@@ -1,0 +1,635 @@
+.private-events-page {
+  background: #ffffff;
+  color: #342716;
+  overflow-x: hidden;
+}
+
+/* Hero */
+.private-events-hero {
+  position: relative;
+  width: 100%;
+  height: clamp(420px, 56.25vw, 810px);
+  margin-top: 0;
+}
+
+.private-events-hero__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Intro */
+.private-events-intro {
+  background: #f3f3f3;
+  padding: 2.75rem 1.5rem 3rem;
+}
+
+.private-events-intro__inner {
+  max-width: 768px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.private-events-intro__title {
+  margin: 0 0 1.25rem;
+  font-family: var(--font-serif);
+  font-size: clamp(1.75rem, 2.8vw, 2.5rem);
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  line-height: 1.2;
+  color: #9b845e;
+  text-transform: uppercase;
+}
+
+.private-events-intro__lead {
+  margin: 0 0 1rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.625;
+  color: #342716;
+  opacity: 0.8;
+}
+
+.private-events-intro__note {
+  margin: 0 0 1.5rem;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-style: italic;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  color: #342716;
+  opacity: 0.6;
+}
+
+.private-events-intro__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 172px;
+  padding: 1rem 2.5rem;
+  border: none;
+  background: #9b845e;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #ffffff;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.25s ease;
+}
+
+.private-events-intro__cta:hover {
+  background: #846d44;
+}
+
+/* Hire */
+.private-events-hire {
+  background: #ffffff;
+  padding: 3rem 0 4rem;
+}
+
+.private-events-hire__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  max-width: 1312px;
+  margin: 0 auto;
+  padding: 0 4rem;
+}
+
+.private-events-hire__image-wrap {
+  background: #efeeeb;
+  min-height: 420px;
+  overflow: hidden;
+}
+
+.private-events-hire__image-wrap img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  object-fit: cover;
+  object-position: center;
+}
+
+.private-events-hire__copy {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  align-content: center;
+  padding: 0 2rem;
+}
+
+.private-events-hire__column h2 {
+  margin: 0 0 1rem;
+  font-family: var(--font-body);
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  line-height: 1.35;
+  color: #342716;
+  text-transform: uppercase;
+}
+
+.private-events-hire__column p {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  line-height: 1.625;
+  letter-spacing: 0.01em;
+  color: #342716;
+  opacity: 0.8;
+}
+
+/* Spaces heading */
+.private-events-spaces-heading {
+  padding: 3rem 1.5rem 2rem;
+  text-align: center;
+  background: #ffffff;
+}
+
+.private-events-spaces-heading h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(2rem, 3vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  line-height: 1;
+  color: #9b845e;
+  text-transform: uppercase;
+}
+
+/* Reusable balanced image/text row */
+.private-events-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: stretch;
+  width: min(100%, 1280px);
+  height: 560px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.private-events-split--space {
+  border-top: 1px solid #d0c5ba;
+}
+
+.private-events-split__text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+  min-height: 0;
+  padding: 4rem 5rem;
+  box-sizing: border-box;
+  background: #f3f3f3;
+}
+
+.private-events-split__media {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.private-events-split__media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Spaces list */
+.private-events-spaces {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 1.5rem;
+}
+
+.private-events-space__level {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: #4d463d;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.private-events-space__title {
+  margin: 0 0 1.25rem;
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  line-height: 1.25;
+  color: #9b845e;
+  text-transform: uppercase;
+}
+
+.private-events-space__description {
+  max-width: 28rem;
+  margin: 0 0 1.5rem;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  line-height: 1.625;
+  letter-spacing: 0.01em;
+  color: #4d463d;
+}
+
+.private-events-space__meta {
+  border-left: 2px solid #735c00;
+  padding-left: 1.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.private-events-space__meta p {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: #342716;
+  text-transform: uppercase;
+}
+
+/* Event menus */
+.private-events-menus {
+  background: #f3f3f3;
+  padding: 4rem 1.5rem;
+  text-align: center;
+}
+
+.private-events-menus h2 {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-serif);
+  font-size: clamp(1.75rem, 2.8vw, 2.5rem);
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  line-height: 1.15;
+  color: #9b845e;
+  text-transform: uppercase;
+}
+
+.private-events-menus p {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  color: #4d463d;
+}
+
+/* Interactive stations */
+.private-events-stations {
+  display: flex;
+  justify-content: center;
+  background: #ffffff;
+  padding: 3rem 1.5rem 0;
+}
+
+.private-events-stations__copy h2 {
+  margin: 0 0 1.25rem;
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  line-height: 1.25;
+  color: #342716;
+  text-transform: uppercase;
+}
+
+.private-events-stations__copy > p {
+  margin: 0 0 1.25rem;
+  max-width: 28rem;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  line-height: 1.625;
+  letter-spacing: 0.01em;
+  color: #4d463d;
+}
+
+.private-events-stations__copy ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.private-events-stations__copy li {
+  position: relative;
+  padding-left: 1.125rem;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  color: #342716;
+}
+
+.private-events-stations__copy li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #735c00;
+}
+
+/* Phūrai catering */
+.private-events-catering {
+  display: flex;
+  justify-content: center;
+  background: #ffffff;
+  padding: 3rem 1.5rem 5rem;
+}
+
+.private-events-catering__copy h2 {
+  margin: 0 0 1.25rem;
+  font-family: var(--font-serif);
+  font-size: 2rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  line-height: 1.25;
+  color: #342716;
+  text-transform: uppercase;
+}
+
+.private-events-catering__copy p {
+  max-width: 28rem;
+  margin: 0 0 1rem;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  letter-spacing: 0.01em;
+  color: #4d463d;
+}
+
+.private-events-catering__copy p:last-child {
+  margin-bottom: 0;
+}
+
+.private-events-catering__link {
+  border: none;
+  padding: 0;
+  background: none;
+  font-family: var(--font-body);
+  font-size: inherit;
+  font-weight: 700;
+  line-height: inherit;
+  color: #735c00;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.private-events-catering__link:hover {
+  text-decoration: underline;
+}
+
+/* Tablet */
+@media (max-width: 1100px) {
+  .private-events-hire__grid {
+    padding: 0 2rem;
+  }
+
+  .private-events-split__text {
+    padding: 3rem 2.5rem;
+  }
+}
+
+/* Mobile */
+@media (max-width: 900px) {
+  .private-events-hire__grid {
+    grid-template-columns: 1fr;
+    padding: 0 1.25rem;
+  }
+
+  .private-events-hire__copy {
+    grid-template-columns: 1fr;
+    padding: 0;
+    gap: 2.5rem;
+  }
+
+  .private-events-hire__image-wrap {
+    min-height: 280px;
+  }
+
+  .private-events-hire__image-wrap img {
+    min-height: 280px;
+  }
+
+  .private-events-split {
+    grid-template-columns: 1fr;
+    width: 100%;
+    height: auto;
+  }
+
+  .private-events-split__media {
+    height: 320px;
+  }
+
+  .private-events-split__text {
+    height: auto;
+    padding: 2rem 1.5rem;
+  }
+
+  .private-events-split__media {
+    order: -1;
+  }
+
+  .private-events-intro {
+    padding: 2.25rem 1.25rem 2.75rem;
+  }
+
+  .private-events-spaces-heading {
+    padding: 2.5rem 1.25rem 1.5rem;
+  }
+
+  .private-events-menus {
+    padding: 3rem 1.25rem;
+  }
+
+  .private-events-stations,
+  .private-events-catering {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .private-events-hero {
+    height: clamp(280px, 62vw, 420px);
+  }
+
+  .private-events-intro__title {
+    letter-spacing: 0.12em;
+  }
+
+  .private-events-space__title {
+    font-size: 1.5rem;
+  }
+
+  .private-events-split__media {
+    height: 260px;
+  }
+}
+
+
+/* =========================================================
+   PRIVATE EVENTS — refine spaces layout
+   Smaller, centered, balanced, with breathing space
+========================================================= */
+
+.private-events-spaces {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5.5rem;
+  padding: 0 1.5rem 6rem;
+  background: #ffffff;
+}
+
+/* Smaller and more website-like than the current huge blocks */
+.private-events-split {
+  width: min(100%, 1120px) !important;
+  height: 440px !important;
+  margin: 0 auto !important;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: stretch;
+  box-sizing: border-box;
+}
+
+/* Remove the hard attached feeling */
+.private-events-split--space {
+  border-top: none !important;
+}
+
+/* Text panel */
+.private-events-split__text {
+  height: 100% !important;
+  padding: 3.5rem 4rem !important;
+  background: #f3f3f3;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* Image panel */
+.private-events-split__media {
+  height: 100% !important;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.private-events-split__media img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Text refinement */
+.private-events-space__level {
+  margin-bottom: 0.65rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+}
+
+.private-events-space__title {
+  margin-bottom: 1.35rem;
+  font-size: clamp(1.75rem, 2.5vw, 2.45rem);
+  line-height: 1.12;
+  letter-spacing: 0.06em;
+}
+
+.private-events-space__description {
+  max-width: 420px;
+  margin-bottom: 1.6rem;
+  font-size: 0.84rem;
+  line-height: 1.7;
+}
+
+.private-events-space__meta {
+  padding-left: 1.3rem;
+  border-left: 2px solid #9b845e;
+  gap: 0.35rem;
+}
+
+.private-events-space__meta p {
+  font-size: 0.68rem;
+  letter-spacing: 0.15em;
+  line-height: 1.7;
+}
+
+/* Event menus blocks should keep the same balanced size */
+.private-events-stations,
+.private-events-catering {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.private-events-stations .private-events-split,
+.private-events-catering .private-events-split {
+  width: min(100%, 1120px) !important;
+  height: 440px !important;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .private-events-spaces {
+    gap: 4rem;
+    padding: 0 1.25rem 5rem;
+  }
+
+  .private-events-split {
+    width: min(100%, 92vw) !important;
+    height: auto !important;
+    grid-template-columns: 1fr;
+  }
+
+  .private-events-split__media {
+    height: 320px !important;
+  }
+
+  .private-events-split__text {
+    height: auto !important;
+    padding: 2.5rem 2rem !important;
+  }
+
+  .private-events-split__media {
+    order: -1;
+  }
+
+  .private-events-stations .private-events-split,
+  .private-events-catering .private-events-split {
+    height: auto !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .private-events-split__media {
+    height: 260px !important;
+  }
+
+  .private-events-space__title {
+    font-size: 1.55rem;
+  }
+
+  .private-events-space__description {
+    font-size: 0.8rem;
+  }
+}

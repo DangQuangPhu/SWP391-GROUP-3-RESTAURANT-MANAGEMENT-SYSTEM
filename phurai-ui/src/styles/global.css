@@ -1,0 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre&family=Hanken+Grotesk:ital,wght@0,400;0,600;0,700;0,900;1,400&family=Imperial+Script&family=Inter:ital,wght@0,400;0,500;0,600;1,400&family=Libre+Caslon+Text:ital@0;1&family=Montserrat:wght@600;800&family=Paytone+One&family=Pragati+Narrow&family=Roboto+Flex:wght@400;500;700&display=swap');
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --color-primary: #8c764b;
+  --color-secondary: #846d44;
+  --color-background: #ffffff;
+  --color-text: #342716;
+  --font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  --font-script: 'Imperial Script', cursive;
+  --font-serif: 'Libre Caslon Text', Georgia, serif;
+  --font-heading: 'Frank Ruhl Libre', Georgia, serif;
+  --font-display: 'Paytone One', sans-serif;
+  --font-body: 'Hanken Grotesk', system-ui, sans-serif;
+  --font-nav: 'Montserrat', system-ui, sans-serif;
+  --font-ui: 'Roboto Flex', system-ui, sans-serif;
+  --font-ui-bold: 'Roboto Flex', system-ui, sans-serif;
+  --font-narrow: 'Pragati Narrow', sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--color-background);
+  color: var(--color-text);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
