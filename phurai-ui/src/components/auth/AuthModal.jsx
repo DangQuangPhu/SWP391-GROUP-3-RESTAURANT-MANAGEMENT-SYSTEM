@@ -9,8 +9,10 @@ function AuthModal({
   showOtp,
   onClose,
   onProceedToOtp,
+  onGoogleAuthenticated,
   onOtpVerified,
   onOtpBack,
+  pendingAuthUser,
 }) {
   useEffect(() => {
     if (!isOpen) {
@@ -55,9 +57,16 @@ function AuthModal({
           <span aria-hidden="true">&times;</span>
         </button>
         {showOtp ? (
-          <OtpVerification onVerified={onOtpVerified} onBack={onOtpBack} />
+          <OtpVerification
+            user={pendingAuthUser}
+            onVerified={onOtpVerified}
+            onBack={onOtpBack}
+          />
         ) : (
-          <AuthCard onProceedToOtp={onProceedToOtp} />
+          <AuthCard
+            onProceedToOtp={onProceedToOtp}
+            onGoogleAuthenticated={onGoogleAuthenticated}
+          />
         )}
       </div>
     </div>,

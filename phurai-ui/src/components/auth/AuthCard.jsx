@@ -1,15 +1,12 @@
 import { useState } from "react";
 import {
-  DEMO_PASSWORD,
-  accountExists,
-  buildGoogleDemoUser,
-  buildUserFromLogin,
-  buildUserFromSignup,
   getPasswordStrength,
   isEmailValue,
   isValidEmail,
   isValidPhoneInput,
 } from "./authHelpers";
+import { loginAccount, registerAccount } from "./api";
+import { signInWithGoogle } from "./googleAuth";
 import "../../styles/auth.css";
 
 function GoogleIcon() {
@@ -104,9 +101,14 @@ function StrengthMeter({ password }) {
   );
 }
 
-function GoogleButton({ label, onClick }) {
+function GoogleButton({ label, onClick, disabled = false }) {
   return (
-    <button type="button" className="auth-socials__btn auth-socials__btn--google" onClick={onClick}>
+    <button
+      type="button"
+      className="auth-socials__btn auth-socials__btn--google"
+      onClick={onClick}
+      disabled={disabled}
+    >
       <GoogleIcon />
       <span>{label}</span>
     </button>
@@ -124,13 +126,20 @@ const EMPTY_SIGNUP = {
   agreeTerms: false,
 };
 
-function AuthCard({ onProceedToOtp, initialMode = "login" }) {
+function AuthCard({
+  onProceedToOtp,
+  onGoogleAuthenticated,
+  initialMode = "login",
+}) {
   const [mode, setMode] = useState(initialMode);
   const [alert, setAlert] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [touched, setTouched] = useState({});
   const [login, setLogin] = useState({ identifier: "", password: "", rememberMe: false });
   const [signup, setSignup] = useState(EMPTY_SIGNUP);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [signupLoading, setSignupLoading] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
 
   const touch = (field) => setTouched((prev) => ({ ...prev, [field]: true }));
   const shouldShow = (field) => submitted || touched[field];
@@ -220,12 +229,25 @@ function AuthCard({ onProceedToOtp, initialMode = "login" }) {
     }
   };
 
-  const handleGoogle = () => {
+  const handleGoogle = async () => {
     setAlert(null);
-    onProceedToOtp?.(buildGoogleDemoUser());
+
+    try {
+      setGoogleLoading(true);
+      const googleUser = await signInWithGoogle();
+      onGoogleAuthenticated?.(googleUser);
+    } catch (error) {
+      setAlert({
+        type: "error",
+        message:
+          error?.message || "Google Sign-In failed. Please try again later.",
+      });
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
-  const handleLoginSubmit = (event) => {
+  const handleLoginSubmit = async (event) => {
     event.preventDefault();
     setSubmitted(true);
     setAlert(null);
@@ -233,21 +255,25 @@ function AuthCard({ onProceedToOtp, initialMode = "login" }) {
     const passwordError = validateLoginPassword(login.password);
     if (identifierError || passwordError) return;
 
-    if (!accountExists(login.identifier)) {
+    try {
+      setLoginLoading(true);
+      const data = await loginAccount({
+        identifier: login.identifier.trim(),
+        password: login.password,
+      });
+
+      onGoogleAuthenticated?.(data.user);
+    } catch (error) {
       setAlert({
         type: "error",
-        message: "Account does not exist. Please check your email or username.",
+        message: error?.message || "Login failed. Please try again.",
       });
-      return;
+    } finally {
+      setLoginLoading(false);
     }
-    if (login.password !== DEMO_PASSWORD) {
-      setAlert({ type: "error", message: "Incorrect password. Please try again." });
-      return;
-    }
-    onProceedToOtp?.(buildUserFromLogin(login.identifier));
   };
 
-  const handleSignupSubmit = (event) => {
+  const handleSignupSubmit = async (event) => {
     event.preventDefault();
     setSubmitted(true);
     setAlert(null);
@@ -276,7 +302,44 @@ function AuthCard({ onProceedToOtp, initialMode = "login" }) {
     };
 
     if (Object.values(errors).some(Boolean)) return;
-    onProceedToOtp?.(buildUserFromSignup(signup));
+
+    try {
+      setSignupLoading(true);
+      const data = await registerAccount({
+        username: signup.username.trim(),
+        email: signup.email.trim().toLowerCase(),
+        password: signup.password,
+        fullName: `${signup.firstName.trim()} ${signup.lastName.trim()}`.trim(),
+        phone: signup.phone.trim(),
+      });
+
+      setAlert({
+        type: "success",
+        message:
+          data.message ||
+          "Registration successful. Please check your email to verify your account.",
+      });
+      setSignup(EMPTY_SIGNUP);
+      setSubmitted(false);
+      setTouched({});
+      onProceedToOtp?.({
+        firstName: signup.firstName.trim(),
+        lastName: signup.lastName.trim(),
+        fullName: `${signup.firstName.trim()} ${signup.lastName.trim()}`.trim(),
+        username: signup.username.trim(),
+        email: signup.email.trim().toLowerCase(),
+        phone: signup.phone.trim(),
+        userId: data.userId,
+        verificationMode: "email",
+      });
+    } catch (error) {
+      setAlert({
+        type: "error",
+        message: error?.message || "Registration failed. Please try again.",
+      });
+    } finally {
+      setSignupLoading(false);
+    }
   };
 
   const updateSignup = (field) => (event) => {
@@ -354,8 +417,14 @@ function AuthCard({ onProceedToOtp, initialMode = "login" }) {
             <button type="button" className="auth-form__link">Forgot password?</button>
           </div>
 
-          <button type="submit" className="auth-submit">SIGN IN</button>
-          <GoogleButton label="Sign in with Google" onClick={handleGoogle} />
+          <button type="submit" className="auth-submit" disabled={loginLoading}>
+            {loginLoading ? "SIGNING IN..." : "SIGN IN"}
+          </button>
+          <GoogleButton
+            label={googleLoading ? "Connecting to Google..." : "Sign in with Google"}
+            onClick={handleGoogle}
+            disabled={googleLoading}
+          />
 
           <p className="auth-card__switch">
             Don&apos;t have an account?{" "}
@@ -472,8 +541,18 @@ function AuthCard({ onProceedToOtp, initialMode = "login" }) {
             <p className="auth-field__error auth-field__error--terms auth-form__full">{signupErrors.terms}</p>
           ) : null}
 
-          <button type="submit" className="auth-submit auth-form__full">CREATE ACCOUNT</button>
-          <GoogleButton label="Continue with Google" onClick={handleGoogle} />
+          <button
+            type="submit"
+            className="auth-submit auth-form__full"
+            disabled={signupLoading}
+          >
+            {signupLoading ? "CREATING ACCOUNT..." : "CREATE ACCOUNT"}
+          </button>
+          <GoogleButton
+            label={googleLoading ? "Connecting to Google..." : "Continue with Google"}
+            onClick={handleGoogle}
+            disabled={googleLoading}
+          />
 
           <p className="auth-card__switch">
             Already have an account?{" "}

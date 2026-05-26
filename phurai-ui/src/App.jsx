@@ -10,6 +10,8 @@ import Menu from "./pages/customer/Menu";
 import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer";
 import AuthModal from "./components/auth/AuthModal";
+import Register from "./pages/Register";
+import VerifyEmail from "./pages/VerifyEmail.jsx";
 import WelcomeOverlay from "./components/auth/WelcomeOverlay";
 import ProfileModal from "./components/auth/ProfileModal";
 
@@ -31,6 +33,8 @@ function App() {
     if (path === "/private-events") return "privateEvents";
     if (path === "/careers") return "careers";
     if (path === "/contact-hours") return "contactHours";
+    if (path === "/register") return "register";
+    if (path === "/verify") return "verify";
     return "home";
   };
 
@@ -120,6 +124,13 @@ function App() {
     setShowWelcome(true);
   };
 
+  const handleGoogleAuthenticated = (user) => {
+    setPendingAuthUser(user);
+    setShowAuth(false);
+    setShowOtp(false);
+    setShowWelcome(true);
+  };
+
   const handleSignOut = () => {
     setIsAuthenticated(false);
     setCurrentUser(null);
@@ -154,6 +165,8 @@ function App() {
       )}
       {activePage === "careers" && <Careers />}
       {activePage === "contactHours" && <ContactHours />}
+      {activePage === "register" && <Register />}
+      {activePage === "verify" && <VerifyEmail />}
       <Footer />
 
       <AuthModal
@@ -161,8 +174,10 @@ function App() {
         showOtp={showOtp}
         onClose={handleCloseAuth}
         onProceedToOtp={handleProceedToOtp}
+        onGoogleAuthenticated={handleGoogleAuthenticated}
         onOtpVerified={handleOtpVerified}
         onOtpBack={handleOtpBack}
+        pendingAuthUser={pendingAuthUser}
       />
 
       <WelcomeOverlay

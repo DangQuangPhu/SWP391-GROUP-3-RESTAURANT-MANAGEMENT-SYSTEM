@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { DEMO_OTP } from "./authHelpers";
+import { verifyEmailCode } from "./api";
 
-function OtpVerification({ onVerified, onBack }) {
+function OtpVerification({ user, onVerified, onBack }) {
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
   const inputRefs = useRef([]);
 
   useEffect(() => {
@@ -44,7 +46,7 @@ function OtpVerification({ onVerified, onBack }) {
     inputRefs.current[focusIndex]?.focus();
   };
 
-  const handleVerify = (event) => {
+  const handleVerify = async (event) => {
     event.preventDefault();
     setSubmitted(true);
     const code = digits.join("");
@@ -59,12 +61,24 @@ function OtpVerification({ onVerified, onBack }) {
       return;
     }
 
-    if (code !== DEMO_OTP) {
-      setError("Incorrect verification code. Please try again.");
-      return;
-    }
+    try {
+      setLoading(true);
 
-    onVerified?.();
+      if (user?.userId) {
+        await verifyEmailCode({ userId: user.userId, code });
+      } else if (code !== DEMO_OTP) {
+        setError("Incorrect verification code. Please try again.");
+        return;
+      }
+
+      onVerified?.();
+    } catch (verificationError) {
+      setError(
+        verificationError?.message || "Incorrect verification code. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleResend = () => {
@@ -108,8 +122,8 @@ function OtpVerification({ onVerified, onBack }) {
           ))}
         </div>
 
-        <button type="submit" className="auth-submit">
-          VERIFY
+        <button type="submit" className="auth-submit" disabled={loading}>
+          {loading ? "VERIFYING..." : "VERIFY"}
         </button>
 
         <button type="button" className="auth-form__link auth-otp__resend" onClick={handleResend}>

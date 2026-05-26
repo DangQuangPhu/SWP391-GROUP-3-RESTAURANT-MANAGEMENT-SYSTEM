@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { updateProfile } from "./api";
 import { getDisplayName, getInitials, isValidEmail } from "./authHelpers";
 import "../../styles/profileModal.css";
 
@@ -55,6 +56,7 @@ function ProfileModal({ isOpen, onClose, user, onSave }) {
     confirm: "",
   });
   const [passwordErrors, setPasswordErrors] = useState({});
+  const [saving, setSaving] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -104,19 +106,39 @@ function ProfileModal({ isOpen, onClose, user, onSave }) {
     return next;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const validation = validate();
     if (Object.keys(validation).length) {
       setErrors(validation);
       return;
     }
+
     const saved = {
       ...draft,
       fullName: `${draft.firstName} ${draft.lastName}`.trim(),
       nickname: draft.username,
     };
-    onSave?.(saved);
-    setAlert({ type: "success", message: "Profile saved successfully." });
+
+    try {
+      setSaving(true);
+      setAlert(null);
+
+      if (saved.id) {
+        const data = await updateProfile(saved.id, saved);
+        onSave?.(data.user || saved);
+      } else {
+        onSave?.(saved);
+      }
+
+      setAlert({ type: "success", message: "Profile saved successfully." });
+    } catch (error) {
+      setAlert({
+        type: "error",
+        message: error?.message || "Profile update failed.",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -301,8 +323,13 @@ function ProfileModal({ isOpen, onClose, user, onSave }) {
         </div>
 
         <div className="profile-edit__footer">
-          <button type="button" className="profile-edit__btn profile-edit__btn--gold" onClick={handleSave}>
-            SAVE CHANGES
+          <button
+            type="button"
+            className="profile-edit__btn profile-edit__btn--gold"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? "SAVING..." : "SAVE CHANGES"}
           </button>
           <button type="button" className="profile-edit__btn profile-edit__btn--outline" onClick={handleCancel}>
             CANCEL
