@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getInitials } from "../auth/authHelpers";
+import UserAvatar from "../auth/UserAvatar";
 import ProfileDropdown from "../profile/ProfileDropdown";
 import "../../styles/profile.css";
 
@@ -22,7 +22,7 @@ const pageClassMap = {
   contactHours: "contact-hours",
 };
 
-const darkTopPages = ["home", "privateEvents", "careers", "contactHours"];
+const darkTopPages = ["home", "takeout", "privateEvents", "careers", "contactHours"];
 
 function Navbar({
   onNavigate,
@@ -33,14 +33,16 @@ function Navbar({
   onOpenProfile,
   onSignOut,
 }) {
+  const openProfile = (view) => {
+    setProfileOpen(false);
+    onOpenProfile?.(view);
+  };
   const [navState, setNavState] = useState("top");
   const [profileOpen, setProfileOpen] = useState(false);
   const lastScrollY = useRef(0);
 
   const isDarkTopPage = darkTopPages.includes(activePage);
   const pageClass = pageClassMap[activePage] || activePage;
-  const initials = getInitials(currentUser);
-
   useEffect(() => {
     setNavState("top");
     lastScrollY.current = window.scrollY;
@@ -48,7 +50,7 @@ function Navbar({
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
 
-      if (currentScrollY <= 20) {
+      if (currentScrollY <= 40) {
         setNavState("top");
       } else if (currentScrollY > lastScrollY.current) {
         setNavState("hidden");
@@ -131,10 +133,9 @@ function Navbar({
     return false;
   };
 
-  const handleMyProfile = () => {
-    setProfileOpen(false);
-    onOpenProfile?.();
-  };
+  const handleMyProfile = () => openProfile("view");
+  const handleEditProfile = () => openProfile("edit");
+  const handleChangePassword = () => openProfile("password");
 
   return (
     <header
@@ -192,21 +193,19 @@ function Navbar({
               aria-label="Open profile menu"
               aria-expanded={profileOpen}
             >
-              {currentUser?.avatarUrl ? (
-                <img
-                  src={currentUser.avatarUrl}
-                  alt=""
-                  className="phurai-navbar__avatar-img"
-                />
-              ) : (
-                initials
-              )}
+              <UserAvatar
+                user={currentUser}
+                size="sm"
+                imgClassName="phurai-navbar__avatar-img"
+              />
             </button>
             <ProfileDropdown
               isOpen={profileOpen}
               onClose={() => setProfileOpen(false)}
               currentUser={currentUser}
               onMyProfile={handleMyProfile}
+              onEditProfile={handleEditProfile}
+              onChangePassword={handleChangePassword}
               onSignOut={onSignOut}
             />
           </div>

@@ -1,11 +1,14 @@
 import { useEffect, useRef } from "react";
-import { getInitials } from "../auth/authHelpers";
+import { getDisplayName } from "../auth/authHelpers";
+import UserAvatar from "../auth/UserAvatar";
 
 function ProfileDropdown({
   isOpen,
   onClose,
   currentUser,
   onMyProfile,
+  onEditProfile,
+  onChangePassword,
   onSignOut,
 }) {
   const menuRef = useRef(null);
@@ -20,9 +23,7 @@ function ProfileDropdown({
     };
 
     const handleEscape = (event) => {
-      if (event.key === "Escape") {
-        onClose?.();
-      }
+      if (event.key === "Escape") onClose?.();
     };
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -34,18 +35,21 @@ function ProfileDropdown({
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen) {
-    return null;
-  }
+  if (!isOpen) return null;
 
-  const initials = getInitials(currentUser);
+  const displayName = getDisplayName(currentUser);
 
   return (
     <div className="profile-dropdown" ref={menuRef}>
       <div className="profile-dropdown__header">
-        <span className="profile-dropdown__avatar">{initials}</span>
+        <UserAvatar
+          user={currentUser}
+          size="sm"
+          imgClassName="profile-dropdown__avatar-img"
+        />
         <div>
-          <p className="profile-dropdown__name">{currentUser?.fullName}</p>
+          <p className="profile-dropdown__name">{displayName}</p>
+          <p className="profile-dropdown__username">@{currentUser?.username}</p>
           <p className="profile-dropdown__email">{currentUser?.email}</p>
         </div>
       </div>
@@ -56,17 +60,18 @@ function ProfileDropdown({
           </button>
         </li>
         <li>
-          <button type="button">Reservations</button>
+          <button type="button" onClick={onEditProfile}>
+            Edit Profile
+          </button>
         </li>
         <li>
-          <button type="button">Favorites</button>
-        </li>
-        <li>
-          <button type="button">Account Settings</button>
+          <button type="button" onClick={onChangePassword}>
+            Change Password
+          </button>
         </li>
         <li>
           <button type="button" className="profile-dropdown__signout" onClick={onSignOut}>
-            Sign Out
+            Logout
           </button>
         </li>
       </ul>

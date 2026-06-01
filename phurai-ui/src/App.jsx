@@ -9,24 +9,36 @@ import ContactHours from "./pages/customer/ContactHours";
 import Menu from "./pages/customer/Menu";
 import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer";
-import AuthModal from "./components/auth/AuthModal";
+import LoginPage from "./pages/auth/LoginPage";
 import Register from "./pages/Register";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
 import WelcomeOverlay from "./components/auth/WelcomeOverlay";
 import ProfileModal from "./components/auth/ProfileModal";
+import { clearAuthUser, getProfile, loadAuthUser, saveAuthUser } from "./components/auth/api";
+import { normalizeStoredAvatarUrl } from "./components/auth/avatarUtils";
+
+function normalizeAuthUser(user) {
+  return {
+    ...user,
+    avatarUrl: normalizeStoredAvatarUrl(user?.avatarUrl),
+    id: user.id ?? user.userId,
+    userId: user.userId ?? user.id,
+  };
+}
 
 function App() {
   const [activePage, setActivePage] = useState("home");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const [showAuth, setShowAuth] = useState(false);
-  const [showOtp, setShowOtp] = useState(false);
   const [pendingAuthUser, setPendingAuthUser] = useState(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeFading, setWelcomeFading] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [profileView, setProfileView] = useState("view");
+  const [loginSuccessMessage, setLoginSuccessMessage] = useState("");
 
   const getPageFromPath = (path) => {
+    if (path === "/login") return "login";
     if (path === "/take-out") return "takeout";
     if (path === "/catering") return "catering";
     if (path === "/menus") return "menus";
@@ -39,6 +51,23 @@ function App() {
   };
 
   useEffect(() => {
+    const stored = loadAuthUser();
+    if (stored) {
+      setIsAuthenticated(true);
+      setCurrentUser(stored);
+
+      const uid = stored.userId ?? stored.id;
+      if (uid) {
+        getProfile(uid)
+          .then((data) => {
+            if (!data?.user) return;
+            const normalized = normalizeAuthUser(data.user);
+            setCurrentUser(normalized);
+            saveAuthUser(normalized, Boolean(localStorage.getItem("phurai_auth_user")));
+          })
+          .catch(() => {});
+      }
+    }
     setActivePage(getPageFromPath(window.location.pathname));
 
     const onPopState = () => {
@@ -51,20 +80,22 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!showWelcome) {
-      return undefined;
-    }
+    if (!showWelcome) return undefined;
 
-    const fadeTimer = setTimeout(() => {
-      setWelcomeFading(true);
-    }, 2600);
-
+    const fadeTimer = setTimeout(() => setWelcomeFading(true), 2600);
     const closeTimer = setTimeout(() => {
       setShowWelcome(false);
       setWelcomeFading(false);
-      setIsAuthenticated(true);
-      setCurrentUser(pendingAuthUser);
-      setPendingAuthUser(null);
+      if (pendingAuthUser) {
+        setIsAuthenticated(true);
+        setCurrentUser(pendingAuthUser);
+        saveAuthUser(pendingAuthUser, Boolean(localStorage.getItem("phurai_auth_user")));
+        setPendingAuthUser(null);
+        setActivePage("home");
+        if (window.location.pathname !== "/") {
+          window.history.pushState(null, "", "/");
+        }
+      }
     }, 3200);
 
     return () => {
@@ -78,7 +109,9 @@ function App() {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
 
     const nextPath =
-      page === "takeout"
+      page === "login"
+        ? "/login"
+        : page === "takeout"
         ? "/take-out"
         : page === "catering"
         ? "/catering"
@@ -97,38 +130,19 @@ function App() {
     }
   };
 
-  const handleOpenAuth = () => {
-    setShowAuth(true);
-    setShowOtp(false);
-    setPendingAuthUser(null);
-  };
+  const handleAuthSuccess = (user, options = {}) => {
+    const normalized = normalizeAuthUser(user);
 
-  const handleCloseAuth = () => {
-    setShowAuth(false);
-    setShowOtp(false);
-    setPendingAuthUser(null);
-  };
+    if (options.showWelcome) {
+      setPendingAuthUser(normalized);
+      setShowWelcome(true);
+      return;
+    }
 
-  const handleProceedToOtp = (user) => {
-    setPendingAuthUser(user);
-    setShowOtp(true);
-  };
-
-  const handleOtpBack = () => {
-    setShowOtp(false);
-  };
-
-  const handleOtpVerified = () => {
-    setShowAuth(false);
-    setShowOtp(false);
-    setShowWelcome(true);
-  };
-
-  const handleGoogleAuthenticated = (user) => {
-    setPendingAuthUser(user);
-    setShowAuth(false);
-    setShowOtp(false);
-    setShowWelcome(true);
+    setIsAuthenticated(true);
+    setCurrentUser(normalized);
+    saveAuthUser(normalized, options.remember);
+    handleNavigate("home");
   };
 
   const handleSignOut = () => {
@@ -136,26 +150,48 @@ function App() {
     setCurrentUser(null);
     setShowProfile(false);
     setPendingAuthUser(null);
-    setShowAuth(false);
-    setShowOtp(false);
     setShowWelcome(false);
+    clearAuthUser();
   };
 
   const handleProfileSave = (updatedUser) => {
-    setCurrentUser(updatedUser);
+    const normalized = normalizeAuthUser(updatedUser);
+    setCurrentUser(normalized);
+    const remember = Boolean(localStorage.getItem("phurai_auth_user"));
+    saveAuthUser(normalized, remember);
   };
+
+  const handlePasswordReset = ({ message } = {}) => {
+    clearAuthUser();
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setShowProfile(false);
+    setProfileView("view");
+    setLoginSuccessMessage(
+      message || "Password reset successfully. Please sign in with your new password."
+    );
+    handleNavigate("login");
+  };
+
+  const isLoginPage = activePage === "login";
 
   return (
     <>
-      <Navbar
-        activePage={activePage}
-        onNavigate={handleNavigate}
-        isAuthenticated={isAuthenticated}
-        currentUser={currentUser}
-        onOpenAuth={handleOpenAuth}
-        onOpenProfile={() => setShowProfile(true)}
-        onSignOut={handleSignOut}
-      />
+      {!isLoginPage ? (
+        <Navbar
+          activePage={activePage}
+          onNavigate={handleNavigate}
+          isAuthenticated={isAuthenticated}
+          currentUser={currentUser}
+          onOpenAuth={() => handleNavigate("login")}
+          onOpenProfile={(view = "view") => {
+            setProfileView(view);
+            setShowProfile(true);
+          }}
+          onSignOut={handleSignOut}
+        />
+      ) : null}
+
       {activePage === "home" && <Home />}
       {activePage === "takeout" && <TakeOut />}
       {activePage === "catering" && <Catering />}
@@ -167,18 +203,17 @@ function App() {
       {activePage === "contactHours" && <ContactHours />}
       {activePage === "register" && <Register />}
       {activePage === "verify" && <VerifyEmail />}
-      <Footer />
+      {isLoginPage && (
+        <LoginPage
+          isAuthenticated={isAuthenticated}
+          onAuthSuccess={handleAuthSuccess}
+          onNavigateHome={() => handleNavigate("home")}
+          successMessage={loginSuccessMessage}
+          onClearSuccess={() => setLoginSuccessMessage("")}
+        />
+      )}
 
-      <AuthModal
-        isOpen={showAuth}
-        showOtp={showOtp}
-        onClose={handleCloseAuth}
-        onProceedToOtp={handleProceedToOtp}
-        onGoogleAuthenticated={handleGoogleAuthenticated}
-        onOtpVerified={handleOtpVerified}
-        onOtpBack={handleOtpBack}
-        pendingAuthUser={pendingAuthUser}
-      />
+      {!isLoginPage ? <Footer /> : null}
 
       <WelcomeOverlay
         isVisible={showWelcome}
@@ -191,6 +226,8 @@ function App() {
         onClose={() => setShowProfile(false)}
         user={currentUser}
         onSave={handleProfileSave}
+        initialView={profileView}
+        onPasswordReset={handlePasswordReset}
       />
     </>
   );

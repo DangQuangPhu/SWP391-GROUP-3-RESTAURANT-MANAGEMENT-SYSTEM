@@ -572,3 +572,10 @@
     padding-top: 3.5rem;
   }
 }
+
+
+.phurai-navbar--light-top-page.phurai-navbar--top .phurai-navbar__auth, .phurai-navbar--visible .phurai-navbar__auth {
+    border-color: #846d44 !important;
+    color: #846d44 !important;
+    background: transparent !important;
+}

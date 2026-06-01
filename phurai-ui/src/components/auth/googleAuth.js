@@ -1,5 +1,10 @@
 const GOOGLE_IDENTITY_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
-import { API_BASE_URL } from "./api";
+import {
+  API_BASE_URL,
+  googleRegister,
+  googleRegisterWithAccessToken,
+  googleLogin,
+} from "./api";
 
 let googleScriptPromise;
 
@@ -40,6 +45,16 @@ function loadGoogleIdentityScript() {
   return googleScriptPromise;
 }
 
+function getClientId() {
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    throw new Error(
+      "Google Sign-In is not configured. Add VITE_GOOGLE_CLIENT_ID to your frontend env."
+    );
+  }
+  return clientId;
+}
+
 function requestGoogleAccessToken(clientId) {
   return new Promise((resolve, reject) => {
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
@@ -50,7 +65,6 @@ function requestGoogleAccessToken(clientId) {
           reject(new Error(response.error));
           return;
         }
-
         resolve(response.access_token);
       },
       error_callback: () => {
@@ -62,40 +76,63 @@ function requestGoogleAccessToken(clientId) {
   });
 }
 
-async function exchangeAccessToken(accessToken) {
-  const response = await fetch(`${API_BASE_URL}/google`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ accessToken }),
+function requestGoogleIdCredential(clientId) {
+  return new Promise((resolve, reject) => {
+    if (!window.google?.accounts?.id) {
+      reject(new Error("Google Identity Services failed to load."));
+      return;
+    }
+
+    let settled = false;
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: (response) => {
+        if (settled) return;
+        settled = true;
+        if (response.credential) resolve(response.credential);
+        else reject(new Error("No Google credential received."));
+      },
+      auto_select: false,
+    });
+
+    window.google.accounts.id.prompt((notification) => {
+      if (settled) return;
+      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+        requestGoogleAccessToken(clientId)
+          .then((token) => {
+            if (settled) return;
+            settled = true;
+            resolve({ accessToken: token });
+          })
+          .catch(reject);
+      }
+    });
   });
+}
 
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(
-      data.message || "Google Sign-In failed while contacting the backend."
-    );
-  }
-
-  if (!data.user) {
-    throw new Error("Backend did not return a Google user profile.");
-  }
-
+/** Google Sign-In for verified accounts (Login tab). */
+export async function signInWithGoogle() {
+  const clientId = getClientId();
+  await loadGoogleIdentityScript();
+  const accessToken = await requestGoogleAccessToken(clientId);
+  const data = await googleLogin({ accessToken });
   return data.user;
 }
 
-export async function signInWithGoogle() {
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+/** Google Create Account — always requires OTP before login. */
+export async function registerWithGoogle() {
+  const clientId = getClientId();
+  await loadGoogleIdentityScript();
 
-  if (!clientId) {
-    throw new Error(
-      "Google Sign-In is not configured. Add VITE_GOOGLE_CLIENT_ID to your frontend env."
-    );
+  const result = await requestGoogleIdCredential(clientId);
+
+  if (typeof result === "string") {
+    return googleRegister(result);
   }
 
-  await loadGoogleIdentityScript();
-  const accessToken = await requestGoogleAccessToken(clientId);
-  return exchangeAccessToken(accessToken);
+  if (result?.accessToken) {
+    return googleRegisterWithAccessToken(result.accessToken);
+  }
+
+  throw new Error("Google registration failed.");
 }

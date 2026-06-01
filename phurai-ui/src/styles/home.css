@@ -156,15 +156,11 @@
   z-index: 1;
 
   background:
-    linear-gradient(
-      rgba(0, 0, 0, 0.32),
-      rgba(0, 0, 0, 0.38)
-    ),
-    radial-gradient(
-      circle at center,
+    linear-gradient(rgba(0, 0, 0, 0.32),
+      rgba(0, 0, 0, 0.38)),
+    radial-gradient(circle at center,
       rgba(0, 0, 0, 0.08) 0%,
-      rgba(0, 0, 0, 0.35) 100%
-    );
+      rgba(0, 0, 0, 0.35) 100%);
 
   pointer-events: none;
 }
@@ -192,6 +188,7 @@
   padding: 0;
   margin-bottom: 20px;
 }
+
 /* Hero button hover swap effect */
 .phurai-btn-primary,
 .phurai-btn-ghost {
@@ -443,6 +440,7 @@
 }
 
 @media (max-width: 900px) {
+
   .phurai-offering,
   .phurai-offering--reverse {
     width: min(92vw, 100%);
@@ -680,6 +678,7 @@
   box-sizing: border-box !important;
   text-align: center;
 }
+
 .phurai-gallery__title {
   font-family: var(--font-heading);
   font-size: clamp(2.5rem, 5vw, 4rem);
@@ -713,12 +712,13 @@
 }
 
 .phurai-gallery__item img {
-  width: 100% ;
+  width: 100%;
   height: clamp(500px, 12vw, 100px);
   object-fit: cover !important;
   object-position: center !important;
   display: block !important;
 }
+
 @media (max-width: 1200px) {
   .phurai-gallery__grid {
     grid-template-columns: repeat(3, 1fr) !important;
@@ -746,7 +746,7 @@
   width: 100%;
   text-align: center;
   padding: 3rem 0 0;
-  
+
 }
 
 .phurai-rolled__header {
@@ -794,6 +794,7 @@
   object-position: center top;
   transform: none;
 }
+
 /* ── Section header ── */
 .phurai-section-header {
   text-align: center;
@@ -1098,7 +1099,7 @@
   gap: 1rem;
 }
 
-.phurai-footer__hours > div {
+.phurai-footer__hours>div {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
@@ -1209,7 +1210,7 @@
   .phurai-navbar {
     padding: 1rem 2rem;
   }
-  
+
 
   .phurai-navbar__nav {
     display: none;
@@ -1230,6 +1231,7 @@
 }
 
 @media (max-width: 900px) {
+
   .phurai-offering,
   .phurai-gift {
     grid-template-columns: 1fr;
@@ -1370,7 +1372,7 @@
 
 .phurai-navbar--visible .phurai-navbar__logo,
 .phurai-navbar--visible .phurai-navbar__nav a {
-  color: #1a1a1a !important;
+  color: #1a1a1a;
 }
 
 .phurai-navbar--visible .phurai-navbar__nav a::after {
@@ -1409,6 +1411,59 @@
   background: #3a2d1d !important;
 }
 
+/* Take Out only: transparent navbar at top + black text */
+.phurai-navbar--page-takeout.phurai-navbar--top {
+  background: transparent !important;
+  border-bottom: 1px solid transparent !important;
+  box-shadow: none !important;
+}
+
+.phurai-navbar--page-takeout.phurai-navbar--top .phurai-navbar__logo,
+.phurai-navbar--page-takeout.phurai-navbar--top .phurai-navbar__nav a {
+  color: #1f1a14 !important;
+}
+
+.phurai-navbar--page-takeout.phurai-navbar--top .phurai-navbar__nav a::after {
+  background: #1f1a14 !important;
+}
+
+.phurai-navbar--page-takeout.phurai-navbar--top .phurai-navbar__auth {
+  border-color: #1f1a14 !important;
+  color: #1f1a14 !important;
+  background: transparent !important;
+}
+
+.phurai-navbar--page-takeout.phurai-navbar--top .phurai-navbar__auth:hover {
+  background: rgba(31, 26, 20, 0.08) !important;
+}
+
+/* ── FIX: Take Out only — Sign In color on white navbar states ── */
+.phurai-navbar--page-takeout.phurai-navbar--top .phurai-navbar__auth,
+.phurai-navbar--page-takeout.phurai-navbar--visible .phurai-navbar__auth,
+.phurai-navbar--page-takeout.phurai-navbar--hidden .phurai-navbar__auth {
+  border-color: #846d44 !important;
+  color: #846d44 !important;
+  background: transparent !important;
+}
+
+/* Take Out page specific Sign In color overrides for all states */
+.phurai-navbar.phurai-navbar--page-takeout.phurai-navbar--top .phurai-navbar__auth,
+.phurai-navbar.phurai-navbar--page-takeout.phurai-navbar--visible .phurai-navbar__auth,
+.phurai-navbar.phurai-navbar--page-takeout.phurai-navbar--hidden .phurai-navbar__auth {
+  border-color: #846d44 !important;
+  color: #846d44 !important;
+  background: transparent !important;
+}
+
+.phurai-navbar.phurai-navbar--page-takeout.phurai-navbar--top .phurai-navbar__auth:hover,
+.phurai-navbar.phurai-navbar--page-takeout.phurai-navbar--visible .phurai-navbar__auth:hover,
+.phurai-navbar.phurai-navbar--page-takeout.phurai-navbar--hidden .phurai-navbar__auth:hover {
+  background: rgba(132, 109, 68, 0.08) !important;
+}
+
+
+
+
 /* Sign In outline — dark hero pages at top */
 .phurai-navbar--dark-top-page.phurai-navbar--top .phurai-navbar__auth {
   border-color: #ffffff !important;
@@ -1444,4 +1499,53 @@
 
 .phurai-navbar__nav a.is-active::after {
   transform: translateX(-50%) scaleX(1) !important;
+}
+
+/* =======================================================
+   GLOBAL HOVER SWAP EFFECTS (Mimicking .phurai-btn-primary / ghost)
+   ======================================================= */
+
+/* 1. Make all navbar buttons and reservation submit pill-shaped */
+.phurai-navbar__auth,
+.phurai-navbar .phurai-navbar__cta,
+.phurai-reservation__submit,
+.phurai-gallery__cta {
+  border-radius: 9999px !important;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease,
+    transform 0.3s ease,
+    box-shadow 0.3s ease !important;
+  will-change: transform;
+}
+
+/* 2. "Ghost to Solid" Swap Effect (Sign In button) */
+/* We use a high-specificity selector to override previous hover states */
+.phurai-navbar__auth:hover,
+.phurai-navbar.phurai-navbar--page-takeout.phurai-navbar--top .phurai-navbar__auth:hover,
+.phurai-navbar.phurai-navbar--page-takeout.phurai-navbar--visible .phurai-navbar__auth:hover,
+.phurai-navbar.phurai-navbar--page-takeout.phurai-navbar--hidden .phurai-navbar__auth:hover,
+.phurai-navbar--light-top-page.phurai-navbar--top .phurai-navbar__auth:hover,
+.phurai-navbar--visible .phurai-navbar__auth:hover,
+.phurai-navbar--dark-top-page.phurai-navbar--top .phurai-navbar__auth:hover {
+  background: #846d44 !important;
+  border-color: #846d44 !important;
+  color: #ffffff !important;
+  transform: translateY(-2px);
+  box-shadow: none !important;
+}
+
+/* 3. "Solid to Ghost" Swap Effect (Reservation / CTA buttons) */
+.phurai-navbar .phurai-navbar__cta:hover,
+.phurai-reservation__submit:hover,
+.phurai-gallery__cta:hover {
+  background: transparent !important;
+  color: #846d44 !important;
+  border-color: transparent !important;
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -4px rgba(0, 0, 0, 0.1),
+    inset 0 0 0 2px #846d44 !important;
+  transform: translateY(-2px);
 }

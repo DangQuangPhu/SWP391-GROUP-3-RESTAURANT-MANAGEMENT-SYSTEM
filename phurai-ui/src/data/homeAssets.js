@@ -7,11 +7,13 @@ import kitchenYellowtailJalapeno from '../assets/images/kitchen-yellowtail-jalap
 import kitchenSashimiSalad from '../assets/images/kitchen-sashimi-salad.jpg';
 import kitchenRockShrimp from '../assets/images/kitchen-rock-shrimp.jpg';
 import kitchenBlackCodMiso from '../assets/images/kitchen-black-cod-miso.jpg';
+import hero from '../assets/images/hero.jpg';
 
 const FIGMA = 'https://www.figma.com/api/mcp/asset';
 
 export const homeImages = {
   heroVideo,
+  hero,
   offeringSushi,
   kitchenSecrets,
   giftCard,

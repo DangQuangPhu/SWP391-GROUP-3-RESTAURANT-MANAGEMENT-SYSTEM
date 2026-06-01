@@ -309,6 +309,130 @@
   color: #8c764b;
 }
 
+.profile-edit__password-choose {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.profile-edit__password-hint {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  color: #6a5e33;
+}
+
+.profile-edit__otp-wrap .auth-card__brand,
+.profile-edit__reset-wrap .auth-card__brand {
+  display: none;
+}
+
+.profile-edit__otp-wrap .auth-card__title,
+.profile-edit__reset-wrap .auth-card__title {
+  font-size: 1.125rem;
+}
+
+.profile-edit__otp-wrap,
+.profile-edit__reset-wrap {
+  margin-bottom: 1rem;
+}
+
+.profile-edit__reset-wrap h4 {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  color: #342716;
+}
+
+.profile-edit__avatar-picker {
+  margin: 0 1.5rem 1rem;
+  padding: 1rem;
+  border: 1px solid #e8e4de;
+  border-radius: 10px;
+  background: #faf8f4;
+}
+
+.profile-edit__avatar-picker-title {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #342716;
+}
+
+.profile-edit__avatar-picker-sub {
+  margin: 0.75rem 0;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  color: #6a5e33;
+}
+
+.profile-edit__avatar-option--upload {
+  width: 100%;
+  padding: 0.625rem 1rem;
+  border: 1px dashed #8c764b;
+  border-radius: 8px;
+  background: #ffffff;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #6a5e33;
+  cursor: pointer;
+}
+
+.profile-edit__avatar-option--upload:hover:not(:disabled) {
+  background: #f8f4ec;
+}
+
+.profile-edit__avatar-option--upload:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.profile-edit__avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.profile-edit__avatar-choice {
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+  aspect-ratio: 1;
+}
+
+.profile-edit__avatar-choice img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.profile-edit__avatar-choice--active {
+  border-color: #8c764b;
+  box-shadow: 0 0 0 2px rgba(140, 118, 75, 0.25);
+}
+
+.profile-edit__avatar-choice:hover:not(:disabled) {
+  border-color: #c4a574;
+}
+
+.profile-edit__avatar-choice:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profile-edit__head .user-avatar--lg .profile-edit__avatar-img {
+  border: 3px solid #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
 @media (max-width: 520px) {
   .profile-edit__grid--2 {
     grid-template-columns: 1fr;
@@ -316,5 +440,9 @@
 
   .profile-edit__footer {
     flex-direction: column;
+  }
+
+  .profile-edit__avatar-grid {
+    grid-template-columns: repeat(3, 1fr);
   }
 }

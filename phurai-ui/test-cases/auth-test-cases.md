@@ -176,10 +176,23 @@
 | AV-05 | Upload file over 2MB | Logged in; Change Avatar | Upload large image | > 2MB | Rejected: "Avatar must be smaller than 2MB." | |
 | AV-06 | Upload valid avatar | Logged in; Change Avatar | Upload PNG/JPG/WEBP under 2MB | valid image | Avatar updates immediately in Profile and Navbar | |
 | AV-07 | Uploaded avatar persists | After AV-06 | Close profile → reopen → switch page → reload | — | Uploaded avatar still appears | |
-| AV-08 | Random system avatar selection | Logged in; Change Avatar | Choose system avatar from grid | `/avatars/avatar-N.svg` | Selected avatar in Profile and Navbar | |
+| AV-08 | Random system avatar selection | Logged in; Change Avatar | Choose system avatar from grid | `/avatars/avatar-N.png` | Selected avatar in Profile and Navbar | |
 | AV-09 | Random avatar persists | After AV-08 | Close profile → reopen → reload | — | System avatar still appears | |
 | AV-10 | Google avatar replaced by upload | User has Google avatar | Upload custom avatar | valid image | Custom avatar replaces Google; persists in DB and UI | |
 | AV-11 | Profile save should not clear avatar | User has any avatar | Edit first name only → Save Changes | — | `AvatarUrl` unchanged; avatar still displays | |
+
+### Avatar API / DB checks
+
+```bash
+# Profile includes avatarUrl
+curl -i http://localhost:5001/api/profile/USER_ID
+
+# After upload or system selection — verify DB
+docker exec -it sqlserver /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P 'PhuSql@123456' -C \
+  -d RestaurantManagementDB \
+  -Q "SELECT TOP 10 UserID, Username, Email, AvatarUrl FROM dbo.Users ORDER BY UserID DESC;"
+```
 
 ---
 
