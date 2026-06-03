@@ -94,7 +94,7 @@
 .phurai-navbar__auth {
   flex-shrink: 0;
   padding: 0.47rem 1.06rem;
-  border: 1px solid #ffffff;
+  border: 2px solid #ffffff;
   background: transparent;
   font-family: var(--font-nav);
   font-size: 0.7rem;
@@ -1444,6 +1444,7 @@
   border-color: #846d44 !important;
   color: #846d44 !important;
   background: transparent !important;
+  
 }
 
 /* Take Out page specific Sign In color overrides for all states */
@@ -1533,7 +1534,7 @@
   border-color: #846d44 !important;
   color: #ffffff !important;
   transform: translateY(-2px);
-  box-shadow: none !important;
+  box-shadow:  none;
 }
 
 /* 3. "Solid to Ghost" Swap Effect (Reservation / CTA buttons) */
@@ -1541,11 +1542,11 @@
 .phurai-reservation__submit:hover,
 .phurai-gallery__cta:hover {
   background: transparent !important;
-  color: #846d44 !important;
+  color: #ffffff !important;
   border-color: transparent !important;
   box-shadow:
     0 10px 15px -3px rgba(0, 0, 0, 0.1),
     0 4px 6px -4px rgba(0, 0, 0, 0.1),
-    inset 0 0 0 2px #846d44 !important;
+    inset 0 0 0 2px #ffffff !important;
   transform: translateY(-2px);
 }
