@@ -115,8 +115,16 @@ export async function signInWithGoogle() {
   const clientId = getClientId();
   await loadGoogleIdentityScript();
   const accessToken = await requestGoogleAccessToken(clientId);
-  const data = await googleLogin({ accessToken });
-  return data.user;
+  try {
+    const data = await googleLogin({ accessToken });
+    return { type: "login", user: data.user };
+  } catch (error) {
+    if (error.code === "ACCOUNT_NOT_FOUND") {
+      const regData = await googleRegisterWithAccessToken(accessToken);
+      return { type: "register", ...regData };
+    }
+    throw error;
+  }
 }
 
 /** Google Create Account — always requires OTP before login. */

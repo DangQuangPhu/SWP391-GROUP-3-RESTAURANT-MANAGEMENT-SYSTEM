@@ -13,6 +13,7 @@ import {
 } from "./authHelpers";
 import { loginAccount, registerAccount, resendVerificationCode } from "./api";
 import { signInWithGoogle, registerWithGoogle } from "./googleAuth";
+import GoogleAccountChooserModal from "./GoogleAccountChooserModal";
 import "../../styles/auth.css";
 
 function GoogleIcon() {
@@ -152,6 +153,7 @@ function AuthCard({
   const [loginLoading, setLoginLoading] = useState(false);
   const [apiFieldErrors, setApiFieldErrors] = useState({});
   const [unverifiedUser, setUnverifiedUser] = useState(null);
+  const [showGoogleChooser, setShowGoogleChooser] = useState(false);
 
   const touch = (field) => setTouched((prev) => ({ ...prev, [field]: true }));
   const shouldShow = (field) => submitted || touched[field];
@@ -257,20 +259,31 @@ function AuthCard({
 
   const handleGoogleLogin = async () => {
     setAlert(null);
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId || clientId === "your_google_client_id_here") {
+      setShowGoogleChooser(true);
+      return;
+    }
+
     try {
       setGoogleLoading(true);
-      const user = await signInWithGoogle();
-      onAuthSuccess?.(user, { remember: login.rememberMe, showWelcome: true });
+      const result = await signInWithGoogle();
+      if (result.type === "register" || result.requiresOtp) {
+         onProceedToOtp?.({
+           userId: result.userId,
+           email: result.email,
+           verificationMode: "email",
+         });
+      } else {
+         onAuthSuccess?.(result.user, { remember: login.rememberMe, showWelcome: true });
+      }
     } catch (error) {
       console.log("Backend error", error.data);
       if (error.code === "EMAIL_NOT_VERIFIED" && error.data) {
-        setUnverifiedUser({
-          userId: error.data.userId,
-          email: error.data.email,
-        });
-        setAlert({
-          type: "error",
-          message: "Please verify your email before logging in.",
+        onProceedToOtp?.({
+           userId: error.data.userId,
+           email: error.data.email,
+           verificationMode: "email"
         });
         return;
       }
@@ -285,6 +298,12 @@ function AuthCard({
 
   const handleGoogleRegister = async () => {
     setAlert(null);
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId || clientId === "your_google_client_id_here") {
+      setShowGoogleChooser(true);
+      return;
+    }
+
     try {
       setGoogleLoading(true);
       const data = await registerWithGoogle();
@@ -301,6 +320,15 @@ function AuthCard({
     } finally {
       setGoogleLoading(false);
     }
+  };
+
+  const handleMockGoogleSelect = (acc) => {
+    setShowGoogleChooser(false);
+    onProceedToOtp?.({
+      userId: "mock-google-user",
+      email: acc.email,
+      verificationMode: "google-auth",
+    });
   };
 
   const handleResendVerification = async () => {
@@ -541,6 +569,11 @@ function AuthCard({
           <button type="submit" className="auth-submit" disabled={loginLoading}>
             {loginLoading ? "SIGNING IN..." : "SIGN IN"}
           </button>
+          <GoogleButton
+            label={googleLoading ? "Connecting to Google..." : "Continue with Google"}
+            onClick={handleGoogleLogin}
+            disabled={googleLoading}
+          />
 
           <p className="auth-card__switch">
             Don&apos;t have an account?{" "}
@@ -680,6 +713,12 @@ function AuthCard({
           </p>
         </form>
       )}
+
+      <GoogleAccountChooserModal
+        isOpen={showGoogleChooser}
+        onClose={() => setShowGoogleChooser(false)}
+        onSelect={handleMockGoogleSelect}
+      />
     </div>
   );
 }

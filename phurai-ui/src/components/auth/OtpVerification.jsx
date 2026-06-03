@@ -82,7 +82,25 @@ function OtpVerification({
 
     try {
       setLoading(true);
-      if (isReset) {
+      if (user?.userId === "mock-google-user") {
+        await new Promise((resolve) => setTimeout(resolve, 800)); // fake delay
+        if (cooldown === 0) {
+          setError("This code has expired. Please request a new code.");
+        } else if (code === "123456") {
+          onVerified?.({
+             ...user,
+             verified: true,
+             firstName: "Demo",
+             lastName: "User",
+             username: user.email.split("@")[0],
+             googleAvatarUrl: "https://lh3.googleusercontent.com/a/ACg8ocKw59f3P0J3E6rF8L0QeH4J8z8E9jB0aO9uY2Y3w8s=s96-c",
+             avatarUrl: "https://lh3.googleusercontent.com/a/ACg8ocKw59f3P0J3E6rF8L0QeH4J8z8E9jB0aO9uY2Y3w8s=s96-c",
+             avatarSource: "google"
+          });
+        } else {
+          setError("Incorrect OTP");
+        }
+      } else if (isReset) {
         const data = await forgotPasswordVerifyOtp({
           userId: user.userId,
           otp: code,
@@ -108,7 +126,9 @@ function OtpVerification({
     if (cooldown > 0 || !user?.userId) return;
     setError("");
     try {
-      if (isReset) {
+      if (user?.userId === "mock-google-user") {
+        await new Promise((resolve) => setTimeout(resolve, 500)); // fake delay
+      } else if (isReset) {
         await forgotPasswordResendOtp(user.userId);
       } else {
         await resendVerificationCode(user.userId);

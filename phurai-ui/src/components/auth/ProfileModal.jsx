@@ -5,6 +5,7 @@ import {
   updateProfile,
   uploadProfileAvatar,
   updateSystemAvatar,
+  updateGoogleAvatar,
   verifyOldPassword,
   resetProfilePassword,
   forgotPasswordRequest,
@@ -500,6 +501,31 @@ function ProfileModal({
           <div className="profile-edit__avatar-picker">
             <p className="profile-edit__avatar-picker-title">Choose a new avatar</p>
             <div className="profile-edit__avatar-options">
+              {draft.googleAvatarUrl ? (
+                <button
+                  type="button"
+                  className="profile-edit__avatar-option profile-edit__avatar-option--google"
+                  style={{ background: "#faf8f4", color: "black", border: "none", marginBottom: "0.5rem" }}
+                  onClick={async () => {
+                    setAvatarPreview(draft.googleAvatarUrl);
+                    setAlert(null);
+                    try {
+                      setAvatarSaving(true);
+                      const data = await updateGoogleAvatar(userId);
+                      applyAvatarUpdate(data);
+                      setAlert({ type: "success", message: data.message || "Avatar updated successfully." });
+                    } catch (error) {
+                      setAvatarPreview("");
+                      setAlert({ type: "error", message: error.message || "Avatar update failed." });
+                    } finally {
+                      setAvatarSaving(false);
+                    }
+                  }}
+                  disabled={avatarSaving}
+                >
+                  Use your Google avatar
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="profile-edit__avatar-option profile-edit__avatar-option--upload"

@@ -276,6 +276,19 @@ export async function updateSystemAvatar(userId, avatarUrl) {
 
 export const setSystemAvatar = updateSystemAvatar;
 
+export async function updateGoogleAvatar(userId) {
+  try {
+    return await request(`/profile/${encodeURIComponent(userId)}/avatar/google`, {
+      method: "PUT",
+    });
+  } catch (error) {
+    throw createApiError(error.message || "Avatar update failed.", {
+      status: error.status,
+      data: error.data,
+    });
+  }
+}
+
 export function verifyOldPassword(userId, oldPassword) {
   return request("/profile/change-password/verify-old", {
     method: "POST",

@@ -106,6 +106,8 @@ function mapUserToFrontend(row) {
       ? new Date(row.date_of_birth).toISOString().slice(0, 10)
       : "",
     avatarUrl: normalizeStoredAvatarUrl(row.AvatarUrl),
+    googleAvatarUrl: row.google_avatar_url || "",
+    avatarSource: row.avatar_source || "system",
     authProvider: row.auth_provider || "LOCAL",
     accountStatus: row.AccountStatus || "",
     emailVerified: Boolean(row.EmailVerified),
@@ -521,32 +523,33 @@ router.post("/google-register", async (req, res) => {
       }
 
       userId = user.UserID;
-      const keepAvatar =
-        user.AvatarUrl && String(user.AvatarUrl).trim()
-          ? user.AvatarUrl
-          : avatarUrl || null;
       await pool.query(
         `UPDATE ${USERS_TABLE}
          SET [google_sub] = ?, [first_name] = ?, [last_name] = ?,
+             [google_avatar_url] = ?,
              [AvatarUrl] = CASE
-               WHEN [AvatarUrl] IS NOT NULL AND LTRIM(RTRIM([AvatarUrl])) <> '' THEN [AvatarUrl]
+               WHEN [avatar_source] = 'custom' OR [avatar_source] = 'system' THEN [AvatarUrl]
                ELSE ?
+             END,
+             [avatar_source] = CASE
+               WHEN [avatar_source] = 'custom' OR [avatar_source] = 'system' THEN [avatar_source]
+               ELSE 'google'
              END,
              [auth_provider] = 'GOOGLE', [verification_token] = ?, [verification_sent_at] = SYSDATETIME(),
              [UpdatedAt] = SYSDATETIME()
          WHERE [UserID] = ?`,
-        [googleSub, firstName, lastName, keepAvatar, otp, userId]
+        [googleSub, firstName, lastName, avatarUrl || null, avatarUrl || null, otp, userId]
       );
     } else {
       const username = await buildUniqueUsername(usernameBase);
       const [insertRows] = await pool.query(
         `INSERT INTO ${USERS_TABLE}
-          ([Email], [Username], [PasswordHash], [AccountStatus], [EmailVerified], [AvatarUrl],
+          ([Email], [Username], [PasswordHash], [AccountStatus], [EmailVerified], [AvatarUrl], [google_avatar_url], [avatar_source],
            [CreatedAt], [UpdatedAt], [first_name], [last_name], [google_sub], [auth_provider],
            [verification_token], [verification_sent_at])
          OUTPUT INSERTED.[UserID]
-         VALUES (?, ?, NULL, 'pending', 0, ?, SYSDATETIME(), SYSDATETIME(), ?, ?, ?, 'GOOGLE', ?, SYSDATETIME())`,
-        [email, username, avatarUrl || null, firstName, lastName, googleSub, otp]
+         VALUES (?, ?, NULL, 'pending', 0, ?, ?, 'google', SYSDATETIME(), SYSDATETIME(), ?, ?, ?, 'GOOGLE', ?, SYSDATETIME())`,
+        [email, username, avatarUrl || null, avatarUrl || null, firstName, lastName, googleSub, otp]
       );
       userId = insertRows[0]?.UserID;
     }
@@ -609,21 +612,22 @@ router.post("/google", async (req, res) => {
       });
     }
 
-    const hasAvatar = user.AvatarUrl && String(user.AvatarUrl).trim();
-    if (!hasAvatar && googlePicture) {
-      await pool.query(
-        `UPDATE ${USERS_TABLE}
-         SET [AvatarUrl] = ?, [LastLoginAt] = SYSDATETIME(), [UpdatedAt] = SYSDATETIME()
-         WHERE [UserID] = ?`,
-        [googlePicture, user.UserID]
-      );
-      user = await findUserById(user.UserID);
-    } else {
-      await pool.query(
-        `UPDATE ${USERS_TABLE} SET [LastLoginAt] = SYSDATETIME(), [UpdatedAt] = SYSDATETIME() WHERE [UserID] = ?`,
-        [user.UserID]
-      );
-    }
+    await pool.query(
+      `UPDATE ${USERS_TABLE}
+       SET [google_avatar_url] = ?,
+           [AvatarUrl] = CASE
+             WHEN [avatar_source] = 'custom' OR [avatar_source] = 'system' THEN [AvatarUrl]
+             ELSE ?
+           END,
+           [avatar_source] = CASE
+             WHEN [avatar_source] = 'custom' OR [avatar_source] = 'system' THEN [avatar_source]
+             ELSE 'google'
+           END,
+           [LastLoginAt] = SYSDATETIME(), [UpdatedAt] = SYSDATETIME()
+       WHERE [UserID] = ?`,
+      [googlePicture || null, googlePicture || null, user.UserID]
+    );
+    user = await findUserById(user.UserID);
 
     return res.json({ success: true, message: "Google Sign-In successful.", user: mapUserToFrontend(user) });
   } catch (err) {
@@ -838,18 +842,20 @@ router.post("/profile/:userId/avatar/upload", (req, res) => {
       if (!user) return res.status(404).json({ message: "User not found." });
 
       const publicPath = `/uploads/avatars/${req.file.filename}`;
-      await pool.query(
-        `UPDATE ${USERS_TABLE} SET [AvatarUrl] = ?, [UpdatedAt] = SYSDATETIME() WHERE [UserID] = ?`,
-        [publicPath, userId]
-      );
-
-      const updated = await findUserById(userId);
-      return res.json({
-        success: true,
-        avatarUrl: publicPath,
-        message: "Avatar updated successfully.",
-        user: mapUserToFrontend(updated),
-      });
+      try {
+        await pool.query(
+          `UPDATE ${USERS_TABLE} SET [AvatarUrl] = ?, [avatar_source] = 'custom', [UpdatedAt] = SYSDATETIME() WHERE [UserID] = ?`,
+          [publicPath, req.params.userId]
+        );
+        return res.json({
+          success: true,
+          avatarUrl: publicPath,
+          message: "Avatar updated successfully.",
+        });
+      } catch (err) {
+        console.error("Avatar upload error:", err);
+        return res.status(500).json({ message: err.message || "Avatar upload failed." });
+      }
     } catch (err) {
       console.error("Avatar upload error:", err);
       return res.status(500).json({ message: err.message || "Avatar upload failed." });
@@ -874,18 +880,19 @@ router.put("/profile/:userId/avatar/system", async (req, res) => {
     const user = await findUserById(userId);
     if (!user) return res.status(404).json({ message: "User not found." });
 
+    try {
       await pool.query(
-      `UPDATE ${USERS_TABLE} SET [AvatarUrl] = ?, [UpdatedAt] = SYSDATETIME() WHERE [UserID] = ?`,
-      [canonical, userId]
-    );
-
-    const updated = await findUserById(userId);
-    return res.json({
-      success: true,
-      avatarUrl: canonical,
-      message: "Avatar updated successfully.",
-      user: mapUserToFrontend(updated),
-    });
+        `UPDATE ${USERS_TABLE} SET [AvatarUrl] = ?, [avatar_source] = 'system', [UpdatedAt] = SYSDATETIME() WHERE [UserID] = ?`,
+        [canonical, req.params.userId]
+      );
+      return res.json({
+        success: true,
+        avatarUrl: canonical,
+        message: "Avatar updated successfully.",
+      });
+    } catch (err) {
+      return res.status(500).json({ message: err.message || "Avatar update failed." });
+    }
   } catch (err) {
     return res.status(500).json({ message: err.message || "Avatar update failed." });
   }
@@ -949,6 +956,28 @@ router.put("/profile/:userId", async (req, res) => {
     return res.json({ success: true, message: "Profile updated.", user: mapUserToFrontend(updated) });
   } catch (err) {
     return res.status(500).json({ message: err.message || "Profile update failed." });
+  }
+});
+
+router.put("/profile/:userId/avatar/google", async (req, res) => {
+  try {
+    const user = await findUserById(req.params.userId);
+    if (!user) return res.status(404).json({ message: "User not found." });
+    if (!user.google_avatar_url) return res.status(400).json({ message: "No Google avatar available." });
+
+    await pool.query(
+      `UPDATE ${USERS_TABLE} SET [AvatarUrl] = [google_avatar_url], [avatar_source] = 'google', [UpdatedAt] = SYSDATETIME() WHERE [UserID] = ?`,
+      [user.UserID]
+    );
+    const updated = await findUserById(req.params.userId);
+    return res.json({
+      success: true,
+      message: "Avatar updated successfully.",
+      user: mapUserToFrontend(updated),
+      avatarUrl: updated.google_avatar_url,
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Avatar update failed." });
   }
 });
 
