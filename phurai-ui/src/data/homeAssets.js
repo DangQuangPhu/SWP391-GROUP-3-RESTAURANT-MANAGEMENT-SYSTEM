@@ -8,6 +8,7 @@ import kitchenSashimiSalad from '../assets/images/kitchen-sashimi-salad.jpg';
 import kitchenRockShrimp from '../assets/images/kitchen-rock-shrimp.jpg';
 import kitchenBlackCodMiso from '../assets/images/kitchen-black-cod-miso.jpg';
 import hero from '../assets/images/hero.jpg';
+import { commonIcons, contactIcons, formIcons, socialIcons, utilityIcons } from './iconAssets';
 
 const FIGMA = 'https://www.figma.com/api/mcp/asset';
 
@@ -43,16 +44,16 @@ export const homeImages = {
 };
 
 export const homeIcons = {
-  star: `${FIGMA}/cd4d551a-ad83-4e17-b338-7ee6e18d5c03`,
-  chevron: `${FIGMA}/2b76c305-94d1-4426-836d-a264fc27ff9e`,
-  accessibility: `${FIGMA}/08611e34-b47d-443a-b093-3bacf2ae7ccb`,
-  scrollTop: `${FIGMA}/8b0f4bd1-0130-4b04-a2f9-fc7a19b6f4e6`,
-  scrollTopAlt: `${FIGMA}/e619ac7c-bdc6-4394-9ec0-64bbe422099f`,
-  socialInstagram: `${FIGMA}/1bc7495d-5077-400b-bfce-45d82a60a6c4`,
-  socialFacebook: `${FIGMA}/228d9026-1711-4196-95e0-c76f53f08c0d`,
-  socialTwitter: `${FIGMA}/cbfb4a76-2d72-43ae-83af-538e3bfef7f4`,
-  socialYoutube: `${FIGMA}/81734236-9af5-4254-b376-26348e706a8a`,
-  location: `${FIGMA}/5c4582a4-1f20-4171-92bb-5a9ab095ba26`,
-  phone: `${FIGMA}/1ce2776d-0f2f-4d77-90cd-af25150ce62e`,
-  email: `${FIGMA}/b1670965-bc58-44bc-945f-bde22c00fed4`,
+  star: commonIcons.star,
+  chevron: formIcons.chevronDown,
+  accessibility: utilityIcons.accessibility,
+  scrollTop: utilityIcons.scrollTop,
+  scrollTopAlt: utilityIcons.scrollTopAlt,
+  socialInstagram: socialIcons.instagram,
+  socialFacebook: socialIcons.facebook,
+  socialTwitter: socialIcons.twitter,
+  socialYoutube: socialIcons.youtube,
+  location: contactIcons.location,
+  phone: contactIcons.phone,
+  email: contactIcons.email,
 };

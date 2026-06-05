@@ -8,7 +8,7 @@ function FloatingUtilityButtons() {
   return (
     <div className="phurai-floating-utils" aria-label="Utility controls">
       <button type="button" className="phurai-floating-utils__btn" aria-label="Accessibility">
-        <img src={homeIcons.accessibility} alt="" width={20} height={20} />
+        <img src={homeIcons.accessibility} alt="" className="icon nav-icon" />
       </button>
       <button
         type="button"
@@ -16,7 +16,7 @@ function FloatingUtilityButtons() {
         aria-label="Back to top"
         onClick={scrollToTop}
       >
-        <img src={homeIcons.scrollTopAlt} alt="" width={20} height={20} />
+        <img src={homeIcons.scrollTopAlt} alt="" className="icon nav-icon" />
       </button>
     </div>
   );

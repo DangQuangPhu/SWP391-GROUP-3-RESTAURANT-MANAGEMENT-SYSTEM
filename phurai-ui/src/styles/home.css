@@ -968,9 +968,41 @@
   position: absolute;
   right: 1rem;
   bottom: 1rem;
-  width: 21px;
-  height: 21px;
   pointer-events: none;
+}
+
+/* ── Icon utilities ── */
+.icon {
+  display: block;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.nav-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.social-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  display: block;
+}
+
+.contact-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.dropdown-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
 
 .phurai-field__label {
@@ -1203,6 +1235,16 @@
   background: #27272a;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
   cursor: pointer;
+}
+
+.phurai-floating-utils__btn .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.phurai-testimonial-card__stars .icon {
+  width: 20px;
+  height: 19px;
 }
 
 /* ── Responsive ── */

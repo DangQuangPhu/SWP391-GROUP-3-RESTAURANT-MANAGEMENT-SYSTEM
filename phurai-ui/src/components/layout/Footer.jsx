@@ -33,7 +33,7 @@ function Footer() {
           <div className="phurai-footer__social">
             {socialLinks.map((item) => (
               <a key={item.label} href="#" aria-label={item.label}>
-                <img src={item.icon} alt="" width={16} height={16} />
+                <img src={item.icon} alt="" className="social-icon" />
               </a>
             ))}
           </div>
@@ -86,15 +86,15 @@ function Footer() {
 
       <div className="phurai-footer__contact-bar">
         <p>
-          <img src={homeIcons.location} alt="" width={13} height={16} />
+          <img src={homeIcons.location} alt="" className="contact-icon" />
           45 Admiralty Way, Lekki Phase 1, Lagos
         </p>
         <p>
-          <img src={homeIcons.phone} alt="" width={14} height={14} />
+          <img src={homeIcons.phone} alt="" className="contact-icon" />
           +84 964 813 966
         </p>
         <p>
-          <img src={homeIcons.email} alt="" width={16} height={13} />
+          <img src={homeIcons.email} alt="" className="contact-icon" />
           quagphu159@gmail.com
         </p>
       </div>

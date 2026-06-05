@@ -18,46 +18,21 @@ import menuMisoCappuccino from '../assets/images/menu/menu-miso-cappuccino.jpg';
 import menuHokusetsuJunmai from '../assets/images/menu/menu-hokusetsu-junmai.jpg';
 import menuLycheeMartini from '../assets/images/menu/menu-lychee-martini.jpg';
 import menuFooterBg from '../assets/images/menu/menu-footer-bg.png';
-import menuNavIcon1 from '../assets/images/menu/menu-nav-icon-1.png';
-import menuNavIcon2 from '../assets/images/menu/menu-nav-icon-2.png';
-import menuNavIcon3 from '../assets/images/menu/menu-nav-icon-3.png';
-import menuNavIcon4 from '../assets/images/menu/menu-nav-icon-4.png';
-import menuNavIcon5 from '../assets/images/menu/menu-nav-icon-5.png';
-import menuNavIcon6 from '../assets/images/menu/menu-nav-icon-6.png';
-import menuNavIcon7 from '../assets/images/menu/menu-nav-icon-7.png';
-import menuNavIcon8 from '../assets/images/menu/menu-nav-icon-8.png';
-import menuSocialInstagram from '../assets/images/menu/menu-social-instagram.png';
-import menuSocialFacebook from '../assets/images/menu/menu-social-facebook.png';
-import menuSocialTwitter from '../assets/images/menu/menu-social-twitter.png';
-import menuSocialYoutube from '../assets/images/menu/menu-social-youtube.png';
-import menuIconLocation from '../assets/images/menu/menu-icon-location.png';
-import menuIconPhone from '../assets/images/menu/menu-icon-phone.png';
-import menuIconEmail from '../assets/images/menu/menu-icon-email.png';
-import menuAccessibility from '../assets/images/menu/menu-accessibility.png';
-import menuScrollTop from '../assets/images/menu/menu-scroll-top.png';
+import { menuCategoryIcons, utilityIcons } from './iconAssets';
 
 export const menuIcons = {
   nav: [
-    menuNavIcon1,
-    menuNavIcon2,
-    menuNavIcon3,
-    menuNavIcon4,
-    menuNavIcon5,
-    menuNavIcon6,
-    menuNavIcon7,
-    menuNavIcon8,
+    menuCategoryIcons.sushiSashimi,
+    menuCategoryIcons.noodleRice,
+    menuCategoryIcons.signatureDish,
+    menuCategoryIcons.seafood,
+    menuCategoryIcons.barbecueGrill,
+    menuCategoryIcons.desserts,
+    menuCategoryIcons.beverages,
+    menuCategoryIcons.chefsSetMenu,
   ],
-  social: {
-    instagram: menuSocialInstagram,
-    facebook: menuSocialFacebook,
-    twitter: menuSocialTwitter,
-    youtube: menuSocialYoutube,
-  },
-  location: menuIconLocation,
-  phone: menuIconPhone,
-  email: menuIconEmail,
-  accessibility: menuAccessibility,
-  scrollTop: menuScrollTop,
+  accessibility: utilityIcons.accessibility,
+  scrollTop: utilityIcons.scrollTop,
 };
 
 export const menuImages = {

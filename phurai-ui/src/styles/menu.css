@@ -77,9 +77,16 @@
   position: relative;
 }
 
-.menu-sidebar__link img {
+.menu-sidebar__link img,
+.menu-category-icon {
   flex-shrink: 0;
   object-fit: contain;
+  display: block;
+}
+
+.menu-category-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .menu-sidebar__link img.icon-18 {

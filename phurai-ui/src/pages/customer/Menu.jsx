@@ -88,7 +88,7 @@ function Menu() {
                 <img
                   src={menuIcons.nav[link.icon]}
                   alt=""
-                  className={link.iconClass}
+                  className={`menu-category-icon ${link.iconClass}`}
                 />
                 <span>
                   {link.multiline
@@ -310,7 +310,7 @@ function Menu() {
 
       <div className="menu-floating" aria-label="Utility controls">
         <button type="button" className="menu-floating__btn" aria-label="Accessibility">
-          <img src={menuIcons.accessibility} alt="" width={20} height={20} />
+          <img src={menuIcons.accessibility} alt="" className="icon nav-icon" />
         </button>
         <button
           type="button"
@@ -318,7 +318,7 @@ function Menu() {
           aria-label="Back to top"
           onClick={scrollToTop}
         >
-          <img src={menuIcons.scrollTop} alt="" width={20} height={20} />
+          <img src={menuIcons.scrollTop} alt="" className="icon nav-icon" />
         </button>
       </div>
     </div>

@@ -41,7 +41,7 @@ function ReservationForm() {
               <option value="19:00">7:00 PM</option>
               <option value="20:00">8:00 PM</option>
             </select>
-            <img src={homeIcons.chevron} alt="" className="phurai-field__chevron" aria-hidden="true" />
+            <img src={homeIcons.chevron} alt="" className="phurai-field__chevron dropdown-icon" aria-hidden="true" />
           </label>
           <label className="phurai-field phurai-field--select">
             <span className="phurai-field__label">Seats</span>
@@ -53,7 +53,7 @@ function ReservationForm() {
               <option value="4">4</option>
               <option value="6">6</option>
             </select>
-            <img src={homeIcons.chevron} alt="" className="phurai-field__chevron" aria-hidden="true" />
+            <img src={homeIcons.chevron} alt="" className="phurai-field__chevron dropdown-icon" aria-hidden="true" />
           </label>
         </div>
 
