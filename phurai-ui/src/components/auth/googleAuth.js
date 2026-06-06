@@ -1,10 +1,5 @@
 const GOOGLE_IDENTITY_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
-import {
-  API_BASE_URL,
-  googleRegister,
-  googleRegisterWithAccessToken,
-  googleLogin,
-} from "./api";
+import { googleRegister, googleRegisterWithAccessToken, googleLogin } from "./api";
 
 let googleScriptPromise;
 
@@ -122,6 +117,14 @@ export async function signInWithGoogle() {
     if (error.code === "ACCOUNT_NOT_FOUND") {
       const regData = await googleRegisterWithAccessToken(accessToken);
       return { type: "register", ...regData };
+    }
+    if (error.code === "EMAIL_NOT_VERIFIED") {
+      return {
+        type: "otp",
+        requiresOtp: true,
+        userId: error.data?.userId,
+        email: error.data?.email,
+      };
     }
     throw error;
   }

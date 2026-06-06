@@ -1,0 +1,20 @@
+.account-page__back-home {
+  position: fixed;
+  top: 50px;
+  left: 120px;
+  z-index: 10;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.account-page__back-home:hover {
+  opacity: 0.75;
+  text-decoration: underline;
+}

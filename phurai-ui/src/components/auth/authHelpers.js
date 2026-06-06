@@ -1,3 +1,9 @@
+export function blurActiveElement() {
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur();
+  }
+}
+
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const USERNAME_REGEX = /^[a-zA-Z0-9._]{3,30}$/;
 export const NAME_REGEX = /^[a-zA-Z\s]+$/;
@@ -42,6 +48,14 @@ export function isAtLeast13YearsOld(value) {
     age -= 1;
   }
   return age >= 13;
+}
+
+export function isDateOfBirthNotInFuture(value) {
+  const dob = parseDateOfBirth(value);
+  if (!dob) return false;
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  return dob.getTime() <= today.getTime();
 }
 
 export function isPasswordStrong(password) {

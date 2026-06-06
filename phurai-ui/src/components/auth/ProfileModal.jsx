@@ -8,8 +8,9 @@ import {
   updateGoogleAvatar,
   verifyOldPassword,
   resetProfilePassword,
-  forgotPasswordRequest,
+  forgotPasswordRequestOtp,
 } from "./api";
+import { buildInitialTiming } from "./otpTiming";
 import { SYSTEM_AVATARS, getAvatarSrc, normalizeStoredAvatarUrl } from "./avatarUtils";
 import UserAvatar from "./UserAvatar";
 import SystemAvatarOption from "./SystemAvatarOption";
@@ -122,7 +123,6 @@ function ProfileModal({
   };
 
   const goToView = () => {
-    console.log("Switching to view");
     setProfileMode(PROFILE_MODES.VIEW);
     resetSubState();
   };
@@ -141,7 +141,6 @@ function ProfileModal({
     }
     setAvatarPreview("");
     onSave?.(nextUser);
-    console.log("Avatar saved — returning to view");
     setProfileMode(PROFILE_MODES.VIEW);
   };
 
@@ -181,7 +180,6 @@ function ProfileModal({
     setDraft(base);
     const mode = mapInitialViewToMode(initialView);
     setProfileMode(mode);
-    console.log("Profile mode:", mode);
     resetSubState();
 
     const uid = base.userId ?? base.id;
@@ -203,7 +201,6 @@ function ProfileModal({
   }, [isOpen, user, initialView, onSave]);
 
   useEffect(() => {
-    console.log("Profile mode:", profileMode);
   }, [profileMode]);
 
   useEffect(() => {
@@ -350,13 +347,16 @@ function ProfileModal({
     try {
       setSaving(true);
       setAlert(null);
-      const data = await forgotPasswordRequest({ userId, identifier: email });
+      const data = await forgotPasswordRequestOtp({
+        email,
+        purpose: "forgot_password",
+      });
       setForgotOtpUser({
         userId: data.userId || userId,
         email: data.email || email,
         verificationMode: "reset-password",
+        initialTiming: buildInitialTiming(data),
       });
-      console.log("Switching to forgotPasswordOtp");
       setProfileMode(PROFILE_MODES.FORGOT_PASSWORD_OTP);
       setAlert({
         type: "success",
@@ -369,12 +369,12 @@ function ProfileModal({
     }
   };
 
-  const handleForgotOtpVerified = ({ resetToken, userId: verifiedUserId }) => {
+  const handleForgotOtpVerified = ({ resetToken, userId: verifiedUserId, email: verifiedEmail }) => {
     setResetSession({
       userId: verifiedUserId || userId,
       resetToken,
+      email: verifiedEmail || forgotOtpUser?.email || draft?.email,
     });
-    console.log("Switching to resetPassword");
     setProfileMode(PROFILE_MODES.RESET_PASSWORD);
     setAlert({ type: "success", message: "OTP verified. You can now reset your password." });
   };
@@ -482,7 +482,6 @@ function ProfileModal({
                 type="button"
                 className="profile-edit__avatar-btn"
                 onClick={() => {
-                  console.log("Switching to changeAvatar");
                   setProfileMode(PROFILE_MODES.CHANGE_AVATAR);
                   setAlert(null);
                 }}
@@ -682,6 +681,7 @@ function ProfileModal({
             <OtpVerification
               user={forgotOtpUser}
               context="reset-password"
+              initialTiming={forgotOtpUser?.initialTiming}
               onVerified={handleForgotOtpVerified}
               onBack={() => {
                 setProfileMode(PROFILE_MODES.CHANGE_PASSWORD);
@@ -697,6 +697,7 @@ function ProfileModal({
             <h3>Create New Password</h3>
             <ResetPasswordForm
               userId={resetSession.userId}
+              email={resetSession.email}
               resetToken={resetSession.resetToken}
               onSuccess={handleForgotResetSuccess}
             />
@@ -799,7 +800,6 @@ function ProfileModal({
                   type="button"
                   className="profile-edit__btn profile-edit__btn--gold"
                   onClick={() => {
-                    console.log("Switching to editProfile");
                     setProfileMode(PROFILE_MODES.EDIT_PROFILE);
                     setAlert(null);
                   }}
@@ -810,7 +810,6 @@ function ProfileModal({
                   type="button"
                   className="profile-edit__btn profile-edit__btn--outline"
                   onClick={() => {
-                    console.log("Switching to changePassword");
                     setPasswordStep("choose");
                     setProfileMode(PROFILE_MODES.CHANGE_PASSWORD);
                     setAlert(null);

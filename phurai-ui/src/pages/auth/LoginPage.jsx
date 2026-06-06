@@ -48,6 +48,7 @@ function LoginPage({
       setResetSession({
         userId: pendingUser.userId,
         resetToken: result.resetToken,
+        email: result.email ?? pendingUser.email,
       });
       setView(VIEWS.RESET);
       return;
@@ -77,6 +78,7 @@ function LoginPage({
             ? "reset-password"
             : "verify-account"
         }
+        initialTiming={pendingUser?.initialTiming}
         onVerified={handleOtpVerified}
         onBack={() => {
           if (pendingUser?.verificationMode === "reset-password") {
@@ -98,6 +100,7 @@ function LoginPage({
     content = (
       <ResetPasswordForm
         userId={resetSession.userId}
+        email={resetSession.email}
         resetToken={resetSession.resetToken}
         onSuccess={handleResetSuccess}
       />

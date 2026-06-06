@@ -1,12 +1,21 @@
 import { useEffect, useRef, useState } from "react";
+import OtpCodeInput from "./OtpCodeInput";
 import {
   verifyOtp,
-  resendVerificationCode,
+  requestOtp,
+  resendOtp,
   forgotPasswordVerifyOtp,
   forgotPasswordResendOtp,
 } from "./api";
+import {
+  OTP_EXPIRES_IN_SECONDS,
+  OTP_RESEND_COOLDOWN_SECONDS,
+  applyOtpSentTiming,
+  formatOtpExpiry,
+  resolveRetryAfterSeconds,
+} from "./otpTiming";
+import "./OtpCodeInput.css";
 
-const COOLDOWN_SECONDS = 30;
 const SUCCESS_DELAY_MS = 900;
 
 function OtpVerification({
@@ -14,39 +23,93 @@ function OtpVerification({
   context = "verify-account",
   onVerified,
   onBack,
+  initialTiming = null,
 }) {
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [shake, setShake] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [cooldown, setCooldown] = useState(COOLDOWN_SECONDS);
-  const inputRefs = useRef([]);
+  const [resendSeconds, setResendSeconds] = useState(OTP_RESEND_COOLDOWN_SECONDS);
+  const [otpExpiresIn, setOtpExpiresIn] = useState(OTP_EXPIRES_IN_SECONDS);
+  const [isResending, setIsResending] = useState(false);
   const successTimerRef = useRef(null);
+  const hasRequestedOtpRef = useRef(false);
 
   const isReset = context === "reset-password";
   const title = isReset ? "Verify Reset Code" : "Verify Your Account";
   const email = user?.email || "your email";
+  const canResend = resendSeconds === 0 && !isResending;
+  const isOtpExpired = otpExpiresIn <= 0;
 
   useEffect(() => {
-    inputRefs.current[0]?.focus();
-    setCooldown(COOLDOWN_SECONDS);
+    hasRequestedOtpRef.current = false;
+    setResendSeconds(OTP_RESEND_COOLDOWN_SECONDS);
+    setOtpExpiresIn(OTP_EXPIRES_IN_SECONDS);
     setSuccess(false);
     setShake(false);
     setDigits(["", "", "", "", "", ""]);
     setError("");
+    setNotice("");
     setSubmitted(false);
-  }, [user?.userId, context]);
+    setIsResending(false);
+
+    if (initialTiming) {
+      applyOtpSentTiming(initialTiming, { setOtpExpiresIn, setResendSeconds });
+    }
+  }, [user?.userId, user?.email, context, initialTiming]);
 
   useEffect(() => {
-    if (cooldown <= 0) return undefined;
-    const timer = setInterval(() => {
-      setCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    if (isReset || initialTiming) return undefined;
+    if (user?.userId === "mock-google-user") return undefined;
+
+    const normalizedEmail = String(user?.email || "").trim().toLowerCase();
+    if (!normalizedEmail || normalizedEmail === "your email") return undefined;
+    if (hasRequestedOtpRef.current) return undefined;
+
+    hasRequestedOtpRef.current = true;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const data = await requestOtp({
+          email: normalizedEmail,
+          purpose: "verify_account",
+        });
+        if (cancelled) return;
+        applyOtpSentTiming(data, { setOtpExpiresIn, setResendSeconds });
+      } catch (err) {
+        if (cancelled) return;
+        setError(err.message || "Could not send verification code.");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.email, user?.userId, context, initialTiming, isReset]);
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return undefined;
+
+    const timer = setTimeout(() => {
+      setResendSeconds((prev) => Math.max(prev - 1, 0));
     }, 1000);
-    return () => clearInterval(timer);
-  }, [cooldown]);
+
+    return () => clearTimeout(timer);
+  }, [resendSeconds]);
+
+  useEffect(() => {
+    if (otpExpiresIn <= 0) return undefined;
+
+    const timer = setTimeout(() => {
+      setOtpExpiresIn((prev) => Math.max(prev - 1, 0));
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [otpExpiresIn]);
 
   useEffect(() => () => {
     if (successTimerRef.current) clearTimeout(successTimerRef.current);
@@ -64,45 +127,17 @@ function OtpVerification({
     }, SUCCESS_DELAY_MS);
   };
 
-  const updateDigit = (index, value) => {
-    const digit = value.replace(/\D/g, "").slice(-1);
-    const next = [...digits];
-    next[index] = digit;
-    setDigits(next);
-    setError("");
-    if (digit && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-      setActiveIndex(index + 1);
-    }
-  };
-
-  const handleFocus = (index) => setActiveIndex(index);
-
-  const handleKeyDown = (index, event) => {
-    if (event.key === "Backspace" && !digits[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-      setActiveIndex(index - 1);
-    }
-  };
-
-  const handlePaste = (event) => {
-    event.preventDefault();
-    const pasted = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-    if (!pasted) return;
-    const next = ["", "", "", "", "", ""];
-    pasted.split("").forEach((char, index) => {
-      next[index] = char;
-    });
-    setDigits(next);
-    setError("");
-    const focusIndex = Math.min(pasted.length, 5);
-    inputRefs.current[focusIndex]?.focus();
-    setActiveIndex(focusIndex);
-  };
-
   const handleVerify = async (event) => {
     event.preventDefault();
     setSubmitted(true);
+    setNotice("");
+
+    if (isOtpExpired) {
+      setError("This code has expired. Please request a new code.");
+      triggerShake();
+      return;
+    }
+
     const code = digits.join("");
 
     if (!code) {
@@ -119,7 +154,6 @@ function OtpVerification({
     try {
       setLoading(true);
       if (user?.userId === "mock-google-user") {
-        // TODO: Replace mock OTP with backend verify-otp when Google mock flow is wired to API.
         await new Promise((resolve) => setTimeout(resolve, 600));
         if (code === "123456") {
           completeVerification({
@@ -136,16 +170,30 @@ function OtpVerification({
         }
       } else if (isReset) {
         const data = await forgotPasswordVerifyOtp({
-          userId: user.userId,
+          email,
           otp: code,
+          purpose: "forgot_password",
+          userId: user?.userId,
         });
         completeVerification({
           resetToken: data.resetToken,
           userId: data.userId ?? user.userId,
+          email: data.email ?? email,
         });
       } else {
-        const data = await verifyOtp({ userId: user.userId, otp: code });
-        completeVerification(data.user);
+        if (!email || email === "your email") {
+          setError("Email is required to verify your account.");
+          triggerShake();
+          return;
+        }
+
+        const data = await verifyOtp({
+          email,
+          otp: code,
+          purpose: "verify_account",
+          userId: user?.userId,
+        });
+        completeVerification(data.user || user);
       }
     } catch (verificationError) {
       setError(
@@ -157,28 +205,54 @@ function OtpVerification({
     }
   };
 
-  const handleResend = async () => {
-    if (cooldown > 0 || !user?.userId) return;
-    setError("");
+  const handleResendOtp = async () => {
+    if (!canResend) return;
+
     try {
+      setIsResending(true);
+      setError("");
+      setNotice("");
+
       if (user?.userId === "mock-google-user") {
         await new Promise((resolve) => setTimeout(resolve, 400));
+        applyOtpSentTiming(
+          { expiresIn: OTP_EXPIRES_IN_SECONDS, resendCooldown: OTP_RESEND_COOLDOWN_SECONDS },
+          { setOtpExpiresIn, setResendSeconds }
+        );
       } else if (isReset) {
-        await forgotPasswordResendOtp(user.userId);
+        if (!email || email === "your email") return;
+        const data = await forgotPasswordResendOtp({
+          email,
+          purpose: "forgot_password",
+          userId: user?.userId,
+        });
+        applyOtpSentTiming(data, { setOtpExpiresIn, setResendSeconds });
       } else {
-        await resendVerificationCode(user.userId);
+        if (!email || email === "your email") return;
+        const data = await resendOtp({
+          email,
+          purpose: "verify_account",
+        });
+
+        if (data.success === false) {
+          throw new Error(data.message || "Could not resend OTP.");
+        }
+
+        applyOtpSentTiming(data, { setOtpExpiresIn, setResendSeconds });
       }
+
       setDigits(["", "", "", "", "", ""]);
       setSubmitted(false);
-      setCooldown(COOLDOWN_SECONDS);
-      inputRefs.current[0]?.focus();
-      setActiveIndex(0);
+      setNotice("A new verification code has been sent to your email.");
     } catch (err) {
-      if (err.status === 429 && err.data?.retryAfterSeconds) {
-        setCooldown(err.data.retryAfterSeconds);
+      const retryAfter = resolveRetryAfterSeconds(err.data || {});
+      if (err.status === 429) {
+        setResendSeconds(retryAfter);
       }
-      setError(err.message || "Could not resend code.");
+      setError(err.message || "Could not resend OTP.");
       triggerShake();
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -196,6 +270,12 @@ function OtpVerification({
         </p>
       ) : null}
 
+      {notice ? (
+        <p className="auth-card__subtitle" role="status">
+          {notice}
+        </p>
+      ) : null}
+
       {success ? (
         <div className="auth-otp__success" role="status" aria-live="polite">
           <div className="auth-otp__success-icon" aria-hidden="true">
@@ -208,44 +288,51 @@ function OtpVerification({
         </div>
       ) : (
         <form className="auth-otp__form" onSubmit={handleVerify} noValidate>
-          <div
-            className={`auth-otp__inputs${shake ? " auth-otp__inputs--shake" : ""}`}
-            onPaste={handlePaste}
-          >
-            {digits.map((digit, index) => (
-              <input
-                key={index}
-                ref={(el) => {
-                  inputRefs.current[index] = el;
-                }}
-                type="text"
-                inputMode="numeric"
-                maxLength={1}
-                className={`auth-otp__input${
-                  error && submitted ? " auth-otp__input--error" : ""
-                }${activeIndex === index ? " auth-otp__input--active" : ""}`}
-                value={digit}
-                onChange={(event) => updateDigit(index, event.target.value)}
-                onFocus={() => handleFocus(index)}
-                onKeyDown={(event) => handleKeyDown(index, event)}
-                aria-label={`Digit ${index + 1}`}
-                disabled={loading}
-              />
-            ))}
-          </div>
+          <OtpCodeInput
+            idPrefix="auth-otp"
+            value={digits}
+            onChange={(next) => {
+              setDigits(next);
+              setError("");
+              setNotice("");
+            }}
+            disabled={loading || isOtpExpired}
+            error={Boolean(error && submitted)}
+            shake={shake}
+          />
 
-          <button type="submit" className="auth-submit" disabled={loading}>
+          {otpExpiresIn > 0 ? (
+            <p className="otp-expiry" aria-live="polite">
+              {`This code expires in ${formatOtpExpiry(otpExpiresIn)}`}
+            </p>
+          ) : (
+            <p className="auth-field__error auth-otp__error" role="alert">
+              This code has expired. Please request a new code.
+            </p>
+          )}
+
+          <button
+            type="submit"
+            className="auth-submit"
+            disabled={loading || isOtpExpired}
+          >
             {loading ? "VERIFYING..." : "VERIFY OTP"}
           </button>
 
-          <button
-            type="button"
-            className="auth-form__link auth-otp__resend"
-            onClick={handleResend}
-            disabled={cooldown > 0 || loading}
-          >
-            {cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend OTP"}
-          </button>
+          {resendSeconds > 0 ? (
+            <p className="otp-countdown" aria-live="polite">
+              {`You can request a new code in ${resendSeconds}s`}
+            </p>
+          ) : (
+            <button
+              type="button"
+              className="otp-resend-button auth-form__link auth-otp__resend"
+              onClick={handleResendOtp}
+              disabled={isResending || loading}
+            >
+              {isResending ? "Sending..." : "Resend Code"}
+            </button>
+          )}
 
           <button type="button" className="auth-form__link auth-otp__back" onClick={onBack}>
             Back

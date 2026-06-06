@@ -22,13 +22,23 @@ const pageClassMap = {
   contactHours: "contact-hours",
 };
 
-const darkTopPages = ["home", "takeout", "privateEvents", "careers", "contactHours"];
+const darkTopPages = [
+  "home",
+  "takeout",
+  "privateEvents",
+  "careers",
+  "contactHours",
+  "notFound",
+];
 
 function Navbar({
   onNavigate,
   activePage = "home",
   isAuthenticated = false,
   currentUser = null,
+  status = null,
+  onSaveStatus,
+  onClearStatus,
   onOpenAuth,
   onOpenProfile,
   onSignOut,
@@ -133,8 +143,14 @@ function Navbar({
     return false;
   };
 
-  const handleMyProfile = () => openProfile("view");
-  const handleEditProfile = () => openProfile("edit");
+  const handleMyProfile = () => {
+    setProfileOpen(false);
+    onNavigate?.("profile");
+  };
+  const handleSettings = () => {
+    setProfileOpen(false);
+    onNavigate?.("settings");
+  };
   const handleChangePassword = () => openProfile("password");
 
   return (
@@ -203,10 +219,14 @@ function Navbar({
               isOpen={profileOpen}
               onClose={() => setProfileOpen(false)}
               currentUser={currentUser}
+              status={status}
+              onSaveStatus={onSaveStatus}
+              onClearStatus={onClearStatus}
               onMyProfile={handleMyProfile}
-              onEditProfile={handleEditProfile}
+              onSettings={handleSettings}
               onChangePassword={handleChangePassword}
               onSignOut={onSignOut}
+              onOpenAuth={onOpenAuth}
             />
           </div>
         ) : null}

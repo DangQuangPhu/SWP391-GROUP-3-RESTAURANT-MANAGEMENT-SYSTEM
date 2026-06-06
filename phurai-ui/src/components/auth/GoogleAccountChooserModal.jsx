@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { blurActiveElement } from "./authHelpers";
 import "../../styles/authModal.css";
 
 const MOCK_ACCOUNTS = [
@@ -16,10 +17,15 @@ const MOCK_ACCOUNTS = [
 ];
 
 function GoogleAccountChooserModal({ isOpen, onClose, onSelect }) {
+  const handleClose = () => {
+    blurActiveElement();
+    onClose?.();
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (event) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") handleClose();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
@@ -31,7 +37,7 @@ function GoogleAccountChooserModal({ isOpen, onClose, onSelect }) {
     <div className="auth-modal" role="presentation">
       <div
         className="auth-modal__overlay"
-        onClick={onClose}
+        onClick={handleClose}
         style={{ background: "rgba(0, 0, 0, 0.6)" }}
         aria-hidden="true"
       />
@@ -46,7 +52,7 @@ function GoogleAccountChooserModal({ isOpen, onClose, onSelect }) {
         <button
           type="button"
           className="auth-modal__close"
-          onClick={onClose}
+          onClick={handleClose}
           aria-label="Close"
         >
           <span aria-hidden="true">&times;</span>
@@ -66,7 +72,10 @@ function GoogleAccountChooserModal({ isOpen, onClose, onSelect }) {
             <button
               key={acc.email}
               type="button"
-              onClick={() => onSelect(acc)}
+              onClick={() => {
+                blurActiveElement();
+                onSelect(acc);
+              }}
               style={{
                 display: "flex",
                 alignItems: "center",

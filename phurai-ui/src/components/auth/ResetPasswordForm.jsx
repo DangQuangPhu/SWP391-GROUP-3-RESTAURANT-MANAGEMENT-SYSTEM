@@ -64,7 +64,7 @@ function StrengthMeter({ password }) {
   );
 }
 
-function ResetPasswordForm({ userId, resetToken, onSuccess }) {
+function ResetPasswordForm({ userId, email, resetToken, onSuccess }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [errors, setErrors] = useState({});
@@ -96,6 +96,7 @@ function ResetPasswordForm({ userId, resetToken, onSuccess }) {
       setAlert("");
       await forgotPasswordReset({
         userId,
+        email,
         resetToken,
         newPassword: password,
         confirmPassword: confirm,

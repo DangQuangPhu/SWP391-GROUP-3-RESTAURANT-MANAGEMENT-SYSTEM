@@ -4,7 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import multer from "multer";
 import pool from "../db.js";
-import { sendVerificationEmail, isSmtpConfigured } from "../email.js";
+import {
+  sendVerificationEmail,
+  sendOtpEmail,
+  isSmtpConfigured,
+  RESEND_COOLDOWN_SECONDS,
+} from "../email.js";
 import {
   hashPassword,
   verifyPassword,
@@ -21,10 +26,26 @@ import {
   isAtLeast13YearsOld,
   parseDateOfBirth,
 } from "../utils/validation.js";
+import {
+  OTP_EXPIRES_IN_SECONDS,
+  OTP_EXPIRES_IN_MS,
+  OTP_RESEND_COOLDOWN_SECONDS,
+  runOtpLifecycleCleanup,
+  saveOtpToken,
+  verifyOtpRecord,
+  findLatestOtpRecord,
+  isVerificationSentExpired,
+  invalidatePendingOtps,
+  markOtpExpired,
+  assertPendingVerificationUser,
+  checkOtpResendCooldown,
+  buildOtpSuccessResponse,
+  getOtpResendRemainingSeconds,
+  isVerifyAccountPurpose,
+} from "../utils/otpService.js";
 
 const router = express.Router();
 const USERS_TABLE = "[dbo].[Users]";
-const RESEND_COOLDOWN_SECONDS = 30;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const AVATAR_UPLOAD_DIR = path.join(__dirname, "../uploads/avatars");
@@ -80,72 +101,106 @@ const avatarUpload = multer({
 
 const GOOGLE_TOKENINFO = "https://oauth2.googleapis.com/tokeninfo";
 
+const OTP_VERIFY_PURPOSE = "verify_account";
+const OTP_RESET_PURPOSE = "reset_password";
+
 function getResendRemainingSeconds(sentAt) {
-  if (!sentAt) return 0;
-  const elapsed = (Date.now() - new Date(sentAt).getTime()) / 1000;
-  return Math.max(0, Math.ceil(RESEND_COOLDOWN_SECONDS - elapsed));
+  return getOtpResendRemainingSeconds(sentAt);
+}
+
+function normalizeUserRow(row) {
+  if (!row) return null;
+  return {
+    user_id: row.user_id ?? row.UserID,
+    email: row.email ?? row.Email,
+    username: row.username ?? row.Username,
+    password_hash: row.password_hash ?? row.PasswordHash,
+    status: row.status ?? row.AccountStatus,
+    is_email_verified: row.is_email_verified ?? row.EmailVerified,
+    phone_number: row.phone_number ?? row.PhoneNumber,
+    avatar_url: row.avatar_url ?? row.AvatarUrl,
+    google_avatar_url: row.google_avatar_url ?? null,
+    avatar_source: row.avatar_source ?? "system",
+    last_login_at: row.last_login_at ?? row.LastLoginAt,
+    created_at: row.created_at ?? row.CreatedAt,
+    updated_at: row.updated_at ?? row.UpdatedAt,
+    first_name: row.first_name ?? "",
+    last_name: row.last_name ?? "",
+    date_of_birth: row.date_of_birth ?? null,
+    google_sub: row.google_sub ?? null,
+    auth_provider: row.auth_provider ?? "LOCAL",
+    verification_token: row.verification_token ?? null,
+    verification_sent_at: row.verification_sent_at ?? null,
+    password_reset_token: row.password_reset_token ?? null,
+    password_reset_expires_at: row.password_reset_expires_at ?? null,
+    password_reset_sent_at: row.password_reset_sent_at ?? null,
+    password_reset_verified_token: row.password_reset_verified_token ?? null,
+    LockoutUntil: row.LockoutUntil ?? null,
+    FailedLoginCount: row.FailedLoginCount ?? 0,
+  };
 }
 
 function mapUserToFrontend(row) {
   if (!row) return null;
-  const firstName = row.first_name || "";
-  const lastName = row.last_name || "";
-  const username = row.username || "";
+  const normalized = normalizeUserRow(row);
+  const firstName = normalized.first_name || "";
+  const lastName = normalized.last_name || "";
+  const username = normalized.username || "";
   return {
-    id: row.user_id,
-    userId: row.user_id,
+    id: normalized.user_id,
+    userId: normalized.user_id,
     firstName: String(firstName).trim(),
     lastName: String(lastName).trim(),
     fullName: `${firstName} ${lastName}`.trim() || username,
     username: String(username).trim(),
     nickname: String(firstName || username).trim(),
-    email: row.email || "",
-    phoneNumber: row.phone_number || "",
-    phone: row.phone_number || "",
-    dateOfBirth: row.date_of_birth
-      ? new Date(row.date_of_birth).toISOString().slice(0, 10)
+    email: normalized.email || "",
+    phoneNumber: normalized.phone_number || "",
+    phone: normalized.phone_number || "",
+    dateOfBirth: normalized.date_of_birth
+      ? new Date(normalized.date_of_birth).toISOString().slice(0, 10)
       : "",
-    avatarUrl: normalizeStoredAvatarUrl(row.avatar_url),
-    googleAvatarUrl: row.google_avatar_url || "",
-    avatarSource: row.avatar_source || "system",
-    authProvider: row.auth_provider || "LOCAL",
-    accountStatus: row.status || "",
-    emailVerified: Boolean(row.is_email_verified),
+    avatarUrl: normalizeStoredAvatarUrl(normalized.avatar_url),
+    googleAvatarUrl: normalized.google_avatar_url || "",
+    avatarSource: normalized.avatar_source || "system",
+    authProvider: normalized.auth_provider || "LOCAL",
+    accountStatus: normalized.status || "",
+    emailVerified: Boolean(normalized.is_email_verified),
   };
 }
 
 async function findUserById(userId) {
   const [rows] = await pool.query(
-    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE [user_id] = ?`,
+    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE [UserID] = ?`,
     [userId]
   );
-  return rows[0] || null;
+  return normalizeUserRow(rows[0]) || null;
 }
 
 async function findUserByEmail(email) {
   const [rows] = await pool.query(
-    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE LOWER([email]) = LOWER(?)`,
+    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE LOWER([Email]) = LOWER(?)`,
     [email]
   );
-  return rows[0] || null;
+  return normalizeUserRow(rows[0]) || null;
 }
 
 async function findUserByUsername(username) {
   const [rows] = await pool.query(
-    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE [username] = ?`,
+    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE LOWER([Username]) = LOWER(?)`,
     [username]
   );
-  return rows[0] || null;
+  return normalizeUserRow(rows[0]) || null;
 }
 
 async function findUserByEmailOrUsername(identifier) {
   const trimmed = String(identifier || "").trim();
   const [rows] = await pool.query(
     `SELECT TOP 1 * FROM ${USERS_TABLE}
-     WHERE LOWER([email]) = LOWER(?) OR LOWER([username]) = LOWER(?)`,
+     WHERE LOWER([Email]) = LOWER(?) OR LOWER([Username]) = LOWER(?)`,
     [trimmed, trimmed]
   );
-  return rows[0] || null;
+  return normalizeUserRow(rows[0]) || null;
 }
 
 async function findUserByEmailOrPhone(identifier) {
@@ -155,10 +210,10 @@ async function findUserByEmailOrPhone(identifier) {
   }
   const phone = normalizePhone(trimmed);
   const [rows] = await pool.query(
-    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE [phone_number] = ?`,
+    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE [PhoneNumber] = ?`,
     [phone]
   );
-  return rows[0] || null;
+  return normalizeUserRow(rows[0]) || null;
 }
 
 async function buildUniqueUsername(preferred) {
@@ -182,6 +237,42 @@ async function verifyGoogleIdToken(credential) {
     throw new Error("Google token audience mismatch.");
   }
   return payload;
+}
+
+async function resolveGooglePayload({ credential, accessToken, email, name, picture }) {
+  if (credential) {
+    return verifyGoogleIdToken(credential);
+  }
+
+  if (accessToken) {
+    const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) throw new Error("Invalid Google access token.");
+    const data = await response.json();
+    return {
+      sub: data.sub,
+      email: data.email,
+      email_verified: data.email_verified ? "true" : "false",
+      given_name: data.given_name,
+      family_name: data.family_name,
+      picture: data.picture,
+    };
+  }
+
+  if (email && process.env.NODE_ENV !== "production") {
+    const nameParts = String(name || "").trim().split(/\s+/).filter(Boolean);
+    return {
+      sub: `dev-${String(email).trim().toLowerCase()}`,
+      email: String(email).trim().toLowerCase(),
+      email_verified: "true",
+      given_name: nameParts[0] || String(email).split("@")[0] || "Google",
+      family_name: nameParts.slice(1).join(" "),
+      picture: picture || "",
+    };
+  }
+
+  return null;
 }
 
 function validateRegisterBody(body) {
@@ -259,7 +350,7 @@ router.post("/register", async (req, res) => {
     }
 
     const [phoneRows] = await pool.query(
-      `SELECT TOP 1 [user_id] FROM ${USERS_TABLE} WHERE [phone_number] = ?`,
+      `SELECT TOP 1 [UserID] FROM ${USERS_TABLE} WHERE [PhoneNumber] = ?`,
       [normalized.phoneNumber]
     );
     if (phoneRows[0]) {
@@ -275,11 +366,11 @@ router.post("/register", async (req, res) => {
 
     const [insertRows] = await pool.query(
       `INSERT INTO ${USERS_TABLE}
-        ([email], [username], [password_hash], [status], [is_email_verified], [phone_number],
-         [created_at], [updated_at], [first_name], [last_name], [date_of_birth], [auth_provider],
+        ([Email], [Username], [PasswordHash], [AccountStatus], [EmailVerified], [PhoneNumber],
+         [CreatedAt], [UpdatedAt], [first_name], [last_name], [date_of_birth], [auth_provider],
          [verification_token], [verification_sent_at])
-       OUTPUT INSERTED.[user_id]
-       VALUES (?, ?, ?, 'pending', 0, ?, SYSDATETIME(), SYSDATETIME(), ?, ?, ?, 'LOCAL', ?, SYSDATETIME())`,
+       OUTPUT INSERTED.[UserID]
+       VALUES (?, ?, ?, 'pending_verification', 0, ?, SYSDATETIME(), SYSDATETIME(), ?, ?, ?, 'LOCAL', ?, SYSDATETIME())`,
       [
         normalized.email,
         normalized.username,
@@ -292,18 +383,26 @@ router.post("/register", async (req, res) => {
       ]
     );
 
-    const userId = insertRows[0]?.user_id;
+    const userId = insertRows[0]?.UserID ?? insertRows[0]?.user_id;
     if (!userId) {
       return res.status(500).json({ success: false, message: "Registration failed." });
     }
 
     await sendVerificationEmail(normalized.email, otp);
+    await saveOtpToken({
+      email: normalized.email,
+      purpose: OTP_VERIFY_PURPOSE,
+      otp,
+      userId,
+    });
 
     return res.status(201).json({
       success: true,
       userId,
       email: normalized.email,
-      message: "Verification code sent to your email.",
+      message: "OTP sent successfully.",
+      expiresIn: OTP_EXPIRES_IN_SECONDS,
+      resendCooldown: OTP_RESEND_COOLDOWN_SECONDS,
     });
   } catch (err) {
     console.error("Register error:", err);
@@ -311,9 +410,179 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// POST /verify-otp
+// POST /request-otp — email + purpose (OtpTokens table)
+router.post("/request-otp", async (req, res) => {
+  try {
+    const { email, purpose = OTP_VERIFY_PURPOSE } = req.body;
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      return res.status(400).json({ success: false, message: "Email is required." });
+    }
+    if (!isValidEmail(normalizedEmail)) {
+      return res.status(400).json({ success: false, message: "Enter a valid email address." });
+    }
+
+    await runOtpLifecycleCleanup();
+
+    let pendingUserId = null;
+    if (isVerifyAccountPurpose(purpose)) {
+      const pendingCheck = await assertPendingVerificationUser(normalizedEmail);
+      if (!pendingCheck.ok) {
+        return res.status(pendingCheck.status).json({
+          success: false,
+          message: pendingCheck.message,
+        });
+      }
+      pendingUserId = pendingCheck.user?.user_id ?? null;
+    }
+
+    const otp = generateOtpCode();
+    await sendOtpEmail({ to: normalizedEmail, otp, purpose });
+    await saveOtpToken({
+      email: normalizedEmail,
+      purpose,
+      otp,
+      userId: pendingUserId,
+    });
+
+    return res.json(buildOtpSuccessResponse("OTP sent successfully."));
+  } catch (error) {
+    console.error("[OTP] request failed:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Could not send OTP email.",
+    });
+  }
+});
+
+// POST /resend-otp — invalidate previous code and send a new one
+router.post("/resend-otp", async (req, res) => {
+  try {
+    const { email, purpose = OTP_VERIFY_PURPOSE } = req.body;
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      return res.status(400).json({ success: false, message: "Email is required." });
+    }
+    if (!isValidEmail(normalizedEmail)) {
+      return res.status(400).json({ success: false, message: "Enter a valid email address." });
+    }
+
+    await runOtpLifecycleCleanup();
+
+    let pendingUserId = null;
+    if (isVerifyAccountPurpose(purpose)) {
+      const pendingCheck = await assertPendingVerificationUser(normalizedEmail);
+      if (!pendingCheck.ok) {
+        return res.status(pendingCheck.status).json({
+          success: false,
+          message: pendingCheck.message,
+        });
+      }
+      pendingUserId = pendingCheck.user?.user_id ?? null;
+    }
+
+    const cooldown = await checkOtpResendCooldown({
+      email: normalizedEmail,
+      purpose,
+      userId: pendingUserId,
+    });
+    if (!cooldown.allowed) {
+      return res.status(429).json({
+        success: false,
+        message: cooldown.message,
+        retryAfter: cooldown.retryAfter,
+        retryAfterSeconds: cooldown.retryAfter,
+      });
+    }
+
+    const otp = generateOtpCode();
+    await sendOtpEmail({ to: normalizedEmail, otp, purpose });
+    await saveOtpToken({
+      email: normalizedEmail,
+      purpose,
+      otp,
+      userId: pendingUserId,
+    });
+
+    return res.json(buildOtpSuccessResponse("A new OTP has been sent."));
+  } catch (error) {
+    console.error("[OTP] resend failed:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Could not resend OTP email.",
+    });
+  }
+});
+
+// POST /verify-otp — email+purpose (OtpTokens) or userId (Users + OtpTokens)
 router.post("/verify-otp", async (req, res) => {
-  const { userId, otp } = req.body;
+  const { email, otp, purpose = OTP_VERIFY_PURPOSE, userId } = req.body;
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+
+  if (normalizedEmail && !userId) {
+    try {
+      if (!otp) {
+        return res.status(400).json({ success: false, message: "Email and OTP are required." });
+      }
+
+      await runOtpLifecycleCleanup();
+
+      if (isVerifyAccountPurpose(purpose)) {
+        const pendingCheck = await assertPendingVerificationUser(normalizedEmail);
+        if (!pendingCheck.ok) {
+          return res.status(pendingCheck.status).json({
+            success: false,
+            message: pendingCheck.message,
+          });
+        }
+      }
+
+      const result = await verifyOtpRecord({
+        email: normalizedEmail,
+        purpose,
+        otp,
+      });
+
+      if (!result.ok) {
+        return res.status(result.status).json({ success: false, message: result.message });
+      }
+
+      const user = await findUserByEmail(normalizedEmail);
+      if (user && purpose === OTP_VERIFY_PURPOSE) {
+        await pool.query(
+          `UPDATE ${USERS_TABLE}
+           SET [EmailVerified] = 1,
+               [verification_token] = NULL,
+               [verification_sent_at] = NULL,
+               [AccountStatus] = 'active',
+               [UpdatedAt] = SYSDATETIME()
+           WHERE [UserID] = ?`,
+          [user.user_id]
+        );
+
+        await invalidatePendingOtps({
+          email: normalizedEmail,
+          purpose: OTP_VERIFY_PURPOSE,
+          userId: user.user_id,
+        });
+
+        const updated = await findUserById(user.user_id);
+        return res.json({
+          success: true,
+          message: "Email verified successfully.",
+          user: mapUserToFrontend(updated),
+        });
+      }
+
+      return res.json({ success: true, message: "OTP verified successfully." });
+    } catch (error) {
+      console.error("[OTP] verify failed:", error);
+      return res.status(500).json({ success: false, message: "Could not verify OTP." });
+    }
+  }
+
   if (!userId || !otp) {
     return res.status(400).json({ success: false, message: "User ID and OTP are required." });
   }
@@ -324,19 +593,78 @@ router.post("/verify-otp", async (req, res) => {
       return res.status(404).json({ success: false, message: "Account not found." });
     }
 
-    if (String(user.verification_token || "").trim() !== String(otp).trim()) {
-      return res.status(400).json({ success: false, message: "Invalid verification code." });
+    await runOtpLifecycleCleanup();
+
+    if (isVerifyAccountPurpose(OTP_VERIFY_PURPOSE)) {
+      const pendingCheck = await assertPendingVerificationUser(user.email);
+      if (!pendingCheck.ok) {
+        return res.status(pendingCheck.status).json({
+          success: false,
+          message: pendingCheck.message,
+        });
+      }
+    }
+
+    if (isVerificationSentExpired(user.verification_sent_at)) {
+      await pool.query(
+        `UPDATE ${USERS_TABLE}
+         SET [verification_token] = NULL, [UpdatedAt] = SYSDATETIME()
+         WHERE [UserID] = ?`,
+        [userId]
+      );
+      const latest = await findLatestOtpRecord({
+        email: user.email,
+        purpose: OTP_VERIFY_PURPOSE,
+        userId,
+      });
+      if (latest?.OtpID) {
+        await markOtpExpired(latest.OtpID);
+      }
+      return res.status(400).json({
+        success: false,
+        message: "Verification code expired. Please resend a new code.",
+      });
+    }
+
+    const tokenMatchesUser = String(user.verification_token || "").trim() === String(otp).trim();
+    const tokenResult = await verifyOtpRecord({
+      email: user.email,
+      purpose: OTP_VERIFY_PURPOSE,
+      otp,
+      userId,
+    });
+
+    if (!tokenMatchesUser && !tokenResult.ok) {
+      return res.status(400).json({
+        success: false,
+        message: tokenResult.message || "Invalid verification code.",
+      });
+    }
+
+    if (tokenMatchesUser && !tokenResult.ok) {
+      await invalidatePendingOtps({
+        email: user.email,
+        purpose: OTP_VERIFY_PURPOSE,
+        userId,
+      });
     }
 
     await pool.query(
       `UPDATE ${USERS_TABLE}
-       SET [is_email_verified] = 1,
+       SET [EmailVerified] = 1,
            [verification_token] = NULL,
-           [status] = 'active',
-           [updated_at] = SYSDATETIME()
-       WHERE [user_id] = ?`,
+           [verification_sent_at] = NULL,
+           [AccountStatus] = 'active',
+           [UpdatedAt] = SYSDATETIME()
+       WHERE [UserID] = ?`,
       [userId]
     );
+
+    await invalidatePendingOtps({
+      email: user.email,
+      purpose: OTP_VERIFY_PURPOSE,
+      userId,
+    });
 
     const updated = await findUserById(userId);
     return res.json({
@@ -361,10 +689,13 @@ router.get("/verify", async (req, res) => {
     if (String(user.verification_token || "").trim() !== String(token).trim()) {
       return res.status(400).json({ message: "Invalid verification code." });
     }
+    if (isVerificationSentExpired(user.verification_sent_at)) {
+      return res.status(400).json({ message: "Verification code expired. Please resend a new code." });
+    }
     await pool.query(
       `UPDATE ${USERS_TABLE}
-       SET [is_email_verified] = 1, [verification_token] = NULL, [status] = 'active', [updated_at] = SYSDATETIME()
-       WHERE [user_id] = ?`,
+       SET [EmailVerified] = 1, [verification_token] = NULL, [AccountStatus] = 'active', [UpdatedAt] = SYSDATETIME()
+       WHERE [UserID] = ?`,
       [uid]
     );
     const updated = await findUserById(uid);
@@ -376,40 +707,69 @@ router.get("/verify", async (req, res) => {
 
 // POST /resend-verification-code
 router.post("/resend-verification-code", async (req, res) => {
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ message: "userId is required." });
+  const { userId, email } = req.body;
+  const normalizedEmail = String(email || "").trim().toLowerCase();
 
   try {
-    const user = await findUserById(userId);
-    if (!user) return res.status(404).json({ message: "User not found." });
-    if (user.is_email_verified) {
-      return res.status(400).json({ message: "Account is already verified." });
+    let user = null;
+    if (userId) {
+      user = await findUserById(userId);
+    } else if (normalizedEmail) {
+      user = await findUserByEmail(normalizedEmail);
     }
 
-    if (user.verification_sent_at) {
-      const remaining = getResendRemainingSeconds(user.verification_sent_at);
-      if (remaining > 0) {
-        return res.status(429).json({
-          success: false,
-          message: "Please wait before requesting another code.",
-          retryAfterSeconds: remaining,
-        });
-      }
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+    if (user.is_email_verified) {
+      return res.status(400).json({ success: false, message: "Account is already verified." });
+    }
+
+    await runOtpLifecycleCleanup();
+    const pendingCheck = await assertPendingVerificationUser(user.email);
+    if (!pendingCheck.ok) {
+      return res.status(pendingCheck.status).json({
+        success: false,
+        message: pendingCheck.message,
+      });
+    }
+
+    const cooldown = await checkOtpResendCooldown({
+      email: user.email,
+      purpose: OTP_VERIFY_PURPOSE,
+      userId: user.user_id,
+    });
+    if (!cooldown.allowed) {
+      return res.status(429).json({
+        success: false,
+        message: cooldown.message,
+        retryAfter: cooldown.retryAfter,
+        retryAfterSeconds: cooldown.retryAfter,
+      });
     }
 
     const otp = generateOtpCode();
     await pool.query(
       `UPDATE ${USERS_TABLE}
-       SET [verification_token] = ?, [verification_sent_at] = SYSDATETIME(), [updated_at] = SYSDATETIME()
-       WHERE [user_id] = ?`,
-      [otp, userId]
+       SET [verification_token] = ?, [verification_sent_at] = SYSDATETIME(), [UpdatedAt] = SYSDATETIME()
+       WHERE [UserID] = ?`,
+      [otp, user.user_id]
     );
 
     await sendVerificationEmail(user.email, otp);
-    return res.json({ success: true, message: "Verification code sent.", email: user.email });
+    await saveOtpToken({
+      email: user.email,
+      purpose: OTP_VERIFY_PURPOSE,
+      otp,
+      userId: user.user_id,
+    });
+    return res.json({
+      ...buildOtpSuccessResponse("A new OTP has been sent."),
+      email: user.email,
+    });
   } catch (err) {
     console.error("Resend verification error:", err);
-    return res.status(500).json({ message: err.message || "Resend failed." });
+    return res.status(500).json({ success: false, message: err.message || "Resend failed." });
   }
 });
 
@@ -459,7 +819,7 @@ router.post("/login", async (req, res) => {
     }
 
     await pool.query(
-      `UPDATE ${USERS_TABLE} SET [last_login_at] = SYSDATETIME(), [updated_at] = SYSDATETIME(), [FailedLoginCount] = 0 WHERE [user_id] = ?`,
+      `UPDATE ${USERS_TABLE} SET [LastLoginAt] = SYSDATETIME(), [UpdatedAt] = SYSDATETIME(), [FailedLoginCount] = 0 WHERE [UserID] = ?`,
       [user.user_id]
     );
 
@@ -476,48 +836,44 @@ router.post("/login", async (req, res) => {
 
 // POST /google-register
 router.post("/google-register", async (req, res) => {
-  const { credential, accessToken } = req.body;
+  const { credential, accessToken, email, name, picture } = req.body;
 
   try {
-    let payload;
-    if (credential) {
-      payload = await verifyGoogleIdToken(credential);
-    } else if (accessToken) {
-      const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-        headers: { Authorization: `Bearer ${accessToken}` },
+    console.log("[GOOGLE REGISTER] request received:", {
+      hasCredential: Boolean(credential),
+      hasAccessToken: Boolean(accessToken),
+      email,
+    });
+
+    const payload = await resolveGooglePayload({ credential, accessToken, email, name, picture });
+    if (!payload) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing Google credential or email.",
       });
-      if (!response.ok) throw new Error("Invalid Google access token.");
-      const data = await response.json();
-      payload = {
-        sub: data.sub,
-        email: data.email,
-        email_verified: data.email_verified ? "true" : "false",
-        given_name: data.given_name,
-        family_name: data.family_name,
-        picture: data.picture,
-      };
-    } else {
-      return res.status(400).json({ message: "Google credential is required." });
     }
 
     if (payload.email_verified !== "true" && payload.email_verified !== true) {
-      return res.status(400).json({ message: "Google email is not verified." });
+      return res.status(400).json({ success: false, message: "Google email is not verified." });
     }
 
-    const email = String(payload.email || "").trim().toLowerCase();
+    const normalizedEmail = String(payload.email || "").trim().toLowerCase();
     const firstName = payload.given_name || "";
     const lastName = payload.family_name || "";
     const googleSub = payload.sub;
     const avatarUrl = payload.picture || "";
-    const usernameBase = (email.split("@")[0] || "user").replace(/[^a-zA-Z0-9._]/g, "").toLowerCase();
+    const usernameBase = (normalizedEmail.split("@")[0] || "user")
+      .replace(/[^a-zA-Z0-9._]/g, "")
+      .toLowerCase();
     const otp = generateOtpCode();
 
-    let user = await findUserByEmail(email);
+    let user = await findUserByEmail(normalizedEmail);
     let userId;
 
     if (user) {
       if (user.is_email_verified) {
         return res.status(409).json({
+          success: false,
           message: "This Google account is already registered. Please sign in.",
         });
       }
@@ -527,8 +883,8 @@ router.post("/google-register", async (req, res) => {
         `UPDATE ${USERS_TABLE}
          SET [google_sub] = ?, [first_name] = ?, [last_name] = ?,
              [google_avatar_url] = ?,
-             [avatar_url] = CASE
-               WHEN [avatar_source] = 'custom' OR [avatar_source] = 'system' THEN [avatar_url]
+             [AvatarUrl] = CASE
+               WHEN [avatar_source] = 'custom' OR [avatar_source] = 'system' THEN [AvatarUrl]
                ELSE ?
              END,
              [avatar_source] = CASE
@@ -536,67 +892,101 @@ router.post("/google-register", async (req, res) => {
                ELSE 'google'
              END,
              [auth_provider] = 'GOOGLE', [verification_token] = ?, [verification_sent_at] = SYSDATETIME(),
-             [updated_at] = SYSDATETIME()
-         WHERE [user_id] = ?`,
+             [UpdatedAt] = SYSDATETIME()
+         WHERE [UserID] = ?`,
         [googleSub, firstName, lastName, avatarUrl || null, avatarUrl || null, otp, userId]
       );
     } else {
       const username = await buildUniqueUsername(usernameBase);
       const [insertRows] = await pool.query(
         `INSERT INTO ${USERS_TABLE}
-          ([email], [username], [password_hash], [status], [is_email_verified], [avatar_url], [google_avatar_url], [avatar_source],
-           [created_at], [updated_at], [first_name], [last_name], [google_sub], [auth_provider],
+          ([Email], [Username], [PasswordHash], [AccountStatus], [EmailVerified], [AvatarUrl], [google_avatar_url], [avatar_source],
+           [CreatedAt], [UpdatedAt], [first_name], [last_name], [google_sub], [auth_provider],
            [verification_token], [verification_sent_at])
-         OUTPUT INSERTED.[user_id]
+         OUTPUT INSERTED.[UserID]
          VALUES (?, ?, NULL, 'pending', 0, ?, ?, 'google', SYSDATETIME(), SYSDATETIME(), ?, ?, ?, 'GOOGLE', ?, SYSDATETIME())`,
-        [email, username, avatarUrl || null, avatarUrl || null, firstName, lastName, googleSub, otp]
+        [
+          normalizedEmail,
+          username,
+          avatarUrl || null,
+          avatarUrl || null,
+          firstName,
+          lastName,
+          googleSub,
+          otp,
+        ]
       );
-      userId = insertRows[0]?.user_id;
+      userId = insertRows[0]?.UserID ?? insertRows[0]?.user_id;
     }
 
-    await sendVerificationEmail(email, otp);
+    if (!userId) {
+      return res.status(500).json({ success: false, message: "Google registration failed." });
+    }
+
+    await sendVerificationEmail(normalizedEmail, otp);
+    await saveOtpToken({
+      email: normalizedEmail,
+      purpose: OTP_VERIFY_PURPOSE,
+      otp,
+      userId,
+    });
 
     return res.json({
       success: true,
       message: "Google account registered. Please verify the OTP sent to your email.",
       userId,
-      email,
+      email: normalizedEmail,
       requiresOtp: true,
+      expiresIn: OTP_EXPIRES_IN_SECONDS,
+      resendCooldown: OTP_RESEND_COOLDOWN_SECONDS,
     });
   } catch (err) {
-    console.error("Google register error:", err);
-    return res.status(500).json({ message: err.message || "Google registration failed." });
+    console.error("[GOOGLE REGISTER] failed:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Google register failed.",
+    });
   }
 });
 
 // POST /google — login for verified users
 router.post("/google", async (req, res) => {
-  const { accessToken, credential } = req.body;
+  const { accessToken, credential, email, name, picture } = req.body;
 
   try {
-    let email;
+    console.log("[GOOGLE LOGIN] request received:", {
+      hasCredential: Boolean(credential),
+      hasAccessToken: Boolean(accessToken),
+      email,
+    });
 
+    let normalizedEmail = "";
     let googlePicture = "";
 
-    if (credential) {
-      const payload = await verifyGoogleIdToken(credential);
-      email = String(payload.email || "").trim().toLowerCase();
+    if (credential || accessToken) {
+      const payload = await resolveGooglePayload({ credential, accessToken, email, name, picture });
+      if (!payload) {
+        return res.status(400).json({
+          success: false,
+          message: "Missing Google credential or email.",
+        });
+      }
+      normalizedEmail = String(payload.email || "").trim().toLowerCase();
       googlePicture = payload.picture || "";
-    } else if (accessToken) {
-      const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!response.ok) throw new Error("Invalid Google access token.");
-      const data = await response.json();
-      email = String(data.email || "").trim().toLowerCase();
-      googlePicture = data.picture || "";
+    } else if (email && process.env.NODE_ENV !== "production") {
+      normalizedEmail = String(email).trim().toLowerCase();
+      googlePicture = picture || "";
     } else {
-      return res.status(400).json({ message: "Google credential or access token required." });
+      return res.status(400).json({
+        success: false,
+        message: "Missing Google credential or email.",
+      });
     }
 
-    let user = await findUserByEmail(email);
+    let user = await findUserByEmail(normalizedEmail);
     if (!user) {
       return res.status(404).json({
+        success: false,
         message: "No account found. Please create an account with Google first.",
         code: "ACCOUNT_NOT_FOUND",
       });
@@ -615,28 +1005,119 @@ router.post("/google", async (req, res) => {
     await pool.query(
       `UPDATE ${USERS_TABLE}
        SET [google_avatar_url] = ?,
-           [avatar_url] = CASE
-             WHEN [avatar_source] = 'custom' OR [avatar_source] = 'system' THEN [avatar_url]
+           [AvatarUrl] = CASE
+             WHEN [avatar_source] = 'custom' OR [avatar_source] = 'system' THEN [AvatarUrl]
              ELSE ?
            END,
            [avatar_source] = CASE
              WHEN [avatar_source] = 'custom' OR [avatar_source] = 'system' THEN [avatar_source]
              ELSE 'google'
            END,
-           [last_login_at] = SYSDATETIME(), [updated_at] = SYSDATETIME()
-       WHERE [user_id] = ?`,
+           [LastLoginAt] = SYSDATETIME(), [UpdatedAt] = SYSDATETIME()
+       WHERE [UserID] = ?`,
       [googlePicture || null, googlePicture || null, user.user_id]
     );
     user = await findUserById(user.user_id);
 
-    return res.json({ success: true, message: "Google Sign-In successful.", user: mapUserToFrontend(user) });
+    return res.json({
+      success: true,
+      message: "Google login successful.",
+      user: mapUserToFrontend(user),
+    });
   } catch (err) {
-    console.error("Google login error:", err);
-    return res.status(500).json({ message: err.message || "Google Sign-In failed." });
+    console.error("[GOOGLE LOGIN] failed:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Google login failed.",
+    });
   }
 });
 
 // Forgot password
+router.post("/forgot-password/request-otp", async (req, res) => {
+  try {
+    const { email, identifier, purpose = "forgot_password" } = req.body;
+    let normalizedEmail = String(email || "").trim().toLowerCase();
+
+    if (!normalizedEmail && identifier) {
+      const trimmed = String(identifier || "").trim();
+      if (!trimmed) {
+        return res.status(400).json({ success: false, message: "Email is required." });
+      }
+
+      const isEmail = trimmed.includes("@");
+      if (isEmail && !isValidEmail(trimmed)) {
+        return res.status(400).json({ success: false, message: "Enter a valid email address." });
+      }
+      if (!isEmail && !isValidVietnamPhone(trimmed)) {
+        return res.status(400).json({
+          success: false,
+          message: "Phone number must be 10–11 digits.",
+        });
+      }
+
+      const userByIdentifier = await findUserByEmailOrPhone(trimmed);
+      if (!userByIdentifier) {
+        return res.status(404).json({
+          success: false,
+          message: "No account found with this email or phone number.",
+        });
+      }
+      normalizedEmail = String(userByIdentifier.email || "").trim().toLowerCase();
+    }
+
+    if (!normalizedEmail) {
+      return res.status(400).json({ success: false, message: "Email is required." });
+    }
+    if (!isValidEmail(normalizedEmail)) {
+      return res.status(400).json({ success: false, message: "Enter a valid email address." });
+    }
+
+    await runOtpLifecycleCleanup();
+
+    const user = await findUserByEmail(normalizedEmail);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "No account found with this email.",
+      });
+    }
+
+    const otp = generateOtpCode();
+    const expires = new Date(Date.now() + OTP_EXPIRES_IN_MS);
+
+    await pool.query(
+      `UPDATE ${USERS_TABLE}
+       SET [password_reset_token] = ?,
+           [password_reset_expires_at] = ?,
+           [password_reset_sent_at] = SYSDATETIME(),
+           [UpdatedAt] = SYSDATETIME()
+       WHERE [UserID] = ?`,
+      [otp, expires, user.user_id]
+    );
+
+    await sendVerificationEmail(user.email, otp, { context: "reset" });
+    await saveOtpToken({
+      email: user.email,
+      purpose: OTP_RESET_PURPOSE,
+      otp,
+      userId: user.user_id,
+    });
+
+    return res.json({
+      ...buildOtpSuccessResponse("OTP sent successfully."),
+      userId: user.user_id,
+      email: user.email,
+    });
+  } catch (err) {
+    console.error("[OTP] forgot-password request-otp failed:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Could not send reset code.",
+    });
+  }
+});
+
 router.post("/forgot-password/request", async (req, res) => {
   const { identifier, userId: bodyUserId } = req.body;
 
@@ -671,25 +1152,30 @@ router.post("/forgot-password/request", async (req, res) => {
     }
 
     const otp = generateOtpCode();
-    const expires = new Date(Date.now() + 5 * 60 * 1000);
+    const expires = new Date(Date.now() + OTP_EXPIRES_IN_MS);
 
     await pool.query(
       `UPDATE ${USERS_TABLE}
        SET [password_reset_token] = ?,
            [password_reset_expires_at] = ?,
            [password_reset_sent_at] = SYSDATETIME(),
-           [updated_at] = SYSDATETIME()
-       WHERE [user_id] = ?`,
+           [UpdatedAt] = SYSDATETIME()
+       WHERE [UserID] = ?`,
       [otp, expires, user.user_id]
     );
 
     await sendVerificationEmail(user.email, otp, { context: "reset" });
+    await saveOtpToken({
+      email: user.email,
+      purpose: OTP_RESET_PURPOSE,
+      otp,
+      userId: user.user_id,
+    });
 
     return res.json({
-      success: true,
+      ...buildOtpSuccessResponse("OTP sent successfully."),
       userId: user.user_id,
       email: user.email,
-      message: "Password reset code sent to your email.",
     });
   } catch (err) {
     console.error("Forgot password request error:", err);
@@ -698,23 +1184,123 @@ router.post("/forgot-password/request", async (req, res) => {
 });
 
 router.post("/forgot-password/verify-otp", async (req, res) => {
-  const { userId, otp } = req.body;
-  if (!userId || !otp) return res.status(400).json({ message: "userId and otp are required." });
+  const { userId, otp, email, purpose = "forgot_password" } = req.body;
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const normalizedOtp = String(otp || "").trim();
+
+  if (!normalizedOtp) {
+    return res.status(400).json({ success: false, message: "OTP is required." });
+  }
+
+  if (normalizedEmail && !userId) {
+    if (!normalizedEmail) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and OTP are required.",
+      });
+    }
+
+    try {
+      await runOtpLifecycleCleanup();
+
+      const user = await findUserByEmail(normalizedEmail);
+      if (!user) {
+        return res.status(404).json({ success: false, message: "User not found." });
+      }
+
+      const tokenResult = await verifyOtpRecord({
+        email: normalizedEmail,
+        purpose,
+        otp: normalizedOtp,
+        userId: user.user_id,
+      });
+
+      if (!tokenResult.ok) {
+        return res.status(tokenResult.status).json({
+          success: false,
+          message: tokenResult.message,
+        });
+      }
+
+      const resetToken = generateSecureToken();
+      await pool.query(
+        `UPDATE ${USERS_TABLE}
+         SET [password_reset_verified_token] = ?, [UpdatedAt] = SYSDATETIME()
+         WHERE [UserID] = ?`,
+        [resetToken, user.user_id]
+      );
+
+      return res.json({
+        success: true,
+        userId: user.user_id,
+        email: user.email,
+        resetToken,
+        message: "OTP verified. You can now reset your password.",
+      });
+    } catch (err) {
+      console.error("[OTP] forgot-password verify failed:", err);
+      return res.status(500).json({ success: false, message: err.message || "Verification failed." });
+    }
+  }
+
+  if (!userId) {
+    return res.status(400).json({
+      success: false,
+      message: "Email and OTP are required.",
+    });
+  }
+
+  if (!normalizedOtp) {
+    return res.status(400).json({ success: false, message: "OTP is required." });
+  }
 
   try {
     const user = await findUserById(userId);
-    if (!user) return res.status(404).json({ message: "User not found." });
-
-    if (String(user.password_reset_token || "").trim() !== String(otp).trim()) {
-      return res.status(400).json({ message: "Invalid reset code." });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
     }
-    if (user.password_reset_expires_at && new Date(user.password_reset_expires_at).getTime() < Date.now()) {
-      return res.status(400).json({ message: "Reset code has expired." });
+
+    if (
+      user.password_reset_expires_at &&
+      new Date(user.password_reset_expires_at).getTime() < Date.now()
+    ) {
+      await pool.query(
+        `UPDATE ${USERS_TABLE}
+         SET [password_reset_token] = NULL, [UpdatedAt] = SYSDATETIME()
+         WHERE [UserID] = ?`,
+        [userId]
+      );
+      const latest = await findLatestOtpRecord({
+        email: user.email,
+        purpose: OTP_RESET_PURPOSE,
+        userId,
+      });
+      if (latest?.OtpID) {
+        await markOtpExpired(latest.OtpID);
+      }
+      return res.status(400).json({ message: "Reset code has expired. Please resend a new code." });
+    }
+
+    const tokenMatchesUser =
+      String(user.password_reset_token || "").trim() === normalizedOtp;
+    const tokenResult = await verifyOtpRecord({
+      email: user.email,
+      purpose: OTP_RESET_PURPOSE,
+      otp: normalizedOtp,
+      userId,
+    });
+
+    if (!tokenMatchesUser && !tokenResult.ok) {
+      return res.status(400).json({
+        message: tokenResult.message || "Invalid reset code.",
+      });
     }
 
     const resetToken = generateSecureToken();
     await pool.query(
-      `UPDATE ${USERS_TABLE} SET [password_reset_verified_token] = ?, [updated_at] = SYSDATETIME() WHERE [user_id] = ?`,
+      `UPDATE ${USERS_TABLE}
+       SET [password_reset_verified_token] = ?, [UpdatedAt] = SYSDATETIME()
+       WHERE [UserID] = ?`,
       [resetToken, userId]
     );
 
@@ -730,47 +1316,140 @@ router.post("/forgot-password/verify-otp", async (req, res) => {
 });
 
 router.post("/forgot-password/resend-otp", async (req, res) => {
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ message: "userId is required." });
+  const { userId, email, purpose = "forgot_password" } = req.body;
+  const normalizedEmail = String(email || "").trim().toLowerCase();
 
   try {
-    const user = await findUserById(userId);
-    if (!user) return res.status(404).json({ message: "User not found." });
+    let user = null;
+    if (userId) {
+      user = await findUserById(userId);
+    } else if (normalizedEmail) {
+      user = await findUserByEmail(normalizedEmail);
+    }
 
-    if (user.password_reset_sent_at) {
-      const remaining = getResendRemainingSeconds(user.password_reset_sent_at);
-      if (remaining > 0) {
-        return res.status(429).json({
-          success: false,
-          message: "Please wait before requesting another code.",
-          retryAfterSeconds: remaining,
-        });
-      }
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    await runOtpLifecycleCleanup();
+
+    const cooldown = await checkOtpResendCooldown({
+      email: user.email,
+      purpose: OTP_RESET_PURPOSE,
+      userId: user.user_id,
+    });
+    if (!cooldown.allowed) {
+      return res.status(429).json({
+        success: false,
+        message: cooldown.message,
+        retryAfter: cooldown.retryAfter,
+        retryAfterSeconds: cooldown.retryAfter,
+      });
     }
 
     const otp = generateOtpCode();
-    const expires = new Date(Date.now() + 5 * 60 * 1000);
+    const expires = new Date(Date.now() + OTP_EXPIRES_IN_MS);
     await pool.query(
       `UPDATE ${USERS_TABLE}
-       SET [password_reset_token] = ?, [password_reset_expires_at] = ?, [password_reset_sent_at] = SYSDATETIME(), [updated_at] = SYSDATETIME()
-       WHERE [user_id] = ?`,
-      [otp, expires, userId]
+       SET [password_reset_token] = ?, [password_reset_expires_at] = ?, [password_reset_sent_at] = SYSDATETIME(), [UpdatedAt] = SYSDATETIME()
+       WHERE [UserID] = ?`,
+      [otp, expires, user.user_id]
     );
 
     await sendVerificationEmail(user.email, otp, { context: "reset" });
-    return res.json({
-      success: true,
-      message: "A new reset code has been sent.",
-      retryAfterSeconds: RESEND_COOLDOWN_SECONDS,
+    await saveOtpToken({
+      email: user.email,
+      purpose: OTP_RESET_PURPOSE,
+      otp,
+      userId: user.user_id,
     });
+    return res.json(buildOtpSuccessResponse("A new OTP has been sent."));
   } catch (err) {
-    return res.status(500).json({ message: err.message || "Resend failed." });
+    return res.status(500).json({ success: false, message: err.message || "Resend failed." });
   }
 });
 
 router.post("/forgot-password/reset", async (req, res) => {
-  const { userId, resetToken, newPassword, confirmPassword } = req.body;
-  if (!userId || !resetToken || !newPassword || !confirmPassword) {
+  const { userId, email, resetToken, newPassword, confirmPassword } = req.body;
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    return res.status(400).json({
+      success: false,
+      message: "Email is required.",
+    });
+  }
+  if (!resetToken) {
+    return res.status(400).json({
+      success: false,
+      message: "Reset token is required. Please verify your OTP first.",
+    });
+  }
+  if (!newPassword) {
+    return res.status(400).json({
+      success: false,
+      message: "New password is required.",
+    });
+  }
+  if (confirmPassword && newPassword !== confirmPassword) {
+    return res.status(400).json({ message: "Passwords do not match." });
+  }
+  if (!isPasswordStrong(newPassword)) {
+    return res.status(400).json({ message: PASSWORD_RULES_MESSAGE });
+  }
+
+  try {
+    let user = null;
+    if (normalizedEmail) {
+      user = await findUserByEmail(normalizedEmail);
+    } else if (userId) {
+      user = await findUserById(userId);
+    }
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+    if (
+      String(user.password_reset_verified_token || "").trim() !==
+      String(resetToken || "").trim()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired reset session.",
+      });
+    }
+
+    const passwordHash = hashPassword(newPassword);
+    await pool.query(
+      `UPDATE ${USERS_TABLE}
+       SET [PasswordHash] = ?,
+           [password_reset_token] = NULL,
+           [password_reset_verified_token] = NULL,
+           [password_reset_expires_at] = NULL,
+           [password_reset_sent_at] = NULL,
+           [UpdatedAt] = SYSDATETIME()
+       WHERE [UserID] = ?`,
+      [passwordHash, user.user_id]
+    );
+
+    await invalidatePendingOtps({
+      email: user.email,
+      purpose: OTP_RESET_PURPOSE,
+      userId: user.user_id,
+    });
+
+    return res.json({
+      success: true,
+      message: "Password reset successfully. Please sign in again.",
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Password reset failed." });
+  }
+});
+
+router.post("/change-password", async (req, res) => {
+  const { userId, currentPassword, newPassword, confirmPassword } = req.body;
+  if (!userId || !currentPassword || !newPassword || !confirmPassword) {
     return res.status(400).json({ message: "All fields are required." });
   }
   if (newPassword !== confirmPassword) {
@@ -783,18 +1462,19 @@ router.post("/forgot-password/reset", async (req, res) => {
   try {
     const user = await findUserById(userId);
     if (!user) return res.status(404).json({ message: "User not found." });
-    if (user.password_reset_verified_token !== resetToken) {
-      return res.status(400).json({ message: "Invalid or expired reset session." });
+    if (!user.password_hash || !verifyPassword(currentPassword, user.password_hash)) {
+      return res.status(401).json({ message: "Old password is incorrect." });
+    }
+    if (verifyPassword(newPassword, user.password_hash)) {
+      return res.status(400).json({ message: "New password must be different from old password." });
     }
 
     const passwordHash = hashPassword(newPassword);
     await pool.query(
       `UPDATE ${USERS_TABLE}
        SET [password_hash] = ?,
-           [password_reset_token] = NULL,
-           [password_reset_verified_token] = NULL,
-           [password_reset_expires_at] = NULL,
-           [password_reset_sent_at] = NULL,
+           [old_password_verified_token] = NULL,
+           [old_password_verified_at] = NULL,
            [updated_at] = SYSDATETIME()
        WHERE [user_id] = ?`,
       [passwordHash, userId]
@@ -802,10 +1482,10 @@ router.post("/forgot-password/reset", async (req, res) => {
 
     return res.json({
       success: true,
-      message: "Password reset successfully. Please sign in again.",
+      message: "Password changed successfully. Please sign in again.",
     });
   } catch (err) {
-    return res.status(500).json({ message: err.message || "Reset failed." });
+    return res.status(500).json({ message: err.message || "Password change failed." });
   }
 });
 

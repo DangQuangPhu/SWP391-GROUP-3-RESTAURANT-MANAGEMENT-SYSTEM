@@ -5,13 +5,16 @@ import {
   isValidVietnamPhone,
   isPasswordStrong,
   isAtLeast13YearsOld,
+  isDateOfBirthNotInFuture,
   parseDateOfBirth,
   validateUsername,
   validateFullName,
   splitFullName,
   normalizePhone,
+  blurActiveElement,
 } from "./authHelpers";
 import { loginAccount, registerAccount, resendVerificationCode } from "./api";
+import { buildInitialTiming } from "./otpTiming";
 import { signInWithGoogle, registerWithGoogle } from "./googleAuth";
 import GoogleAccountChooserModal from "./GoogleAccountChooserModal";
 import LoginForm from "./LoginForm";
@@ -104,6 +107,8 @@ function AuthCard({
           ? "Date of birth is required."
           : !parseDateOfBirth(signup.dateOfBirth)
           ? "Enter a valid date of birth."
+          : !isDateOfBirthNotInFuture(signup.dateOfBirth)
+          ? "Date of birth cannot be in the future."
           : !isAtLeast13YearsOld(signup.dateOfBirth)
           ? "You must be at least 13 years old."
           : ""
@@ -141,9 +146,7 @@ function AuthCard({
   const signupErrors = getSignupErrors();
 
   const switchMode = (nextMode) => {
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur();
-    }
+    blurActiveElement();
 
     const mode = normalizeMode(nextMode);
     setAuthMode(mode);
@@ -167,11 +170,16 @@ function AuthCard({
     try {
       setGoogleLoading(true);
       const result = await signInWithGoogle();
-      if (result.type === "register" || result.requiresOtp) {
+      if (
+        result.type === "register" ||
+        result.type === "otp" ||
+        result.requiresOtp
+      ) {
         onProceedToOtp?.({
           userId: result.userId,
           email: result.email,
           verificationMode: "email",
+          initialTiming: buildInitialTiming(result),
         });
       } else {
         onAuthSuccess?.(result.user, { remember: login.rememberMe, showWelcome: true });
@@ -187,7 +195,7 @@ function AuthCard({
       }
       setAlert({
         type: "error",
-        message: error?.message || "Google Sign-In failed.",
+        message: error?.message || "Google login failed. Please try again.",
       });
     } finally {
       setGoogleLoading(false);
@@ -209,11 +217,12 @@ function AuthCard({
         userId: data.userId,
         email: data.email,
         verificationMode: "email",
+        initialTiming: buildInitialTiming(data),
       });
     } catch (error) {
       setAlert({
         type: "error",
-        message: error?.message || "Google registration failed.",
+        message: error?.message || "Google login failed. Please try again.",
       });
     } finally {
       setGoogleLoading(false);
@@ -221,6 +230,7 @@ function AuthCard({
   };
 
   const handleMockGoogleSelect = (acc) => {
+    blurActiveElement();
     setShowGoogleChooser(false);
     onProceedToOtp?.({
       userId: "mock-google-user",
@@ -231,13 +241,17 @@ function AuthCard({
 
   const handleResendVerification = async () => {
     const target = unverifiedUser;
-    if (!target?.userId) return;
+    if (!target?.email) return;
     try {
-      await resendVerificationCode(target.userId);
+      const data = await resendVerificationCode({
+        email: target.email,
+        purpose: "verify_account",
+      });
       onProceedToOtp?.({
         userId: target.userId,
         email: target.email,
         verificationMode: "email",
+        initialTiming: buildInitialTiming(data),
       });
     } catch (err) {
       setAlert({ type: "error", message: err.message || "Resend failed." });
@@ -308,6 +322,8 @@ function AuthCard({
         ? "Date of birth is required."
         : !parseDateOfBirth(signup.dateOfBirth)
         ? "Enter a valid date of birth."
+        : !isDateOfBirthNotInFuture(signup.dateOfBirth)
+        ? "Date of birth cannot be in the future."
         : !isAtLeast13YearsOld(signup.dateOfBirth)
         ? "You must be at least 13 years old."
         : "",
@@ -350,6 +366,7 @@ function AuthCard({
         email: payload.email,
         userId: data.userId,
         verificationMode: "email",
+        initialTiming: buildInitialTiming(data),
       });
     } catch (error) {
       if (error.data?.errors && typeof error.data.errors === "object") {
@@ -476,7 +493,10 @@ function AuthCard({
 
       <GoogleAccountChooserModal
         isOpen={showGoogleChooser}
-        onClose={() => setShowGoogleChooser(false)}
+        onClose={() => {
+          blurActiveElement();
+          setShowGoogleChooser(false);
+        }}
         onSelect={handleMockGoogleSelect}
       />
     </div>

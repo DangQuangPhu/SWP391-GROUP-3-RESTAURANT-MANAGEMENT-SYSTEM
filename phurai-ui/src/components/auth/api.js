@@ -1,5 +1,13 @@
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
+const DEFAULT_API_BASE_URL = "http://localhost:5001/api";
+
+function normalizeApiBaseUrl(value) {
+  const trimmed = String(value || DEFAULT_API_BASE_URL).trim().replace(/\/+$/, "");
+  if (trimmed.endsWith("/api/auth")) return trimmed;
+  if (trimmed.endsWith("/api")) return trimmed;
+  return `${trimmed}/api`;
+}
+
+export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 const AUTH_STORAGE_KEY = "phurai_auth_user";
 
@@ -146,77 +154,239 @@ export function loginAccount(payload) {
   });
 }
 
-export function verifyOtp(payload) {
-  return request("/verify-otp", {
+export function verifyOtp({ email, otp, purpose = "verify_account", userId }) {
+  const body = {
+    email: String(email || "").trim().toLowerCase(),
+    otp,
+    purpose,
+  };
+
+  if (userId) {
+    body.userId = userId;
+  }
+
+  return request("/auth/verify-otp", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
 }
 
-export function verifyEmailCode({ userId, code }) {
-  return verifyOtp({ userId, otp: code });
+export function verifyEmailCode({ email, userId, code }) {
+  return verifyOtp({
+    email,
+    userId,
+    otp: code,
+    purpose: "verify_account",
+  });
 }
 
-export function resendVerificationCode(userId) {
-  return request("/resend-verification-code", {
+export function requestOtp({ email, purpose = "verify_account" }) {
+  return request("/auth/request-otp", {
     method: "POST",
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({
+      email: String(email || "").trim().toLowerCase(),
+      purpose,
+    }),
   });
+}
+
+export function resendOtp({ email, purpose = "verify_account" }) {
+  return request("/auth/resend-otp", {
+    method: "POST",
+    body: JSON.stringify({
+      email: String(email || "").trim().toLowerCase(),
+      purpose,
+    }),
+  });
+}
+
+export function resendVerificationCode({ email, purpose = "verify_account" } = {}) {
+  return resendOtp({ email, purpose });
 }
 
 export function googleRegister(credential) {
-  return request("/google-register", {
+  return request("/auth/google-register", {
     method: "POST",
     body: JSON.stringify({ credential }),
   });
 }
 
 export function googleRegisterWithAccessToken(accessToken) {
-  return request("/google-register", {
+  return request("/auth/google-register", {
     method: "POST",
     body: JSON.stringify({ accessToken }),
   });
 }
 
 export function googleLogin(payload) {
-  return request("/google", {
+  return request("/auth/google", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export function forgotPasswordRequest(payload) {
-  const body =
-    typeof payload === "string"
-      ? { identifier: payload }
-      : payload?.userId
-      ? { userId: payload.userId }
-      : { identifier: payload?.identifier || payload?.email };
+function getAuthToken() {
+  return (
+    localStorage.getItem("phurai_token") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("authToken") ||
+    sessionStorage.getItem("phurai_token") ||
+    sessionStorage.getItem("token") ||
+    sessionStorage.getItem("authToken") ||
+    ""
+  );
+}
 
-  return request("/forgot-password/request", {
+function authHeaders(extra = {}) {
+  const headers = { ...extra };
+  const token = getAuthToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export function forgotPasswordRequestOtp({
+  email,
+  identifier,
+  purpose = "forgot_password",
+} = {}) {
+  const body = { purpose };
+
+  if (email) {
+    body.email = String(email).trim().toLowerCase();
+  }
+  if (identifier) {
+    body.identifier = String(identifier).trim();
+  }
+
+  return request("/auth/forgot-password/request-otp", {
     method: "POST",
     body: JSON.stringify(body),
   });
 }
 
-export function forgotPasswordVerifyOtp(payload) {
-  return request("/forgot-password/verify-otp", {
-    method: "POST",
-    body: JSON.stringify(payload),
+/** @deprecated Use forgotPasswordRequestOtp */
+export function forgotPasswordRequest(payload) {
+  if (typeof payload === "string") {
+    const trimmed = payload.trim();
+    if (trimmed.includes("@")) {
+      return forgotPasswordRequestOtp({ email: trimmed, purpose: "forgot_password" });
+    }
+    return forgotPasswordRequestOtp({ identifier: trimmed, purpose: "forgot_password" });
+  }
+
+  const identifier = payload?.identifier || payload?.email;
+  if (identifier && String(identifier).includes("@")) {
+    return forgotPasswordRequestOtp({
+      email: String(identifier).trim().toLowerCase(),
+      purpose: "forgot_password",
+    });
+  }
+
+  return forgotPasswordRequestOtp({
+    identifier,
+    purpose: "forgot_password",
   });
 }
 
-export function forgotPasswordResendOtp(userId) {
-  return request("/forgot-password/resend-otp", {
+export function forgotPasswordVerifyOtp({
+  email,
+  otp,
+  purpose = "forgot_password",
+  userId,
+} = {}) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const normalizedOtp = String(otp || "").trim();
+
+  if (!normalizedEmail || !normalizedOtp) {
+    return Promise.reject(
+      createApiError("Email and OTP are required.", {
+        status: 400,
+        data: { message: "Email and OTP are required." },
+      })
+    );
+  }
+
+  const body = {
+    email: normalizedEmail,
+    otp: normalizedOtp,
+    purpose,
+  };
+
+  if (userId) {
+    body.userId = userId;
+  }
+
+  return request("/auth/forgot-password/verify-otp", {
     method: "POST",
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify(body),
   });
 }
 
-export function forgotPasswordReset(payload) {
-  return request("/forgot-password/reset", {
+export function forgotPasswordResendOtp({ email, purpose = "forgot_password", userId } = {}) {
+  const body = {
+    email: String(email || "").trim().toLowerCase(),
+    purpose,
+  };
+
+  if (userId) {
+    body.userId = userId;
+  }
+
+  return request("/auth/forgot-password/resend-otp", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
+  });
+}
+
+export function forgotPasswordReset({
+  email,
+  resetToken,
+  newPassword,
+  confirmPassword,
+  userId,
+} = {}) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+
+  if (!normalizedEmail || !resetToken || !newPassword) {
+    return Promise.reject(
+      createApiError("Email, reset token, and new password are required.", {
+        status: 400,
+        data: { message: "Email, reset token, and new password are required." },
+      })
+    );
+  }
+
+  const body = {
+    email: normalizedEmail,
+    resetToken,
+    newPassword,
+  };
+
+  if (confirmPassword) {
+    body.confirmPassword = confirmPassword;
+  }
+  if (userId) {
+    body.userId = userId;
+  }
+
+  return request("/auth/forgot-password/reset", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function changePassword({ userId, currentPassword, newPassword, confirmPassword }) {
+  return request("/auth/change-password", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({
+      userId,
+      currentPassword,
+      newPassword,
+      confirmPassword,
+    }),
   });
 }
 
@@ -290,14 +460,14 @@ export async function updateGoogleAvatar(userId) {
 }
 
 export function verifyOldPassword(userId, oldPassword) {
-  return request("/profile/change-password/verify-old", {
+  return request("/auth/profile/change-password/verify-old", {
     method: "POST",
     body: JSON.stringify({ userId, oldPassword }),
   });
 }
 
 export function resetProfilePassword(payload) {
-  return request("/profile/change-password/reset", {
+  return request("/auth/profile/change-password/reset", {
     method: "POST",
     body: JSON.stringify(payload),
   });

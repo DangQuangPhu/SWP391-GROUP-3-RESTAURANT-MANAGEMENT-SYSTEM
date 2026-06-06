@@ -4,6 +4,7 @@ import AuthCard from "./AuthCard";
 import OtpVerification from "./OtpVerification";
 import ForgotPasswordForm from "./ForgotPasswordForm";
 import ResetPasswordForm from "./ResetPasswordForm";
+import { blurActiveElement } from "./authHelpers";
 import "../../styles/auth.css";
 import "../../styles/authModal.css";
 
@@ -76,6 +77,7 @@ function AuthModal({
       setResetSession({
         userId: pendingUser.userId,
         resetToken: result.resetToken,
+        email: result.email ?? pendingUser.email,
       });
       setView(VIEWS.RESET);
       return;
@@ -117,6 +119,7 @@ function AuthModal({
             ? "reset-password"
             : "verify-account"
         }
+        initialTiming={pendingUser?.initialTiming}
         onVerified={handleOtpVerified}
         onBack={() => {
           if (pendingUser?.verificationMode === "reset-password") {
@@ -138,6 +141,7 @@ function AuthModal({
     content = (
       <ResetPasswordForm
         userId={resetSession.userId}
+        email={resetSession.email}
         resetToken={resetSession.resetToken}
         onSuccess={handleResetSuccess}
       />

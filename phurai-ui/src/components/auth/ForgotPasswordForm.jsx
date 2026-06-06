@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { isEmailValue, isValidEmail, isValidVietnamPhone, normalizePhone } from "./authHelpers";
-import { forgotPasswordRequest } from "./api";
+import { forgotPasswordRequestOtp } from "./api";
+import { buildInitialTiming } from "./otpTiming";
 
 function ForgotPasswordForm({ onOtpSent, onBack }) {
   const [identifier, setIdentifier] = useState("");
@@ -36,11 +37,16 @@ function ForgotPasswordForm({ onOtpSent, onBack }) {
     try {
       setLoading(true);
       setError("");
-      const data = await forgotPasswordRequest(identifier.trim());
+      const trimmed = identifier.trim();
+      const payload = isEmailValue(trimmed)
+        ? { email: trimmed.toLowerCase(), purpose: "forgot_password" }
+        : { identifier: trimmed, purpose: "forgot_password" };
+      const data = await forgotPasswordRequestOtp(payload);
       onOtpSent?.({
         userId: data.userId,
         email: data.email,
         verificationMode: "reset-password",
+        initialTiming: buildInitialTiming(data),
       });
     } catch (err) {
       setError(err.message || "Request failed.");

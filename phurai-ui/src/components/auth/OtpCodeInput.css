@@ -1,0 +1,125 @@
+.otp-code-input {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.otp-code-input__grid {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.otp-code-input.is-error .otp-code-input__grid {
+  animation: otpShake 0.35s ease;
+}
+
+.otp-code-input__box {
+  width: 2.75rem;
+  height: 3.25rem;
+  padding: 0;
+  border: 1px solid #d0c5ba;
+  border-radius: 10px;
+  background: #faf9f6;
+  font-family: var(--font-body);
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: center;
+  color: #342716;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.otp-code-input__box:focus,
+.otp-code-input__box.is-active {
+  outline: none;
+  border-color: #9a8454;
+  box-shadow: 0 0 0 4px rgba(154, 132, 84, 0.18);
+  transform: translateY(-2px);
+}
+
+.otp-code-input__box.is-error {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
+.otp-countdown {
+  margin: 0;
+  align-self: center;
+  color: #64748b;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.otp-expiry {
+  margin: 0;
+  align-self: center;
+  color: #475569;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.otp-resend-button {
+  align-self: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.otp-resend-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.otp-resend-button:not(:disabled):hover {
+  text-decoration: underline;
+}
+
+@keyframes otpShake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-6px);
+  }
+  75% {
+    transform: translateX(6px);
+  }
+}
+
+.profile-dashboard__forgot-step {
+  animation: forgotStepIn 0.35s ease both;
+}
+
+@keyframes forgotStepIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 480px) {
+  .otp-code-input__box {
+    width: 2.35rem;
+    height: 2.85rem;
+    font-size: 1.1rem;
+  }
+
+  .otp-code-input__grid {
+    gap: 0.35rem;
+  }
+}

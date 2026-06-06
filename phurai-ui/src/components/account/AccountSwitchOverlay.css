@@ -1,0 +1,170 @@
+.account-switch {
+  position: fixed;
+  inset: 0;
+  z-index: 1350;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 4.5rem 1.5rem 1rem;
+  pointer-events: none;
+}
+
+.account-switch__panel {
+  pointer-events: auto;
+  width: min(300px, calc(100vw - 2rem));
+  padding: 0.75rem 0;
+  border: 1px solid #e8e4de;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.14);
+}
+
+.account-switch__back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin: 0 0.75rem 0.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #6a5e33;
+  cursor: pointer;
+}
+
+.account-switch__back:hover {
+  background: #f4f3f0;
+}
+
+.account-switch__back svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.account-switch__current {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 1rem 0.75rem;
+  border-bottom: 1px solid #f0ebe3;
+}
+
+.account-switch__name {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #342716;
+}
+
+.account-switch__username {
+  margin: 0.125rem 0 0;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: #6a5e33;
+}
+
+.account-switch__title {
+  margin: 0.75rem 1rem 0.5rem;
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6a5e33;
+}
+
+.account-switch__row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.625rem 1rem;
+  border: none;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  color: #342716;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-switch__row:hover {
+  background: #f4f3f0;
+}
+
+.account-switch__row--active {
+  background: #faf9f6;
+}
+
+.account-switch__row--danger {
+  color: #b91c1c;
+}
+
+.account-switch__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: #f4f3f0;
+  color: #6a5e33;
+}
+
+.account-switch__icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.account-switch__check {
+  margin-left: auto;
+  color: #8c764b;
+  font-weight: 700;
+}
+
+.account-switch__placeholder {
+  position: fixed;
+  inset: 0;
+  z-index: 1450;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(52, 39, 22, 0.4);
+}
+
+.account-switch__placeholder-panel {
+  width: min(360px, 100%);
+  padding: 1.25rem;
+  border-radius: 10px;
+  background: #ffffff;
+  text-align: center;
+}
+
+.account-switch__placeholder-panel p {
+  margin: 0 0 1rem;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  color: #342716;
+}
+
+.account-switch__placeholder-panel button {
+  padding: 0.5rem 1.25rem;
+  border: 1px solid #8c764b;
+  border-radius: 8px;
+  background: #8c764b;
+  color: #ffffff;
+  font-family: var(--font-body);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .account-switch {
+    justify-content: center;
+    padding-top: 5rem;
+  }
+}

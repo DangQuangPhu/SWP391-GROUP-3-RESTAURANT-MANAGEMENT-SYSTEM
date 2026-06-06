@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./styles/home.css";
 import Home from "./pages/customer/Home";
 import TakeOut from "./pages/customer/TakeOut";
@@ -7,6 +7,9 @@ import PrivateEvents from "./pages/customer/PrivateEvents";
 import Careers from "./pages/customer/Careers";
 import ContactHours from "./pages/customer/ContactHours";
 import Menu from "./pages/customer/Menu";
+import ProfilePage from "./pages/customer/Profile";
+import SettingsPage from "./pages/customer/Settings";
+import NotFound from "./pages/NotFound";
 import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer";
 import FloatingActionButtons from "./components/FloatingActionButtons";
@@ -16,7 +19,9 @@ import AuthModal from "./components/auth/AuthModal";
 import AuthSuccessOverlay from "./components/auth/AuthSuccessOverlay";
 import ProfileModal from "./components/auth/ProfileModal";
 import { clearAuthUser, getProfile, loadAuthUser, saveAuthUser } from "./components/auth/api";
+import { blurActiveElement } from "./components/auth/authHelpers";
 import { normalizeStoredAvatarUrl } from "./components/auth/avatarUtils";
+import { useUserProfile } from "./hooks/useUserProfile";
 
 function normalizeAuthUser(user) {
   return {
@@ -27,8 +32,35 @@ function normalizeAuthUser(user) {
   };
 }
 
+function normalizePathname(path) {
+  if (!path || path === "/") return "/";
+  return path.replace(/\/+$/, "") || "/";
+}
+
+function getPageFromPath(path) {
+  const normalized = normalizePathname(path);
+
+  if (normalized.startsWith("/settings")) return "settings";
+  if (normalized === "/profile") return "profile";
+  if (normalized === "/login") return "login";
+  if (normalized === "/take-out") return "takeout";
+  if (normalized === "/catering") return "catering";
+  if (normalized === "/menus") return "menus";
+  if (normalized === "/private-events") return "privateEvents";
+  if (normalized === "/careers") return "careers";
+  if (normalized === "/contact-hours") return "contactHours";
+  if (normalized === "/register") return "register";
+  if (normalized === "/verify") return "verify";
+  if (normalized === "/") return "home";
+
+  return "notFound";
+}
+
 function App() {
   const [activePage, setActivePage] = useState("home");
+  const [pathname, setPathname] = useState(
+    typeof window !== "undefined" ? window.location.pathname : "/"
+  );
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [pendingAuthUser, setPendingAuthUser] = useState(null);
@@ -40,18 +72,28 @@ function App() {
   const [authModalMode, setAuthModalMode] = useState("login");
   const [loginSuccessMessage, setLoginSuccessMessage] = useState("");
 
-  const getPageFromPath = (path) => {
-    if (path === "/login") return "login";
-    if (path === "/take-out") return "takeout";
-    if (path === "/catering") return "catering";
-    if (path === "/menus") return "menus";
-    if (path === "/private-events") return "privateEvents";
-    if (path === "/careers") return "careers";
-    if (path === "/contact-hours") return "contactHours";
-    if (path === "/register") return "register";
-    if (path === "/verify") return "verify";
-    return "home";
+  const handleProfileSave = (updatedUser) => {
+    const normalized = normalizeAuthUser(updatedUser);
+    setCurrentUser(normalized);
+    const remember = Boolean(localStorage.getItem("phurai_auth_user"));
+    saveAuthUser(normalized, remember);
   };
+
+  const {
+    profile,
+    status,
+    saveStatus,
+    clearStatus,
+    saveProfileFields,
+    applyAvatarUpdate,
+    persistExtended,
+  } = useUserProfile(currentUser, handleProfileSave);
+
+  const profileEditMode = useMemo(() => {
+    if (activePage !== "profile") return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get("mode") === "edit";
+  }, [pathname, activePage]);
 
   const openAuthModal = (mode = "login") => {
     setAuthModalMode(mode);
@@ -59,6 +101,7 @@ function App() {
   };
 
   const closeAuthModal = () => {
+    blurActiveElement();
     setIsAuthModalOpen(false);
   };
 
@@ -81,23 +124,37 @@ function App() {
       }
     }
 
-    const initialPage = getPageFromPath(window.location.pathname);
+    let initialPath = window.location.pathname;
+    if (initialPath === "/settings" || initialPath === "/settings/") {
+      initialPath = "/settings/profile";
+      window.history.replaceState(null, "", initialPath);
+    }
+    setPathname(initialPath);
+    const initialPage = getPageFromPath(initialPath);
     if (initialPage === "login") {
       setActivePage("home");
       setIsAuthModalOpen(true);
       if (window.location.pathname === "/login") {
         window.history.replaceState(null, "", "/");
+        setPathname("/");
       }
     } else {
       setActivePage(initialPage);
     }
 
     const onPopState = () => {
-      const page = getPageFromPath(window.location.pathname);
+      let path = window.location.pathname;
+      if (path === "/settings" || path === "/settings/") {
+        path = "/settings/profile";
+        window.history.replaceState(null, "", path);
+      }
+      setPathname(path);
+      const page = getPageFromPath(path);
       if (page === "login") {
         setActivePage("home");
         openAuthModal("login");
         window.history.replaceState(null, "", "/");
+        setPathname("/");
         return;
       }
       setActivePage(page);
@@ -115,6 +172,7 @@ function App() {
     const closeTimer = setTimeout(() => {
       setShowWelcome(false);
       setWelcomeFading(false);
+      blurActiveElement();
       setIsAuthModalOpen(false);
       if (pendingAuthUser) {
         setIsAuthenticated(true);
@@ -130,9 +188,46 @@ function App() {
     };
   }, [showWelcome, pendingAuthUser]);
 
+  const navigateToPath = (path) => {
+    const nextPath =
+      path === "/settings" || path === "/settings/" ? "/settings/profile" : path;
+    setPathname(nextPath);
+    setActivePage(getPageFromPath(nextPath));
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState(null, "", nextPath);
+    }
+  };
+
   const handleNavigate = (page) => {
     if (page === "login") {
       openAuthModal("login");
+      return;
+    }
+
+    if (page === "profile") {
+      navigateToPath("/profile");
+      return;
+    }
+
+    if (page === "profileEdit") {
+      navigateToPath("/profile?mode=edit");
+      return;
+    }
+
+    if (page === "settings") {
+      navigateToPath("/settings/profile");
+      return;
+    }
+
+    if (page === "reservation") {
+      navigateToPath("/");
+      window.requestAnimationFrame(() => {
+        document.getElementById("reserve")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
       return;
     }
 
@@ -154,6 +249,7 @@ function App() {
         ? "/contact-hours"
         : "/";
 
+    setPathname(nextPath);
     if (window.location.pathname !== nextPath) {
       window.history.pushState(null, "", nextPath);
     }
@@ -171,6 +267,7 @@ function App() {
     setIsAuthenticated(true);
     setCurrentUser(normalized);
     saveAuthUser(normalized, options.remember);
+    blurActiveElement();
     setIsAuthModalOpen(false);
   };
 
@@ -181,13 +278,7 @@ function App() {
     setPendingAuthUser(null);
     setShowWelcome(false);
     clearAuthUser();
-  };
-
-  const handleProfileSave = (updatedUser) => {
-    const normalized = normalizeAuthUser(updatedUser);
-    setCurrentUser(normalized);
-    const remember = Boolean(localStorage.getItem("phurai_auth_user"));
-    saveAuthUser(normalized, remember);
+    navigateToPath("/");
   };
 
   const handlePasswordReset = ({ message } = {}) => {
@@ -202,20 +293,36 @@ function App() {
     openAuthModal("login");
   };
 
+  const openChangePassword = () => {
+    setProfileView("password");
+    setShowProfile(true);
+  };
+
+  const isAccountPage =
+    pathname.startsWith("/profile") || pathname.startsWith("/settings");
+
   return (
     <>
-      <Navbar
-        activePage={activePage}
-        onNavigate={handleNavigate}
-        isAuthenticated={isAuthenticated}
-        currentUser={currentUser}
-        onOpenAuth={() => openAuthModal("login")}
-        onOpenProfile={(view = "view") => {
-          setProfileView(view);
-          setShowProfile(true);
-        }}
-        onSignOut={handleSignOut}
-      />
+      {!isAccountPage ? (
+        <Navbar
+          activePage={activePage}
+          onNavigate={handleNavigate}
+          isAuthenticated={isAuthenticated}
+          currentUser={currentUser}
+          status={status}
+          onSaveStatus={saveStatus}
+          onClearStatus={clearStatus}
+          onOpenAuth={() => openAuthModal("login")}
+          onOpenProfile={(view = "view") => {
+            if (view === "password") {
+              openChangePassword();
+              return;
+            }
+            handleNavigate("profile");
+          }}
+          onSignOut={handleSignOut}
+        />
+      ) : null}
 
       {activePage === "home" && <Home />}
       {activePage === "takeout" && <TakeOut />}
@@ -228,10 +335,37 @@ function App() {
       {activePage === "contactHours" && <ContactHours />}
       {activePage === "register" && <Register />}
       {activePage === "verify" && <VerifyEmail />}
+      {activePage === "profile" && (
+        <ProfilePage
+          profile={profile}
+          isAuthenticated={isAuthenticated}
+          initialEditMode={profileEditMode}
+          onSaveProfile={saveProfileFields}
+          onSavePreferences={persistExtended}
+          onApplyAvatar={applyAvatarUpdate}
+          onOpenChangePassword={openChangePassword}
+          onPasswordReset={handlePasswordReset}
+          onNavigateLogin={() => openAuthModal("login")}
+          onNavigateHome={() => handleNavigate("home")}
+        />
+      )}
+      {activePage === "settings" && (
+        <SettingsPage
+          profile={profile}
+          pathname={pathname}
+          isAuthenticated={isAuthenticated}
+          onNavigatePath={navigateToPath}
+          onNavigateLogin={() => openAuthModal("login")}
+          onNavigateHome={() => handleNavigate("home")}
+          onOpenChangePassword={openChangePassword}
+          onApplyAvatar={applyAvatarUpdate}
+        />
+      )}
+      {activePage === "notFound" && <NotFound onNavigate={handleNavigate} />}
 
-      <Footer />
+      {!isAccountPage ? <Footer /> : null}
 
-      <FloatingActionButtons />
+      {!isAccountPage ? <FloatingActionButtons /> : null}
 
       <AuthModal
         isOpen={isAuthModalOpen}
