@@ -907,140 +907,440 @@
   line-height: 1.33;
 }
 
-/* ── Reservation ── */
-.phurai-reservation {
-  padding-bottom: 5rem;
-}
+/* ── Reservation (new premium design) ── */
 
-.phurai-reservation__form {
-  max-width: 768px;
-  margin: 0 auto;
-  padding: 0 2rem 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.phurai-reservation__row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-}
-
-.phurai-field {
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-
-.phurai-field--full {
-  grid-column: 1 / -1;
-}
-
-.phurai-field input,
-.phurai-field textarea,
-.phurai-field select {
-  width: 100%;
-  padding: 1.125rem 1.0625rem;
-  border: 1px solid var(--border-light);
+/* Section wrapper */
+.phurai-res-section {
+  padding: 5rem 1.5rem 6rem;
   background: #fff;
-  font-family: var(--font-body);
-  font-size: 0.875rem;
-  color: var(--text-dark);
-}
-
-.phurai-field input::placeholder,
-.phurai-field textarea::placeholder {
-  color: rgba(77, 70, 61, 0.4);
-}
-
-.phurai-field textarea {
-  min-height: 154px;
-  resize: vertical;
-}
-
-.phurai-field--select select {
-  appearance: none;
-  padding-right: 2.5rem;
-}
-
-.phurai-field__chevron {
-  position: absolute;
-  right: 1rem;
-  bottom: 1rem;
-  pointer-events: none;
-}
-
-/* ── Icon utilities ── */
-.icon {
-  display: block;
-  object-fit: contain;
-  flex-shrink: 0;
-}
-
-.nav-icon {
-  width: 20px;
-  height: 20px;
-}
-
-.social-icon {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
-  display: block;
-}
-
-.contact-icon {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
-  display: inline-block;
-  flex-shrink: 0;
-  vertical-align: middle;
-}
-
-.dropdown-icon {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
-}
-
-.phurai-field__label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-}
-
-.phurai-reservation__footer-note {
-  max-width: 448px;
-  margin: 3rem auto 0;
   text-align: center;
 }
 
-.phurai-reservation__footer-note p {
+/* Ornament */
+.phurai-res-section__ornament {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.phurai-res-section__ornament-line {
+  display: block;
+  width: 60px;
+  height: 1px;
+  background: linear-gradient(to right, transparent, #8c764b);
+}
+.phurai-res-section__ornament-line:last-child {
+  background: linear-gradient(to left, transparent, #8c764b);
+}
+
+/* Kicker */
+.phurai-res-section__kicker {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: #8c764b;
+  margin-bottom: 1rem;
+}
+
+/* Heading */
+.phurai-res-section__heading {
+  font-family: var(--font-heading);
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-weight: 400;
+  color: #1c1612;
+  letter-spacing: -1px;
+  margin: 0 0 1rem;
+}
+
+/* Sub */
+.phurai-res-section__sub {
+  font-family: var(--font-body);
+  font-size: 1.0625rem;
+  color: #7a6e63;
+  max-width: 480px;
+  margin: 0 auto 3.5rem;
+  line-height: 1.6;
+}
+
+/* Main split card */
+.phurai-res-card {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  max-width: 1100px;
+  margin: 0 auto;
+  border-radius: 2px;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(28, 22, 18, 0.14), 0 4px 16px rgba(28, 22, 18, 0.08);
+}
+
+/* ── Info panel (left, dark) ── */
+.phurai-res-card__info {
+  position: relative;
+  background: #1c1612;
+  padding: 3rem 2.5rem;
+  overflow: hidden;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+}
+.phurai-res-card__info::before {
+  content: '';
+  position: absolute;
+  top: -80px;
+  right: -80px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(140, 118, 75, 0.18) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.phurai-res-card__info-inner {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+}
+
+.phurai-res-card__badge {
+  display: inline-block;
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 3.5px;
+  color: #8c764b;
+  border: 1px solid rgba(140, 118, 75, 0.4);
+  padding: 0.35rem 0.85rem;
+  margin-bottom: 1.75rem;
+}
+
+.phurai-res-card__info-title {
+  font-family: var(--font-heading);
+  font-size: clamp(1.75rem, 2.5vw, 2.5rem);
+  font-weight: 400;
+  color: #f5f0e8;
+  line-height: 1.15;
+  margin: 0 0 1.25rem;
+}
+
+.phurai-res-card__info-desc {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  color: rgba(245, 240, 232, 0.55);
+  line-height: 1.65;
+  margin-bottom: 2rem;
+}
+
+.phurai-res-card__perks {
+  list-style: none;
+  margin: 0 0 2.25rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.phurai-res-card__perks li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: rgba(245, 240, 232, 0.75);
+  line-height: 1.45;
+}
+.phurai-res-card__perk-icon {
+  color: #8c764b;
+  font-size: 0.625rem;
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+/* Hours */
+.phurai-res-card__hours {
+  border-top: 1px solid rgba(140, 118, 75, 0.2);
+  padding-top: 1.5rem;
+  margin-bottom: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.phurai-res-card__hours-row {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+}
+.phurai-res-card__hours-row span:first-child { color: rgba(245, 240, 232, 0.45); }
+.phurai-res-card__hours-row span:last-child  { color: rgba(245, 240, 232, 0.85); }
+
+/* Phone link */
+.phurai-res-card__phone {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #8c764b;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.phurai-res-card__phone:hover { color: #f5c76e; }
+
+/* Gold corner accent */
+.phurai-res-card__corner {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 90px;
+  height: 90px;
+  background: linear-gradient(135deg, transparent 50%, rgba(140, 118, 75, 0.25) 50%);
+}
+
+/* ── Form panel (right, light) ── */
+.phurai-res-card__form-wrap {
+  background: #faf9f7;
+  padding: 3rem 2.75rem;
+  text-align: left;
+}
+
+.phurai-res-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.phurai-res-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+/* ── Floating label fields ── */
+.res-field {
+  position: relative;
+}
+.res-field input,
+.res-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid rgba(126, 118, 108, 0.35);
+  padding: 1.5rem 0 0.5rem;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  color: #1c1612;
+  outline: none;
+  transition: border-color 0.25s;
+  border-radius: 0;
+  -webkit-appearance: none;
+}
+.res-field input:focus,
+.res-field textarea:focus {
+  border-color: #8c764b;
+}
+.res-field label {
+  position: absolute;
+  top: 1.15rem;
+  left: 0;
   font-family: var(--font-body);
   font-size: 0.875rem;
-  font-style: italic;
-  color: var(--text-muted);
-  line-height: 1.43;
+  color: rgba(28, 22, 18, 0.45);
+  pointer-events: none;
+  transform-origin: left top;
+  transition: transform 0.2s ease, color 0.2s ease, font-size 0.2s ease;
+}
+.res-field input:focus ~ label,
+.res-field input:not(:placeholder-shown) ~ label,
+.res-field textarea:focus ~ label,
+.res-field textarea:not(:placeholder-shown) ~ label,
+.res-field--date input:not([value=""]) ~ label,
+.res-field--filled label {
+  transform: translateY(-1.1rem) scale(0.78);
+  color: #8c764b;
+  font-size: 0.875rem;
+}
+.res-field__line {
+  display: none; /* handled by border */
 }
 
-.phurai-reservation__footer-divider {
-  display: block;
-  width: 48px;
-  height: 1px;
-  margin: 1rem auto;
-  background: rgba(106, 94, 51, 0.3);
+/* Date input color fix */
+.res-field--date input {
+  color-scheme: light;
 }
 
-.phurai-reservation__email {
+/* Textarea specific */
+.res-field--textarea textarea {
+  resize: vertical;
+  min-height: 90px;
+  padding-top: 1.75rem;
+}
+
+/* Section label */
+.phurai-res-form__section-label {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
   font-weight: 700;
-  font-style: normal !important;
-  letter-spacing: 1.2px;
-  color: var(--text-dark) !important;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: rgba(28, 22, 18, 0.45);
+  margin-bottom: -0.5rem;
 }
+
+/* Time slots */
+.phurai-res-slots {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+.phurai-res-slot {
+  padding: 0.55rem 0.25rem;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #342716;
+  background: #fff;
+  border: 1.5px solid rgba(126, 118, 108, 0.25);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 2px;
+  text-align: center;
+}
+.phurai-res-slot:hover {
+  border-color: #8c764b;
+  color: #8c764b;
+  background: rgba(140, 118, 75, 0.05);
+}
+.phurai-res-slot--active {
+  background: #1c1612;
+  border-color: #1c1612;
+  color: #f5c76e;
+}
+
+/* Seat count */
+.phurai-res-seats {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.phurai-res-seat {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #342716;
+  background: #fff;
+  border: 1.5px solid rgba(126, 118, 108, 0.25);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 2px;
+}
+.phurai-res-seat:hover {
+  border-color: #8c764b;
+  color: #8c764b;
+}
+.phurai-res-seat--active {
+  background: #1c1612;
+  border-color: #1c1612;
+  color: #f5c76e;
+}
+
+/* Submit button */
+.phurai-res-form__submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 1.1rem 2rem;
+  background: #1c1612;
+  color: #f5c76e;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  transition: background 0.25s, color 0.25s, transform 0.15s;
+  border-radius: 2px;
+  margin-top: 0.5rem;
+}
+.phurai-res-form__submit:hover {
+  background: #8c764b;
+  color: #fff;
+  transform: translateY(-1px);
+}
+.phurai-res-form__submit svg {
+  transition: transform 0.2s;
+}
+.phurai-res-form__submit:hover svg {
+  transform: translateX(4px);
+}
+
+/* Note */
+.phurai-res-form__note {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: rgba(28, 22, 18, 0.4);
+  text-align: center;
+  line-height: 1.55;
+  margin-top: -0.5rem;
+}
+
+/* ── Contact footer strip ── */
+.phurai-res-section__contact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-top: 4rem;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  color: rgba(28, 22, 18, 0.45);
+}
+.phurai-res-section__contact-line {
+  display: block;
+  width: 60px;
+  height: 1px;
+  background: rgba(140, 118, 75, 0.3);
+}
+.phurai-res-section__contact-dot {
+  color: #8c764b;
+  font-size: 0.625rem;
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .phurai-res-card {
+    grid-template-columns: 1fr;
+  }
+  .phurai-res-card__info {
+    padding: 2.5rem 2rem;
+  }
+  .phurai-res-card__corner { display: none; }
+}
+@media (max-width: 640px) {
+  .phurai-res-card__form-wrap {
+    padding: 2rem 1.5rem;
+  }
+  .phurai-res-form__row {
+    grid-template-columns: 1fr;
+  }
+  .phurai-res-slots {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+
 
 /* ── Footer ── */
 .phurai-footer {
@@ -1320,9 +1620,8 @@
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .phurai-reservation__row {
-    grid-template-columns: 1fr;
-  }
+
+
 
   .phurai-footer__contact-bar {
     grid-template-columns: 1fr;

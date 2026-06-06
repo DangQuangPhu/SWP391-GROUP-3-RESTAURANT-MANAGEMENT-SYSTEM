@@ -90,33 +90,33 @@ function mapUserToFrontend(row) {
   if (!row) return null;
   const firstName = row.first_name || "";
   const lastName = row.last_name || "";
-  const username = row.Username || "";
+  const username = row.username || "";
   return {
-    id: row.UserID,
-    userId: row.UserID,
+    id: row.user_id,
+    userId: row.user_id,
     firstName: String(firstName).trim(),
     lastName: String(lastName).trim(),
     fullName: `${firstName} ${lastName}`.trim() || username,
     username: String(username).trim(),
     nickname: String(firstName || username).trim(),
-    email: row.Email || "",
-    phoneNumber: row.PhoneNumber || "",
-    phone: row.PhoneNumber || "",
+    email: row.email || "",
+    phoneNumber: row.phone_number || "",
+    phone: row.phone_number || "",
     dateOfBirth: row.date_of_birth
       ? new Date(row.date_of_birth).toISOString().slice(0, 10)
       : "",
-    avatarUrl: normalizeStoredAvatarUrl(row.AvatarUrl),
+    avatarUrl: normalizeStoredAvatarUrl(row.avatar_url),
     googleAvatarUrl: row.google_avatar_url || "",
     avatarSource: row.avatar_source || "system",
     authProvider: row.auth_provider || "LOCAL",
-    accountStatus: row.AccountStatus || "",
-    emailVerified: Boolean(row.EmailVerified),
+    accountStatus: row.status || "",
+    emailVerified: Boolean(row.is_email_verified),
   };
 }
 
 async function findUserById(userId) {
   const [rows] = await pool.query(
-    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE [UserID] = ?`,
+    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE [user_id] = ?`,
     [userId]
   );
   return rows[0] || null;
@@ -124,7 +124,7 @@ async function findUserById(userId) {
 
 async function findUserByEmail(email) {
   const [rows] = await pool.query(
-    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE LOWER([Email]) = LOWER(?)`,
+    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE LOWER([email]) = LOWER(?)`,
     [email]
   );
   return rows[0] || null;
@@ -132,7 +132,7 @@ async function findUserByEmail(email) {
 
 async function findUserByUsername(username) {
   const [rows] = await pool.query(
-    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE [Username] = ?`,
+    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE [username] = ?`,
     [username]
   );
   return rows[0] || null;
@@ -142,7 +142,7 @@ async function findUserByEmailOrUsername(identifier) {
   const trimmed = String(identifier || "").trim();
   const [rows] = await pool.query(
     `SELECT TOP 1 * FROM ${USERS_TABLE}
-     WHERE LOWER([Email]) = LOWER(?) OR LOWER([Username]) = LOWER(?)`,
+     WHERE LOWER([email]) = LOWER(?) OR LOWER([username]) = LOWER(?)`,
     [trimmed, trimmed]
   );
   return rows[0] || null;
@@ -155,7 +155,7 @@ async function findUserByEmailOrPhone(identifier) {
   }
   const phone = normalizePhone(trimmed);
   const [rows] = await pool.query(
-    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE [PhoneNumber] = ?`,
+    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE [phone_number] = ?`,
     [phone]
   );
   return rows[0] || null;
@@ -259,7 +259,7 @@ router.post("/register", async (req, res) => {
     }
 
     const [phoneRows] = await pool.query(
-      `SELECT TOP 1 [UserID] FROM ${USERS_TABLE} WHERE [PhoneNumber] = ?`,
+      `SELECT TOP 1 [user_id] FROM ${USERS_TABLE} WHERE [phone_number] = ?`,
       [normalized.phoneNumber]
     );
     if (phoneRows[0]) {
@@ -275,10 +275,10 @@ router.post("/register", async (req, res) => {
 
     const [insertRows] = await pool.query(
       `INSERT INTO ${USERS_TABLE}
-        ([Email], [Username], [PasswordHash], [AccountStatus], [EmailVerified], [PhoneNumber],
-         [CreatedAt], [UpdatedAt], [first_name], [last_name], [date_of_birth], [auth_provider],
+        ([email], [username], [password_hash], [status], [is_email_verified], [phone_number],
+         [created_at], [updated_at], [first_name], [last_name], [date_of_birth], [auth_provider],
          [verification_token], [verification_sent_at])
-       OUTPUT INSERTED.[UserID]
+       OUTPUT INSERTED.[user_id]
        VALUES (?, ?, ?, 'pending', 0, ?, SYSDATETIME(), SYSDATETIME(), ?, ?, ?, 'LOCAL', ?, SYSDATETIME())`,
       [
         normalized.email,
@@ -292,7 +292,7 @@ router.post("/register", async (req, res) => {
       ]
     );
 
-    const userId = insertRows[0]?.UserID;
+    const userId = insertRows[0]?.user_id;
     if (!userId) {
       return res.status(500).json({ success: false, message: "Registration failed." });
     }
@@ -330,11 +330,11 @@ router.post("/verify-otp", async (req, res) => {
 
     await pool.query(
       `UPDATE ${USERS_TABLE}
-       SET [EmailVerified] = 1,
+       SET [is_email_verified] = 1,
            [verification_token] = NULL,
-           [AccountStatus] = 'active',
-           [UpdatedAt] = SYSDATETIME()
-       WHERE [UserID] = ?`,
+           [status] = 'active',
+           [updated_at] = SYSDATETIME()
+       WHERE [user_id] = ?`,
       [userId]
     );
 
@@ -363,8 +363,8 @@ router.get("/verify", async (req, res) => {
     }
     await pool.query(
       `UPDATE ${USERS_TABLE}
-       SET [EmailVerified] = 1, [verification_token] = NULL, [AccountStatus] = 'active', [UpdatedAt] = SYSDATETIME()
-       WHERE [UserID] = ?`,
+       SET [is_email_verified] = 1, [verification_token] = NULL, [status] = 'active', [updated_at] = SYSDATETIME()
+       WHERE [user_id] = ?`,
       [uid]
     );
     const updated = await findUserById(uid);
@@ -382,7 +382,7 @@ router.post("/resend-verification-code", async (req, res) => {
   try {
     const user = await findUserById(userId);
     if (!user) return res.status(404).json({ message: "User not found." });
-    if (user.EmailVerified) {
+    if (user.is_email_verified) {
       return res.status(400).json({ message: "Account is already verified." });
     }
 
@@ -400,13 +400,13 @@ router.post("/resend-verification-code", async (req, res) => {
     const otp = generateOtpCode();
     await pool.query(
       `UPDATE ${USERS_TABLE}
-       SET [verification_token] = ?, [verification_sent_at] = SYSDATETIME(), [UpdatedAt] = SYSDATETIME()
-       WHERE [UserID] = ?`,
+       SET [verification_token] = ?, [verification_sent_at] = SYSDATETIME(), [updated_at] = SYSDATETIME()
+       WHERE [user_id] = ?`,
       [otp, userId]
     );
 
-    await sendVerificationEmail(user.Email, otp);
-    return res.json({ success: true, message: "Verification code sent.", email: user.Email });
+    await sendVerificationEmail(user.email, otp);
+    return res.json({ success: true, message: "Verification code sent.", email: user.email });
   } catch (err) {
     console.error("Resend verification error:", err);
     return res.status(500).json({ message: err.message || "Resend failed." });
@@ -433,34 +433,34 @@ router.post("/login", async (req, res) => {
       return res.status(403).json({ message: "Account is temporarily locked. Try again later." });
     }
 
-    if (!user.PasswordHash || !verifyPassword(password, user.PasswordHash)) {
+    if (!user.password_hash || !verifyPassword(password, user.password_hash)) {
       return res.status(401).json({ message: "Incorrect password. Please try again." });
     }
 
-    if (!user.EmailVerified) {
+    if (!user.is_email_verified) {
       return res.status(403).json({
         success: false,
         code: "EMAIL_NOT_VERIFIED",
         message: "Please verify your email before logging in.",
-        userId: user.UserID,
-        email: user.Email,
+        userId: user.user_id,
+        email: user.email,
       });
     }
 
-    const status = String(user.AccountStatus || "").toLowerCase();
+    const status = String(user.status || "").toLowerCase();
     if (status && status !== "active") {
       return res.status(403).json({
         success: false,
         code: "EMAIL_NOT_VERIFIED",
         message: "Please verify your email before logging in.",
-        userId: user.UserID,
-        email: user.Email,
+        userId: user.user_id,
+        email: user.email,
       });
     }
 
     await pool.query(
-      `UPDATE ${USERS_TABLE} SET [LastLoginAt] = SYSDATETIME(), [UpdatedAt] = SYSDATETIME(), [FailedLoginCount] = 0 WHERE [UserID] = ?`,
-      [user.UserID]
+      `UPDATE ${USERS_TABLE} SET [last_login_at] = SYSDATETIME(), [updated_at] = SYSDATETIME(), [FailedLoginCount] = 0 WHERE [user_id] = ?`,
+      [user.user_id]
     );
 
     return res.json({
@@ -516,19 +516,19 @@ router.post("/google-register", async (req, res) => {
     let userId;
 
     if (user) {
-      if (user.EmailVerified) {
+      if (user.is_email_verified) {
         return res.status(409).json({
           message: "This Google account is already registered. Please sign in.",
         });
       }
 
-      userId = user.UserID;
+      userId = user.user_id;
       await pool.query(
         `UPDATE ${USERS_TABLE}
          SET [google_sub] = ?, [first_name] = ?, [last_name] = ?,
              [google_avatar_url] = ?,
-             [AvatarUrl] = CASE
-               WHEN [avatar_source] = 'custom' OR [avatar_source] = 'system' THEN [AvatarUrl]
+             [avatar_url] = CASE
+               WHEN [avatar_source] = 'custom' OR [avatar_source] = 'system' THEN [avatar_url]
                ELSE ?
              END,
              [avatar_source] = CASE
@@ -536,22 +536,22 @@ router.post("/google-register", async (req, res) => {
                ELSE 'google'
              END,
              [auth_provider] = 'GOOGLE', [verification_token] = ?, [verification_sent_at] = SYSDATETIME(),
-             [UpdatedAt] = SYSDATETIME()
-         WHERE [UserID] = ?`,
+             [updated_at] = SYSDATETIME()
+         WHERE [user_id] = ?`,
         [googleSub, firstName, lastName, avatarUrl || null, avatarUrl || null, otp, userId]
       );
     } else {
       const username = await buildUniqueUsername(usernameBase);
       const [insertRows] = await pool.query(
         `INSERT INTO ${USERS_TABLE}
-          ([Email], [Username], [PasswordHash], [AccountStatus], [EmailVerified], [AvatarUrl], [google_avatar_url], [avatar_source],
-           [CreatedAt], [UpdatedAt], [first_name], [last_name], [google_sub], [auth_provider],
+          ([email], [username], [password_hash], [status], [is_email_verified], [avatar_url], [google_avatar_url], [avatar_source],
+           [created_at], [updated_at], [first_name], [last_name], [google_sub], [auth_provider],
            [verification_token], [verification_sent_at])
-         OUTPUT INSERTED.[UserID]
+         OUTPUT INSERTED.[user_id]
          VALUES (?, ?, NULL, 'pending', 0, ?, ?, 'google', SYSDATETIME(), SYSDATETIME(), ?, ?, ?, 'GOOGLE', ?, SYSDATETIME())`,
         [email, username, avatarUrl || null, avatarUrl || null, firstName, lastName, googleSub, otp]
       );
-      userId = insertRows[0]?.UserID;
+      userId = insertRows[0]?.user_id;
     }
 
     await sendVerificationEmail(email, otp);
@@ -602,32 +602,32 @@ router.post("/google", async (req, res) => {
       });
     }
 
-    if (!user.EmailVerified) {
+    if (!user.is_email_verified) {
       return res.status(403).json({
         success: false,
         code: "EMAIL_NOT_VERIFIED",
         message: "Please verify your email before logging in.",
-        userId: user.UserID,
-        email: user.Email,
+        userId: user.user_id,
+        email: user.email,
       });
     }
 
     await pool.query(
       `UPDATE ${USERS_TABLE}
        SET [google_avatar_url] = ?,
-           [AvatarUrl] = CASE
-             WHEN [avatar_source] = 'custom' OR [avatar_source] = 'system' THEN [AvatarUrl]
+           [avatar_url] = CASE
+             WHEN [avatar_source] = 'custom' OR [avatar_source] = 'system' THEN [avatar_url]
              ELSE ?
            END,
            [avatar_source] = CASE
              WHEN [avatar_source] = 'custom' OR [avatar_source] = 'system' THEN [avatar_source]
              ELSE 'google'
            END,
-           [LastLoginAt] = SYSDATETIME(), [UpdatedAt] = SYSDATETIME()
-       WHERE [UserID] = ?`,
-      [googlePicture || null, googlePicture || null, user.UserID]
+           [last_login_at] = SYSDATETIME(), [updated_at] = SYSDATETIME()
+       WHERE [user_id] = ?`,
+      [googlePicture || null, googlePicture || null, user.user_id]
     );
-    user = await findUserById(user.UserID);
+    user = await findUserById(user.user_id);
 
     return res.json({ success: true, message: "Google Sign-In successful.", user: mapUserToFrontend(user) });
   } catch (err) {
@@ -678,17 +678,17 @@ router.post("/forgot-password/request", async (req, res) => {
        SET [password_reset_token] = ?,
            [password_reset_expires_at] = ?,
            [password_reset_sent_at] = SYSDATETIME(),
-           [UpdatedAt] = SYSDATETIME()
-       WHERE [UserID] = ?`,
-      [otp, expires, user.UserID]
+           [updated_at] = SYSDATETIME()
+       WHERE [user_id] = ?`,
+      [otp, expires, user.user_id]
     );
 
-    await sendVerificationEmail(user.Email, otp, { context: "reset" });
+    await sendVerificationEmail(user.email, otp, { context: "reset" });
 
     return res.json({
       success: true,
-      userId: user.UserID,
-      email: user.Email,
+      userId: user.user_id,
+      email: user.email,
       message: "Password reset code sent to your email.",
     });
   } catch (err) {
@@ -714,7 +714,7 @@ router.post("/forgot-password/verify-otp", async (req, res) => {
 
     const resetToken = generateSecureToken();
     await pool.query(
-      `UPDATE ${USERS_TABLE} SET [password_reset_verified_token] = ?, [UpdatedAt] = SYSDATETIME() WHERE [UserID] = ?`,
+      `UPDATE ${USERS_TABLE} SET [password_reset_verified_token] = ?, [updated_at] = SYSDATETIME() WHERE [user_id] = ?`,
       [resetToken, userId]
     );
 
@@ -752,12 +752,12 @@ router.post("/forgot-password/resend-otp", async (req, res) => {
     const expires = new Date(Date.now() + 5 * 60 * 1000);
     await pool.query(
       `UPDATE ${USERS_TABLE}
-       SET [password_reset_token] = ?, [password_reset_expires_at] = ?, [password_reset_sent_at] = SYSDATETIME(), [UpdatedAt] = SYSDATETIME()
-       WHERE [UserID] = ?`,
+       SET [password_reset_token] = ?, [password_reset_expires_at] = ?, [password_reset_sent_at] = SYSDATETIME(), [updated_at] = SYSDATETIME()
+       WHERE [user_id] = ?`,
       [otp, expires, userId]
     );
 
-    await sendVerificationEmail(user.Email, otp, { context: "reset" });
+    await sendVerificationEmail(user.email, otp, { context: "reset" });
     return res.json({
       success: true,
       message: "A new reset code has been sent.",
@@ -790,13 +790,13 @@ router.post("/forgot-password/reset", async (req, res) => {
     const passwordHash = hashPassword(newPassword);
     await pool.query(
       `UPDATE ${USERS_TABLE}
-       SET [PasswordHash] = ?,
+       SET [password_hash] = ?,
            [password_reset_token] = NULL,
            [password_reset_verified_token] = NULL,
            [password_reset_expires_at] = NULL,
            [password_reset_sent_at] = NULL,
-           [UpdatedAt] = SYSDATETIME()
-       WHERE [UserID] = ?`,
+           [updated_at] = SYSDATETIME()
+       WHERE [user_id] = ?`,
       [passwordHash, userId]
     );
 
@@ -844,7 +844,7 @@ router.post("/profile/:userId/avatar/upload", (req, res) => {
       const publicPath = `/uploads/avatars/${req.file.filename}`;
       try {
         await pool.query(
-          `UPDATE ${USERS_TABLE} SET [AvatarUrl] = ?, [avatar_source] = 'custom', [UpdatedAt] = SYSDATETIME() WHERE [UserID] = ?`,
+          `UPDATE ${USERS_TABLE} SET [avatar_url] = ?, [avatar_source] = 'custom', [updated_at] = SYSDATETIME() WHERE [user_id] = ?`,
           [publicPath, req.params.userId]
         );
         return res.json({
@@ -882,7 +882,7 @@ router.put("/profile/:userId/avatar/system", async (req, res) => {
 
     try {
       await pool.query(
-        `UPDATE ${USERS_TABLE} SET [AvatarUrl] = ?, [avatar_source] = 'system', [UpdatedAt] = SYSDATETIME() WHERE [UserID] = ?`,
+        `UPDATE ${USERS_TABLE} SET [avatar_url] = ?, [avatar_source] = 'system', [updated_at] = SYSDATETIME() WHERE [user_id] = ?`,
         [canonical, req.params.userId]
       );
       return res.json({
@@ -920,12 +920,12 @@ router.put("/profile/:userId", async (req, res) => {
     if (!current) return res.status(404).json({ message: "User not found." });
 
     const dupUsername = await findUserByUsername(normalized.username);
-    if (dupUsername && String(dupUsername.UserID) !== String(userId)) {
+    if (dupUsername && String(dupUsername.user_id) !== String(userId)) {
       return res.status(409).json({ field: "username", message: "Username is already in use." });
     }
 
     const [dupPhone] = await pool.query(
-      `SELECT TOP 1 [UserID] FROM ${USERS_TABLE} WHERE [PhoneNumber] = ? AND [UserID] <> ?`,
+      `SELECT TOP 1 [user_id] FROM ${USERS_TABLE} WHERE [phone_number] = ? AND [user_id] <> ?`,
       [normalized.phoneNumber, userId]
     );
     if (dupPhone[0]) {
@@ -940,14 +940,14 @@ router.put("/profile/:userId", async (req, res) => {
       normalized.dateOfBirth,
     ];
     let sql = `UPDATE ${USERS_TABLE}
-      SET [Username] = ?, [PhoneNumber] = ?, [first_name] = ?, [last_name] = ?, [date_of_birth] = ?`;
+      SET [username] = ?, [phone_number] = ?, [first_name] = ?, [last_name] = ?, [date_of_birth] = ?`;
 
     if (req.body.avatarUrl !== undefined) {
-      sql += `, [AvatarUrl] = ?`;
+      sql += `, [avatar_url] = ?`;
       params.push(req.body.avatarUrl || null);
     }
 
-    sql += `, [UpdatedAt] = SYSDATETIME() WHERE [UserID] = ?`;
+    sql += `, [updated_at] = SYSDATETIME() WHERE [user_id] = ?`;
     params.push(userId);
 
     await pool.query(sql, params);
@@ -966,8 +966,8 @@ router.put("/profile/:userId/avatar/google", async (req, res) => {
     if (!user.google_avatar_url) return res.status(400).json({ message: "No Google avatar available." });
 
     await pool.query(
-      `UPDATE ${USERS_TABLE} SET [AvatarUrl] = [google_avatar_url], [avatar_source] = 'google', [UpdatedAt] = SYSDATETIME() WHERE [UserID] = ?`,
-      [user.UserID]
+      `UPDATE ${USERS_TABLE} SET [avatar_url] = [google_avatar_url], [avatar_source] = 'google', [updated_at] = SYSDATETIME() WHERE [user_id] = ?`,
+      [user.user_id]
     );
     const updated = await findUserById(req.params.userId);
     return res.json({
@@ -990,15 +990,15 @@ router.post("/profile/change-password/verify-old", async (req, res) => {
   try {
     const user = await findUserById(userId);
     if (!user) return res.status(404).json({ message: "User not found." });
-    if (!user.PasswordHash || !verifyPassword(oldPassword, user.PasswordHash)) {
+    if (!user.password_hash || !verifyPassword(oldPassword, user.password_hash)) {
       return res.status(401).json({ message: "Old password is incorrect." });
     }
 
     const token = generateSecureToken();
-      await pool.query(
+    await pool.query(
       `UPDATE ${USERS_TABLE}
-       SET [old_password_verified_token] = ?, [old_password_verified_at] = SYSDATETIME(), [UpdatedAt] = SYSDATETIME()
-       WHERE [UserID] = ?`,
+       SET [old_password_verified_token] = ?, [old_password_verified_at] = SYSDATETIME(), [updated_at] = SYSDATETIME()
+       WHERE [user_id] = ?`,
       [token, userId]
     );
 
@@ -1036,18 +1036,18 @@ router.post("/profile/change-password/reset", async (req, res) => {
         return res.status(400).json({ message: "Session expired. Verify old password again." });
       }
     }
-    if (user.PasswordHash && verifyPassword(newPassword, user.PasswordHash)) {
+    if (user.password_hash && verifyPassword(newPassword, user.password_hash)) {
       return res.status(400).json({ message: "New password must be different from old password." });
     }
 
     const passwordHash = hashPassword(newPassword);
     await pool.query(
       `UPDATE ${USERS_TABLE}
-       SET [PasswordHash] = ?,
+       SET [password_hash] = ?,
            [old_password_verified_token] = NULL,
            [old_password_verified_at] = NULL,
-           [UpdatedAt] = SYSDATETIME()
-       WHERE [UserID] = ?`,
+           [updated_at] = SYSDATETIME()
+       WHERE [user_id] = ?`,
       [passwordHash, userId]
     );
 
