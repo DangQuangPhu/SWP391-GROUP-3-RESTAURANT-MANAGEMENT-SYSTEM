@@ -1135,7 +1135,7 @@
   outline: none;
   transition: border-color 0.25s;
   border-radius: 0;
-  -webkit-appearance: none;
+  appearance: none;
 }
 .res-field input:focus,
 .res-field textarea:focus {
@@ -1392,17 +1392,39 @@
 
 .phurai-footer__social {
   display: flex;
-  gap: 1rem;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
 }
 
-.phurai-footer__social a {
-  display: flex;
+.social-link {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(52, 39, 22, 0.25);
+  border-radius: 50%;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid rgba(52, 39, 22, 0.2);
-  border-radius: 50%;
+  text-decoration: none;
+  color: #342716;
+  transition: all 0.25s ease;
+}
+
+.social-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+  object-fit: contain;
+}
+
+.social-link:hover {
+  background-color: #342716;
+  border-color: #342716;
+  transform: translateY(-2px);
+}
+
+.social-link:hover .social-icon {
+  filter: brightness(0) invert(1);
 }
 
 .phurai-footer h3 {

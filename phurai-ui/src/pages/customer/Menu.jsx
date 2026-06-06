@@ -59,10 +59,6 @@ function MenuSection({ id, title, subtitle, titleDark, variant, children }) {
 }
 
 function Menu() {
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
   const handleSidebarClick = (event, sectionId) => {
     event.preventDefault();
     const el = document.getElementById(sectionId);
@@ -308,19 +304,6 @@ function Menu() {
         </main>
       </div>
 
-      <div className="menu-floating" aria-label="Utility controls">
-        <button type="button" className="menu-floating__btn" aria-label="Accessibility">
-          <img src={menuIcons.accessibility} alt="" className="icon nav-icon" />
-        </button>
-        <button
-          type="button"
-          className="menu-floating__btn"
-          aria-label="Back to top"
-          onClick={scrollToTop}
-        >
-          <img src={menuIcons.scrollTop} alt="" className="icon nav-icon" />
-        </button>
-      </div>
     </div>
   );
 }

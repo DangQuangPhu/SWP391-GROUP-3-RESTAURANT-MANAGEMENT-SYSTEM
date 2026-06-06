@@ -58,25 +58,33 @@ export function getPasswordStrength(password) {
     return { level: "neutral", bars: 0, label: "Enter a password to check strength" };
   }
 
-  const checks = {
-    length: password.length >= 8,
-    lower: /[a-z]/.test(password),
-    upper: /[A-Z]/.test(password),
-    number: /[0-9]/.test(password),
-    special: /[^A-Za-z0-9]/.test(password),
-  };
+  const hasLetter = /[a-zA-Z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const onlyLetters = /^[a-zA-Z]+$/.test(password);
+  const onlyNumbers = /^[0-9]+$/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasUpper = /[A-Z]/.test(password);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
 
-  const score = Object.values(checks).filter(Boolean).length;
-
-  if (password.length < 8 || score <= 2) {
+  if (password.length < 6 || onlyLetters || onlyNumbers) {
     return { level: "low", bars: 1, label: "Weak" };
   }
 
-  if (score >= 5) {
+  if (
+    password.length >= 8 &&
+    hasLower &&
+    hasUpper &&
+    hasNumber &&
+    hasSpecial
+  ) {
     return { level: "strong", bars: 3, label: "Strong" };
   }
 
-  return { level: "medium", bars: 2, label: "Medium" };
+  if (password.length >= 6 && hasLetter && hasNumber) {
+    return { level: "medium", bars: 2, label: "Medium" };
+  }
+
+  return { level: "low", bars: 1, label: "Weak" };
 }
 
 export function validateName(value, label) {
@@ -84,6 +92,23 @@ export function validateName(value, label) {
   if (!trimmed) return `${label} is required.`;
   if (!NAME_REGEX.test(trimmed)) {
     return `${label} can only contain letters and spaces.`;
+  }
+  return "";
+}
+
+export function splitFullName(fullName) {
+  const trimmed = fullName?.trim() ?? "";
+  if (!trimmed) return { firstName: "", lastName: "" };
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return { firstName: parts[0], lastName: parts[0] };
+  return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
+}
+
+export function validateFullName(value) {
+  const trimmed = value?.trim();
+  if (!trimmed) return "Full name is required.";
+  if (!NAME_REGEX.test(trimmed)) {
+    return "Full name can only contain letters and spaces.";
   }
   return "";
 }

@@ -1,4 +1,5 @@
-import { homeIcons } from '../../data/homeAssets';
+import accessibilityIcon from '../assets/icons/accessibility.svg';
+import scrollTopAltIcon from '../assets/icons/scroll-top-alt.svg';
 
 function FloatingUtilityButtons() {
   const scrollToTop = () => {
@@ -8,7 +9,7 @@ function FloatingUtilityButtons() {
   return (
     <div className="phurai-floating-utils" aria-label="Utility controls">
       <button type="button" className="phurai-floating-utils__btn" aria-label="Accessibility">
-        <img src={homeIcons.accessibility} alt="" className="icon nav-icon" />
+        <img src={accessibilityIcon} alt="" className="icon nav-icon" />
       </button>
       <button
         type="button"
@@ -16,7 +17,7 @@ function FloatingUtilityButtons() {
         aria-label="Back to top"
         onClick={scrollToTop}
       >
-        <img src={homeIcons.scrollTopAlt} alt="" className="icon nav-icon" />
+        <img src={scrollTopAltIcon} alt="" className="icon nav-icon" />
       </button>
     </div>
   );

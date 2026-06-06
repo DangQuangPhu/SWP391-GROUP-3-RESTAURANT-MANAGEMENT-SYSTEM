@@ -29,6 +29,15 @@
   z-index: 1;
 }
 
+.login-page__inner--auth {
+  max-width: 900px;
+}
+
+.login-page__card--auth {
+  padding: clamp(1.25rem, 3vw, 2rem);
+  overflow: hidden;
+}
+
 .login-page__inner {
   position: relative;
   z-index: 2;

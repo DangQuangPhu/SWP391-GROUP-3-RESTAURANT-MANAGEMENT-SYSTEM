@@ -1,0 +1,94 @@
+.floating-actions {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  pointer-events: none;
+}
+
+.floating-actions__button {
+  position: fixed;
+  right: clamp(1.5rem, 4vw, 4rem);
+  width: 50px;
+  height: 50px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #242424;
+  color: #fff;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.floating-actions__icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.floating-actions__accessibility {
+  top: 145px;
+  transform: translateY(0);
+  transition: transform 0.55s ease;
+}
+
+.floating-actions.is-scrolled .floating-actions__accessibility {
+  transform: translateY(calc(100vh - 6.5rem - 64px - 145px));
+}
+
+.floating-actions__scroll-top {
+  bottom: 2rem;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(24px) scale(0.96);
+  transition:
+    opacity 0.3s ease,
+    visibility 0.3s ease,
+    transform 0.3s ease;
+}
+
+.floating-actions.is-scrolled .floating-actions__scroll-top {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+  animation: scrollTopJumpUp 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+
+@keyframes scrollTopJumpUp {
+  0% {
+    opacity: 0;
+    transform: translateY(28px) scale(0.92);
+  }
+
+  55% {
+    opacity: 1;
+    transform: translateY(-10px) scale(1.04);
+  }
+
+  75% {
+    transform: translateY(4px) scale(0.98);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-actions__accessibility {
+    transition: none;
+  }
+
+  .floating-actions__scroll-top,
+  .floating-actions.is-scrolled .floating-actions__scroll-top {
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    animation: none;
+    transform: none;
+  }
+}

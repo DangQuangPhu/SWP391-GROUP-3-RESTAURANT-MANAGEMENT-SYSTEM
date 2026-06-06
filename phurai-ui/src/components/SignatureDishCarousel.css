@@ -1,0 +1,316 @@
+.signature-dish-carousel {
+  position: relative;
+  width: 100%;
+  padding: clamp(3rem, 6vw, 5rem) 0 clamp(4rem, 8vw, 6rem);
+  background: #fff;
+  overflow: hidden;
+}
+
+.signature-dish-carousel__header {
+  width: min(1280px, calc(100vw - 3rem));
+  margin: 0 auto clamp(1.5rem, 3vw, 2.5rem);
+  padding: 0 clamp(1rem, 4vw, 3rem);
+  box-sizing: border-box;
+}
+
+.signature-dish-carousel__heading {
+  font-family: var(--font-heading);
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-weight: 400;
+  margin-bottom: 1rem;
+  color: #342716;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  text-align: center;
+}
+
+.signature-dish-carousel__viewport {
+  width: 100%;
+  overflow: hidden;
+}
+
+.signature-dish-carousel__track {
+  --signature-card-width: min(1260px, calc(100vw - 4rem));
+  --signature-card-height: 680px;
+  display: flex;
+  gap: clamp(1rem, 2vw, 1.5rem);
+  padding-block: 0 0.5rem;
+  padding-inline: max(2rem, calc((100vw - var(--signature-card-width)) / 2));
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: max(2rem, calc((100vw - var(--signature-card-width)) / 2));
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.signature-dish-carousel__track::-webkit-scrollbar {
+  display: none;
+}
+
+.signature-dish-carousel__track--animating {
+  scroll-snap-type: none;
+}
+
+.signature-dish-carousel__card {
+  flex: 0 0 var(--signature-card-width);
+  width: var(--signature-card-width);
+  height: var(--signature-card-height);
+  scroll-snap-align: center;
+  display: grid;
+  grid-template-columns: 42% 58%;
+  align-items: stretch;
+  border-radius: clamp(18px, 2vw, 28px);
+  overflow: hidden;
+  background: #f3f3f3;
+}
+
+.signature-dish-carousel__content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  height: 100%;
+  padding: clamp(1.25rem, 2.5vw, 2rem);
+  padding-top: clamp(3rem, 7vw, 5.5rem);
+  padding-right: clamp(1rem, 2vw, 1.75rem);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.signature-dish-carousel__text-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 100%;
+}
+
+.signature-dish-carousel__eyebrow {
+  margin: 0 0 0.85rem;
+  font-family: var(--font-ui-bold, var(--font-body));
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #846d44;
+}
+
+.signature-dish-carousel__title {
+  margin: 0 0 1rem;
+  font-family: var(--font-heading);
+  font-size: clamp(1.65rem, 2.8vw, 2.35rem);
+  font-weight: 400;
+  line-height: 1.15;
+  color: #342716;
+}
+
+.signature-dish-carousel__description {
+  margin: 0 0 1.5rem;
+  font-family: var(--font-body);
+  font-size: clamp(0.9375rem, 1.5vw, 1.0625rem);
+  line-height: 1.55;
+  color: #4d463d;
+  max-width: 34ch;
+}
+
+.signature-dish-carousel__content .phurai-btn-outline {
+  margin-top: 0.25rem;
+  padding: 0.625rem 1.5rem;
+  border-color: #846d44;
+  color: #846d44;
+  font-family: var(--font-ui);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.signature-dish-carousel__content .phurai-btn-outline:hover {
+  background: #846d44;
+  color: #fff;
+}
+
+.signature-dish-carousel__media {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: #e8e4de;
+}
+
+.signature-dish-carousel__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 1.5rem;
+  box-sizing: border-box;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(52, 39, 22, 0.45);
+  background: linear-gradient(145deg, #ebe7e1 0%, #ddd8d0 100%);
+}
+
+.signature-dish-carousel__controls {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(1.25rem, 3vw, 2rem);
+  z-index: 90;
+  transform: translateX(-50%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.35s ease,
+    visibility 0.35s ease,
+    transform 0.35s ease;
+}
+
+.signature-dish-carousel__controls--visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.signature-dish-carousel__controls-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(132, 109, 68, 0.18);
+  border-radius: 999px;
+  background: rgba(244, 241, 236, 0.94);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 10px 36px rgba(52, 39, 22, 0.14);
+}
+
+.signature-dish-carousel__arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid rgba(132, 109, 68, 0.25);
+  border-radius: 50%;
+  background: #fffaf2;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: #846d44;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.signature-dish-carousel__arrow:hover:not(:disabled) {
+  background: #846d44;
+  border-color: #846d44;
+  color: #fffaf2;
+}
+
+.signature-dish-carousel__arrow:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.signature-dish-carousel__dots {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.25rem;
+}
+
+.signature-dish-carousel__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(132, 109, 68, 0.28);
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.signature-dish-carousel__dot--active {
+  transform: scale(1.15);
+  background: #846d44;
+}
+
+.signature-dish-carousel__dot:hover {
+  background: rgba(132, 109, 68, 0.55);
+}
+
+@media (max-width: 900px) {
+  .signature-dish-carousel__card {
+    grid-template-columns: 44% 56%;
+  }
+}
+
+@media (max-width: 768px) {
+  .signature-dish-carousel {
+    padding-bottom: clamp(5rem, 12vw, 7rem);
+  }
+
+  .signature-dish-carousel__track {
+    --signature-card-width: calc(100vw - 2rem);
+    --signature-card-height: auto;
+  }
+
+  .signature-dish-carousel__card {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(240px, 42vw);
+    min-height: 680px;
+    height: auto;
+  }
+
+  .signature-dish-carousel__content {
+    padding: clamp(2rem, 6vw, 3rem) clamp(1.25rem, 4vw, 1.75rem)
+      clamp(1.25rem, 4vw, 1.75rem);
+    padding-top: clamp(3rem, 8vw, 5.5rem);
+  }
+
+  .signature-dish-carousel__media {
+    min-height: clamp(240px, 42vw, 320px);
+  }
+
+  .signature-dish-carousel__description {
+    max-width: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .signature-dish-carousel__header {
+    width: calc(100vw - 2rem);
+  }
+
+  .signature-dish-carousel__track {
+    --signature-card-width: calc(100vw - 2rem);
+  }
+
+  .signature-dish-carousel__card {
+    border-radius: 18px;
+  }
+
+  .signature-dish-carousel__controls-inner {
+    gap: 0.5rem;
+    padding: 0.45rem 0.6rem;
+  }
+
+  .signature-dish-carousel__arrow {
+    width: 2rem;
+    height: 2rem;
+    font-size: 1.2rem;
+  }
+}

@@ -9,10 +9,11 @@ import ContactHours from "./pages/customer/ContactHours";
 import Menu from "./pages/customer/Menu";
 import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer";
-import LoginPage from "./pages/auth/LoginPage";
+import FloatingActionButtons from "./components/FloatingActionButtons";
 import Register from "./pages/Register";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
-import WelcomeOverlay from "./components/auth/WelcomeOverlay";
+import AuthModal from "./components/auth/AuthModal";
+import AuthSuccessOverlay from "./components/auth/AuthSuccessOverlay";
 import ProfileModal from "./components/auth/ProfileModal";
 import { clearAuthUser, getProfile, loadAuthUser, saveAuthUser } from "./components/auth/api";
 import { normalizeStoredAvatarUrl } from "./components/auth/avatarUtils";
@@ -35,6 +36,8 @@ function App() {
   const [welcomeFading, setWelcomeFading] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [profileView, setProfileView] = useState("view");
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState("login");
   const [loginSuccessMessage, setLoginSuccessMessage] = useState("");
 
   const getPageFromPath = (path) => {
@@ -48,6 +51,15 @@ function App() {
     if (path === "/register") return "register";
     if (path === "/verify") return "verify";
     return "home";
+  };
+
+  const openAuthModal = (mode = "login") => {
+    setAuthModalMode(mode);
+    setIsAuthModalOpen(true);
+  };
+
+  const closeAuthModal = () => {
+    setIsAuthModalOpen(false);
   };
 
   useEffect(() => {
@@ -68,10 +80,27 @@ function App() {
           .catch(() => {});
       }
     }
-    setActivePage(getPageFromPath(window.location.pathname));
+
+    const initialPage = getPageFromPath(window.location.pathname);
+    if (initialPage === "login") {
+      setActivePage("home");
+      setIsAuthModalOpen(true);
+      if (window.location.pathname === "/login") {
+        window.history.replaceState(null, "", "/");
+      }
+    } else {
+      setActivePage(initialPage);
+    }
 
     const onPopState = () => {
-      setActivePage(getPageFromPath(window.location.pathname));
+      const page = getPageFromPath(window.location.pathname);
+      if (page === "login") {
+        setActivePage("home");
+        openAuthModal("login");
+        window.history.replaceState(null, "", "/");
+        return;
+      }
+      setActivePage(page);
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     };
 
@@ -86,15 +115,12 @@ function App() {
     const closeTimer = setTimeout(() => {
       setShowWelcome(false);
       setWelcomeFading(false);
+      setIsAuthModalOpen(false);
       if (pendingAuthUser) {
         setIsAuthenticated(true);
         setCurrentUser(pendingAuthUser);
         saveAuthUser(pendingAuthUser, Boolean(localStorage.getItem("phurai_auth_user")));
         setPendingAuthUser(null);
-        setActivePage("home");
-        if (window.location.pathname !== "/") {
-          window.history.pushState(null, "", "/");
-        }
       }
     }, 3200);
 
@@ -105,13 +131,16 @@ function App() {
   }, [showWelcome, pendingAuthUser]);
 
   const handleNavigate = (page) => {
+    if (page === "login") {
+      openAuthModal("login");
+      return;
+    }
+
     setActivePage(page);
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
 
     const nextPath =
-      page === "login"
-        ? "/login"
-        : page === "takeout"
+      page === "takeout"
         ? "/take-out"
         : page === "catering"
         ? "/catering"
@@ -142,7 +171,7 @@ function App() {
     setIsAuthenticated(true);
     setCurrentUser(normalized);
     saveAuthUser(normalized, options.remember);
-    handleNavigate("home");
+    setIsAuthModalOpen(false);
   };
 
   const handleSignOut = () => {
@@ -170,27 +199,23 @@ function App() {
     setLoginSuccessMessage(
       message || "Password reset successfully. Please sign in with your new password."
     );
-    handleNavigate("login");
+    openAuthModal("login");
   };
-
-  const isLoginPage = activePage === "login";
 
   return (
     <>
-      {!isLoginPage ? (
-        <Navbar
-          activePage={activePage}
-          onNavigate={handleNavigate}
-          isAuthenticated={isAuthenticated}
-          currentUser={currentUser}
-          onOpenAuth={() => handleNavigate("login")}
-          onOpenProfile={(view = "view") => {
-            setProfileView(view);
-            setShowProfile(true);
-          }}
-          onSignOut={handleSignOut}
-        />
-      ) : null}
+      <Navbar
+        activePage={activePage}
+        onNavigate={handleNavigate}
+        isAuthenticated={isAuthenticated}
+        currentUser={currentUser}
+        onOpenAuth={() => openAuthModal("login")}
+        onOpenProfile={(view = "view") => {
+          setProfileView(view);
+          setShowProfile(true);
+        }}
+        onSignOut={handleSignOut}
+      />
 
       {activePage === "home" && <Home />}
       {activePage === "takeout" && <TakeOut />}
@@ -203,19 +228,22 @@ function App() {
       {activePage === "contactHours" && <ContactHours />}
       {activePage === "register" && <Register />}
       {activePage === "verify" && <VerifyEmail />}
-      {isLoginPage && (
-        <LoginPage
-          isAuthenticated={isAuthenticated}
-          onAuthSuccess={handleAuthSuccess}
-          onNavigateHome={() => handleNavigate("home")}
-          successMessage={loginSuccessMessage}
-          onClearSuccess={() => setLoginSuccessMessage("")}
-        />
-      )}
 
-      {!isLoginPage ? <Footer /> : null}
+      <Footer />
 
-      <WelcomeOverlay
+      <FloatingActionButtons />
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={closeAuthModal}
+        isAuthenticated={isAuthenticated}
+        onAuthSuccess={handleAuthSuccess}
+        initialMode={authModalMode}
+        successMessage={loginSuccessMessage}
+        onClearSuccess={() => setLoginSuccessMessage("")}
+      />
+
+      <AuthSuccessOverlay
         isVisible={showWelcome}
         user={pendingAuthUser}
         fading={welcomeFading}

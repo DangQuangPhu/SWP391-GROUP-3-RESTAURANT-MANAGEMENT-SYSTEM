@@ -127,7 +127,7 @@ function LoginPage({
       />
       <div className="login-page__overlay" aria-hidden="true" />
 
-      <div className="login-page__inner">
+      <div className={`login-page__inner${view === VIEWS.AUTH ? " login-page__inner--auth" : ""}`}>
         <button type="button" className="login-page__back" onClick={onNavigateHome}>
           ← Back to Home
         </button>
@@ -141,7 +141,7 @@ function LoginPage({
             </button>
           </div>
         ) : (
-          <div className="login-page__card login-page__card--glass">{content}</div>
+          <div className={`login-page__card login-page__card--glass${view === VIEWS.AUTH ? " login-page__card--auth" : ""}`}>{content}</div>
         )}
       </div>
     </main>

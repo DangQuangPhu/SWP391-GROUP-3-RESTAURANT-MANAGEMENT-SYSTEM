@@ -31,11 +31,21 @@ function Footer() {
             service, and ambiance has made us a beloved destination for food lovers.
           </p>
           <div className="phurai-footer__social">
-            {socialLinks.map((item) => (
-              <a key={item.label} href="#" aria-label={item.label}>
-                <img src={item.icon} alt="" className="social-icon" />
-              </a>
-            ))}
+            <a href="#" aria-label="Instagram" className="social-link">
+              <img src={homeIcons.socialInstagram} alt="" className="social-icon" />
+            </a>
+
+            <a href="#" aria-label="Facebook" className="social-link">
+              <img src={homeIcons.socialFacebook} alt="" className="social-icon" />
+            </a>
+
+            <a href="#" aria-label="Twitter" className="social-link">
+              <img src={homeIcons.socialTwitter} alt="" className="social-icon" />
+            </a>
+
+            <a href="#" aria-label="YouTube" className="social-link">
+              <img src={homeIcons.socialYoutube} alt="" className="social-icon" />
+            </a>
           </div>
         </div>
 

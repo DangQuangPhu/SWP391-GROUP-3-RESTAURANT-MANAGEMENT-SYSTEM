@@ -15,7 +15,6 @@ import locationIcon from '../assets/icons/location.svg';
 import phoneIcon from '../assets/icons/phone.svg';
 import emailIcon from '../assets/icons/email.svg';
 import accessibilityIcon from '../assets/icons/accessibility.svg';
-import scrollTopIcon from '../assets/icons/scroll-top.svg';
 import scrollTopAltIcon from '../assets/icons/scroll-top-alt.svg';
 import chevronDownIcon from '../assets/icons/chevron-down.svg';
 import closeIcon from '../assets/icons/close.svg';
@@ -48,7 +47,7 @@ export const contactIcons = {
 
 export const utilityIcons = {
   accessibility: accessibilityIcon,
-  scrollTop: scrollTopIcon,
+  scrollTop: scrollTopAltIcon,
   scrollTopAlt: scrollTopAltIcon,
 };
 
