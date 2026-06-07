@@ -6,7 +6,7 @@ const corporateSections = [
     title: "Lunch Boxes",
     items: [
       {
-        name: "Nobu Style Bento",
+        name: "Phūrai Style Bento",
         desc: "Chef's selection of sashimi, sushi, black cod miso, and dessert.",
         price: "65",
       },

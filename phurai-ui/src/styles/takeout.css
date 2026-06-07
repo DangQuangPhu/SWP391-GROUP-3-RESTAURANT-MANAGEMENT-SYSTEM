@@ -14,12 +14,12 @@
   grid-template-columns: 1.05fr 0.95fr;
   align-items: stretch;
   width: 100%;
-  min-height: 560px;
+  min-height: calc(100svh - 117px);
   background: #ffffff;
 }
 
 .takeout-hero__image {
-  min-height: 560px;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -27,7 +27,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  min-height: 560px;
+ 
   object-fit: cover;
   object-position: center left;
 }
@@ -43,7 +43,7 @@
 .takeout-hero__label {
   margin: 0 0 2rem;
   font-family: var(--font-ui-bold);
-  font-size: 1.05rem;
+  font-size: 2.05rem;
   font-weight: 800;
   letter-spacing: 0.04em;
   line-height: 1.2;
@@ -67,7 +67,7 @@
 .takeout-hero__line {
   margin: 0;
   font-family: var(--font-ui-bold);
-  font-size: 0.95rem;
+  font-size: 1.8rem;
   font-weight: 800;
   line-height: 1.2;
   letter-spacing: 0.02em;
@@ -105,7 +105,7 @@
   gap: 0.35rem;
   width: fit-content;
   font-family: var(--font-ui-bold);
-  font-size: 0.9rem;
+  font-size: 1.0rem;
   font-weight: 800;
   color: #8c764b;
   text-decoration: none;
@@ -120,7 +120,7 @@
 .takeout-hero__note {
   margin: 0;
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: 1.2rem;
   line-height: 1.45;
   color: #8c764b;
   text-transform: none;
@@ -158,14 +158,14 @@
 }
 
 .takeout-menu__tab {
-  width: 132px;
-  height: 34px;
+  width: 230px;
+  height: 52px;
   border: none;
   background: #efeee9;
-  font-family: var(--font-ui-bold);
-  font-size: 0.68rem;
+  font-family: var(--font-nav);
+  font-size: 0.72rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.05em;
   color: #8c764b;
   text-transform: uppercase;
   cursor: pointer;
@@ -197,9 +197,9 @@
 .takeout-menu__label {
   margin: 0 0 0.35rem;
   font-family: var(--font-heading);
-  font-size: 0.9rem;
+  font-size: clamp(3.2rem, 4.8vw, 5rem);
   font-weight: 400;
-  letter-spacing: 0.28em;
+  letter-spacing: 0.2em;
   color: #8c764b;
   text-transform: uppercase;
 }
@@ -225,7 +225,7 @@
 .takeout-menu__section-title {
   margin: 0 0 1.25rem;
   font-family: var(--font-heading);
-  font-size: 0.9rem;
+  font-size: clamp(1.45rem, 2.3vw, 2rem);
   font-weight: 400;
   letter-spacing: 0.28em;
   line-height: 1.3;
@@ -279,10 +279,10 @@
 /* Menu items */
 .takeout-menu__item {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr 80px;
   gap: 2rem;
   align-items: start;
-  padding: 0.65rem 0;
+  padding: 1.55rem 0;
 }
 
 .takeout-menu__item--simple {
@@ -303,14 +303,16 @@
 }
 
 .takeout-menu__item-title {
-  margin: 0 0 0.2rem;
+  
+  margin: 0 0 0.5rem;
   font-family: var(--font-ui-bold);
-  font-size: 0.72rem;
+  font-size: 0.92rem;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.1em;
   line-height: 1.35;
   color: #342716;
   text-transform: uppercase;
+  
 }
 
 .takeout-menu__item--simple .takeout-menu__item-title {

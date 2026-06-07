@@ -76,15 +76,15 @@ function Footer() {
           <dl className="phurai-footer__hours">
             <div>
               <dt>Mon — Thu</dt>
-              <dd>11:00 AM — 10:00 PM</dd>
+              <dd>7:00 AM — 12:00 PM</dd>
             </div>
             <div>
               <dt>Fri — Sat</dt>
-              <dd>11:00 AM — 11:00 PM</dd>
+              <dd>7:00 AM — 12:00 PM</dd>
             </div>
             <div>
               <dt>Sunday</dt>
-              <dd>12:00 PM — 9:00 PM</dd>
+              <dd>7 PM — 10:00 PM</dd>
             </div>
             <div className="phurai-footer__happy-hour">
               <dt>Happy Hour</dt>

@@ -139,7 +139,7 @@ function LunchMenu() {
       </header>
 
       <div className="takeout-menu__section">
-        <h3 className="takeout-menu__section-title">NOBU SELECT BENTO</h3>
+        <h3 className="takeout-menu__section-title">Phūrai SELECT BENTO</h3>
         <div className="takeout-menu__item takeout-menu__item--stacked">
           <p className="takeout-menu__item-description takeout-menu__item-description--center">
             Sashimi salad, assorted sushi, black cod with miso, tenderloin anticucho

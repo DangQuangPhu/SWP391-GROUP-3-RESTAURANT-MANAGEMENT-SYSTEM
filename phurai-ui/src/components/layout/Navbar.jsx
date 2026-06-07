@@ -53,6 +53,8 @@ function Navbar({
 
   const isDarkTopPage = darkTopPages.includes(activePage);
   const pageClass = pageClassMap[activePage] || activePage;
+  
+  const isBlackReservationPage = ["takeout", "catering", "menus"].includes(activePage);
   useEffect(() => {
     setNavState("top");
     lastScrollY.current = window.scrollY;
@@ -155,11 +157,10 @@ function Navbar({
 
   return (
     <header
-      className={`phurai-navbar phurai-navbar--${navState} phurai-navbar--page-${pageClass} ${
-        isDarkTopPage
+      className={`phurai-navbar phurai-navbar--${navState} phurai-navbar--page-${pageClass} ${isDarkTopPage
           ? "phurai-navbar--dark-top-page"
           : "phurai-navbar--light-top-page"
-      }`}
+        }`}
     >
       <a
         href="/"
@@ -197,7 +198,11 @@ function Navbar({
             SIGN IN
           </button>
         ) : null}
-        <a href="#reserve" className="phurai-navbar__cta">
+        <a
+          href="#reserve"
+          className={`phurai-navbar__cta ${isBlackReservationPage ? "phurai-navbar__cta--black" : ""
+            }`}
+        >
           RESERVATIONS
         </a>
         {isAuthenticated ? (

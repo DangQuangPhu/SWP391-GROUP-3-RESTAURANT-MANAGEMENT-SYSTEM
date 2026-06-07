@@ -330,6 +330,33 @@
   font-size: 1.25rem;
   padding: 0.625rem 1.5rem;
 }
+.phurai-navbar__cta--black {
+  background: #111111;
+  color: #ffffff;
+  border-color: #111111;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+}
+
+.phurai-navbar__cta--black:hover {
+  background: #000000;
+  color: #ffffff;
+  border-color: #000000;
+}
+.phurai-navbar--page-takeout .phurai-navbar__cta--black,
+.phurai-navbar--page-catering .phurai-navbar__cta--black,
+.phurai-navbar--page-menus .phurai-navbar__cta--black {
+  background: #111111;
+  color: #ffffff;
+  border-color: #111111;
+}
+
+.phurai-navbar--page-takeout .phurai-navbar__cta--black:hover,
+.phurai-navbar--page-catering .phurai-navbar__cta--black:hover,
+.phurai-navbar--page-menus .phurai-navbar__cta--black:hover {
+  background: #000000;
+  color: #ffffff;
+  border-color: #000000;
+}
 
 /* ── Offering / Happenings blocks ── */
 .phurai-offering {
@@ -1533,6 +1560,21 @@
   position: relative;
   z-index: 1;
 }
+.phurai-footer {
+  position: relative;
+  margin-top: 0rem;
+  padding-top: 2rem;
+}
+
+.phurai-footer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: clamp(2rem, 5vw, 5rem);
+  right: clamp(2rem, 5vw, 5rem);
+  height: 1px;
+  background: rgba(52, 33, 22, 0.12);
+}
 
 /* ── Floating utils ── */
 .phurai-floating-utils {
@@ -1911,5 +1953,20 @@
     0 10px 15px -3px rgba(0, 0, 0, 0.1),
     0 4px 6px -4px rgba(0, 0, 0, 0.1),
     inset 0 0 0 2px #ffffff !important;
+  transform: translateY(-2px);
+}
+
+
+/* Hover vẫn giữ màu đen, không bị transparent */
+.phurai-navbar.phurai-navbar--page-takeout .phurai-navbar__actions .phurai-navbar__cta.phurai-navbar__cta--black:hover,
+.phurai-navbar.phurai-navbar--page-catering .phurai-navbar__actions .phurai-navbar__cta.phurai-navbar__cta--black:hover,
+.phurai-navbar.phurai-navbar--page-menus .phurai-navbar__actions .phurai-navbar__cta.phurai-navbar__cta--black:hover {
+  background: transparent !important;
+  color: #000000 !important;
+  border-color: transparent !important;
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -4px rgba(0, 0, 0, 0.1),
+    inset 0 0 0 2px #000000 !important;
   transform: translateY(-2px);
 }

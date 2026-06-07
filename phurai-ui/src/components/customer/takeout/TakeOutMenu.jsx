@@ -103,7 +103,7 @@ function TakeOutMenu() {
         </header>
 
         <div className="takeout-menu__section">
-          <h3 className="takeout-menu__section-title">NOBU SELECT BENTO</h3>
+          <h3 className="takeout-menu__section-title">Phūrai SELECT BENTO</h3>
           <div className="takeout-menu__item takeout-menu__item--description-only">
             <p className="takeout-menu__item-description">
               SASHIMI SALAD, ASSORTED SUSHI, BLACK COD WITH MISO, TENDERLOIN ANTICUCHO & MISO SOUP
