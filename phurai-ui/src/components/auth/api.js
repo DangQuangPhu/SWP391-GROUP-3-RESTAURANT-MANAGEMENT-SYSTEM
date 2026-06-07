@@ -293,11 +293,13 @@ export function forgotPasswordRequest(payload) {
 export function forgotPasswordVerifyOtp({
   email,
   otp,
+  code,
   purpose = "forgot_password",
+  phone,
   userId,
 } = {}) {
   const normalizedEmail = String(email || "").trim().toLowerCase();
-  const normalizedOtp = String(otp || "").trim();
+  const normalizedOtp = String(otp ?? code ?? "").trim();
 
   if (!normalizedEmail || !normalizedOtp) {
     return Promise.reject(
@@ -313,6 +315,10 @@ export function forgotPasswordVerifyOtp({
     otp: normalizedOtp,
     purpose,
   };
+
+  if (phone) {
+    body.phone = String(phone).replace(/\D/g, "");
+  }
 
   if (userId) {
     body.userId = userId;
@@ -395,16 +401,51 @@ export function getProfile(userId) {
 }
 
 export function updateProfile(userId, payload) {
-  const { firstName, lastName, username, phone, phoneNumber, dateOfBirth } = payload;
+  const {
+    firstName,
+    lastName,
+    fullName,
+    username,
+    phone,
+    phoneNumber,
+    dateOfBirth,
+    gender,
+    bio,
+    address,
+    country,
+    language,
+  } = payload;
   return request(`/profile/${encodeURIComponent(userId)}`, {
     method: "PUT",
     body: JSON.stringify({
       firstName,
       lastName,
+      fullName,
       username,
       phone: phone ?? phoneNumber,
+      phoneNumber: phone ?? phoneNumber,
       dateOfBirth,
+      gender,
+      bio,
+      address,
+      country,
+      language,
     }),
+  });
+}
+
+export function patchProfile(userId, payload) {
+  return request(`/profile/${encodeURIComponent(userId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateProfilePhone(userId, phoneNumber) {
+  const normalized = String(phoneNumber || "").replace(/\D/g, "");
+  return patchProfile(userId, {
+    phone: normalized,
+    phoneNumber: normalized,
   });
 }
 

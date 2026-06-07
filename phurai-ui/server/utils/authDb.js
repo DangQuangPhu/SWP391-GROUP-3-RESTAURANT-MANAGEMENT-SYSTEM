@@ -316,22 +316,29 @@ export async function runMigrationsOnStartup() {
     const path = await import("node:path");
     const { fileURLToPath } = await import("node:url");
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
-    const sqlPath = path.join(__dirname, "../migrations/001-auth-columns.sql");
-    if (!fs.existsSync(sqlPath)) return;
+    const migrationsDir = path.join(__dirname, "../migrations");
+    if (!fs.existsSync(migrationsDir)) return;
 
-    const raw = fs.readFileSync(sqlPath, "utf8");
-    const batches = raw
-      .split(/^\s*GO\s*$/gim)
-      .map((b) => b.trim())
-      .filter((b) => b && !b.startsWith("--") && !b.match(/^USE\s/i) && !b.match(/^PRINT\s/i));
+    const migrationFiles = fs
+      .readdirSync(migrationsDir)
+      .filter((name) => name.endsWith(".sql"))
+      .sort();
 
-    for (const batch of batches) {
-      if (batch.includes("OBJECT_ID") && batch.includes("no-op")) continue;
-      try {
-        await pool.query(batch);
-      } catch (e) {
-        if (!String(e.message).includes("already an object")) {
-          console.warn("Migration batch warning:", e.message);
+    for (const fileName of migrationFiles) {
+      const raw = fs.readFileSync(path.join(migrationsDir, fileName), "utf8");
+      const batches = raw
+        .split(/^\s*GO\s*$/gim)
+        .map((b) => b.trim())
+        .filter((b) => b && !b.startsWith("--") && !b.match(/^USE\s/i) && !b.match(/^PRINT\s/i));
+
+      for (const batch of batches) {
+        if (batch.includes("OBJECT_ID") && batch.includes("no-op")) continue;
+        try {
+          await pool.query(batch);
+        } catch (e) {
+          if (!String(e.message).includes("already an object")) {
+            console.warn(`Migration ${fileName} warning:`, e.message);
+          }
         }
       }
     }

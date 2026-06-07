@@ -1,0 +1,106 @@
+.profile-avatar-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.profile-avatar-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  cursor: pointer;
+}
+
+.avatar-preview__frame {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  border-radius: 28px;
+  background: #fffaf2;
+  box-shadow:
+    0 24px 60px rgba(74, 55, 25, 0.18),
+    0 8px 24px rgba(74, 55, 25, 0.1);
+  animation: profile-avatar-modal-in 0.25s ease both;
+}
+
+.avatar-preview__close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 2;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 4px 14px rgba(74, 55, 25, 0.12);
+  font-size: 1.35rem;
+  line-height: 1;
+  color: #4a3719;
+  cursor: pointer;
+}
+
+.avatar-preview__close:hover {
+  background: #ffffff;
+}
+
+.avatar-preview__image {
+  display: block;
+  width: min(70vw, 520px);
+  height: min(70vh, 520px);
+  max-width: min(70vw, 520px);
+  max-height: min(70vh, 520px);
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatar-preview__initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(70vw, 520px);
+  height: min(70vw, 520px);
+  max-width: min(70vw, 520px);
+  max-height: min(70vh, 520px);
+  border-radius: 50%;
+  background: linear-gradient(145deg, #e8dcc8 0%, #d4c4a8 100%);
+  color: #4a3719;
+  font-family: var(--font-serif);
+  font-size: clamp(3rem, 12vw, 6rem);
+  font-weight: 500;
+}
+
+@keyframes profile-avatar-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 640px) {
+  .avatar-preview__frame {
+    padding: 1rem;
+    border-radius: 24px;
+  }
+
+  .avatar-preview__image,
+  .avatar-preview__initial {
+    width: min(82vw, 360px);
+    height: min(82vw, 360px);
+  }
+}

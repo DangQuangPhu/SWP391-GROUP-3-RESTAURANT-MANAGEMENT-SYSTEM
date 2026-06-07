@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import UserAvatar from "../../components/auth/UserAvatar";
 import AvatarPickerModal from "../../components/account/AvatarPickerModal";
+import AvatarPreviewModal from "../../components/account/AvatarPreviewModal";
 import AccountBackHome from "../../components/account/AccountBackHome";
-import { getDisplayName, isPasswordStrong } from "../../components/auth/authHelpers";
+import PasswordAuthenticationPanel from "../../components/account/PasswordAuthenticationPanel";
+import { getDisplayName, isValidVietnamPhone, normalizePhone } from "../../components/auth/authHelpers";
 import OtpCodeInput from "../../components/auth/OtpCodeInput";
 import {
   changePassword,
@@ -23,21 +25,19 @@ import "../../components/auth/OtpCodeInput.css";
 import "./Profile.css";
 import "./accountShared.css";
 
-const OTP_RESEND_SECONDS = OTP_RESEND_COOLDOWN_SECONDS;
-
 const GENDERS = ["", "Female", "Male", "Non-binary", "Prefer not to say"];
 const COUNTRIES = ["", "Vietnam", "United States", "United Kingdom", "Singapore", "Other"];
 const LANGUAGES = ["", "English", "Vietnamese", "French", "Other"];
 
 const FORM_FIELDS = [
-  { key: "fullName", label: "Full Name", placeholder: "Your First Name", type: "text" },
-  { key: "username", label: "Username", placeholder: "Your Username", type: "text" },
+  { key: "fullName", label: "Full Name", placeholder: "Your full name", type: "text" },
+  { key: "username", label: "Username", placeholder: "Your username", type: "text" },
   { key: "gender", label: "Gender", placeholder: "Select gender", type: "select", options: GENDERS },
   { key: "country", label: "Country", placeholder: "Select country", type: "select", options: COUNTRIES },
   { key: "language", label: "Language", placeholder: "Select language", type: "select", options: LANGUAGES },
   {
     key: "dateOfBirth",
-    label: "Date of birth",
+    label: "Date of Birth",
     placeholder: "Select your date of birth",
     type: "date",
   },
@@ -100,7 +100,7 @@ const resolveUsername = (profile = {}, user = {}) => {
 const ProfileIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <path
-      d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0"
+      d="M12 12a4 4 0 1 0 0 -8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
@@ -167,7 +167,7 @@ const DASHBOARD_ITEMS = [
   { key: "profile", label: "Profile", icon: ProfileIcon },
   { key: "appearance", label: "Appearance", icon: AppearanceIcon },
   { key: "accessibility", label: "Accessibility", icon: AccessibilityIcon },
-  { key: "password", label: "Password", icon: PasswordIcon },
+  { key: "password", label: "Password & Authentication", icon: PasswordIcon },
   { key: "sessions", label: "Sessions", icon: SessionsIcon },
 ];
 
@@ -196,25 +196,43 @@ function formatDateOfBirthDisplay(value) {
   return value;
 }
 
-function getProfilePasswordStrength(password) {
-  if (!password) {
-    return { level: "none", bars: 0, label: "" };
+function formatPhoneDisplay(phone) {
+  const digits = normalizePhone(phone);
+  if (!digits) return "";
+  if (digits.startsWith("84") && digits.length >= 11) {
+    return `+${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5, 8)} ${digits.slice(8)}`;
   }
-  if (password.length < 8) {
-    return { level: "weak", bars: 1, label: "Weak" };
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
   }
-  const hasLetter = /[a-zA-Z]/.test(password);
-  const hasNumber = /[0-9]/.test(password);
-  const hasLower = /[a-z]/.test(password);
-  const hasUpper = /[A-Z]/.test(password);
-  const hasSpecial = /[^A-Za-z0-9]/.test(password);
-  if (password.length >= 8 && hasLower && hasUpper && hasNumber && hasSpecial) {
-    return { level: "strong", bars: 3, label: "Strong" };
-  }
-  if (password.length >= 8 && hasLetter && hasNumber) {
-    return { level: "medium", bars: 2, label: "Medium" };
-  }
-  return { level: "weak", bars: 1, label: "Weak" };
+  return String(phone).trim();
+}
+
+function ProfileContentSkeleton() {
+  return (
+    <div className="profile-content-skeleton" aria-hidden="true">
+      <div className="profile-content-skeleton__row" />
+      <div className="profile-content-skeleton__row" />
+      <div className="profile-content-skeleton__row profile-content-skeleton__row--short" />
+      <div className="profile-content-skeleton__block" />
+    </div>
+  );
+}
+
+function ProfileErrorBanner({ message, onRetry, retrying }) {
+  return (
+    <div className="profile-dashboard__error-card" role="alert">
+      <p>{message}</p>
+      <button
+        type="button"
+        className="profile-dashboard__btn profile-dashboard__btn--ghost"
+        onClick={onRetry}
+        disabled={retrying}
+      >
+        {retrying ? "Retrying…" : "Retry"}
+      </button>
+    </div>
+  );
 }
 
 function getCoverGradient(themeId) {
@@ -255,12 +273,12 @@ function BellIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
       <path
-        d="M10 3a3.5 3.5 0 00-3.5 3.5V9L5 12h10l-1.5-3V6.5A3.5 3.5 0 0010 3z"
+        d="M10 3a3.5 3.5 0 0 0 -3.5 3.5V9L5 12h10l-1.5-3V6.5A3.5 3.5 0 0 0 10 3z"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinejoin="round"
       />
-      <path d="M8.5 14a1.5 1.5 0 003 0" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M8.5 14a1.5 1.5 0 0 0 3 0" stroke="currentColor" strokeWidth="1.5" />
     </svg>
   );
 }
@@ -270,6 +288,19 @@ function MailIcon() {
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
       <rect x="3" y="5" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.4" />
       <path d="M3 7l7 4.5L17 7" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path
+        d="M6.5 3h2l1 4-2.2 1.2a11 11 0 0 0 5.5 5.5L14 11l4 1v2c0 .6-.4 1-1 1.1C15.8 16.1 13.2 16 10.8 15 6.6 13.6 3.4 10.4 2 6.2 1.9 3.8 1.8 1.2 2.9 1 3 1h3.5Z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -287,7 +318,7 @@ function ProfileAvatar({ user }) {
   );
 }
 
-function ProfileField({ field, value, isEditing, onChange }) {
+function ProfileField({ field, value, isEditing, onChange, error }) {
   const isDateField = field.key === "dateOfBirth";
   const displayValue = isDateField
     ? formatDateOfBirthDisplay(value)
@@ -312,11 +343,16 @@ function ProfileField({ field, value, isEditing, onChange }) {
             value={value}
             placeholder={field.placeholder}
             onChange={onChange}
+            className={error ? "profile-dashboard__input--error" : ""}
+            aria-invalid={Boolean(error)}
           />
         )
       ) : (
         <div className="profile-dashboard__field-value">{displayValue}</div>
       )}
+      {isEditing && error ? (
+        <span className="profile-dashboard__field-error">{error}</span>
+      ) : null}
     </div>
   );
 }
@@ -377,502 +413,6 @@ function AccessibilityPanel({ prefs, onChange }) {
   );
 }
 
-function ProfilePasswordStrength({ password }) {
-  const strength = getProfilePasswordStrength(password);
-  if (!password) return null;
-
-  return (
-    <div className="profile-dashboard__password-strength" aria-live="polite">
-      <div className="profile-dashboard__strength-bars" aria-hidden="true">
-        {[1, 2, 3].map((bar) => (
-          <span
-            key={bar}
-            className={`profile-dashboard__strength-bar${
-              bar <= strength.bars ? ` is-${strength.level}` : ""
-            }`}
-          />
-        ))}
-      </div>
-      <span className={`profile-dashboard__strength-label is-${strength.level}`}>
-        {strength.label}
-      </span>
-    </div>
-  );
-}
-
-function PasswordPanel({ profile, onPasswordReset }) {
-  const [mode, setMode] = useState("change");
-  const [forgotStep, setForgotStep] = useState("send");
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [changeErrors, setChangeErrors] = useState({});
-  const [changeSaving, setChangeSaving] = useState(false);
-
-  const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
-  const [otpError, setOtpError] = useState("");
-  const [otpShake, setOtpShake] = useState(false);
-  const [otpSaving, setOtpSaving] = useState(false);
-  const [resendSeconds, setResendSeconds] = useState(OTP_RESEND_SECONDS);
-  const [otpExpiresIn, setOtpExpiresIn] = useState(OTP_EXPIRES_IN_SECONDS);
-  const [isResending, setIsResending] = useState(false);
-  const [resetToken, setResetToken] = useState("");
-  const [forgotNewPassword, setForgotNewPassword] = useState("");
-  const [forgotConfirmPassword, setForgotConfirmPassword] = useState("");
-  const [forgotError, setForgotError] = useState("");
-  const [forgotSuccess, setForgotSuccess] = useState("");
-  const [forgotSaving, setForgotSaving] = useState(false);
-  const [sendOtpSaving, setSendOtpSaving] = useState(false);
-
-  const userId = profile?.userId ?? profile?.id;
-  const email = profile?.email || "";
-
-  const forgotStrength = getProfilePasswordStrength(forgotNewPassword);
-  const canResetForgotPassword =
-    Boolean(forgotNewPassword) &&
-    forgotStrength.level !== "weak" &&
-    forgotStrength.bars >= 2 &&
-    forgotNewPassword === forgotConfirmPassword;
-
-  const canResend = resendSeconds === 0 && !isResending;
-  const isOtpExpired = otpExpiresIn <= 0;
-
-  const resetForgotFlow = () => {
-    setMode("change");
-    setForgotStep("send");
-    setOtpDigits(["", "", "", "", "", ""]);
-    setOtpError("");
-    setOtpShake(false);
-    setResetToken("");
-    setForgotNewPassword("");
-    setForgotConfirmPassword("");
-    setForgotError("");
-    setForgotSuccess("");
-    setResendSeconds(OTP_RESEND_SECONDS);
-    setOtpExpiresIn(OTP_EXPIRES_IN_SECONDS);
-    setIsResending(false);
-  };
-
-  useEffect(() => {
-    if (otpExpiresIn <= 0 || forgotStep !== "otp") return undefined;
-
-    const timer = setTimeout(() => {
-      setOtpExpiresIn((prev) => Math.max(prev - 1, 0));
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [otpExpiresIn, forgotStep]);
-
-  useEffect(() => {
-    if (resendSeconds <= 0 || forgotStep !== "otp") return undefined;
-
-    const timer = setTimeout(() => {
-      setResendSeconds((prev) => Math.max(prev - 1, 0));
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [resendSeconds, forgotStep]);
-
-  const handleChangeSubmit = async (event) => {
-    event.preventDefault();
-    const nextErrors = {};
-
-    if (!currentPassword) {
-      nextErrors.current = "Current password is required.";
-    }
-    if (!newPassword) {
-      nextErrors.newPassword = "New password is required.";
-    } else if (!isPasswordStrong(newPassword)) {
-      nextErrors.newPassword =
-        "Password must be at least 8 characters with uppercase, lowercase, number, and special character.";
-    }
-    if (newPassword !== confirmPassword) {
-      nextErrors.confirm = "Passwords do not match.";
-    }
-
-    if (Object.keys(nextErrors).length) {
-      setChangeErrors(nextErrors);
-      return;
-    }
-
-    if (!userId) {
-      setChangeErrors({ form: "Unable to update password for this account." });
-      return;
-    }
-
-    const sessionUser = loadAuthUser();
-    if (!sessionUser?.userId && !sessionUser?.id) {
-      setChangeErrors({ form: "Please log in again to change your password." });
-      return;
-    }
-
-    try {
-      setChangeSaving(true);
-      setChangeErrors({});
-      await changePassword({
-        userId,
-        currentPassword,
-        newPassword,
-        confirmPassword,
-      });
-      onPasswordReset?.({
-        message: "Password changed successfully. Please log in again.",
-      });
-    } catch (error) {
-      if (error.status === 401) {
-        setChangeErrors({ form: "Please log in again to change your password." });
-        return;
-      }
-      setChangeErrors({
-        form: error?.message || "Password update failed.",
-      });
-    } finally {
-      setChangeSaving(false);
-    }
-  };
-
-  const handleSendOtp = async (event) => {
-    event.preventDefault();
-    setForgotError("");
-    setForgotSuccess("");
-
-    if (!userId || !email) {
-      setForgotError("Unable to send verification code for this account.");
-      return;
-    }
-
-    try {
-      setSendOtpSaving(true);
-      const data = await forgotPasswordRequestOtp({
-        email,
-        purpose: "forgot_password",
-      });
-      setForgotStep("otp");
-      applyOtpSentTiming(data, { setOtpExpiresIn, setResendSeconds });
-      setForgotSuccess("We sent a 6-digit verification code to your email.");
-    } catch (error) {
-      if (error.status === 429) {
-        setForgotStep("otp");
-        setResendSeconds(resolveRetryAfterSeconds(error.data || {}));
-        setForgotError(error.message || "Please wait before requesting another code.");
-        return;
-      }
-      setForgotError(error?.message || "Could not send verification code.");
-    } finally {
-      setSendOtpSaving(false);
-    }
-  };
-
-  const triggerOtpShake = () => {
-    setOtpShake(true);
-    window.setTimeout(() => setOtpShake(false), 520);
-  };
-
-  const handleResendOtp = async () => {
-    if (!canResend || !email) return;
-
-    try {
-      setIsResending(true);
-      setOtpError("");
-      const data = await forgotPasswordResendOtp({
-        email,
-        purpose: "forgot_password",
-        userId,
-      });
-      setOtpDigits(["", "", "", "", "", ""]);
-      applyOtpSentTiming(data, { setOtpExpiresIn, setResendSeconds });
-      setForgotSuccess("A new verification code has been sent to your email.");
-    } catch (error) {
-      if (error.status === 429) {
-        setResendSeconds(resolveRetryAfterSeconds(error.data || {}));
-      }
-      setOtpError(error?.message || "Could not resend verification code.");
-      triggerOtpShake();
-    } finally {
-      setIsResending(false);
-    }
-  };
-
-  const handleVerifyOtp = async (event) => {
-    event.preventDefault();
-
-    if (isOtpExpired) {
-      setOtpError("This code has expired. Please request a new code.");
-      triggerOtpShake();
-      return;
-    }
-
-    const code = otpDigits.join("");
-    if (code.length < 6) {
-      setOtpError("Please enter all 6 digits.");
-      triggerOtpShake();
-      return;
-    }
-
-    try {
-      setOtpSaving(true);
-      setOtpError("");
-      const data = await forgotPasswordVerifyOtp({
-        email,
-        otp: code,
-        purpose: "forgot_password",
-        userId,
-      });
-      setResetToken(data.resetToken);
-      setForgotStep("reset");
-    } catch (error) {
-      setOtpError(error?.message || "Invalid verification code.");
-      triggerOtpShake();
-    } finally {
-      setOtpSaving(false);
-    }
-  };
-
-  const handleForgotReset = async (event) => {
-    event.preventDefault();
-    setForgotError("");
-
-    if (!canResetForgotPassword) {
-      if (forgotNewPassword !== forgotConfirmPassword) {
-        setForgotError("Passwords do not match.");
-      }
-      return;
-    }
-
-    try {
-      setForgotSaving(true);
-      await forgotPasswordReset({
-        email,
-        resetToken,
-        newPassword: forgotNewPassword,
-        confirmPassword: forgotConfirmPassword,
-        userId,
-      });
-      onPasswordReset?.({
-        message: "Password changed successfully. Please log in again.",
-      });
-    } catch (error) {
-      setForgotError(error?.message || "Password reset failed.");
-    } finally {
-      setForgotSaving(false);
-    }
-  };
-
-  if (mode === "forgot") {
-    return (
-      <div className="profile-dashboard__panel profile-dashboard__forgot-password">
-        <div className="profile-dashboard__forgot-head">
-          <h3>Reset password</h3>
-          <button
-            type="button"
-            className="profile-dashboard__forgot-back"
-            onClick={resetForgotFlow}
-          >
-            Back to change password
-          </button>
-        </div>
-
-        {forgotStep === "send" ? (
-          <form
-            className="profile-dashboard__password-form profile-dashboard__forgot-step"
-            onSubmit={handleSendOtp}
-          >
-            <label>
-              Email
-              <input type="email" value={email} readOnly aria-readonly="true" />
-            </label>
-            <button
-              type="submit"
-              className="profile-dashboard__btn profile-dashboard__btn--primary"
-              disabled={sendOtpSaving}
-            >
-              {sendOtpSaving ? "Sending…" : "Send OTP"}
-            </button>
-            {forgotError ? (
-              <p className="profile-dashboard__password-error" role="alert">
-                {forgotError}
-              </p>
-            ) : null}
-          </form>
-        ) : null}
-
-        {forgotStep === "otp" ? (
-          <form
-            className="profile-dashboard__password-form profile-dashboard__forgot-step"
-            onSubmit={handleVerifyOtp}
-          >
-            <h4 className="profile-dashboard__forgot-step-title">Verify Your Account</h4>
-            {forgotSuccess ? (
-              <p className="profile-dashboard__panel-note">{forgotSuccess}</p>
-            ) : (
-              <p className="profile-dashboard__panel-note">
-                Enter the 6-digit code sent to your email
-              </p>
-            )}
-            <OtpCodeInput
-              idPrefix="profile-reset-otp"
-              value={otpDigits}
-              onChange={(next) => {
-                setOtpDigits(next);
-                setOtpError("");
-              }}
-              disabled={otpSaving || isOtpExpired}
-              error={Boolean(otpError)}
-              shake={otpShake}
-            />
-            {otpExpiresIn > 0 ? (
-              <p className="otp-expiry" aria-live="polite">
-                {`This code expires in ${formatOtpExpiry(otpExpiresIn)}`}
-              </p>
-            ) : (
-              <p className="profile-dashboard__password-error" role="alert">
-                This code has expired. Please request a new code.
-              </p>
-            )}
-            {otpError ? (
-              <p className="profile-dashboard__password-error" role="alert">
-                {otpError}
-              </p>
-            ) : null}
-            <button
-              type="submit"
-              className="profile-dashboard__btn profile-dashboard__btn--primary"
-              disabled={otpSaving || isOtpExpired}
-            >
-              {otpSaving ? "Verifying…" : "Verify OTP"}
-            </button>
-            {resendSeconds > 0 ? (
-              <p className="otp-countdown" aria-live="polite">
-                {`You can request a new code in ${resendSeconds}s`}
-              </p>
-            ) : (
-              <button
-                type="button"
-                className="otp-resend-button profile-dashboard__forgot-link"
-                onClick={handleResendOtp}
-                disabled={isResending || otpSaving}
-              >
-                {isResending ? "Sending..." : "Resend Code"}
-              </button>
-            )}
-          </form>
-        ) : null}
-
-        {forgotStep === "reset" ? (
-          <form
-            className="profile-dashboard__password-form profile-dashboard__forgot-step"
-            onSubmit={handleForgotReset}
-          >
-            <label>
-              Enter new password
-              <input
-                type="password"
-                value={forgotNewPassword}
-                onChange={(event) => setForgotNewPassword(event.target.value)}
-                autoComplete="new-password"
-              />
-            </label>
-            <ProfilePasswordStrength password={forgotNewPassword} />
-            <label>
-              Confirm new password
-              <input
-                type="password"
-                value={forgotConfirmPassword}
-                onChange={(event) => setForgotConfirmPassword(event.target.value)}
-                autoComplete="new-password"
-              />
-            </label>
-            {forgotConfirmPassword && forgotNewPassword !== forgotConfirmPassword ? (
-              <p className="profile-dashboard__password-error" role="alert">
-                Passwords do not match.
-              </p>
-            ) : null}
-            <button
-              type="submit"
-              className="profile-dashboard__btn profile-dashboard__btn--primary"
-              disabled={!canResetForgotPassword || forgotSaving}
-            >
-              {forgotSaving ? "Resetting…" : "Reset password"}
-            </button>
-            {forgotError ? (
-              <p className="profile-dashboard__password-error" role="alert">
-                {forgotError}
-              </p>
-            ) : null}
-          </form>
-        ) : null}
-      </div>
-    );
-  }
-
-  return (
-    <div className="profile-dashboard__panel">
-      <h3>Change password</h3>
-      <form className="profile-dashboard__password-form" onSubmit={handleChangeSubmit}>
-        <label>
-          Current password
-          <input
-            type="password"
-            value={currentPassword}
-            onChange={(event) => setCurrentPassword(event.target.value)}
-            autoComplete="current-password"
-          />
-          {changeErrors.current ? (
-            <span className="profile-dashboard__password-error">{changeErrors.current}</span>
-          ) : null}
-        </label>
-        <label>
-          New password
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(event) => setNewPassword(event.target.value)}
-            autoComplete="new-password"
-          />
-          {changeErrors.newPassword ? (
-            <span className="profile-dashboard__password-error">{changeErrors.newPassword}</span>
-          ) : null}
-        </label>
-        <label>
-          Confirm new password
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            autoComplete="new-password"
-          />
-          {changeErrors.confirm ? (
-            <span className="profile-dashboard__password-error">{changeErrors.confirm}</span>
-          ) : null}
-        </label>
-        <button
-          type="submit"
-          className="profile-dashboard__btn profile-dashboard__btn--primary"
-          disabled={changeSaving}
-        >
-          {changeSaving ? "Updating…" : "Update password"}
-        </button>
-        {changeErrors.form ? (
-          <p className="profile-dashboard__password-error" role="alert">
-            {changeErrors.form}
-          </p>
-        ) : null}
-      </form>
-      <button
-        type="button"
-        className="profile-dashboard__forgot-link"
-        onClick={() => {
-          setMode("forgot");
-          setForgotStep("send");
-          setForgotError("");
-          setForgotSuccess("");
-        }}
-      >
-        Forgot password?
-      </button>
-    </div>
-  );
-}
 
 function SessionsPanel() {
   return (
@@ -891,7 +431,11 @@ function SessionsPanel() {
 
 function ProfilePage({
   profile,
+  profileLoading = false,
+  profileError = null,
+  onRetryProfile,
   onSaveProfile,
+  onSavePhone,
   onSavePreferences,
   onApplyAvatar,
   initialEditMode = false,
@@ -903,13 +447,34 @@ function ProfilePage({
   const [isEditing, setIsEditing] = useState(initialEditMode);
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [isAvatarChooserOpen, setIsAvatarChooserOpen] = useState(false);
+  const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activePanel, setActivePanel] = useState("profile");
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  const handleEditAvatarClick = () => {
+    setIsAvatarPreviewOpen(false);
+    setIsAvatarChooserOpen(true);
+  };
+
+  const handleAvatarPreviewClick = () => {
+    setIsAvatarChooserOpen(false);
+    setIsAvatarPreviewOpen(true);
+  };
+
+  const handlePanelChange = useCallback((panelKey) => {
+    setActivePanel(panelKey);
+  }, []);
 
   const welcomeDate = useMemo(() => formatWelcomeDate(), []);
+  const fieldByKey = useMemo(
+    () => Object.fromEntries(FORM_FIELDS.map((field) => [field.key, field])),
+    []
+  );
 
   const user = profile ?? {};
   const displayName = useMemo(
@@ -928,8 +493,21 @@ function ProfilePage({
 
   useEffect(() => {
     if (!profile) return;
-    setDraft(buildDraft(profile));
-  }, [profile]);
+    setDraft((prev) => {
+      if (prev && isEditing) return prev;
+      return buildDraft(profile);
+    });
+  }, [profile, isEditing]);
+
+  const handleRetryProfile = useCallback(async () => {
+    if (!onRetryProfile) return;
+    setRetrying(true);
+    try {
+      await onRetryProfile();
+    } finally {
+      setRetrying(false);
+    }
+  }, [onRetryProfile]);
 
   useEffect(() => {
     if (!successMessage) return;
@@ -952,23 +530,48 @@ function ProfilePage({
     );
   }
 
-  if (!profile || !draft) {
+  const effectiveDraft = draft ?? (profile ? buildDraft(profile) : null);
+  const isContentReady = Boolean(profile && effectiveDraft);
+  const showSkeleton = profileLoading && !isContentReady;
+
+  const email = profile?.email || effectiveDraft?.email || "";
+  const phoneDisplay = formatPhoneDisplay(
+    profile?.phone || profile?.phoneNumber || effectiveDraft?.phone
+  );
+  const coverGradient = getCoverGradient(
+    effectiveDraft?.coverTheme || profile?.coverTheme || "blue-cream"
+  );
+
+  if (!profile) {
     return (
-      <main className="profile-page profile-page--empty">
+      <main className="profile-page profile-page--empty profile-shell-enter">
         <AccountBackHome onNavigateHome={onNavigateHome} className="profile-page__back-home" />
         <div className="profile-page__empty-panel">
-          <p>Loading profile…</p>
+          {showSkeleton ? <ProfileContentSkeleton /> : <p>Loading profile…</p>}
+          {profileError ? (
+            <ProfileErrorBanner
+              message={profileError}
+              onRetry={handleRetryProfile}
+              retrying={retrying}
+            />
+          ) : null}
         </div>
       </main>
     );
   }
 
-  const email = profile?.email || draft.email || username || "";
-
-  const coverGradient = getCoverGradient(draft.coverTheme || profile.coverTheme || "blue-cream");
-
   const handleChange = (field) => (event) => {
-    setDraft((prev) => ({ ...prev, [field]: event.target.value }));
+    setDraft((prev) => {
+      const base = prev ?? buildDraft(profile);
+      return { ...base, [field]: event.target.value };
+    });
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
   };
 
   const handleCancel = () => {
@@ -976,52 +579,95 @@ function ProfilePage({
     setIsEditing(false);
     setSuccessMessage("");
     setErrorMessage("");
+    setFieldErrors({});
+  };
+
+  const handlePhoneUpdate = async (normalizedPhone) => {
+    await onSavePhone?.(normalizedPhone);
+    setSuccessMessage("Phone number updated successfully.");
   };
 
   const handleSave = async () => {
+    if (!effectiveDraft) return;
+    const phoneTrimmed = String(effectiveDraft.phone || "").trim();
+    const nextFieldErrors = {};
+
+    if (phoneTrimmed && !isValidVietnamPhone(phoneTrimmed)) {
+      nextFieldErrors.phone = "Enter a valid phone number (10–11 digits).";
+    }
+
+    if (Object.keys(nextFieldErrors).length) {
+      setFieldErrors(nextFieldErrors);
+      setErrorMessage("Please fix the highlighted fields.");
+      return;
+    }
+
     try {
       setSaving(true);
       setErrorMessage("");
-      await onSaveProfile?.(draft);
+      setFieldErrors({});
+      const payload = {
+        ...effectiveDraft,
+        phone: phoneTrimmed ? normalizePhone(phoneTrimmed) : "",
+        phoneNumber: phoneTrimmed ? normalizePhone(phoneTrimmed) : "",
+      };
+      await onSaveProfile?.(payload);
       setIsEditing(false);
       setSuccessMessage("Profile saved successfully.");
-    } catch {
-      setErrorMessage("Could not save profile. Please try again.");
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error("Profile save failed:", error);
+      }
+      const apiField = error?.data?.field;
+      if (apiField === "phoneNumber" || apiField === "phone") {
+        setFieldErrors({ phone: error?.message || "Phone number could not be saved." });
+      }
+      setErrorMessage(error?.message || "Could not save profile. Please try again.");
     } finally {
       setSaving(false);
     }
   };
 
   const handleSelectTheme = (themeId) => {
-    setDraft((prev) => ({ ...prev, coverTheme: themeId }));
+    setDraft((prev) => ({ ...(prev ?? buildDraft(profile)), coverTheme: themeId }));
     onSavePreferences?.({ coverTheme: themeId });
   };
 
   const handleAccessibilityChange = (key, value) => {
-    setDraft((prev) => ({ ...prev, [key]: value }));
+    setDraft((prev) => ({ ...(prev ?? buildDraft(profile)), [key]: value }));
     onSavePreferences?.({ [key]: value });
   };
 
   const renderPanelContent = () => {
+    if (!effectiveDraft) {
+      return <ProfileContentSkeleton />;
+    }
+
     if (activePanel === "appearance") {
       return (
-        <AppearancePanel coverTheme={draft.coverTheme} onSelectTheme={handleSelectTheme} />
+        <AppearancePanel coverTheme={effectiveDraft.coverTheme} onSelectTheme={handleSelectTheme} />
       );
     }
     if (activePanel === "accessibility") {
       return (
         <AccessibilityPanel
           prefs={{
-            reduceMotion: draft.reduceMotion,
-            largerText: draft.largerText,
-            highContrast: draft.highContrast,
+            reduceMotion: effectiveDraft.reduceMotion,
+            largerText: effectiveDraft.largerText,
+            highContrast: effectiveDraft.highContrast,
           }}
           onChange={handleAccessibilityChange}
         />
       );
     }
     if (activePanel === "password") {
-      return <PasswordPanel profile={profile} onPasswordReset={onPasswordReset} />;
+      return (
+        <PasswordAuthenticationPanel
+          profile={profile}
+          onPasswordReset={onPasswordReset}
+          onPhoneUpdate={handlePhoneUpdate}
+        />
+      );
     }
     if (activePanel === "sessions") {
       return <SessionsPanel />;
@@ -1030,15 +676,42 @@ function ProfilePage({
     return (
       <>
         <div className="profile-dashboard__form-grid">
-          {FORM_FIELDS.map((field) => (
-            <ProfileField
-              key={field.key}
-              field={field}
-              value={draft[field.key]}
-              isEditing={isEditing}
-              onChange={handleChange(field.key)}
-            />
-          ))}
+          <ProfileField
+            field={fieldByKey.fullName}
+            value={effectiveDraft.fullName}
+            isEditing={isEditing}
+            onChange={handleChange("fullName")}
+          />
+          <ProfileField
+            field={fieldByKey.username}
+            value={effectiveDraft.username}
+            isEditing={isEditing}
+            onChange={handleChange("username")}
+          />
+          <ProfileField
+            field={fieldByKey.gender}
+            value={effectiveDraft.gender}
+            isEditing={isEditing}
+            onChange={handleChange("gender")}
+          />
+          <ProfileField
+            field={fieldByKey.country}
+            value={effectiveDraft.country}
+            isEditing={isEditing}
+            onChange={handleChange("country")}
+          />
+          <ProfileField
+            field={fieldByKey.language}
+            value={effectiveDraft.language}
+            isEditing={isEditing}
+            onChange={handleChange("language")}
+          />
+          <ProfileField
+            field={fieldByKey.dateOfBirth}
+            value={effectiveDraft.dateOfBirth}
+            isEditing={isEditing}
+            onChange={handleChange("dateOfBirth")}
+          />
 
           <div className="profile-dashboard__field profile-dashboard__field--bio">
             <label htmlFor="profile-bio">Bio</label>
@@ -1047,39 +720,56 @@ function ProfilePage({
                 id="profile-bio"
                 className="profile-dashboard__bio-textarea"
                 rows={4}
-                value={draft.bio}
+                value={effectiveDraft.bio}
                 placeholder="Tell us a little bit about yourself"
                 onChange={handleChange("bio")}
               />
             ) : (
               <div className="profile-dashboard__field-value profile-dashboard__field-value--bio">
-                {draft.bio || "Tell us a little bit about yourself"}
+                {effectiveDraft.bio || "Tell us a little bit about yourself"}
               </div>
             )}
           </div>
         </div>
 
-        <section className="profile-dashboard__emails">
-          <h3>My email address</h3>
-          <div className="profile-dashboard__email-row">
-            <span className="profile-dashboard__email-icon">
-              <MailIcon />
-            </span>
-            <p className="profile-dashboard__email-text">{email || "—"}</p>
+        <section className="profile-dashboard__contact">
+          <h3 className="profile-gradient-title">Contact</h3>
+          <div className="profile-dashboard__contact-block">
+            <p className="profile-dashboard__contact-label">My email address</p>
+            <div className="profile-dashboard__email-row">
+              <span className="profile-dashboard__email-icon">
+                <MailIcon />
+              </span>
+              {email ? (
+                <a className="profile-dashboard__email-text" href={`mailto:${email}`}>
+                  {email}
+                </a>
+              ) : (
+                <p className="profile-dashboard__email-text">—</p>
+              )}
+            </div>
           </div>
-          <button type="button" className="profile-dashboard__add-email" disabled={!isEditing}>
-            +Add Email Address
-          </button>
+          <div className="profile-dashboard__contact-block">
+            <p className="profile-dashboard__contact-label">My phone number</p>
+            <div className="profile-dashboard__email-row">
+              <span className="profile-dashboard__email-icon">
+                <PhoneIcon />
+              </span>
+              <p className="profile-dashboard__email-text">
+                {phoneDisplay || "No phone number added"}
+              </p>
+            </div>
+          </div>
         </section>
       </>
     );
   };
 
   return (
-    <main className="profile-page">
+    <main className="profile-page profile-shell-enter">
       <AccountBackHome onNavigateHome={onNavigateHome} className="profile-page__back-home" />
 
-      <div className="profile-dashboard">
+      <div className="profile-dashboard profile-sticky-card">
         <aside className="profile-dashboard__sidebar" aria-label="Profile navigation">
           {SIDEBAR_ITEMS.map((item) => {
             const Icon = item.icon;
@@ -1090,7 +780,7 @@ function ProfilePage({
                 className={`profile-dashboard__nav-item${
                   activePanel === item.key ? " is-active" : ""
                 }`}
-                onClick={() => setActivePanel(item.key)}
+                onClick={() => handlePanelChange(item.key)}
               >
                 <span className="profile-dashboard__nav-icon">
                   <Icon />
@@ -1104,7 +794,7 @@ function ProfilePage({
         <div className="profile-dashboard__main">
           <header className="profile-dashboard__top">
             <div className="profile-dashboard__welcome">
-              <h1>Welcome, {welcomeName}</h1>
+              <h1 className="profile-gradient-title">Welcome, {welcomeName}</h1>
               <p>{welcomeDate}</p>
             </div>
 
@@ -1134,6 +824,14 @@ function ProfilePage({
             <p className="profile-dashboard__message profile-dashboard__message--error">{errorMessage}</p>
           ) : null}
 
+          {profileError ? (
+            <ProfileErrorBanner
+              message={profileError}
+              onRetry={handleRetryProfile}
+              retrying={retrying}
+            />
+          ) : null}
+
           <div className="profile-dashboard__content">
             <article className="profile-dashboard__card">
             <div
@@ -1149,10 +847,9 @@ function ProfilePage({
               <div className="profile-dashboard__avatar-block">
                 <button
                   type="button"
-                  className="profile-dashboard__avatar-btn"
-                  onClick={() => isEditing && setShowAvatarPicker(true)}
-                  disabled={!isEditing}
-                  aria-label={isEditing ? "Edit avatar" : "Profile avatar"}
+                  className="profile-dashboard__avatar-btn profile-dashboard__avatar-btn--preview"
+                  onClick={handleAvatarPreviewClick}
+                  aria-label="View profile avatar"
                 >
                   <ProfileAvatar user={profile} />
                 </button>
@@ -1160,7 +857,7 @@ function ProfilePage({
                   <button
                     type="button"
                     className="profile-dashboard__avatar-edit"
-                    onClick={() => setShowAvatarPicker(true)}
+                    onClick={handleEditAvatarClick}
                   >
                     Edit avatar
                   </button>
@@ -1207,7 +904,9 @@ function ProfilePage({
             </div>
 
             <div className="profile-dashboard__card-body">
-              {renderPanelContent()}
+              <div key={activePanel} className="profile-content-panel">
+                {showSkeleton ? <ProfileContentSkeleton /> : renderPanelContent()}
+              </div>
             </div>
           </article>
           </div>
@@ -1215,10 +914,15 @@ function ProfilePage({
       </div>
 
       <AvatarPickerModal
-        isOpen={showAvatarPicker}
-        onClose={() => setShowAvatarPicker(false)}
+        isOpen={isAvatarChooserOpen}
+        onClose={() => setIsAvatarChooserOpen(false)}
         user={profile}
         onSave={onApplyAvatar}
+      />
+      <AvatarPreviewModal
+        isOpen={isAvatarPreviewOpen}
+        onClose={() => setIsAvatarPreviewOpen(false)}
+        user={profile}
       />
     </main>
   );

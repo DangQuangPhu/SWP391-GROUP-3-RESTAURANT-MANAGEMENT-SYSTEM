@@ -23,6 +23,8 @@ import {
   normalizePhone,
   isValidVietnamPhone,
   validateProfilePayload,
+  validatePhoneUpdatePayload,
+  isPhoneOnlyProfileUpdate,
   isAtLeast13YearsOld,
   parseDateOfBirth,
 } from "../utils/validation.js";
@@ -46,6 +48,30 @@ import {
 
 const router = express.Router();
 const USERS_TABLE = "[dbo].[Users]";
+const USER_PROFILES_TABLE = "[dbo].[UserProfiles]";
+
+/** Live SQL Server Users table column names (PascalCase + legacy snake_case profile fields). */
+const USER_SQL = {
+  id: "UserID",
+  username: "Username",
+  phoneNumber: "PhoneNumber",
+  passwordHash: "PasswordHash",
+  avatarUrl: "AvatarUrl",
+  updatedAt: "UpdatedAt",
+  firstName: "first_name",
+  lastName: "last_name",
+  dateOfBirth: "date_of_birth",
+};
+
+/** Live SQL Server UserProfiles table column names. */
+const USER_PROFILE_SQL = {
+  userId: "UserID",
+  gender: "Gender",
+  bio: "Bio",
+  address: "AddressLine",
+  country: "country",
+  language: "language",
+};
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const AVATAR_UPLOAD_DIR = path.join(__dirname, "../uploads/avatars");
@@ -140,9 +166,31 @@ function normalizeUserRow(row) {
   };
 }
 
-function mapUserToFrontend(row) {
+function composeFullName(firstName, lastName) {
+  const first = String(firstName || "").trim();
+  const last = String(lastName || "").trim();
+  if (!first && !last) return "";
+  if (!last) return first;
+  // Google OAuth sometimes stores the full name in first_name and the family name again in last_name.
+  if (first !== last && first.endsWith(last)) return first;
+  return `${first} ${last}`.trim();
+}
+
+function normalizeProfileRow(row) {
+  if (!row) return null;
+  return {
+    gender: row.gender ?? row.Gender ?? "",
+    bio: row.bio ?? row.Bio ?? "",
+    address: row.address ?? row.Address ?? row.AddressLine ?? "",
+    country: row.country ?? row.Country ?? "",
+    language: row.language ?? row.Language ?? "",
+  };
+}
+
+function mapUserToFrontend(row, profileRow = null) {
   if (!row) return null;
   const normalized = normalizeUserRow(row);
+  const profile = normalizeProfileRow(profileRow);
   const firstName = normalized.first_name || "";
   const lastName = normalized.last_name || "";
   const username = normalized.username || "";
@@ -151,7 +199,7 @@ function mapUserToFrontend(row) {
     userId: normalized.user_id,
     firstName: String(firstName).trim(),
     lastName: String(lastName).trim(),
-    fullName: `${firstName} ${lastName}`.trim() || username,
+    fullName: composeFullName(firstName, lastName) || username,
     username: String(username).trim(),
     nickname: String(firstName || username).trim(),
     email: normalized.email || "",
@@ -160,6 +208,11 @@ function mapUserToFrontend(row) {
     dateOfBirth: normalized.date_of_birth
       ? new Date(normalized.date_of_birth).toISOString().slice(0, 10)
       : "",
+    gender: profile?.gender || "",
+    bio: profile?.bio || "",
+    address: profile?.address || "",
+    country: profile?.country || "",
+    language: profile?.language || "",
     avatarUrl: normalizeStoredAvatarUrl(normalized.avatar_url),
     googleAvatarUrl: normalized.google_avatar_url || "",
     avatarSource: normalized.avatar_source || "system",
@@ -167,6 +220,46 @@ function mapUserToFrontend(row) {
     accountStatus: normalized.status || "",
     emailVerified: Boolean(normalized.is_email_verified),
   };
+}
+
+async function findUserProfileRow(userId) {
+  const [rows] = await pool.query(
+    `SELECT TOP 1 * FROM ${USER_PROFILES_TABLE} WHERE [${USER_PROFILE_SQL.userId}] = ?`,
+    [userId]
+  );
+  return rows[0] || null;
+}
+
+async function upsertUserProfile(userId, patch = {}) {
+  const gender = patch.gender ?? null;
+  const bio = patch.bio ?? null;
+  const address = patch.address ?? null;
+  const country = patch.country ?? null;
+  const language = patch.language ?? null;
+
+  const [existing] = await pool.query(
+    `SELECT TOP 1 [${USER_PROFILE_SQL.userId}] FROM ${USER_PROFILES_TABLE} WHERE [${USER_PROFILE_SQL.userId}] = ?`,
+    [userId]
+  );
+
+  if (existing[0]) {
+    await pool.query(
+      `UPDATE ${USER_PROFILES_TABLE}
+       SET [${USER_PROFILE_SQL.gender}] = ?, [${USER_PROFILE_SQL.bio}] = ?, [${USER_PROFILE_SQL.address}] = ?,
+           [${USER_PROFILE_SQL.country}] = ?, [${USER_PROFILE_SQL.language}] = ?, [UpdatedAt] = SYSDATETIME()
+       WHERE [${USER_PROFILE_SQL.userId}] = ?`,
+      [gender, bio, address, country, language, userId]
+    );
+    return;
+  }
+
+  await pool.query(
+    `INSERT INTO ${USER_PROFILES_TABLE}
+      ([${USER_PROFILE_SQL.userId}], [${USER_PROFILE_SQL.gender}], [${USER_PROFILE_SQL.bio}], [${USER_PROFILE_SQL.address}],
+       [${USER_PROFILE_SQL.country}], [${USER_PROFILE_SQL.language}])
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [userId, gender, bio, address, country, language]
+  );
 }
 
 async function findUserById(userId) {
@@ -1097,9 +1190,10 @@ router.post("/forgot-password/request-otp", async (req, res) => {
     );
 
     await sendVerificationEmail(user.email, otp, { context: "reset" });
+    const otpPurpose = purpose === "phone_update" ? "phone_update" : OTP_RESET_PURPOSE;
     await saveOtpToken({
       email: user.email,
-      purpose: OTP_RESET_PURPOSE,
+      purpose: otpPurpose,
       otp,
       userId: user.user_id,
     });
@@ -1184,9 +1278,10 @@ router.post("/forgot-password/request", async (req, res) => {
 });
 
 router.post("/forgot-password/verify-otp", async (req, res) => {
-  const { userId, otp, email, purpose = "forgot_password" } = req.body;
+  const { userId, otp, email, purpose = "forgot_password", phone } = req.body;
   const normalizedEmail = String(email || "").trim().toLowerCase();
   const normalizedOtp = String(otp || "").trim();
+  const normalizedPhone = phone ? normalizePhone(phone) : "";
 
   if (!normalizedOtp) {
     return res.status(400).json({ success: false, message: "OTP is required." });
@@ -1208,6 +1303,21 @@ router.post("/forgot-password/verify-otp", async (req, res) => {
         return res.status(404).json({ success: false, message: "User not found." });
       }
 
+      if (purpose === "phone_update") {
+        if (!normalizedPhone) {
+          return res.status(400).json({
+            success: false,
+            message: "Phone number is required.",
+          });
+        }
+        if (!isValidVietnamPhone(normalizedPhone)) {
+          return res.status(400).json({
+            success: false,
+            message: "Enter a valid phone number (10–11 digits).",
+          });
+        }
+      }
+
       const tokenResult = await verifyOtpRecord({
         email: normalizedEmail,
         purpose,
@@ -1219,6 +1329,16 @@ router.post("/forgot-password/verify-otp", async (req, res) => {
         return res.status(tokenResult.status).json({
           success: false,
           message: tokenResult.message,
+        });
+      }
+
+      if (purpose === "phone_update") {
+        return res.json({
+          success: true,
+          userId: user.user_id,
+          email: user.email,
+          phone: normalizedPhone,
+          message: "OTP verified. Phone number can be updated.",
         });
       }
 
@@ -1335,7 +1455,7 @@ router.post("/forgot-password/resend-otp", async (req, res) => {
 
     const cooldown = await checkOtpResendCooldown({
       email: user.email,
-      purpose: OTP_RESET_PURPOSE,
+      purpose: purpose === "phone_update" ? "phone_update" : OTP_RESET_PURPOSE,
       userId: user.user_id,
     });
     if (!cooldown.allowed) {
@@ -1357,9 +1477,10 @@ router.post("/forgot-password/resend-otp", async (req, res) => {
     );
 
     await sendVerificationEmail(user.email, otp, { context: "reset" });
+    const otpPurpose = purpose === "phone_update" ? "phone_update" : OTP_RESET_PURPOSE;
     await saveOtpToken({
       email: user.email,
-      purpose: OTP_RESET_PURPOSE,
+      purpose: otpPurpose,
       otp,
       userId: user.user_id,
     });
@@ -1472,11 +1593,11 @@ router.post("/change-password", async (req, res) => {
     const passwordHash = hashPassword(newPassword);
     await pool.query(
       `UPDATE ${USERS_TABLE}
-       SET [password_hash] = ?,
+       SET [${USER_SQL.passwordHash}] = ?,
            [old_password_verified_token] = NULL,
            [old_password_verified_at] = NULL,
-           [updated_at] = SYSDATETIME()
-       WHERE [user_id] = ?`,
+           [${USER_SQL.updatedAt}] = SYSDATETIME()
+       WHERE [${USER_SQL.id}] = ?`,
       [passwordHash, userId]
     );
 
@@ -1524,7 +1645,7 @@ router.post("/profile/:userId/avatar/upload", (req, res) => {
       const publicPath = `/uploads/avatars/${req.file.filename}`;
       try {
         await pool.query(
-          `UPDATE ${USERS_TABLE} SET [avatar_url] = ?, [avatar_source] = 'custom', [updated_at] = SYSDATETIME() WHERE [user_id] = ?`,
+          `UPDATE ${USERS_TABLE} SET [${USER_SQL.avatarUrl}] = ?, [avatar_source] = 'custom', [${USER_SQL.updatedAt}] = SYSDATETIME() WHERE [${USER_SQL.id}] = ?`,
           [publicPath, req.params.userId]
         );
         return res.json({
@@ -1562,7 +1683,7 @@ router.put("/profile/:userId/avatar/system", async (req, res) => {
 
     try {
       await pool.query(
-        `UPDATE ${USERS_TABLE} SET [avatar_url] = ?, [avatar_source] = 'system', [updated_at] = SYSDATETIME() WHERE [user_id] = ?`,
+        `UPDATE ${USERS_TABLE} SET [${USER_SQL.avatarUrl}] = ?, [avatar_source] = 'system', [${USER_SQL.updatedAt}] = SYSDATETIME() WHERE [${USER_SQL.id}] = ?`,
         [canonical, req.params.userId]
       );
       return res.json({
@@ -1582,14 +1703,146 @@ router.get("/profile/:userId", async (req, res) => {
   try {
     const user = await findUserById(req.params.userId);
     if (!user) return res.status(404).json({ message: "User not found." });
-    return res.json({ success: true, user: mapUserToFrontend(user) });
+    const profileRow = await findUserProfileRow(req.params.userId);
+    return res.json({ success: true, user: mapUserToFrontend(user, profileRow) });
   } catch (err) {
     return res.status(500).json({ message: err.message || "Failed to load profile." });
   }
 });
 
+async function handlePhoneProfileUpdate(req, res) {
+  const { userId } = req.params;
+  const { errors, normalized } = validatePhoneUpdatePayload(req.body);
+  if (Object.keys(errors).length) {
+    return res.status(400).json({ success: false, message: "Validation failed.", errors });
+  }
+
+  try {
+    const current = await findUserById(userId);
+    if (!current) return res.status(404).json({ message: "User not found." });
+
+    const [dupPhone] = await pool.query(
+      `SELECT TOP 1 [${USER_SQL.id}] FROM ${USERS_TABLE} WHERE [${USER_SQL.phoneNumber}] = ? AND [${USER_SQL.id}] <> ?`,
+      [normalized.phoneNumber, userId]
+    );
+    if (dupPhone[0]) {
+      return res.status(409).json({ field: "phoneNumber", message: "Phone number is already in use." });
+    }
+
+    await pool.query(
+      `UPDATE ${USERS_TABLE} SET [${USER_SQL.phoneNumber}] = ?, [${USER_SQL.updatedAt}] = SYSDATETIME() WHERE [${USER_SQL.id}] = ?`,
+      [normalized.phoneNumber, userId]
+    );
+
+    const updated = await findUserById(userId);
+    const profileRow = await findUserProfileRow(userId);
+    return res.json({
+      success: true,
+      message: "Phone number updated.",
+      user: mapUserToFrontend(updated, profileRow),
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Phone update failed." });
+  }
+}
+
+router.patch("/profile/:userId", async (req, res) => {
+  if (isPhoneOnlyProfileUpdate(req.body)) {
+    return handlePhoneProfileUpdate(req, res);
+  }
+
+  const { userId } = req.params;
+  const { errors, normalized } = validateProfilePayload(req.body, { partial: true });
+  if (Object.keys(errors).length) {
+    return res.status(400).json({ success: false, message: "Validation failed.", errors });
+  }
+
+  try {
+    const current = await findUserById(userId);
+    if (!current) return res.status(404).json({ message: "User not found." });
+
+    const username = normalized.username ?? current.username;
+    const dupUsername = await findUserByUsername(username);
+    if (dupUsername && String(dupUsername.user_id) !== String(userId)) {
+      return res.status(409).json({ field: "username", message: "Username is already in use." });
+    }
+
+    if (normalized.phoneNumber) {
+      const [dupPhone] = await pool.query(
+        `SELECT TOP 1 [${USER_SQL.id}] FROM ${USERS_TABLE} WHERE [${USER_SQL.phoneNumber}] = ? AND [${USER_SQL.id}] <> ?`,
+        [normalized.phoneNumber, userId]
+      );
+      if (dupPhone[0]) {
+        return res.status(409).json({ field: "phoneNumber", message: "Phone number is already in use." });
+      }
+    }
+
+    const params = [];
+    const setClauses = [];
+
+    if (Object.prototype.hasOwnProperty.call(req.body, "username")) {
+      setClauses.push(`[${USER_SQL.username}] = ?`);
+      params.push(username);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "phone") || Object.prototype.hasOwnProperty.call(req.body, "phoneNumber")) {
+      setClauses.push(`[${USER_SQL.phoneNumber}] = ?`);
+      params.push(normalized.phoneNumber);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "firstName") || Object.prototype.hasOwnProperty.call(req.body, "fullName")) {
+      setClauses.push(`[${USER_SQL.firstName}] = ?`);
+      params.push(normalized.firstName || current.first_name);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "lastName") || Object.prototype.hasOwnProperty.call(req.body, "fullName")) {
+      setClauses.push(`[${USER_SQL.lastName}] = ?`);
+      params.push(normalized.lastName || current.last_name || "");
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, "dateOfBirth")) {
+      setClauses.push(`[${USER_SQL.dateOfBirth}] = ?`);
+      params.push(normalized.dateOfBirth);
+    }
+    if (req.body.avatarUrl !== undefined) {
+      setClauses.push(`[${USER_SQL.avatarUrl}] = ?`);
+      params.push(req.body.avatarUrl || null);
+    }
+
+    if (setClauses.length) {
+      setClauses.push(`[${USER_SQL.updatedAt}] = SYSDATETIME()`);
+      params.push(userId);
+      await pool.query(
+        `UPDATE ${USERS_TABLE} SET ${setClauses.join(", ")} WHERE [${USER_SQL.id}] = ?`,
+        params
+      );
+    }
+
+    const profilePatch = {};
+    if (Object.prototype.hasOwnProperty.call(req.body, "gender")) profilePatch.gender = normalized.gender;
+    if (Object.prototype.hasOwnProperty.call(req.body, "bio")) profilePatch.bio = normalized.bio;
+    if (Object.prototype.hasOwnProperty.call(req.body, "address")) profilePatch.address = normalized.address;
+    if (Object.prototype.hasOwnProperty.call(req.body, "country")) profilePatch.country = normalized.country;
+    if (Object.prototype.hasOwnProperty.call(req.body, "language")) profilePatch.language = normalized.language;
+    if (Object.keys(profilePatch).length) {
+      await upsertUserProfile(userId, profilePatch);
+    }
+
+    const updated = await findUserById(userId);
+    const profileRow = await findUserProfileRow(userId);
+    return res.json({
+      success: true,
+      message: "Profile updated.",
+      user: mapUserToFrontend(updated, profileRow),
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || "Profile update failed." });
+  }
+});
+
 router.put("/profile/:userId", async (req, res) => {
   const { userId } = req.params;
+
+  if (isPhoneOnlyProfileUpdate(req.body)) {
+    return handlePhoneProfileUpdate(req, res);
+  }
+
   const { errors, normalized } = validateProfilePayload(req.body);
   if (Object.keys(errors).length) {
     return res.status(400).json({ success: false, message: "Validation failed.", errors });
@@ -1604,36 +1857,57 @@ router.put("/profile/:userId", async (req, res) => {
       return res.status(409).json({ field: "username", message: "Username is already in use." });
     }
 
-    const [dupPhone] = await pool.query(
-      `SELECT TOP 1 [user_id] FROM ${USERS_TABLE} WHERE [phone_number] = ? AND [user_id] <> ?`,
-      [normalized.phoneNumber, userId]
-    );
-    if (dupPhone[0]) {
-      return res.status(409).json({ field: "phoneNumber", message: "Phone number is already in use." });
+    if (normalized.phoneNumber) {
+      const [dupPhone] = await pool.query(
+        `SELECT TOP 1 [${USER_SQL.id}] FROM ${USERS_TABLE} WHERE [${USER_SQL.phoneNumber}] = ? AND [${USER_SQL.id}] <> ?`,
+        [normalized.phoneNumber, userId]
+      );
+      if (dupPhone[0]) {
+        return res.status(409).json({ field: "phoneNumber", message: "Phone number is already in use." });
+      }
     }
+
+    const dateOfBirthToSave =
+      normalized.dateOfBirth ||
+      (current.date_of_birth
+        ? new Date(current.date_of_birth).toISOString().slice(0, 10)
+        : null);
 
     const params = [
       normalized.username,
       normalized.phoneNumber,
       normalized.firstName,
       normalized.lastName,
-      normalized.dateOfBirth,
+      dateOfBirthToSave,
     ];
     let sql = `UPDATE ${USERS_TABLE}
-      SET [username] = ?, [phone_number] = ?, [first_name] = ?, [last_name] = ?, [date_of_birth] = ?`;
+      SET [${USER_SQL.username}] = ?, [${USER_SQL.phoneNumber}] = ?, [${USER_SQL.firstName}] = ?, [${USER_SQL.lastName}] = ?, [${USER_SQL.dateOfBirth}] = ?`;
 
     if (req.body.avatarUrl !== undefined) {
-      sql += `, [avatar_url] = ?`;
+      sql += `, [${USER_SQL.avatarUrl}] = ?`;
       params.push(req.body.avatarUrl || null);
     }
 
-    sql += `, [updated_at] = SYSDATETIME() WHERE [user_id] = ?`;
+    sql += `, [${USER_SQL.updatedAt}] = SYSDATETIME() WHERE [${USER_SQL.id}] = ?`;
     params.push(userId);
 
     await pool.query(sql, params);
 
+    await upsertUserProfile(userId, {
+      gender: normalized.gender,
+      bio: normalized.bio,
+      address: normalized.address,
+      country: normalized.country,
+      language: normalized.language,
+    });
+
     const updated = await findUserById(userId);
-    return res.json({ success: true, message: "Profile updated.", user: mapUserToFrontend(updated) });
+    const profileRow = await findUserProfileRow(userId);
+    return res.json({
+      success: true,
+      message: "Profile updated.",
+      user: mapUserToFrontend(updated, profileRow),
+    });
   } catch (err) {
     return res.status(500).json({ message: err.message || "Profile update failed." });
   }
@@ -1646,7 +1920,7 @@ router.put("/profile/:userId/avatar/google", async (req, res) => {
     if (!user.google_avatar_url) return res.status(400).json({ message: "No Google avatar available." });
 
     await pool.query(
-      `UPDATE ${USERS_TABLE} SET [avatar_url] = [google_avatar_url], [avatar_source] = 'google', [updated_at] = SYSDATETIME() WHERE [user_id] = ?`,
+      `UPDATE ${USERS_TABLE} SET [${USER_SQL.avatarUrl}] = [google_avatar_url], [avatar_source] = 'google', [${USER_SQL.updatedAt}] = SYSDATETIME() WHERE [${USER_SQL.id}] = ?`,
       [user.user_id]
     );
     const updated = await findUserById(req.params.userId);
@@ -1677,8 +1951,8 @@ router.post("/profile/change-password/verify-old", async (req, res) => {
     const token = generateSecureToken();
     await pool.query(
       `UPDATE ${USERS_TABLE}
-       SET [old_password_verified_token] = ?, [old_password_verified_at] = SYSDATETIME(), [updated_at] = SYSDATETIME()
-       WHERE [user_id] = ?`,
+       SET [old_password_verified_token] = ?, [old_password_verified_at] = SYSDATETIME(), [${USER_SQL.updatedAt}] = SYSDATETIME()
+       WHERE [${USER_SQL.id}] = ?`,
       [token, userId]
     );
 
@@ -1723,11 +1997,11 @@ router.post("/profile/change-password/reset", async (req, res) => {
     const passwordHash = hashPassword(newPassword);
     await pool.query(
       `UPDATE ${USERS_TABLE}
-       SET [password_hash] = ?,
+       SET [${USER_SQL.passwordHash}] = ?,
            [old_password_verified_token] = NULL,
            [old_password_verified_at] = NULL,
-           [updated_at] = SYSDATETIME()
-       WHERE [user_id] = ?`,
+           [${USER_SQL.updatedAt}] = SYSDATETIME()
+       WHERE [${USER_SQL.id}] = ?`,
       [passwordHash, userId]
     );
 

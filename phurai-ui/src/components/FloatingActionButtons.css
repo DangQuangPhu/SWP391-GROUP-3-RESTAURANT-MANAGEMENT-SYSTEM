@@ -36,7 +36,7 @@
 }
 
 .floating-actions.is-scrolled .floating-actions__accessibility {
-  transform: translateY(calc(100vh - 6.5rem - 64px - 145px));
+  transform: translateY(calc(100vh - 4.5rem - 64px - 145px));
 }
 
 .floating-actions__scroll-top {

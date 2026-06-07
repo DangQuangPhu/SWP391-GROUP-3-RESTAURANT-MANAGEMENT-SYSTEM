@@ -9,7 +9,7 @@ const CARDS = [
     title: 'Spring tasting menu sushi platter',
     description:
       'A curated selection of seasonal sushi, sashimi, and refined Phūrai signatures.',
-    buttonLabel: 'RESERVE',
+    
   },
   {
     id: 'placeholder-2',
@@ -17,7 +17,7 @@ const CARDS = [
     title: 'Chef’s selection nigiri flight',
     description:
       'Placeholder copy for a second signature dish card. Replace with final content.',
-    buttonLabel: 'RESERVE',
+    
   },
   {
     id: 'placeholder-3',
@@ -25,7 +25,7 @@ const CARDS = [
     title: 'Seasonal omakase experience',
     description:
       'Placeholder copy for a third signature dish card. Replace with final content.',
-    buttonLabel: 'RESERVE',
+   
   },
 ];
 
@@ -371,9 +371,7 @@ function SignatureDishCarousel() {
                     <p className="signature-dish-carousel__description">
                       {card.description}
                     </p>
-                    <OutlineButton onClick={handleReserve}>
-                      {card.buttonLabel}
-                    </OutlineButton>
+                   
                   </div>
                 </div>
 

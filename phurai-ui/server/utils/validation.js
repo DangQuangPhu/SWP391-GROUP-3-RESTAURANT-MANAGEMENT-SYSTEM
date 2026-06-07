@@ -72,37 +72,101 @@ export function validateRegisterPayload(body) {
   return { errors, normalized: { firstName, lastName, username, email, phoneNumber, dateOfBirth, password } };
 }
 
-export function validateProfilePayload(body) {
+export function isPhoneOnlyProfileUpdate(body) {
+  const keys = Object.keys(body || {}).filter(
+    (key) => body[key] !== undefined && key !== "avatarUrl"
+  );
+  return keys.length > 0 && keys.every((key) => key === "phone" || key === "phoneNumber");
+}
+
+export function validatePhoneUpdatePayload(body) {
   const errors = {};
-  const firstName = body.firstName?.trim();
-  const lastName = body.lastName?.trim();
+  const phoneRaw = body.phone ?? body.phoneNumber ?? "";
+  const phoneTrimmed = String(phoneRaw).trim();
+  const phoneNumber = phoneTrimmed ? normalizePhone(phoneTrimmed) : "";
+
+  if (!phoneNumber) {
+    errors.phoneNumber = "Phone number is required.";
+  } else if (!isValidVietnamPhone(phoneNumber)) {
+    errors.phoneNumber = "Enter a valid phone number (10–11 digits).";
+  }
+
+  return {
+    errors,
+    normalized: { phoneNumber },
+  };
+}
+
+export function validateProfilePayload(body, { partial = false } = {}) {
+  const errors = {};
+  const present = (key) =>
+    partial ? Object.prototype.hasOwnProperty.call(body, key) : true;
+
+  const fullName = String(body.fullName || "").trim();
+  const nameParts = fullName.split(/\s+/).filter(Boolean);
+  const hasFullNameField = Object.prototype.hasOwnProperty.call(body, "fullName");
+
+  // When the client sends fullName (profile form save), always derive first/last from it.
+  // Stale firstName/lastName in the payload must not override the edited full name.
+  let firstName;
+  let lastName;
+  if (hasFullNameField && fullName) {
+    firstName = nameParts[0] || "";
+    lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+  } else {
+    firstName = body.firstName?.trim() || nameParts[0] || "";
+    lastName =
+      body.lastName?.trim() ||
+      (nameParts.length > 1 ? nameParts.slice(1).join(" ") : "");
+  }
   const username = body.username?.trim().toLowerCase();
-  const phoneNumber = normalizePhone(body.phone);
-  const dateOfBirth = body.dateOfBirth;
+  const phoneRaw = body.phone ?? body.phoneNumber ?? "";
+  const phoneTrimmed = String(phoneRaw).trim();
+  const phoneNumber = phoneTrimmed ? normalizePhone(phoneTrimmed) : "";
+  const hasDateOfBirth = Object.prototype.hasOwnProperty.call(body, "dateOfBirth");
+  const dateOfBirth = hasDateOfBirth ? body.dateOfBirth || null : null;
+  const gender = body.gender?.trim() || null;
+  const bio = body.bio?.trim() || null;
+  const address = body.address?.trim() || null;
+  const country = body.country?.trim() || null;
+  const language = body.language?.trim() || null;
 
-  if (!firstName) errors.firstName = "First name is required.";
-  else if (!NAME_REGEX.test(firstName)) {
-    errors.firstName = "First name can only contain letters and spaces.";
+  if (present("firstName") || present("fullName")) {
+    if (!firstName) {
+      errors.firstName = "First name is required.";
+    }
   }
-  if (!lastName) errors.lastName = "Last name is required.";
-  else if (!NAME_REGEX.test(lastName)) {
-    errors.lastName = "Last name can only contain letters and spaces.";
+  if (present("username")) {
+    if (!username) errors.username = "Username is required.";
+    else if (!USERNAME_REGEX.test(username)) {
+      errors.username =
+        "Username must be 3–30 characters (letters, numbers, underscore, dot only).";
+    }
   }
-  if (!username) errors.username = "Username is required.";
-  else if (!USERNAME_REGEX.test(username)) {
-    errors.username =
-      "Username must be 3–30 characters (letters, numbers, underscore, dot only).";
+  if ((present("phone") || present("phoneNumber")) && phoneNumber && !isValidVietnamPhone(phoneNumber)) {
+    errors.phoneNumber = "Enter a valid phone number (10–11 digits).";
   }
-  if (!phoneNumber) errors.phoneNumber = "Phone number is required.";
-  else if (!isValidVietnamPhone(phoneNumber)) {
-    errors.phoneNumber = "Phone number must be 10–11 digits.";
-  }
-  if (!dateOfBirth) errors.dateOfBirth = "Date of birth is required.";
-  else if (!parseDateOfBirth(dateOfBirth)) {
-    errors.dateOfBirth = "Enter a valid date of birth.";
-  } else if (!isAtLeast13YearsOld(dateOfBirth)) {
-    errors.dateOfBirth = "You must be at least 13 years old.";
+  if (hasDateOfBirth && dateOfBirth) {
+    if (!parseDateOfBirth(dateOfBirth)) {
+      errors.dateOfBirth = "Enter a valid date of birth.";
+    } else if (!isAtLeast13YearsOld(dateOfBirth)) {
+      errors.dateOfBirth = "You must be at least 13 years old.";
+    }
   }
 
-  return { errors, normalized: { firstName, lastName, username, phoneNumber, dateOfBirth } };
+  return {
+    errors,
+    normalized: {
+      firstName,
+      lastName,
+      username,
+      phoneNumber: phoneNumber || null,
+      dateOfBirth,
+      gender,
+      bio,
+      address,
+      country,
+      language,
+    },
+  };
 }

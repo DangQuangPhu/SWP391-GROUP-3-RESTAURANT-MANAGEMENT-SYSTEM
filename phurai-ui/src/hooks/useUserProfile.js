@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { API_BASE_URL, updateProfile, saveAuthUser, loadAuthUser } from "../components/auth/api";
+import { API_BASE_URL, updateProfile, updateProfilePhone, saveAuthUser, loadAuthUser } from "../components/auth/api";
+import { normalizePhone, splitFullName } from "../components/auth/authHelpers";
 import { normalizeStoredAvatarUrl } from "../components/auth/avatarUtils";
 
 const DEFAULT_EXTENDED = {
@@ -78,6 +79,9 @@ function mergeUser(user, extended) {
     dateOfBirth,
     dob: dateOfBirth,
     avatarUrl: normalizeStoredAvatarUrl(user.avatarUrl),
+    googleAvatarUrl:
+      user.googleAvatarUrl || user.google_avatar_url || user.picture || "",
+    avatarSource: user.avatarSource || user.avatar_source || "",
     fullName:
       user.fullName ||
       [user.firstName, user.lastName].filter(Boolean).join(" ").trim(),
@@ -85,7 +89,7 @@ function mergeUser(user, extended) {
   };
 }
 
-const PROFILE_API_FIELD_KEYS = new Set([
+const PROFILE_API_FIELD_KEYS = [
   "firstName",
   "lastName",
   "fullName",
@@ -93,10 +97,56 @@ const PROFILE_API_FIELD_KEYS = new Set([
   "phone",
   "phoneNumber",
   "dateOfBirth",
-]);
+  "gender",
+  "bio",
+  "address",
+  "country",
+  "language",
+  "avatarUrl",
+  "googleAvatarUrl",
+];
 
 function hasProfileApiFields(fields) {
-  return PROFILE_API_FIELD_KEYS.some((key) => Object.prototype.hasOwnProperty.call(fields, key));
+  return PROFILE_API_FIELD_KEYS.some((key) =>
+    Object.prototype.hasOwnProperty.call(fields, key)
+  );
+}
+
+function getEmailLocalPart(email = "") {
+  const normalized = String(email || "").trim().toLowerCase();
+  return normalized.includes("@") ? normalized.split("@")[0] : normalized;
+}
+
+function buildProfileApiPayload(user, fields, extended) {
+  const hasFullNameField = Object.prototype.hasOwnProperty.call(fields, "fullName");
+  const fullName = String(
+    hasFullNameField ? fields.fullName ?? "" : fields.fullName ?? user?.fullName ?? ""
+  ).trim();
+  const { firstName, lastName } = splitFullName(
+    fullName || user?.fullName || user?.firstName || "User"
+  );
+  const fallbackUsername = (
+    fields.username ??
+    user?.username ??
+    (getEmailLocalPart(user?.email) || "user")
+  )
+    .trim()
+    .toLowerCase();
+
+  return {
+    fullName: fullName || user?.fullName,
+    firstName,
+    lastName,
+    username: fallbackUsername,
+    phone: fields.phone ?? fields.phoneNumber ?? user?.phone ?? "",
+    phoneNumber: fields.phone ?? fields.phoneNumber ?? user?.phoneNumber ?? "",
+    dateOfBirth: fields.dateOfBirth ?? user?.dateOfBirth ?? extended.dateOfBirth ?? "",
+    gender: fields.gender ?? user?.gender ?? extended.gender ?? "",
+    bio: fields.bio ?? user?.bio ?? extended.bio ?? "",
+    address: fields.address ?? user?.address ?? extended.address ?? "",
+    country: fields.country ?? user?.country ?? extended.country ?? "",
+    language: fields.language ?? user?.language ?? extended.language ?? "",
+  };
 }
 
 async function fetchProfileSafe(userId, email) {
@@ -129,68 +179,116 @@ export function useUserProfile(user, onUserUpdate) {
 
   const [extended, setExtended] = useState(() => loadExtended(userId, email));
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
     setExtended(loadExtended(userId, email));
   }, [userId, email]);
 
-  useEffect(() => {
-    if (!userId && !email) return;
+  const applyProfilePayload = useCallback((data) => {
+    if (data?.user) {
+      const normalized = {
+        ...data.user,
+        avatarUrl: normalizeStoredAvatarUrl(data.user.avatarUrl),
+        googleAvatarUrl:
+          data.user.googleAvatarUrl || data.user.google_avatar_url || "",
+        avatarSource: data.user.avatarSource || data.user.avatar_source || "",
+        id: data.user.id ?? data.user.userId,
+        userId: data.user.userId ?? data.user.id,
+      };
+      onUserUpdateRef.current?.(normalized);
+      setExtended((prev) => ({
+        ...prev,
+        gender: data.user.gender ?? prev.gender,
+        bio: data.user.bio ?? prev.bio,
+        address: data.user.address ?? prev.address,
+        country: data.user.country ?? prev.country,
+        language: data.user.language ?? prev.language,
+        dateOfBirth: data.user.dateOfBirth || prev.dateOfBirth,
+      }));
+      return;
+    }
 
-    const userKey = String(userId || email);
-    if (apiFailedRef.current.has(userKey)) return;
+    if (data && typeof data === "object") {
+      setExtended((prev) => ({ ...prev, ...data }));
+    }
+  }, []);
 
-    let cancelled = false;
+  const fetchAndApplyProfile = useCallback(
+    async ({ skipCache = false } = {}) => {
+      if (!userId && !email) return { failed: false };
 
-    const loadProfile = async () => {
+      const userKey = String(userId || email);
+      if (!skipCache && apiFailedRef.current.has(userKey)) {
+        return { failed: true, cached: true };
+      }
+
       if (!userId || String(userId).startsWith("mock-")) {
         const local = loadLocalProfile(email);
-        if (!cancelled && Object.keys(local).length) {
+        if (Object.keys(local).length) {
           setExtended((prev) => ({ ...prev, ...local }));
         }
-        return;
+        return { failed: false };
       }
 
       setLoading(true);
+      setLoadError(null);
+
       try {
         const { payload: data, failed } = await fetchProfileSafe(userId, email);
-        if (cancelled) return;
 
         if (failed) {
           apiFailedRef.current.add(userKey);
+          setLoadError("Could not refresh profile from the server. Showing saved data.");
+          const local = loadLocalProfile(email);
+          if (Object.keys(local).length) {
+            setExtended((prev) => ({ ...prev, ...local }));
+          }
+          return { failed: true };
         }
 
-        if (data?.user) {
-          const normalized = {
-            ...data.user,
-            avatarUrl: normalizeStoredAvatarUrl(data.user.avatarUrl),
-            id: data.user.id ?? data.user.userId,
-            userId: data.user.userId ?? data.user.id,
-          };
-          onUserUpdateRef.current?.(normalized);
-          return;
+        apiFailedRef.current.delete(userKey);
+        applyProfilePayload(data);
+        return { failed: false };
+      } catch {
+        apiFailedRef.current.add(userKey);
+        setLoadError("Could not load profile. Showing saved data.");
+        const local = loadLocalProfile(email);
+        if (Object.keys(local).length) {
+          setExtended((prev) => ({ ...prev, ...local }));
         }
-
-        if (data && typeof data === "object") {
-          setExtended((prev) => ({ ...prev, ...data }));
-        }
+        return { failed: true };
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
-    };
+    },
+    [userId, email, applyProfilePayload]
+  );
 
-    loadProfile().catch(() => {
-      apiFailedRef.current.add(userKey);
+  useEffect(() => {
+    if (!userId && !email) return undefined;
+
+    let cancelled = false;
+
+    fetchAndApplyProfile().catch(() => {
+      if (cancelled) return;
       const local = loadLocalProfile(email);
-      if (!cancelled && Object.keys(local).length) {
+      if (Object.keys(local).length) {
         setExtended((prev) => ({ ...prev, ...local }));
       }
+      setLoadError("Could not load profile. Showing saved data.");
     });
 
     return () => {
       cancelled = true;
     };
-  }, [userId, email]);
+  }, [userId, email, fetchAndApplyProfile]);
+
+  const refetchProfile = useCallback(async () => {
+    const userKey = String(userId || email);
+    apiFailedRef.current.delete(userKey);
+    return fetchAndApplyProfile({ skipCache: true });
+  }, [userId, email, fetchAndApplyProfile]);
 
   const profile = useMemo(() => mergeUser(user, extended), [user, extended]);
 
@@ -217,6 +315,58 @@ export function useUserProfile(user, onUserUpdate) {
     persistExtended({ status: null });
   }, [persistExtended]);
 
+  const savePhoneNumber = useCallback(
+    async (phoneNumber) => {
+      const normalized = normalizePhone(phoneNumber);
+      if (!normalized) {
+        throw new Error("Phone number is required.");
+      }
+
+      let apiUser = user;
+
+      if (userId) {
+        try {
+          const data = await updateProfilePhone(userId, normalized);
+          if (data?.user) {
+            apiUser = {
+              ...data.user,
+              avatarUrl: normalizeStoredAvatarUrl(data.user.avatarUrl),
+              id: data.user.id ?? data.user.userId,
+              userId: data.user.userId ?? data.user.id,
+            };
+          }
+        } catch (error) {
+          if (import.meta.env.DEV) {
+            console.error("Phone update failed:", error);
+          }
+          const apiErrors = error?.data?.errors;
+          const phoneError = apiErrors?.phoneNumber || apiErrors?.phone;
+          if (phoneError) {
+            const enhanced = new Error(phoneError);
+            enhanced.status = error.status;
+            enhanced.data = error.data;
+            throw enhanced;
+          }
+          if (error?.message && !error.message.includes("Validation failed")) {
+            throw error;
+          }
+          throw new Error(error?.message || "Could not save phone number.");
+        }
+      }
+
+      const mergedAuthUser = {
+        ...apiUser,
+        phone: apiUser.phone ?? normalized,
+        phoneNumber: apiUser.phoneNumber ?? normalized,
+      };
+      const remember = Boolean(localStorage.getItem("phurai_auth_user"));
+      saveAuthUser(mergedAuthUser, remember);
+      onUserUpdateRef.current?.(mergedAuthUser);
+      return mergeUser(mergedAuthUser, extended);
+    },
+    [user, userId, extended]
+  );
+
   const saveProfileFields = useCallback(
     async (fields) => {
       const {
@@ -240,17 +390,7 @@ export function useUserProfile(user, onUserUpdate) {
       } = fields;
 
       let apiUser = user;
-      const nameParts = String(fullName || "")
-        .trim()
-        .split(/\s+/);
-      const apiPayload = {
-        firstName: firstName || nameParts[0] || user?.firstName,
-        lastName:
-          lastName || (nameParts.length > 1 ? nameParts.slice(1).join(" ") : user?.lastName),
-        username: username ?? user?.username,
-        phone: phone ?? phoneNumber ?? user?.phone,
-        dateOfBirth: dateOfBirth ?? user?.dateOfBirth,
-      };
+      const apiPayload = buildProfileApiPayload(user, fields, extended);
 
       if (userId && hasProfileApiFields(fields)) {
         try {
@@ -263,8 +403,22 @@ export function useUserProfile(user, onUserUpdate) {
               userId: data.user.userId ?? data.user.id,
             };
           }
-        } catch {
-          apiUser = { ...user, ...apiPayload, fullName: fullName || user?.fullName };
+        } catch (error) {
+          if (import.meta.env.DEV) {
+            console.error("Profile API update failed:", error);
+          }
+          const apiErrors = error?.data?.errors;
+          const firstFieldError =
+            apiErrors && typeof apiErrors === "object"
+              ? Object.values(apiErrors).find(Boolean)
+              : null;
+          if (firstFieldError) {
+            const enhanced = new Error(firstFieldError);
+            enhanced.status = error.status;
+            enhanced.data = error.data;
+            throw enhanced;
+          }
+          throw error;
         }
       }
 
@@ -272,13 +426,13 @@ export function useUserProfile(user, onUserUpdate) {
         dateOfBirth ?? extended.dateOfBirth ?? apiUser?.dateOfBirth ?? "";
 
       const nextExtended = {
-        gender: gender ?? extended.gender,
+        gender: gender ?? apiUser?.gender ?? extended.gender,
         country: country ?? extended.country,
         language: language ?? extended.language,
         timeZone: timeZone ?? extended.timeZone,
         dateOfBirth: resolvedDateOfBirth,
-        address: address ?? extended.address,
-        bio: bio ?? extended.bio,
+        address: address ?? apiUser?.address ?? extended.address,
+        bio: bio ?? apiUser?.bio ?? extended.bio,
         coverTheme: coverTheme ?? extended.coverTheme,
         reduceMotion: reduceMotion ?? extended.reduceMotion,
         largerText: largerText ?? extended.largerText,
@@ -290,6 +444,15 @@ export function useUserProfile(user, onUserUpdate) {
       const mergedAuthUser = {
         ...apiUser,
         fullName: fullName || apiUser.fullName,
+        username: username ?? apiUser.username,
+        gender: gender ?? apiUser.gender,
+        bio: bio ?? apiUser.bio,
+        country: country ?? apiUser.country,
+        language: language ?? apiUser.language,
+        googleAvatarUrl: apiUser.googleAvatarUrl || user?.googleAvatarUrl || "",
+        avatarSource: apiUser.avatarSource || user?.avatarSource || "",
+        phone: apiUser.phone ?? apiPayload.phone ?? apiPayload.phoneNumber,
+        phoneNumber: apiUser.phoneNumber ?? apiPayload.phoneNumber ?? apiPayload.phone,
         dateOfBirth: resolvedDateOfBirth,
         dob: resolvedDateOfBirth,
       };
@@ -305,6 +468,9 @@ export function useUserProfile(user, onUserUpdate) {
     const normalized = {
       ...updatedUser,
       avatarUrl: normalizeStoredAvatarUrl(updatedUser.avatarUrl),
+      googleAvatarUrl:
+        updatedUser.googleAvatarUrl || updatedUser.google_avatar_url || "",
+      avatarSource: updatedUser.avatarSource || updatedUser.avatar_source || "",
       id: updatedUser.id ?? updatedUser.userId,
       userId: updatedUser.userId ?? updatedUser.id,
     };
@@ -317,10 +483,13 @@ export function useUserProfile(user, onUserUpdate) {
     profile,
     extended,
     loading,
+    loadError,
+    refetchProfile,
     status: extended.status,
     saveStatus,
     clearStatus,
     saveProfileFields,
+    savePhoneNumber,
     applyAvatarUpdate,
     persistExtended,
   };

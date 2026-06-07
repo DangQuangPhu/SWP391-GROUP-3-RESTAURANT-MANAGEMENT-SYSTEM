@@ -1944,8 +1944,7 @@
 
 /* 3. "Solid to Ghost" Swap Effect (Reservation / CTA buttons) */
 .phurai-navbar .phurai-navbar__cta:hover,
-.phurai-reservation__submit:hover,
-.phurai-gallery__cta:hover {
+.phurai-reservation__submit:hover {
   background: transparent !important;
   color: #ffffff !important;
   border-color: transparent !important;
@@ -1955,6 +1954,16 @@
     inset 0 0 0 2px #ffffff !important;
   transform: translateY(-2px);
 }
+.phurai-gallery__cta:hover {
+  background: #846d44;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -4px rgba(0, 0, 0, 0.1),
+    inset 0 0 0 2px #846d44 !important;
+  transform: translateY(-2px);
+}
 
 
 /* Hover vẫn giữ màu đen, không bị transparent */
@@ -1962,11 +1971,11 @@
 .phurai-navbar.phurai-navbar--page-catering .phurai-navbar__actions .phurai-navbar__cta.phurai-navbar__cta--black:hover,
 .phurai-navbar.phurai-navbar--page-menus .phurai-navbar__actions .phurai-navbar__cta.phurai-navbar__cta--black:hover {
   background: transparent !important;
-  color: #000000 !important;
+  color: #846d44 !important;
   border-color: transparent !important;
   box-shadow:
     0 10px 15px -3px rgba(0, 0, 0, 0.1),
     0 4px 6px -4px rgba(0, 0, 0, 0.1),
-    inset 0 0 0 2px #000000 !important;
+    inset 0 0 0 2px #846d44 !important;
   transform: translateY(-2px);
 }

@@ -136,11 +136,21 @@ export function validateUsername(value) {
   return "";
 }
 
+export function composeFullName(firstName, lastName) {
+  const first = String(firstName || "").trim();
+  const last = String(lastName || "").trim();
+  if (!first && !last) return "";
+  if (!last) return first;
+  if (first !== last && first.endsWith(last)) return first;
+  return `${first} ${last}`.trim();
+}
+
 export function getDisplayName(user) {
-  if (user?.firstName) {
-    return `${user.firstName}${user.lastName ? ` ${user.lastName}` : ""}`.trim();
-  }
-  return user?.fullName?.trim() || user?.username?.trim() || "Guest";
+  const fromFull = user?.fullName?.trim();
+  if (fromFull) return fromFull;
+  const composed = composeFullName(user?.firstName, user?.lastName);
+  if (composed) return composed;
+  return user?.username?.trim() || "Guest";
 }
 
 export function getInitials(user) {

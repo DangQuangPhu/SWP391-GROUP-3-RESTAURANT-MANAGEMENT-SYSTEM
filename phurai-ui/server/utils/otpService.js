@@ -23,6 +23,7 @@ const PURPOSE_ALIASES = {
   LoginMfa: "LoginMfa",
   profile_update: "ProfileUpdate",
   ProfileUpdate: "ProfileUpdate",
+  phone_update: "ProfileUpdate",
 };
 
 export function normalizeOtpPurpose(purpose) {

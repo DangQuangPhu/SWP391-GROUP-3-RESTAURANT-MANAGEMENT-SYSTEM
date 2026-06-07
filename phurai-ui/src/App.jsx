@@ -85,8 +85,12 @@ function App() {
     saveStatus,
     clearStatus,
     saveProfileFields,
+    savePhoneNumber,
     applyAvatarUpdate,
     persistExtended,
+    loading: profileLoading,
+    loadError: profileLoadError,
+    refetchProfile,
   } = useUserProfile(currentUser, handleProfileSave);
 
   const profileEditMode = useMemo(() => {
@@ -338,9 +342,13 @@ function App() {
       {activePage === "profile" && (
         <ProfilePage
           profile={profile}
+          profileLoading={profileLoading}
+          profileError={profileLoadError}
+          onRetryProfile={refetchProfile}
           isAuthenticated={isAuthenticated}
           initialEditMode={profileEditMode}
           onSaveProfile={saveProfileFields}
+          onSavePhone={savePhoneNumber}
           onSavePreferences={persistExtended}
           onApplyAvatar={applyAvatarUpdate}
           onOpenChangePassword={openChangePassword}

@@ -51,12 +51,37 @@ export function resolveAvatarUrl(avatarUrl) {
 }
 
 export function getAvatarSrc(userOrProfile) {
-  return normalizeStoredAvatarUrl(
+  if (!userOrProfile) return "";
+
+  const avatarUrl = normalizeStoredAvatarUrl(
     userOrProfile?.avatarUrl || userOrProfile?.AvatarUrl || ""
   );
+  const googleUrl = normalizeStoredAvatarUrl(
+    userOrProfile?.googleAvatarUrl ||
+      userOrProfile?.google_avatar_url ||
+      userOrProfile?.picture ||
+      ""
+  );
+  const source = String(
+    userOrProfile?.avatarSource || userOrProfile?.avatar_source || ""
+  ).toLowerCase();
+
+  const isCustom =
+    source === "custom" || (avatarUrl && avatarUrl.startsWith("/uploads/"));
+  const isSystem =
+    source === "system" || (avatarUrl && avatarUrl.startsWith("/avatars/"));
+
+  if (avatarUrl && (isCustom || isSystem)) return avatarUrl;
+  if (googleUrl) return googleUrl;
+  if (avatarUrl) return avatarUrl;
+  return "";
 }
 
 export function getAvatarInitial(user) {
+  const fullName = String(user?.fullName || "").trim();
+  if (fullName) {
+    return fullName.charAt(0).toUpperCase();
+  }
   const letter =
     user?.firstName?.[0] ||
     user?.username?.[0] ||

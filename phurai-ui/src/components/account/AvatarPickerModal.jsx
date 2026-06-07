@@ -30,6 +30,9 @@ function AvatarPickerModal({ isOpen, onClose, user, onSave }) {
   useEffect(() => {
     if (!isOpen) return undefined;
 
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     const handleEscape = (event) => {
       if (event.key === "Escape") {
         if (document.activeElement instanceof HTMLElement) {
@@ -52,6 +55,7 @@ function AvatarPickerModal({ isOpen, onClose, user, onSave }) {
     document.addEventListener("mousedown", handleClickOutside);
 
     return () => {
+      document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleEscape);
       document.removeEventListener("mousedown", handleClickOutside);
     };
@@ -139,7 +143,12 @@ function AvatarPickerModal({ isOpen, onClose, user, onSave }) {
 
   return createPortal(
     <div className="avatar-picker" role="presentation">
-      <div className="avatar-picker__backdrop" />
+      <button
+        type="button"
+        className="avatar-picker__backdrop"
+        aria-label="Close"
+        onClick={onClose}
+      />
       <div
         className="avatar-picker__panel"
         ref={panelRef}
