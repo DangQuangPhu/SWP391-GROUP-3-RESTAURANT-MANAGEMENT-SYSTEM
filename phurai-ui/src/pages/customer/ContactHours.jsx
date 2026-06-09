@@ -1,8 +1,8 @@
 import { useRef } from "react";
-import heroImage from "../../assets/images/contact-hours/contact-hero.jpg";
-import mapImage from "../../assets/images/contact-hours/contact-map.jpg";
-import atmosphereImage from "../../assets/images/contact-hours/contact-atmosphere.jpg";
-import "../../styles/contactHours.css";
+import heroImage from "@/assets/images/contact-hours/contact-hero.jpg";
+import mapImage from "@/assets/images/contact-hours/contact-map.jpg";
+import atmosphereImage from "@/assets/images/contact-hours/contact-atmosphere.jpg";
+import "@/styles/contactHours.css";
 
 function HoursColumn({ title, blocks }) {
   return (

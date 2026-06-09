@@ -1,34 +1,41 @@
 import { useEffect, useMemo, useState } from "react";
-import "./styles/home.css";
-import Home from "./pages/customer/Home";
-import TakeOut from "./pages/customer/TakeOut";
-import Catering from "./pages/customer/Catering";
-import PrivateEvents from "./pages/customer/PrivateEvents";
-import Careers from "./pages/customer/Careers";
-import ContactHours from "./pages/customer/ContactHours";
-import Menu from "./pages/customer/Menu";
-import ProfilePage from "./pages/customer/Profile";
-import SettingsPage from "./pages/customer/Settings";
-import NotFound from "./pages/NotFound";
-import Navbar from "./components/layout/Navbar";
-import Footer from "./components/layout/Footer";
-import FloatingActionButtons from "./components/FloatingActionButtons";
-import Register from "./pages/Register";
-import VerifyEmail from "./pages/VerifyEmail.jsx";
-import AuthModal from "./components/auth/AuthModal";
-import AuthSuccessOverlay from "./components/auth/AuthSuccessOverlay";
-import ProfileModal from "./components/auth/ProfileModal";
-import { clearAuthUser, getProfile, loadAuthUser, saveAuthUser } from "./components/auth/api";
-import { blurActiveElement } from "./components/auth/authHelpers";
-import { normalizeStoredAvatarUrl } from "./components/auth/avatarUtils";
-import { useUserProfile } from "./hooks/useUserProfile";
+import "@/styles/home.css";
+import Home from "@/pages/customer/Home";
+import TakeOut from "@/pages/customer/TakeOut";
+import Catering from "@/pages/customer/Catering";
+import PrivateEvents from "@/pages/customer/PrivateEvents";
+import Careers from "@/pages/customer/Careers";
+import ContactHours from "@/pages/customer/ContactHours";
+import Menu from "@/pages/customer/Menu";
+import ProfilePage from "@/pages/customer/Profile";
+import SettingsPage from "@/pages/customer/Settings";
+import NotFound from "@/pages/NotFound";
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
+import FloatingActionButtons from "@/components/common/FloatingActionButtons";
+import Register from "@/pages/Register";
+import VerifyEmail from "@/pages/VerifyEmail.jsx";
+import AuthModal from "@/components/auth/AuthModal";
+import AuthSuccessOverlay from "@/components/auth/AuthSuccessOverlay";
+import ProfileModal from "@/components/auth/ProfileModal";
+import {
+  clearAuthUser,
+  getProfile,
+  loadAuthUser,
+  mapApiUserToFrontend,
+  saveAuthUser,
+} from "@/api";
+import { blurActiveElement } from "@/utils/authHelpers";
+import { normalizeStoredAvatarUrl } from "@/utils/avatarUtils";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 function normalizeAuthUser(user) {
+  const mapped = mapApiUserToFrontend(user) || user;
   return {
-    ...user,
-    avatarUrl: normalizeStoredAvatarUrl(user?.avatarUrl),
-    id: user.id ?? user.userId,
-    userId: user.userId ?? user.id,
+    ...mapped,
+    avatarUrl: normalizeStoredAvatarUrl(mapped?.avatarUrl),
+    id: mapped.id ?? mapped.userId,
+    userId: mapped.userId ?? mapped.id,
   };
 }
 

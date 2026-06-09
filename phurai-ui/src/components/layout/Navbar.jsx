@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import UserAvatar from "../auth/UserAvatar";
-import ProfileDropdown from "../profile/ProfileDropdown";
-import "../../styles/profile.css";
+import UserAvatar from "@/components/auth/UserAvatar";
+import ProfileDropdown from "@/components/profile/ProfileDropdown";
+import "@/styles/profile.css";
 
 const navLinks = [
   "TAKE OUT",

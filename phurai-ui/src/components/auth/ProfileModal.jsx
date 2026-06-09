@@ -6,17 +6,14 @@ import {
   uploadProfileAvatar,
   updateSystemAvatar,
   updateGoogleAvatar,
-  verifyOldPassword,
-  resetProfilePassword,
+  changePassword,
   forgotPasswordRequestOtp,
-} from "./api";
-import { buildInitialTiming } from "./otpTiming";
-import { SYSTEM_AVATARS, getAvatarSrc, normalizeStoredAvatarUrl } from "./avatarUtils";
+} from "@/api";
+import { SYSTEM_AVATARS, getAvatarSrc, normalizeStoredAvatarUrl } from "@/utils/avatarUtils";
 import UserAvatar from "./UserAvatar";
 import SystemAvatarOption from "./SystemAvatarOption";
-import OtpVerification from "./OtpVerification";
 import ResetPasswordForm from "./ResetPasswordForm";
-import "../../styles/auth.css";
+import "@/styles/auth.css";
 import {
   getDisplayName,
   getPasswordStrength,
@@ -28,15 +25,14 @@ import {
   isAtLeast13YearsOld,
   parseDateOfBirth,
   validateAvatarFile,
-} from "./authHelpers";
-import "../../styles/profileModal.css";
+} from "@/utils/authHelpers";
+import "@/styles/profileModal.css";
 
 const PROFILE_MODES = {
   VIEW: "view",
   EDIT_PROFILE: "editProfile",
   CHANGE_AVATAR: "changeAvatar",
   CHANGE_PASSWORD: "changePassword",
-  FORGOT_PASSWORD_OTP: "forgotPasswordOtp",
   RESET_PASSWORD: "resetPassword",
 };
 
@@ -96,10 +92,8 @@ function ProfileModal({
   const [alert, setAlert] = useState(null);
   const [saving, setSaving] = useState(false);
   const [passwordStep, setPasswordStep] = useState("choose");
-  const [forgotOtpUser, setForgotOtpUser] = useState(null);
   const [resetSession, setResetSession] = useState(null);
   const [oldPassword, setOldPassword] = useState("");
-  const [oldPasswordToken, setOldPasswordToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordErrors, setPasswordErrors] = useState({});
@@ -110,10 +104,8 @@ function ProfileModal({
 
   const resetSubState = () => {
     setPasswordStep("choose");
-    setForgotOtpUser(null);
     setResetSession(null);
     setOldPassword("");
-    setOldPasswordToken("");
     setNewPassword("");
     setConfirmPassword("");
     setPasswordErrors({});
@@ -223,9 +215,7 @@ function ProfileModal({
   const isChangeAvatar = profileMode === PROFILE_MODES.CHANGE_AVATAR;
   const isChangePassword =
     profileMode === PROFILE_MODES.CHANGE_PASSWORD ||
-    profileMode === PROFILE_MODES.FORGOT_PASSWORD_OTP ||
     profileMode === PROFILE_MODES.RESET_PASSWORD;
-  const isForgotOtp = profileMode === PROFILE_MODES.FORGOT_PASSWORD_OTP;
   const isResetPassword = profileMode === PROFILE_MODES.RESET_PASSWORD;
 
   const update = (field, value) => {
@@ -347,17 +337,11 @@ function ProfileModal({
     try {
       setSaving(true);
       setAlert(null);
-      const data = await forgotPasswordRequestOtp({
-        email,
-        purpose: "forgot_password",
-      });
-      setForgotOtpUser({
-        userId: data.userId || userId,
+      const data = await forgotPasswordRequestOtp({ email });
+      setResetSession({
         email: data.email || email,
-        verificationMode: "reset-password",
-        initialTiming: buildInitialTiming(data),
       });
-      setProfileMode(PROFILE_MODES.FORGOT_PASSWORD_OTP);
+      setProfileMode(PROFILE_MODES.RESET_PASSWORD);
       setAlert({
         type: "success",
         message: data.message || "Password reset code sent to your email.",
@@ -369,43 +353,27 @@ function ProfileModal({
     }
   };
 
-  const handleForgotOtpVerified = ({ resetToken, userId: verifiedUserId, email: verifiedEmail }) => {
-    setResetSession({
-      userId: verifiedUserId || userId,
-      resetToken,
-      email: verifiedEmail || forgotOtpUser?.email || draft?.email,
-    });
-    setProfileMode(PROFILE_MODES.RESET_PASSWORD);
-    setAlert({ type: "success", message: "OTP verified. You can now reset your password." });
-  };
-
   const handleForgotResetSuccess = () => {
     onPasswordReset?.({
       message: "Password reset successfully. Please sign in with your new password.",
     });
   };
 
-  const handleVerifyOldPassword = async () => {
+  const handleVerifyOldPassword = () => {
     if (!oldPassword) {
       setPasswordErrors({ old: "Old password is required." });
       return;
     }
-    try {
-      setSaving(true);
-      const data = await verifyOldPassword(userId, oldPassword);
-      setOldPasswordToken(data.oldPasswordVerifiedToken);
-      setPasswordStep("old-new");
-      setPasswordErrors({});
-      setAlert({ type: "success", message: data.message || "Old password verified." });
-    } catch (error) {
-      setPasswordErrors({ old: error.message || "Old password is incorrect." });
-    } finally {
-      setSaving(false);
-    }
+    setPasswordStep("old-new");
+    setPasswordErrors({});
+    setAlert(null);
   };
 
   const handleChangePassword = async () => {
     const next = {};
+    if (!oldPassword) {
+      next.old = "Old password is required.";
+    }
     if (!isPasswordStrong(newPassword)) {
       next.newPassword =
         "Password must be at least 8 characters with uppercase, lowercase, number, and special character.";
@@ -420,16 +388,23 @@ function ProfileModal({
 
     try {
       setSaving(true);
-      await resetProfilePassword({
+      setAlert(null);
+      await changePassword({
         userId,
-        oldPasswordVerifiedToken: oldPasswordToken,
+        email: draft?.email,
+        currentPassword: oldPassword,
         newPassword,
         confirmPassword,
       });
+      setAlert({ type: "success", message: "Password updated successfully." });
       onPasswordReset?.({
-        message: "Password changed successfully. Please sign in again.",
+        message: "Password updated successfully.",
       });
     } catch (error) {
+      if (error.status === 401) {
+        setPasswordErrors({ old: error.message || "Invalid old password." });
+        return;
+      }
       setAlert({ type: "error", message: error.message || "Password change failed." });
     } finally {
       setSaving(false);
@@ -565,7 +540,7 @@ function ProfileModal({
           </div>
         ) : null}
 
-        {isChangePassword && !isForgotOtp && !isResetPassword ? (
+        {isChangePassword && !isResetPassword ? (
           <div className="profile-edit__body">
             <h3>Change Password</h3>
 
@@ -676,29 +651,11 @@ function ProfileModal({
           </div>
         ) : null}
 
-        {isForgotOtp && forgotOtpUser ? (
-          <div className="profile-edit__body profile-edit__otp-wrap">
-            <OtpVerification
-              user={forgotOtpUser}
-              context="reset-password"
-              initialTiming={forgotOtpUser?.initialTiming}
-              onVerified={handleForgotOtpVerified}
-              onBack={() => {
-                setProfileMode(PROFILE_MODES.CHANGE_PASSWORD);
-                setPasswordStep("choose");
-                setForgotOtpUser(null);
-              }}
-            />
-          </div>
-        ) : null}
-
-        {isResetPassword && resetSession ? (
+        {isResetPassword && resetSession?.email ? (
           <div className="profile-edit__body profile-edit__reset-wrap">
             <h3>Create New Password</h3>
             <ResetPasswordForm
-              userId={resetSession.userId}
               email={resetSession.email}
-              resetToken={resetSession.resetToken}
               onSuccess={handleForgotResetSuccess}
             />
           </div>

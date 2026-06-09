@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import UserAvatar from "../auth/UserAvatar";
-import { getDisplayName } from "../auth/authHelpers";
+import UserAvatar from "@/components/auth/UserAvatar";
+import { getDisplayName } from "@/utils/authHelpers";
 import { AddAccountIcon, ChevronBackIcon, SignOutIcon, SwitchAccountIcon } from "./accountIcons";
-import "./AccountSwitchOverlay.css";
+import "@/styles/AccountSwitchOverlay.css";
 
 function AccountSwitchOverlay({
   isOpen,

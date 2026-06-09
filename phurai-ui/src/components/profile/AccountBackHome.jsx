@@ -1,4 +1,4 @@
-import "../../pages/customer/accountShared.css";
+import "@/styles/profile.css";
 
 function AccountBackHome({ onNavigateHome, className = "" }) {
   return (

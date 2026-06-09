@@ -1,4 +1,4 @@
-import { homeImages } from "../../data/homeAssets";
+import { homeImages } from "@/data/homeAssets";
 
 function HeroSection() {
   return (

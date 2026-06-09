@@ -1,5 +1,5 @@
-import accessibilityIcon from '../assets/icons/accessibility.svg';
-import scrollTopAltIcon from '../assets/icons/scroll-top-alt.svg';
+import accessibilityIcon from '@/assets/icons/accessibility.svg';
+import scrollTopAltIcon from '@/assets/icons/scroll-top-alt.svg';
 
 function FloatingUtilityButtons() {
   const scrollToTop = () => {

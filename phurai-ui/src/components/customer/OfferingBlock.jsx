@@ -1,4 +1,4 @@
-import OutlineButton from '../common/OutlineButton';
+import OutlineButton from '@/components/common/OutlineButton';
 
 function OfferingBlock({
   label,

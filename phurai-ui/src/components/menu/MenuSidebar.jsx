@@ -1,4 +1,4 @@
-import { menuCategoryIcons } from '../../data/iconAssets';
+import { menuCategoryIcons } from '@/data/iconAssets';
 
 function AllMenuIcon({ active }) {
   return (

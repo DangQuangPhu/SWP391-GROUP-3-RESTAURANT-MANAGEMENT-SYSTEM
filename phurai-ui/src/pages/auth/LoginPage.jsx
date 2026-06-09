@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { homeImages } from "../../data/homeAssets";
-import AuthCard from "../../components/auth/AuthCard";
-import OtpVerification from "../../components/auth/OtpVerification";
-import ForgotPasswordForm from "../../components/auth/ForgotPasswordForm";
-import ResetPasswordForm from "../../components/auth/ResetPasswordForm";
-import "../../styles/loginPage.css";
+import { homeImages } from "@/data/homeAssets";
+import AuthCard from "@/components/auth/AuthCard";
+import OtpVerification from "@/components/auth/OtpVerification";
+import ForgotPasswordForm from "@/components/auth/ForgotPasswordForm";
+import ResetPasswordForm from "@/components/auth/ResetPasswordForm";
+import "@/styles/loginPage.css";
 
 const VIEWS = {
   AUTH: "auth",
@@ -58,7 +58,7 @@ function LoginPage({
 
   const handleForgotOtp = (user) => {
     setPendingUser(user);
-    setView(VIEWS.OTP);
+    setView(VIEWS.RESET);
   };
 
   const handleResetSuccess = () => {
@@ -96,13 +96,20 @@ function LoginPage({
         onBack={() => setView(VIEWS.AUTH)}
       />
     );
+  } else if (view === VIEWS.RESET && pendingUser?.email) {
+    content = (
+      <ResetPasswordForm
+        email={pendingUser.email}
+        onSuccess={handleResetSuccess}
+        onBack={() => setView(VIEWS.FORGOT)}
+      />
+    );
   } else if (view === VIEWS.RESET && resetSession) {
     content = (
       <ResetPasswordForm
-        userId={resetSession.userId}
         email={resetSession.email}
-        resetToken={resetSession.resetToken}
         onSuccess={handleResetSuccess}
+        onBack={() => setView(VIEWS.FORGOT)}
       />
     );
   } else {

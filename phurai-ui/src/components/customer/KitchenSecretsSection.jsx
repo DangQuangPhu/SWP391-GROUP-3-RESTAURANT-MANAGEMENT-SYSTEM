@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import OutlineButton from '../common/OutlineButton';
+import OutlineButton from '@/components/common/OutlineButton';
 import KitchenRecommendations from './KitchenRecommendations';
-import { homeImages } from '../../data/homeAssets';
+import { homeImages } from '@/data/homeAssets';
 
 function KitchenSecretsSection() {
   const [expanded, setExpanded] = useState(false);

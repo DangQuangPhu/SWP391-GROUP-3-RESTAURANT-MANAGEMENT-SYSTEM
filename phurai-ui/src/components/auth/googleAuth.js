@@ -1,5 +1,5 @@
 const GOOGLE_IDENTITY_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
-import { googleRegister, googleRegisterWithAccessToken, googleLogin } from "./api";
+import { googleRegister, googleRegisterWithAccessToken, googleLogin } from "@/api/authApi";
 
 let googleScriptPromise;
 

@@ -6,15 +6,15 @@ import {
   resendOtp,
   forgotPasswordVerifyOtp,
   forgotPasswordResendOtp,
-} from "./api";
+} from "@/api/authApi";
 import {
   OTP_EXPIRES_IN_SECONDS,
   OTP_RESEND_COOLDOWN_SECONDS,
   applyOtpSentTiming,
   formatOtpExpiry,
   resolveRetryAfterSeconds,
-} from "./otpTiming";
-import "./OtpCodeInput.css";
+} from "@/utils/otpTiming";
+import "@/styles/OtpCodeInput.css";
 
 const SUCCESS_DELAY_MS = 900;
 
@@ -76,7 +76,7 @@ function OtpVerification({
       try {
         const data = await requestOtp({
           email: normalizedEmail,
-          purpose: "verify_account",
+          purpose: "EMAIL_VERIFY",
         });
         if (cancelled) return;
         applyOtpSentTiming(data, { setOtpExpiresIn, setResendSeconds });
@@ -188,10 +188,9 @@ function OtpVerification({
         }
 
         const data = await verifyOtp({
-          email,
+          email: String(email || "").trim().toLowerCase(),
           otp: code,
-          purpose: "verify_account",
-          userId: user?.userId,
+          purpose: "EMAIL_VERIFY",
         });
         completeVerification(data.user || user);
       }
@@ -230,8 +229,8 @@ function OtpVerification({
       } else {
         if (!email || email === "your email") return;
         const data = await resendOtp({
-          email,
-          purpose: "verify_account",
+          email: String(email || "").trim().toLowerCase(),
+          purpose: "EMAIL_VERIFY",
         });
 
         if (data.success === false) {

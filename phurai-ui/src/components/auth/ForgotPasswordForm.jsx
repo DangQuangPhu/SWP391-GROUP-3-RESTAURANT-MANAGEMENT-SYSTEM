@@ -1,27 +1,19 @@
 import { useState } from "react";
-import { isEmailValue, isValidEmail, isValidVietnamPhone, normalizePhone } from "./authHelpers";
-import { forgotPasswordRequestOtp } from "./api";
-import { buildInitialTiming } from "./otpTiming";
+import { isValidEmail } from "@/utils/authHelpers";
+import { forgotPasswordRequestOtp } from "@/api/authApi";
+import { buildInitialTiming } from "@/utils/otpTiming";
 
 function ForgotPasswordForm({ onOtpSent, onBack }) {
-  const [identifier, setIdentifier] = useState("");
+  const [email, setEmail] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
   const validate = () => {
-    const trimmed = identifier.trim();
-    if (!trimmed) return "Email or phone number is required.";
-    if (isEmailValue(trimmed)) {
-      if (!isValidEmail(trimmed)) return "Enter a valid email address.";
-      return "";
-    }
-    if (!/^\d+$/.test(normalizePhone(trimmed))) {
-      return "Phone number must contain digits only.";
-    }
-    if (!isValidVietnamPhone(trimmed)) {
-      return "Phone number must be 10–11 digits.";
-    }
+    const trimmed = email.trim();
+    if (!trimmed) return "Email is required.";
+    if (!isValidEmail(trimmed)) return "Enter a valid email address.";
     return "";
   };
 
@@ -37,14 +29,13 @@ function ForgotPasswordForm({ onOtpSent, onBack }) {
     try {
       setLoading(true);
       setError("");
-      const trimmed = identifier.trim();
-      const payload = isEmailValue(trimmed)
-        ? { email: trimmed.toLowerCase(), purpose: "forgot_password" }
-        : { identifier: trimmed, purpose: "forgot_password" };
-      const data = await forgotPasswordRequestOtp(payload);
+      setNotice("");
+      const normalizedEmail = email.trim().toLowerCase();
+      const data = await forgotPasswordRequestOtp({ email: normalizedEmail });
+      setNotice(data.message || "Verification code sent.");
       onOtpSent?.({
         userId: data.userId,
-        email: data.email,
+        email: data.email || normalizedEmail,
         verificationMode: "reset-password",
         initialTiming: buildInitialTiming(data),
       });
@@ -62,8 +53,14 @@ function ForgotPasswordForm({ onOtpSent, onBack }) {
       <p className="auth-card__brand">Phūrai</p>
       <h2 className="auth-card__title">Forgot Password</h2>
       <p className="auth-card__subtitle">
-        Enter your email or phone number to receive a reset code.
+        Enter your email to receive a reset code.
       </p>
+
+      {notice ? (
+        <div className="auth-alert auth-alert--success" role="status">
+          {notice}
+        </div>
+      ) : null}
 
       {(error || fieldError) ? (
         <div className="auth-alert auth-alert--error" role="alert">
@@ -73,19 +70,19 @@ function ForgotPasswordForm({ onOtpSent, onBack }) {
 
       <form className="auth-form" onSubmit={handleSubmit} noValidate>
         <div className="auth-field">
-          <label className="auth-field__label" htmlFor="forgot-identifier">
-            Email or Phone Number
+          <label className="auth-field__label" htmlFor="forgot-email">
+            Email
           </label>
           <input
-            id="forgot-identifier"
-            type="text"
+            id="forgot-email"
+            type="email"
             className={`auth-field__input${fieldError ? " auth-field__input--error" : ""}`}
-            value={identifier}
+            value={email}
             onChange={(e) => {
-              setIdentifier(e.target.value);
+              setEmail(e.target.value);
               setError("");
             }}
-            autoComplete="username"
+            autoComplete="email"
           />
           {fieldError ? <p className="auth-field__error">{fieldError}</p> : null}
         </div>

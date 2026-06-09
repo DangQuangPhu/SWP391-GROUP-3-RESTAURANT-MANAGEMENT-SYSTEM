@@ -1,5 +1,5 @@
 import { useState } from "react";
-import "../../styles/catering.css";
+import "@/styles/catering.css";
 
 const corporateSections = [
   {

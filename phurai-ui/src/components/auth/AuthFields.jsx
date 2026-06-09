@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getPasswordStrength } from "./authHelpers";
+import { getPasswordStrength } from "@/utils/authHelpers";
 
 export function GoogleIcon() {
   return (

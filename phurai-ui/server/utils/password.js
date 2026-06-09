@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import bcrypt from "bcryptjs";
 
 export function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString("hex");
@@ -20,6 +21,21 @@ export function verifyPassword(password, passwordHash) {
     storedBuffer.length === derivedKey.length &&
     crypto.timingSafeEqual(storedBuffer, derivedKey)
   );
+}
+
+export async function verifyStoredPassword(password, passwordHash) {
+  const hash = String(passwordHash || "");
+  if (!hash) return false;
+
+  if (hash.startsWith("$2a$") || hash.startsWith("$2b$")) {
+    return bcrypt.compare(String(password || ""), hash);
+  }
+
+  if (hash.startsWith("scrypt$")) {
+    return verifyPassword(password, hash);
+  }
+
+  return false;
 }
 
 export function generateOtpCode() {

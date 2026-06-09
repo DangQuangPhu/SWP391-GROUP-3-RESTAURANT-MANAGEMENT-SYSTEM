@@ -1,6 +1,6 @@
-import takeoutHero from '../../../assets/images/takeout/takeout-hero.png';
-import takeoutArrow from '../../../assets/images/takeout/takeout-arrow.png';
-import takeoutPhone from '../../../assets/images/takeout/takeout-phone.png';
+import takeoutHero from '@/assets/images/takeout/takeout-hero.png';
+import takeoutArrow from '@/assets/images/takeout/takeout-arrow.png';
+import takeoutPhone from '@/assets/images/takeout/takeout-phone.png';
 
 function TakeOutHero() {
   return (

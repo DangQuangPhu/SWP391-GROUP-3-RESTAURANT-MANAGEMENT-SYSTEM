@@ -1,5 +1,5 @@
-import notFoundImage from "../assets/images/fork-near-plate-with-twig.jpg";
-import "./NotFound.css";
+import notFoundImage from "@/assets/images/fork-near-plate-with-twig.jpg";
+import "@/styles/notFound.css";
 
 function HomeIcon() {
   return (

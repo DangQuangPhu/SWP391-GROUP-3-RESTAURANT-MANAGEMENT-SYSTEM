@@ -1,5 +1,5 @@
-import takeoutArrow from '../../../assets/images/takeout/takeout-arrow.png';
-import takeoutPhone from '../../../assets/images/takeout/takeout-phone.png';
+import takeoutArrow from '@/assets/images/takeout/takeout-arrow.png';
+import takeoutPhone from '@/assets/images/takeout/takeout-phone.png';
 
 function TakeOutBottom() {
   const scrollToTop = () => {

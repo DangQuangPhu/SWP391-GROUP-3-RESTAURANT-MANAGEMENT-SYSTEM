@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { menuImages } from '../../data/menuAssets';
-import { formatVND } from '../../utils/formatCurrency';
+import { menuImages } from '@/data/menuAssets';
+import { formatVND } from '@/utils/formatCurrency';
 
 const FALLBACK_IMAGE = menuImages.hero;
 

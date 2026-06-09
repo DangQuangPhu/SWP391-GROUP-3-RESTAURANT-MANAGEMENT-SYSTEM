@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import OutlineButton from './common/OutlineButton';
-import './SignatureDishCarousel.css';
+import OutlineButton from '@/components/common/OutlineButton';
+import '@/styles/SignatureDishCarousel.css';
 
 const CARDS = [
   {

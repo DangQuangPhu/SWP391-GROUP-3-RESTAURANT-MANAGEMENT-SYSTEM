@@ -4,9 +4,9 @@ import AuthCard from "./AuthCard";
 import OtpVerification from "./OtpVerification";
 import ForgotPasswordForm from "./ForgotPasswordForm";
 import ResetPasswordForm from "./ResetPasswordForm";
-import { blurActiveElement } from "./authHelpers";
-import "../../styles/auth.css";
-import "../../styles/authModal.css";
+import { blurActiveElement } from "@/utils/authHelpers";
+import "@/styles/auth.css";
+import "@/styles/authModal.css";
 
 const VIEWS = {
   AUTH: "auth",
@@ -87,7 +87,7 @@ function AuthModal({
 
   const handleForgotOtp = (user) => {
     setPendingUser(user);
-    setView(VIEWS.OTP);
+    setView(VIEWS.RESET);
   };
 
   const handleResetSuccess = () => {
@@ -137,13 +137,20 @@ function AuthModal({
         onBack={() => setView(VIEWS.AUTH)}
       />
     );
+  } else if (view === VIEWS.RESET && pendingUser?.email) {
+    content = (
+      <ResetPasswordForm
+        email={pendingUser.email}
+        onSuccess={handleResetSuccess}
+        onBack={() => setView(VIEWS.FORGOT)}
+      />
+    );
   } else if (view === VIEWS.RESET && resetSession) {
     content = (
       <ResetPasswordForm
-        userId={resetSession.userId}
         email={resetSession.email}
-        resetToken={resetSession.resetToken}
         onSuccess={handleResetSuccess}
+        onBack={() => setView(VIEWS.FORGOT)}
       />
     );
   } else {

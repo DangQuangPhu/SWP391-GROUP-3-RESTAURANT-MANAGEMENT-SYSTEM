@@ -1,12 +1,12 @@
 import { useRef } from "react";
-import heroImage from "../../assets/images/careers/careers-hero.jpg";
-import principlesImage from "../../assets/images/careers/careers-principles.jpg";
-import chefsImage from "../../assets/images/careers/careers-chefs.jpg";
-import teamImage from "../../assets/images/careers/careers-team.jpg";
-import barbackImage from "../../assets/images/careers/careers-position-barback.jpg";
-import hostessImage from "../../assets/images/careers/careers-position-hostess.jpg";
-import busserImage from "../../assets/images/careers/careers-position-busser.jpg";
-import "../../styles/careers.css";
+import heroImage from "@/assets/images/careers/careers-hero.jpg";
+import principlesImage from "@/assets/images/careers/careers-principles.jpg";
+import chefsImage from "@/assets/images/careers/careers-chefs.jpg";
+import teamImage from "@/assets/images/careers/careers-team.jpg";
+import barbackImage from "@/assets/images/careers/careers-position-barback.jpg";
+import hostessImage from "@/assets/images/careers/careers-position-hostess.jpg";
+import busserImage from "@/assets/images/careers/careers-position-busser.jpg";
+import "@/styles/careers.css";
 
 const positions = [
   {

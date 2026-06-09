@@ -4,8 +4,8 @@ import {
   getAvatarInitial,
   getAvatarSrc,
   resolveAvatarUrl,
-} from "../auth/avatarUtils";
-import "./AvatarPreviewModal.css";
+} from "@/utils/avatarUtils";
+import "@/styles/AvatarPreviewModal.css";
 
 function AvatarPreviewModal({ isOpen, onClose, user }) {
   const panelRef = useRef(null);

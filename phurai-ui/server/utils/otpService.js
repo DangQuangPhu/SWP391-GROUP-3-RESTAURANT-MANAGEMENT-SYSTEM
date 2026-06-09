@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import pool from "../db.js";
 
 export const OTP_EXPIRES_IN_SECONDS = 5 * 60;
@@ -7,32 +8,43 @@ export const PENDING_ACCOUNT_EXPIRES_IN_SECONDS = 5 * 60;
 export const PENDING_ACCOUNT_EXPIRES_IN_MS = PENDING_ACCOUNT_EXPIRES_IN_SECONDS * 1000;
 
 const OTP_TABLE = "[dbo].[OtpTokens]";
-const USERS_TABLE = "[dbo].[Users]";
+const USERS_TABLE = "[dbo].[UserAccounts]";
+
+/** Values allowed by CK_OtpTokens_purpose on dbo.OtpTokens */
+const ALLOWED_PURPOSES = new Set([
+  "EMAIL_VERIFY",
+  "PASSWORD_RESET",
+  "LOGIN_VERIFY",
+  "CHANGE_PASSWORD",
+]);
 
 const PURPOSE_ALIASES = {
-  verify_account: "EmailVerification",
-  email_verification: "EmailVerification",
-  EmailVerification: "EmailVerification",
-  reset_password: "ForgotPassword",
-  forgot_password: "ForgotPassword",
-  reset: "ForgotPassword",
-  ForgotPassword: "ForgotPassword",
-  google_registration: "GoogleRegistration",
-  GoogleRegistration: "GoogleRegistration",
-  login_mfa: "LoginMfa",
-  LoginMfa: "LoginMfa",
-  profile_update: "ProfileUpdate",
-  ProfileUpdate: "ProfileUpdate",
-  phone_update: "ProfileUpdate",
+  verify_account: "EMAIL_VERIFY",
+  email_verification: "EMAIL_VERIFY",
+  email_verify: "EMAIL_VERIFY",
+  EMAIL_VERIFY: "EMAIL_VERIFY",
+  EmailVerification: "EMAIL_VERIFY",
+  reset_password: "PASSWORD_RESET",
+  forgot_password: "PASSWORD_RESET",
+  reset: "PASSWORD_RESET",
+  PASSWORD_RESET: "PASSWORD_RESET",
+  ForgotPassword: "PASSWORD_RESET",
+  google_registration: "EMAIL_VERIFY",
+  login_mfa: "LOGIN_VERIFY",
+  LOGIN_VERIFY: "LOGIN_VERIFY",
+  profile_update: "CHANGE_PASSWORD",
+  phone_update: "CHANGE_PASSWORD",
+  CHANGE_PASSWORD: "CHANGE_PASSWORD",
 };
 
 export function normalizeOtpPurpose(purpose) {
-  const key = String(purpose || "EmailVerification").trim();
-  return PURPOSE_ALIASES[key] || "EmailVerification";
+  const key = String(purpose || "EMAIL_VERIFY").trim();
+  const normalized = PURPOSE_ALIASES[key] || "EMAIL_VERIFY";
+  return ALLOWED_PURPOSES.has(normalized) ? normalized : "EMAIL_VERIFY";
 }
 
 export function isVerifyAccountPurpose(purpose) {
-  return normalizeOtpPurpose(purpose) === "EmailVerification";
+  return normalizeOtpPurpose(purpose) === "EMAIL_VERIFY";
 }
 
 export function getOtpResendRemainingSeconds(createdAt) {
@@ -47,72 +59,37 @@ export function isVerificationSentExpired(sentAt) {
 }
 
 export function isOtpExpired(record) {
-  if (!record?.ExpiresAt) return true;
-  return new Date(record.ExpiresAt).getTime() < Date.now();
+  const expiresAt = record?.expires_at;
+  if (!expiresAt) return true;
+  return new Date(expiresAt).getTime() < Date.now();
 }
 
 function isPendingVerificationUser(user) {
   if (!user) return false;
-  if (user.is_email_verified) return false;
-  const status = String(user.status || "").toLowerCase();
-  return (
-    status === "pending" ||
-    status === "pending_verification" ||
-    status === "inactive" ||
-    !status ||
-    status !== "active"
-  );
+  return !user.email_verified;
 }
 
 export async function cleanupExpiredOtps() {
   await pool.query(
     `UPDATE ${OTP_TABLE}
-     SET [UsedAt] = SYSDATETIME()
-     WHERE [UsedAt] IS NULL
-       AND [ExpiresAt] < SYSDATETIME()`
-  );
-}
-
-export async function cleanupExpiredPendingUsers() {
-  const pendingUserFilter = `
-    ([EmailVerified] = 0 OR [EmailVerified] IS NULL)
-    AND (
-      LOWER(COALESCE([AccountStatus], N'')) IN (
-        N'pending',
-        N'pending_verification',
-        N'inactive'
-      )
-      OR [EmailVerified] = 0
-      OR [EmailVerified] IS NULL
-    )
-    AND [CreatedAt] < DATEADD(SECOND, -?, SYSDATETIME())`;
-
-  await pool.query(
-    `UPDATE ${OTP_TABLE}
-     SET [UsedAt] = SYSDATETIME()
-     WHERE [UsedAt] IS NULL
-       AND [UserID] IN (
-         SELECT [UserID]
-         FROM ${USERS_TABLE}
-         WHERE ${pendingUserFilter}
-       )`,
-    [PENDING_ACCOUNT_EXPIRES_IN_SECONDS]
+     SET consumed_at = SYSDATETIME()
+     WHERE consumed_at IS NULL
+       AND verified_at IS NULL
+       AND expires_at < SYSDATETIME()`
   );
 
   await pool.query(
     `DELETE FROM ${OTP_TABLE}
-     WHERE [UserID] IN (
-       SELECT [UserID]
-       FROM ${USERS_TABLE}
-       WHERE ${pendingUserFilter}
-     )`,
-    [PENDING_ACCOUNT_EXPIRES_IN_SECONDS]
+     WHERE consumed_at IS NOT NULL
+       AND expires_at < DATEADD(DAY, -7, SYSDATETIME())`
   );
+}
 
+export async function cleanupExpiredPendingUsers() {
   await pool.query(
-    `DELETE FROM ${USERS_TABLE}
-     WHERE ${pendingUserFilter}`,
-    [PENDING_ACCOUNT_EXPIRES_IN_SECONDS]
+    `DELETE FROM ${OTP_TABLE}
+     WHERE consumed_at IS NOT NULL
+       AND expires_at < DATEADD(DAY, -7, SYSDATETIME())`
   );
 }
 
@@ -126,13 +103,13 @@ export async function invalidatePendingOtps({ email, purpose, userId = null }) {
   const normalizedPurpose = normalizeOtpPurpose(purpose);
   const params = [normalizedEmail, normalizedPurpose];
   let sql = `UPDATE ${OTP_TABLE}
-     SET [UsedAt] = SYSDATETIME()
-     WHERE LOWER([Email]) = LOWER(?)
-       AND [Purpose] = ?
-       AND [UsedAt] IS NULL`;
+     SET consumed_at = SYSDATETIME()
+     WHERE LOWER(email) = LOWER(?)
+       AND purpose = ?
+       AND consumed_at IS NULL`;
 
   if (userId != null && userId !== "") {
-    sql += ` AND [UserID] = ?`;
+    sql += ` AND user_id = ?`;
     params.push(userId);
   }
 
@@ -145,12 +122,13 @@ export async function saveOtpToken({ email, purpose, otp, userId = null }) {
 
   const normalizedEmail = String(email || "").trim().toLowerCase();
   const safeOtp = String(otp || "").trim();
+  const otpHash = await bcrypt.hash(safeOtp, 10);
 
   await pool.query(
     `INSERT INTO ${OTP_TABLE}
-      ([UserID], [Email], [Purpose], [OtpHash], [ExpiresAt], [CreatedAt])
-     VALUES (?, ?, ?, ?, DATEADD(SECOND, ?, SYSDATETIME()), SYSDATETIME())`,
-    [userId || null, normalizedEmail, normalizedPurpose, safeOtp, OTP_EXPIRES_IN_SECONDS]
+      (user_id, email, purpose, otp_hash, expires_at, created_at)
+     VALUES (?, ?, ?, ?, DATEADD(MINUTE, 5, SYSDATETIME()), SYSDATETIME())`,
+    [userId || null, normalizedEmail, normalizedPurpose, otpHash]
   );
 
   return {
@@ -165,21 +143,41 @@ export async function findLatestOtpRecord({ email, purpose, userId = null }) {
   const normalizedEmail = String(email || "").trim().toLowerCase();
   const normalizedPurpose = normalizeOtpPurpose(purpose);
   const params = [normalizedEmail, normalizedPurpose];
-  let sql = `SELECT TOP 1 *
+  let sql = `SELECT TOP 1
+       otp_id,
+       user_id,
+       email,
+       purpose,
+       otp_hash,
+       expires_at,
+       verified_at,
+       consumed_at,
+       created_at
      FROM ${OTP_TABLE}
-     WHERE LOWER([Email]) = LOWER(?)
-       AND [Purpose] = ?
-       AND [UsedAt] IS NULL
-     ORDER BY [CreatedAt] DESC`;
+     WHERE LOWER(email) = LOWER(?)
+       AND purpose = ?
+       AND consumed_at IS NULL
+       AND verified_at IS NULL
+     ORDER BY created_at DESC`;
 
   if (userId != null && userId !== "") {
-    sql = `SELECT TOP 1 *
+    sql = `SELECT TOP 1
+       otp_id,
+       user_id,
+       email,
+       purpose,
+       otp_hash,
+       expires_at,
+       verified_at,
+       consumed_at,
+       created_at
      FROM ${OTP_TABLE}
-     WHERE LOWER([Email]) = LOWER(?)
-       AND [Purpose] = ?
-       AND [UserID] = ?
-       AND [UsedAt] IS NULL
-     ORDER BY [CreatedAt] DESC`;
+     WHERE LOWER(email) = LOWER(?)
+       AND purpose = ?
+       AND user_id = ?
+       AND consumed_at IS NULL
+       AND verified_at IS NULL
+     ORDER BY created_at DESC`;
     params.push(userId);
   }
 
@@ -187,11 +185,38 @@ export async function findLatestOtpRecord({ email, purpose, userId = null }) {
   return rows[0] || null;
 }
 
+export async function findLatestValidOtpForVerify({ email, purpose }) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const normalizedPurpose = normalizeOtpPurpose(purpose);
+
+  const [rows] = await pool.query(
+    `SELECT TOP 1
+       otp_id,
+       user_id,
+       email,
+       purpose,
+       otp_hash,
+       expires_at,
+       verified_at,
+       consumed_at,
+       created_at
+     FROM ${OTP_TABLE}
+     WHERE LOWER(email) = LOWER(?)
+       AND purpose = ?
+       AND consumed_at IS NULL
+       AND verified_at IS NULL
+     ORDER BY created_at DESC`,
+    [normalizedEmail, normalizedPurpose]
+  );
+
+  return rows[0] || null;
+}
+
 export async function markOtpUsed(otpId) {
   await pool.query(
     `UPDATE ${OTP_TABLE}
-     SET [UsedAt] = SYSDATETIME()
-     WHERE [OtpID] = ?`,
+     SET consumed_at = SYSDATETIME(), verified_at = SYSDATETIME()
+     WHERE otp_id = ?`,
     [otpId]
   );
 }
@@ -199,16 +224,28 @@ export async function markOtpUsed(otpId) {
 export async function markOtpExpired(otpId) {
   await pool.query(
     `UPDATE ${OTP_TABLE}
-     SET [UsedAt] = SYSDATETIME()
-     WHERE [OtpID] = ?`,
+     SET consumed_at = SYSDATETIME()
+     WHERE otp_id = ?`,
     [otpId]
+  );
+}
+
+export async function markUserEmailVerified(email) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  await pool.query(
+    `UPDATE ${USERS_TABLE}
+     SET email_verified = 1, updated_at = SYSDATETIME()
+     WHERE LOWER(email) = LOWER(?)`,
+    [normalizedEmail]
   );
 }
 
 export async function assertPendingVerificationUser(email) {
   const normalizedEmail = String(email || "").trim().toLowerCase();
   const [rows] = await pool.query(
-    `SELECT TOP 1 * FROM ${USERS_TABLE} WHERE LOWER([Email]) = LOWER(?)`,
+    `SELECT TOP 1 user_id, email, email_verified, is_active, created_at
+     FROM ${USERS_TABLE}
+     WHERE LOWER(email) = LOWER(?)`,
     [normalizedEmail]
   );
   const row = rows[0];
@@ -220,15 +257,7 @@ export async function assertPendingVerificationUser(email) {
     };
   }
 
-  const user = {
-    user_id: row.UserID ?? row.user_id,
-    email: row.Email ?? row.email,
-    is_email_verified: row.EmailVerified ?? row.is_email_verified,
-    status: row.AccountStatus ?? row.status,
-    created_at: row.CreatedAt ?? row.created_at,
-  };
-
-  if (!isPendingVerificationUser(user)) {
+  if (!isPendingVerificationUser(row)) {
     return {
       ok: false,
       status: 400,
@@ -237,8 +266,8 @@ export async function assertPendingVerificationUser(email) {
   }
 
   if (
-    user.created_at &&
-    Date.now() - new Date(user.created_at).getTime() > PENDING_ACCOUNT_EXPIRES_IN_MS
+    row.created_at &&
+    Date.now() - new Date(row.created_at).getTime() > PENDING_ACCOUNT_EXPIRES_IN_MS
   ) {
     await cleanupExpiredPendingUsers();
     return {
@@ -248,12 +277,12 @@ export async function assertPendingVerificationUser(email) {
     };
   }
 
-  return { ok: true, user };
+  return { ok: true, user: row };
 }
 
 export async function checkOtpResendCooldown({ email, purpose, userId = null }) {
   const existing = await findLatestOtpRecord({ email, purpose, userId });
-  const createdAt = existing?.CreatedAt ?? existing?.createdAt;
+  const createdAt = existing?.created_at;
   if (!createdAt) {
     return { allowed: true, retryAfter: 0 };
   }
@@ -270,50 +299,45 @@ export async function checkOtpResendCooldown({ email, purpose, userId = null }) 
   return { allowed: true, retryAfter: 0 };
 }
 
-export async function verifyOtpRecord({ email, purpose, otp, userId = null }) {
-  await runOtpLifecycleCleanup();
-
+export async function verifyOtpRecord({ email, purpose, otp }) {
   const normalizedPurpose = normalizeOtpPurpose(purpose);
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const submittedOtp = String(otp || "").trim();
 
-  if (isVerifyAccountPurpose(purpose)) {
-    const pendingCheck = await assertPendingVerificationUser(email);
-    if (!pendingCheck.ok) {
-      return {
-        ok: false,
-        status: pendingCheck.status,
-        message: pendingCheck.message,
-      };
-    }
-  }
-
-  const record = await findLatestOtpRecord({
-    email,
+  const record = await findLatestValidOtpForVerify({
+    email: normalizedEmail,
     purpose: normalizedPurpose,
-    userId,
   });
 
   if (!record) {
     return {
       ok: false,
-      status: 400,
-      message: "No active OTP found. Please request a new code.",
+      status: 410,
+      message: "Verification session expired. Please request a new code.",
     };
   }
 
-  if (isOtpExpired(record)) {
-    await markOtpExpired(record.OtpID);
+  const expiresAt = record.expires_at ? new Date(record.expires_at) : null;
+  if (!expiresAt || expiresAt.getTime() <= Date.now()) {
+    await markOtpExpired(record.otp_id);
     return {
       ok: false,
-      status: 400,
-      message: "Verification code expired. Please resend a new code.",
+      status: 410,
+      message: "Verification code expired. Please request a new code.",
     };
   }
 
-  if (String(record.OtpHash || "").trim() !== String(otp || "").trim()) {
+  const otpMatches = await bcrypt.compare(submittedOtp, String(record.otp_hash || ""));
+  if (!otpMatches) {
     return { ok: false, status: 400, message: "Invalid verification code." };
   }
 
-  await markOtpUsed(record.OtpID);
+  await markOtpUsed(record.otp_id);
+
+  if (isVerifyAccountPurpose(normalizedPurpose)) {
+    await markUserEmailVerified(normalizedEmail);
+  }
+
   return { ok: true, record };
 }
 
@@ -324,4 +348,43 @@ export function buildOtpSuccessResponse(message) {
     expiresIn: OTP_EXPIRES_IN_SECONDS,
     resendCooldown: OTP_RESEND_COOLDOWN_SECONDS,
   };
+}
+
+export async function verifyPasswordResetOtp({ email, otp }) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const submittedOtp = String(otp || "").trim();
+
+  const record = await findLatestValidOtpForVerify({
+    email: normalizedEmail,
+    purpose: "PASSWORD_RESET",
+  });
+
+  if (!record) {
+    return {
+      ok: false,
+      status: 410,
+      message: "Verification session expired. Please request a new code.",
+    };
+  }
+
+  const expiresAt = record.expires_at ? new Date(record.expires_at) : null;
+  if (!expiresAt || expiresAt.getTime() <= Date.now()) {
+    await markOtpExpired(record.otp_id);
+    return {
+      ok: false,
+      status: 410,
+      message: "Verification code expired. Please request a new code.",
+    };
+  }
+
+  const otpMatches = await bcrypt.compare(submittedOtp, String(record.otp_hash || ""));
+  if (!otpMatches) {
+    return { ok: false, status: 400, message: "Invalid OTP." };
+  }
+
+  return { ok: true, record };
+}
+
+export async function consumePasswordResetOtp(otpId) {
+  await markOtpUsed(otpId);
 }

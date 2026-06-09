@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import "./config.js";
 import authRoutes from "./routes/auth.js";
-import { runMigrationsOnStartup } from "./utils/authDb.js";
+import profileRoutes from "./routes/profile.js";
 import { runOtpLifecycleCleanup } from "./utils/otpService.js";
 import { isSmtpConfigured } from "./email.js";
 
@@ -32,6 +32,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/api", authRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/profile", profileRoutes);
 
 app.use("/api", (_req, res) => {
   res.status(404).json({ success: false, message: "API endpoint not found." });
@@ -46,10 +47,8 @@ if (fs.existsSync(distPath)) {
   });
 }
 
-runMigrationsOnStartup()
-  .then(() => runOtpLifecycleCleanup())
-  .catch((err) => {
-  console.warn("Startup migrations:", err.message);
+runOtpLifecycleCleanup().catch((err) => {
+  console.warn("OTP lifecycle cleanup:", err.message);
 });
 
 const OTP_CLEANUP_INTERVAL_MS = 60 * 1000;

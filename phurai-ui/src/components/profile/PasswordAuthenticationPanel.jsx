@@ -6,14 +6,14 @@ import {
   forgotPasswordResendOtp,
   forgotPasswordReset,
   loadAuthUser,
-} from "../auth/api";
-import { isPasswordStrong, normalizePhone, isValidVietnamPhone } from "../auth/authHelpers";
+} from "@/api";
+import { isPasswordStrong, normalizePhone, isValidVietnamPhone } from "@/utils/authHelpers";
 import {
   OTP_EXPIRES_IN_SECONDS,
   OTP_RESEND_COOLDOWN_SECONDS,
   applyOtpSentTiming,
   resolveRetryAfterSeconds,
-} from "../auth/otpTiming";
+} from "@/utils/otpTiming";
 import OtpVerificationModal from "./OtpVerificationModal";
 
 const OTP_RESEND_SECONDS = OTP_RESEND_COOLDOWN_SECONDS;
@@ -149,7 +149,7 @@ function PasswordAuthenticationPanel({ profile, onPasswordReset, onPhoneUpdate }
   const [isResending, setIsResending] = useState(false);
   const [sendOtpSaving, setSendOtpSaving] = useState(false);
 
-  const [resetToken, setResetToken] = useState("");
+  const [verifiedOtp, setVerifiedOtp] = useState("");
   const [forgotNewPassword, setForgotNewPassword] = useState("");
   const [forgotConfirmPassword, setForgotConfirmPassword] = useState("");
   const [forgotFieldErrors, setForgotFieldErrors] = useState({});
@@ -198,7 +198,7 @@ function PasswordAuthenticationPanel({ profile, onPasswordReset, onPhoneUpdate }
     try {
       const data = await forgotPasswordRequestOtp({
         email,
-        purpose: purpose === "phone" ? PHONE_OTP_PURPOSE : "forgot_password",
+        ...(purpose === "phone" ? { purpose: PHONE_OTP_PURPOSE } : {}),
       });
       applyOtpSentTiming(data, { setOtpExpiresIn, setResendSeconds });
       setOtpOpen(true);
@@ -235,11 +235,14 @@ function PasswordAuthenticationPanel({ profile, onPasswordReset, onPhoneUpdate }
     if (resendSeconds > 0 || isResending) return;
     try {
       setIsResending(true);
-      const data = await forgotPasswordResendOtp({
-        email,
-        purpose: otpPurpose === "phone" ? PHONE_OTP_PURPOSE : "forgot_password",
-        userId,
-      });
+      const data =
+        otpPurpose === "forgot"
+          ? await forgotPasswordRequestOtp({ email })
+          : await forgotPasswordResendOtp({
+              email,
+              purpose: otpPurpose === "phone" ? PHONE_OTP_PURPOSE : "forgot_password",
+              userId,
+            });
       applyOtpSentTiming(data, { setOtpExpiresIn, setResendSeconds });
     } catch (error) {
       if (error.status === 429) {
@@ -279,19 +282,15 @@ function PasswordAuthenticationPanel({ profile, onPasswordReset, onPhoneUpdate }
       return;
     }
 
-    const data = await forgotPasswordVerifyOtp({
-      email,
-      otp: normalizedCode,
-      purpose: "forgot_password",
-    });
-
     if (otpPurpose === "forgot") {
-      setResetToken(data.resetToken || "");
+      if (normalizedCode.length !== 6 || !/^\d{6}$/.test(normalizedCode)) {
+        throw new Error("Invalid OTP code. Please try again.");
+      }
+      setVerifiedOtp(normalizedCode);
       return;
     }
 
     if (otpPurpose === "email") {
-      // TODO: Wire POST /profile/:userId/email when backend endpoint is available.
       setEmailNotice("Email change is not available yet. Your current email remains verified.");
       setManageEmail(false);
     }
@@ -338,12 +337,12 @@ function PasswordAuthenticationPanel({ profile, onPasswordReset, onPhoneUpdate }
       setChangeErrors({});
       await changePassword({
         userId,
+        email,
         currentPassword,
         newPassword,
-        confirmPassword,
       });
       onPasswordReset?.({
-        message: "Password changed successfully. Please log in again.",
+        message: "Password updated successfully.",
       });
     } catch (error) {
       if (error.status === 401) {
@@ -378,7 +377,17 @@ function PasswordAuthenticationPanel({ profile, onPasswordReset, onPhoneUpdate }
     setForgotFormError("");
     setForgotFieldErrors({});
     setResetSuccessMessage("");
+    setVerifiedOtp("");
     await startOtpFlow("forgot");
+  };
+
+  const handleBackToChangePassword = () => {
+    setPasswordMode("change");
+    setVerifiedOtp("");
+    setForgotNewPassword("");
+    setForgotConfirmPassword("");
+    setForgotFieldErrors({});
+    setForgotFormError("");
   };
 
   const togglePasswordPanel = () => {
@@ -397,7 +406,7 @@ function PasswordAuthenticationPanel({ profile, onPasswordReset, onPhoneUpdate }
     setForgotConfirmPassword("");
     setForgotFieldErrors({});
     setForgotFormError("");
-    setResetToken("");
+    setVerifiedOtp("");
     setResetSuccessMessage("");
   };
 
@@ -424,7 +433,7 @@ function PasswordAuthenticationPanel({ profile, onPasswordReset, onPhoneUpdate }
       return;
     }
 
-    if (!resetToken) {
+    if (!verifiedOtp) {
       setForgotFormError("Session expired. Please request a new verification code.");
       return;
     }
@@ -434,18 +443,17 @@ function PasswordAuthenticationPanel({ profile, onPasswordReset, onPhoneUpdate }
       setForgotFieldErrors({});
       await forgotPasswordReset({
         email,
-        resetToken,
+        otp: verifiedOtp,
         newPassword: forgotNewPassword,
         confirmPassword: forgotConfirmPassword,
-        userId,
       });
-      setResetSuccessMessage("Password changed successfully. Please log in again.");
+      setResetSuccessMessage("Password reset successfully.");
       setPasswordMode("hidden");
       setForgotNewPassword("");
       setForgotConfirmPassword("");
-      setResetToken("");
+      setVerifiedOtp("");
       onPasswordReset?.({
-        message: "Password changed successfully. Please log in again.",
+        message: "Password reset successfully.",
       });
     } catch (error) {
       setForgotFormError(error?.message || "Password reset failed.");
@@ -459,7 +467,9 @@ function PasswordAuthenticationPanel({ profile, onPasswordReset, onPhoneUpdate }
       ? `Enter the 6-digit code sent to ${email} to confirm your phone update.`
       : otpPurpose === "email"
         ? `Enter the 6-digit code sent to ${email} to manage your email.`
-        : `Enter the 6-digit code sent to ${email}`;
+        : otpPurpose === "forgot"
+          ? `Enter the 6-digit code sent to ${email} to reset your password.`
+          : `Enter the 6-digit code sent to ${email}`;
 
   return (
     <div className="profile-dashboard__panel profile-auth">
@@ -673,6 +683,13 @@ function PasswordAuthenticationPanel({ profile, onPasswordReset, onPhoneUpdate }
                 {forgotSaving ? "Resetting…" : "Reset password"}
               </button>
             </form>
+            <button
+              type="button"
+              className="profile-dashboard__forgot-link"
+              onClick={handleBackToChangePassword}
+            >
+              Back to change password
+            </button>
           </div>
         ) : null}
       </SignInMethodRow>
@@ -680,7 +697,7 @@ function PasswordAuthenticationPanel({ profile, onPasswordReset, onPhoneUpdate }
       <OtpVerificationModal
         isOpen={otpOpen}
         onClose={handleOtpClose}
-        title="Verify Your Account"
+        title={otpPurpose === "forgot" ? "Reset Your Password" : "Verify Your Account"}
         subtitle={otpSubtitle}
         onVerify={handleOtpVerify}
         onResend={handleOtpResend}

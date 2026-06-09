@@ -4,12 +4,12 @@ import {
   uploadProfileAvatar,
   updateSystemAvatar,
   updateGoogleAvatar,
-} from "../auth/api";
-import { SYSTEM_AVATARS, getAvatarSrc, normalizeStoredAvatarUrl } from "../auth/avatarUtils";
-import { validateAvatarFile } from "../auth/authHelpers";
-import SystemAvatarOption from "../auth/SystemAvatarOption";
-import UserAvatar from "../auth/UserAvatar";
-import "./AvatarPickerModal.css";
+} from "@/api";
+import { SYSTEM_AVATARS, getAvatarSrc, normalizeStoredAvatarUrl } from "@/utils/avatarUtils";
+import { validateAvatarFile } from "@/utils/authHelpers";
+import SystemAvatarOption from "@/components/auth/SystemAvatarOption";
+import UserAvatar from "@/components/auth/UserAvatar";
+import "@/styles/AvatarPickerModal.css";
 
 function AvatarPickerModal({ isOpen, onClose, user, onSave }) {
   const [alert, setAlert] = useState(null);

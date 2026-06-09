@@ -1,4 +1,4 @@
-import { formIcons } from '../../data/iconAssets';
+import { formIcons } from '@/data/iconAssets';
 
 const SORT_OPTIONS = [
   { value: 'default', label: 'Default' },

@@ -1,5 +1,5 @@
-import OutlineButton from '../common/OutlineButton';
-import { homeImages } from '../../data/homeAssets';
+import OutlineButton from '@/components/common/OutlineButton';
+import { homeImages } from '@/data/homeAssets';
 
 const recommendations = [
   {

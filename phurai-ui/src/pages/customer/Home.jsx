@@ -1,14 +1,14 @@
-import HeroSection from '../../components/customer/HeroSection';
-import SignatureDishCarousel from '../../components/SignatureDishCarousel';
-import OfferingBlock from '../../components/customer/OfferingBlock';
-import KitchenSecretsSection from '../../components/customer/KitchenSecretsSection';
-import GiftCardSection from '../../components/customer/GiftCardSection';
-import GallerySection from '../../components/customer/GallerySection';
-import RolledPerfectionSection from '../../components/customer/RolledPerfectionSection';
-import TestimonialsSection from '../../components/customer/TestimonialsSection';
-import ReservationForm from '../../components/reservation/ReservationForm';
-import { homeImages } from '../../data/homeAssets';
-import '../../styles/home.css';
+import HeroSection from '@/components/customer/HeroSection';
+import SignatureDishCarousel from '@/components/customer/SignatureDishCarousel';
+import OfferingBlock from '@/components/customer/OfferingBlock';
+import KitchenSecretsSection from '@/components/customer/KitchenSecretsSection';
+import GiftCardSection from '@/components/customer/GiftCardSection';
+import GallerySection from '@/components/customer/GallerySection';
+import RolledPerfectionSection from '@/components/customer/RolledPerfectionSection';
+import TestimonialsSection from '@/components/customer/TestimonialsSection';
+import ReservationForm from '@/components/reservation/ReservationForm';
+import { homeImages } from '@/data/homeAssets';
+import '@/styles/home.css';
 
 function Home() {
   return (

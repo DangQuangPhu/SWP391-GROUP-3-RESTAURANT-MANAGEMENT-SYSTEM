@@ -1,6 +1,6 @@
-import SectionHeader from '../common/SectionHeader';
-import TestimonialCard from '../common/TestimonialCard';
-import { homeImages } from '../../data/homeAssets';
+import SectionHeader from '@/components/common/SectionHeader';
+import TestimonialCard from '@/components/common/TestimonialCard';
+import { homeImages } from '@/data/homeAssets';
 
 const testimonials = [
   {

@@ -38,6 +38,7 @@ function rewriteSqlForSqlServer(statement) {
 
 function bindParams(request, statement, params = []) {
   let index = 0;
+
   const rewritten = statement.replace(/\?/g, () => {
     const name = `p${index}`;
     request.input(name, params[index]);

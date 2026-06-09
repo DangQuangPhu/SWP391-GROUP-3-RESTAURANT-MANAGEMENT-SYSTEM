@@ -1,14 +1,14 @@
-import heroImage from "../../assets/images/private-events/private-events-hero.jpg";
-import diningImage from "../../assets/images/private-events/private-events-dining.jpg";
-import waveWallImage from "../../assets/images/private-events/wave-wall.jpg";
-import northAlcoveImage from "../../assets/images/private-events/north-alcove.jpg";
-import entireDiningRoomImage from "../../assets/images/private-events/entire-dining-room.jpg";
-import sakeTableImage from "../../assets/images/private-events/sake-table.jpg";
-import candleRoomImage from "../../assets/images/private-events/candle-room.jpg";
-import malibuTableImage from "../../assets/images/private-events/malibu-table.jpg";
-import interactiveStationsImage from "../../assets/images/private-events/interactive-stations.jpg";
-import phuraiCateringImage from "../../assets/images/private-events/phurai-catering.jpg";
-import "../../styles/privateEvents.css";
+import heroImage from "@/assets/images/private-events/private-events-hero.jpg";
+import diningImage from "@/assets/images/private-events/private-events-dining.jpg";
+import waveWallImage from "@/assets/images/private-events/wave-wall.jpg";
+import northAlcoveImage from "@/assets/images/private-events/north-alcove.jpg";
+import entireDiningRoomImage from "@/assets/images/private-events/entire-dining-room.jpg";
+import sakeTableImage from "@/assets/images/private-events/sake-table.jpg";
+import candleRoomImage from "@/assets/images/private-events/candle-room.jpg";
+import malibuTableImage from "@/assets/images/private-events/malibu-table.jpg";
+import interactiveStationsImage from "@/assets/images/private-events/interactive-stations.jpg";
+import phuraiCateringImage from "@/assets/images/private-events/phurai-catering.jpg";
+import "@/styles/privateEvents.css";
 
 const spaces = [
   {

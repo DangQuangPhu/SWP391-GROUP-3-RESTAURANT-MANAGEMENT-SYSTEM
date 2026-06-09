@@ -12,14 +12,14 @@ import {
   splitFullName,
   normalizePhone,
   blurActiveElement,
-} from "./authHelpers";
-import { loginAccount, registerAccount, resendVerificationCode } from "./api";
-import { buildInitialTiming } from "./otpTiming";
+} from "@/utils/authHelpers";
+import { loginAccount, registerAccount, resendVerificationCode } from "@/api/authApi";
+import { buildInitialTiming } from "@/utils/otpTiming";
 import { signInWithGoogle, registerWithGoogle } from "./googleAuth";
 import GoogleAccountChooserModal from "./GoogleAccountChooserModal";
 import LoginForm from "./LoginForm";
 import RegisterForm from "./RegisterForm";
-import "../../styles/auth.css";
+import "@/styles/auth.css";
 
 const EMPTY_SIGNUP = {
   fullName: "",
@@ -245,7 +245,7 @@ function AuthCard({
     try {
       const data = await resendVerificationCode({
         email: target.email,
-        purpose: "verify_account",
+        purpose: "EMAIL_VERIFY",
       });
       onProceedToOtp?.({
         userId: target.userId,

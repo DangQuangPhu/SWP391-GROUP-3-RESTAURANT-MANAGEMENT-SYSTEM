@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { API_BASE_URL, updateProfile, updateProfilePhone, saveAuthUser, loadAuthUser } from "../components/auth/api";
-import { normalizePhone, splitFullName } from "../components/auth/authHelpers";
-import { normalizeStoredAvatarUrl } from "../components/auth/avatarUtils";
+import {
+  getProfileMe,
+  mapApiUserToFrontend,
+  updateProfile,
+  updateProfilePhone,
+  saveAuthUser,
+  loadAuthUser,
+} from "@/api";
+import { normalizePhone, splitFullName } from "@/utils/authHelpers";
+import { normalizeStoredAvatarUrl } from "@/utils/avatarUtils";
 
 const DEFAULT_EXTENDED = {
   gender: "",
@@ -11,6 +18,13 @@ const DEFAULT_EXTENDED = {
   dateOfBirth: "",
   address: "",
   bio: "",
+  preferences: [],
+  loyaltyPoints: 0,
+  membershipTier: "Bronze",
+  membershipIcon: "🥉",
+  nextTier: "Silver",
+  pointsToNextTier: 300,
+  progressPercent: 0,
   status: null,
   coverTheme: "blue-cream",
   reduceMotion: false,
@@ -73,18 +87,28 @@ function mergeUser(user, extended) {
   if (!user) return null;
   const dateOfBirth =
     extended.dateOfBirth || user.dateOfBirth || user.dob || "";
+  const preferences =
+    user.preferences?.length ? user.preferences : extended.preferences || [];
   return {
     ...user,
     ...extended,
     dateOfBirth,
     dob: dateOfBirth,
+    preferences,
+    loyaltyPoints: user.loyaltyPoints ?? extended.loyaltyPoints ?? 0,
+    membershipTier: user.membershipTier ?? extended.membershipTier ?? "Bronze",
+    membershipIcon: user.membershipIcon ?? extended.membershipIcon ?? "🥉",
+    nextTier: user.nextTier ?? extended.nextTier ?? null,
+    pointsToNextTier: user.pointsToNextTier ?? extended.pointsToNextTier ?? 0,
+    progressPercent: user.progressPercent ?? extended.progressPercent ?? 0,
     avatarUrl: normalizeStoredAvatarUrl(user.avatarUrl),
     googleAvatarUrl:
       user.googleAvatarUrl || user.google_avatar_url || user.picture || "",
     avatarSource: user.avatarSource || user.avatar_source || "",
-    fullName:
-      user.fullName ||
-      [user.firstName, user.lastName].filter(Boolean).join(" ").trim(),
+    fullName: user.fullName || "",
+    username:
+      user.username ||
+      (user.email?.includes("@") ? user.email.split("@")[0] : "user"),
     nickname: user.nickname || user.username,
   };
 }
@@ -102,6 +126,7 @@ const PROFILE_API_FIELD_KEYS = [
   "address",
   "country",
   "language",
+  "preferences",
   "avatarUrl",
   "googleAvatarUrl",
 ];
@@ -146,26 +171,21 @@ function buildProfileApiPayload(user, fields, extended) {
     address: fields.address ?? user?.address ?? extended.address ?? "",
     country: fields.country ?? user?.country ?? extended.country ?? "",
     language: fields.language ?? user?.language ?? extended.language ?? "",
+    preferences: fields.preferences ?? user?.preferences ?? extended.preferences ?? [],
   };
 }
 
-async function fetchProfileSafe(userId, email) {
+async function fetchProfileSafe(userId) {
   if (!userId) {
-    return { payload: loadLocalProfile(email), failed: false };
+    return { payload: null, failed: true };
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/profile/${encodeURIComponent(userId)}`);
-
-    if (!response.ok) {
-      console.warn("Profile API unavailable, using local profile fallback.");
-      return { payload: loadLocalProfile(email), failed: true };
-    }
-
-    return { payload: await response.json(), failed: false };
+    const data = await getProfileMe(userId);
+    return { payload: data, failed: false };
   } catch (error) {
-    console.warn("Profile API failed, using local profile fallback.", error);
-    return { payload: loadLocalProfile(email), failed: true };
+    console.warn("Profile API failed:", error);
+    return { payload: null, failed: true };
   }
 }
 
@@ -187,24 +207,31 @@ export function useUserProfile(user, onUserUpdate) {
 
   const applyProfilePayload = useCallback((data) => {
     if (data?.user) {
+      const mapped = mapApiUserToFrontend(data.user) || data.user;
       const normalized = {
-        ...data.user,
-        avatarUrl: normalizeStoredAvatarUrl(data.user.avatarUrl),
-        googleAvatarUrl:
-          data.user.googleAvatarUrl || data.user.google_avatar_url || "",
-        avatarSource: data.user.avatarSource || data.user.avatar_source || "",
-        id: data.user.id ?? data.user.userId,
-        userId: data.user.userId ?? data.user.id,
+        ...mapped,
+        avatarUrl: normalizeStoredAvatarUrl(mapped.avatarUrl),
+        googleAvatarUrl: mapped.googleAvatarUrl || "",
+        avatarSource: mapped.avatarSource || "",
+        id: mapped.id ?? mapped.userId,
+        userId: mapped.userId ?? mapped.id,
       };
       onUserUpdateRef.current?.(normalized);
       setExtended((prev) => ({
         ...prev,
-        gender: data.user.gender ?? prev.gender,
-        bio: data.user.bio ?? prev.bio,
-        address: data.user.address ?? prev.address,
-        country: data.user.country ?? prev.country,
-        language: data.user.language ?? prev.language,
-        dateOfBirth: data.user.dateOfBirth || prev.dateOfBirth,
+        gender: normalized.gender ?? prev.gender,
+        bio: normalized.bio ?? prev.bio,
+        address: normalized.address ?? prev.address,
+        country: normalized.country ?? prev.country,
+        language: normalized.language ?? prev.language,
+        dateOfBirth: normalized.dateOfBirth || prev.dateOfBirth,
+        preferences: normalized.preferences ?? prev.preferences,
+        loyaltyPoints: normalized.loyaltyPoints ?? prev.loyaltyPoints,
+        membershipTier: normalized.membershipTier ?? prev.membershipTier,
+        membershipIcon: normalized.membershipIcon ?? prev.membershipIcon,
+        nextTier: normalized.nextTier ?? prev.nextTier,
+        pointsToNextTier: normalized.pointsToNextTier ?? prev.pointsToNextTier,
+        progressPercent: normalized.progressPercent ?? prev.progressPercent,
       }));
       return;
     }
@@ -235,15 +262,11 @@ export function useUserProfile(user, onUserUpdate) {
       setLoadError(null);
 
       try {
-        const { payload: data, failed } = await fetchProfileSafe(userId, email);
+        const { payload: data, failed } = await fetchProfileSafe(userId);
 
         if (failed) {
           apiFailedRef.current.add(userKey);
-          setLoadError("Could not refresh profile from the server. Showing saved data.");
-          const local = loadLocalProfile(email);
-          if (Object.keys(local).length) {
-            setExtended((prev) => ({ ...prev, ...local }));
-          }
+          setLoadError("Could not refresh profile from the server.");
           return { failed: true };
         }
 
@@ -252,11 +275,7 @@ export function useUserProfile(user, onUserUpdate) {
         return { failed: false };
       } catch {
         apiFailedRef.current.add(userKey);
-        setLoadError("Could not load profile. Showing saved data.");
-        const local = loadLocalProfile(email);
-        if (Object.keys(local).length) {
-          setExtended((prev) => ({ ...prev, ...local }));
-        }
+        setLoadError("Could not load profile from the server.");
         return { failed: true };
       } finally {
         setLoading(false);
@@ -272,11 +291,7 @@ export function useUserProfile(user, onUserUpdate) {
 
     fetchAndApplyProfile().catch(() => {
       if (cancelled) return;
-      const local = loadLocalProfile(email);
-      if (Object.keys(local).length) {
-        setExtended((prev) => ({ ...prev, ...local }));
-      }
-      setLoadError("Could not load profile. Showing saved data.");
+      setLoadError("Could not load profile from the server.");
     });
 
     return () => {
@@ -387,6 +402,7 @@ export function useUserProfile(user, onUserUpdate) {
         reduceMotion,
         largerText,
         highContrast,
+        preferences,
       } = fields;
 
       let apiUser = user;
@@ -437,6 +453,13 @@ export function useUserProfile(user, onUserUpdate) {
         reduceMotion: reduceMotion ?? extended.reduceMotion,
         largerText: largerText ?? extended.largerText,
         highContrast: highContrast ?? extended.highContrast,
+        preferences: preferences ?? apiUser?.preferences ?? extended.preferences,
+        loyaltyPoints: apiUser?.loyaltyPoints ?? extended.loyaltyPoints,
+        membershipTier: apiUser?.membershipTier ?? extended.membershipTier,
+        membershipIcon: apiUser?.membershipIcon ?? extended.membershipIcon,
+        nextTier: apiUser?.nextTier ?? extended.nextTier,
+        pointsToNextTier: apiUser?.pointsToNextTier ?? extended.pointsToNextTier,
+        progressPercent: apiUser?.progressPercent ?? extended.progressPercent,
       };
 
       persistExtended(nextExtended);
@@ -449,6 +472,13 @@ export function useUserProfile(user, onUserUpdate) {
         bio: bio ?? apiUser.bio,
         country: country ?? apiUser.country,
         language: language ?? apiUser.language,
+        preferences: preferences ?? apiUser.preferences,
+        loyaltyPoints: apiUser.loyaltyPoints,
+        membershipTier: apiUser.membershipTier,
+        membershipIcon: apiUser.membershipIcon,
+        nextTier: apiUser.nextTier,
+        pointsToNextTier: apiUser.pointsToNextTier,
+        progressPercent: apiUser.progressPercent,
         googleAvatarUrl: apiUser.googleAvatarUrl || user?.googleAvatarUrl || "",
         avatarSource: apiUser.avatarSource || user?.avatarSource || "",
         phone: apiUser.phone ?? apiPayload.phone ?? apiPayload.phoneNumber,

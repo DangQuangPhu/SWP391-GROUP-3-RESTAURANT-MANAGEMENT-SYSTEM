@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { getDisplayName } from "./authHelpers";
+import { getDisplayName } from "@/utils/authHelpers";
 
 function AuthSuccessOverlay({ isVisible, user, fading = false }) {
   if (!isVisible) {

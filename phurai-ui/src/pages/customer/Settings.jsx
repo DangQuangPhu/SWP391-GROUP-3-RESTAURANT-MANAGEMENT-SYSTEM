@@ -1,10 +1,10 @@
 import { useState } from "react";
-import UserAvatar from "../../components/auth/UserAvatar";
-import AvatarPickerModal from "../../components/account/AvatarPickerModal";
-import AccountBackHome from "../../components/account/AccountBackHome";
-import { getDisplayName } from "../../components/auth/authHelpers";
-import "./Settings.css";
-import "./accountShared.css";
+import UserAvatar from "@/components/auth/UserAvatar";
+import AvatarPickerModal from "@/components/profile/AvatarPickerModal";
+import AccountBackHome from "@/components/profile/AccountBackHome";
+import { getDisplayName } from "@/utils/authHelpers";
+import "@/styles/settings.css";
+import "@/styles/profile.css";
 
 const MAIN_ITEMS = [
   { id: "profile", label: "Public profile", path: "/settings/profile", icon: "user" },

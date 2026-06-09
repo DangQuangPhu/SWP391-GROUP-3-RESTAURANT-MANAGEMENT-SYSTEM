@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { getDisplayName } from "../auth/authHelpers";
-import UserAvatar from "../auth/UserAvatar";
-import AccountSwitchOverlay from "../account/AccountSwitchOverlay";
-import StatusModal from "../account/StatusModal";
-import "../../styles/profile.css";
-import "../account/AccountDropdown.css";
+import { getDisplayName } from "@/utils/authHelpers";
+import UserAvatar from "@/components/auth/UserAvatar";
+import AccountSwitchOverlay from "./AccountSwitchOverlay";
+import StatusModal from "./StatusModal";
+import "@/styles/profile.css";
+import "@/styles/AccountDropdown.css";
 
 function SwitchAccountIcon() {
   return (

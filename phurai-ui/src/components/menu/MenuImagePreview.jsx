@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { formatVND } from '../../utils/formatCurrency';
+import { formatVND } from '@/utils/formatCurrency';
 
 function MenuImagePreview({ dish, onClose }) {
   const [closing, setClosing] = useState(false);

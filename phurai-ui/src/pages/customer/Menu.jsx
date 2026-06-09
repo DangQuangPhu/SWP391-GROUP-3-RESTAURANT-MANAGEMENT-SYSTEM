@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import '../../styles/menu.css';
-import MenuGrid from '../../components/menu/MenuGrid';
-import MenuImagePreview from '../../components/menu/MenuImagePreview';
-import MenuSidebar from '../../components/menu/MenuSidebar';
-import MenuToolbar from '../../components/menu/MenuToolbar';
-import { flattenMenuDishes, menuCategories } from '../../data/menuData';
-import { menuImages } from '../../data/menuAssets';
-import { normalizePrice } from '../../utils/formatCurrency';
+import '@/styles/menu.css';
+import MenuGrid from '@/components/menu/MenuGrid';
+import MenuImagePreview from '@/components/menu/MenuImagePreview';
+import MenuSidebar from '@/components/menu/MenuSidebar';
+import MenuToolbar from '@/components/menu/MenuToolbar';
+import { flattenMenuDishes, menuCategories } from '@/data/menuData';
+import { menuImages } from '@/data/menuAssets';
+import { normalizePrice } from '@/utils/formatCurrency';
 
 function filterDishes(dishes, searchTerm) {
   const query = searchTerm.trim().toLowerCase();

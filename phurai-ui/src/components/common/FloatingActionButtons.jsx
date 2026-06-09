@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import accessibilityIcon from '../assets/icons/accessibility.svg';
-import scrollTopAltIcon from '../assets/icons/scroll-top-alt.svg';
-import './FloatingActionButtons.css';
+import accessibilityIcon from '@/assets/icons/accessibility.svg';
+import scrollTopAltIcon from '@/assets/icons/scroll-top-alt.svg';
+import '@/styles/FloatingActionButtons.css';
 
 function FloatingActionButtons() {
   const [isScrolled, setIsScrolled] = useState(false);

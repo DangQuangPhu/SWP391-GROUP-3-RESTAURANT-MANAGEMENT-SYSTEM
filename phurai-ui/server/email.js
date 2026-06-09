@@ -148,7 +148,13 @@ export async function sendVerificationEmail(toEmail, otp, options = {}) {
 
 /** OTP routes accept `{ to, otp, purpose }`. */
 export async function sendOtpEmail({ to, otp, purpose = "verify_account" }) {
+  const normalizedPurpose = String(purpose || "").toLowerCase();
   const context =
-    purpose === "reset" || purpose === "reset_password" ? "reset" : "account";
+    normalizedPurpose === "reset" ||
+    normalizedPurpose === "reset_password" ||
+    normalizedPurpose === "password_reset" ||
+    normalizedPurpose === "forgot_password"
+      ? "reset"
+      : "account";
   return sendVerificationEmail(to, otp, { context });
 }

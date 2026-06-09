@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import UserAvatar from "../../components/auth/UserAvatar";
-import AvatarPickerModal from "../../components/account/AvatarPickerModal";
-import AvatarPreviewModal from "../../components/account/AvatarPreviewModal";
-import AccountBackHome from "../../components/account/AccountBackHome";
-import PasswordAuthenticationPanel from "../../components/account/PasswordAuthenticationPanel";
-import { getDisplayName, isValidVietnamPhone, normalizePhone } from "../../components/auth/authHelpers";
-import OtpCodeInput from "../../components/auth/OtpCodeInput";
+import UserAvatar from "@/components/auth/UserAvatar";
+import AvatarPickerModal from "@/components/profile/AvatarPickerModal";
+import AvatarPreviewModal from "@/components/profile/AvatarPreviewModal";
+import AccountBackHome from "@/components/profile/AccountBackHome";
+import PasswordAuthenticationPanel from "@/components/profile/PasswordAuthenticationPanel";
+import { getDisplayName, isValidVietnamPhone, normalizePhone } from "@/utils/authHelpers";
+import OtpCodeInput from "@/components/auth/OtpCodeInput";
 import {
   changePassword,
   forgotPasswordRequestOtp,
@@ -13,17 +13,16 @@ import {
   forgotPasswordResendOtp,
   forgotPasswordReset,
   loadAuthUser,
-} from "../../components/auth/api";
+} from "@/api";
 import {
   OTP_EXPIRES_IN_SECONDS,
   OTP_RESEND_COOLDOWN_SECONDS,
   applyOtpSentTiming,
   formatOtpExpiry,
   resolveRetryAfterSeconds,
-} from "../../components/auth/otpTiming";
-import "../../components/auth/OtpCodeInput.css";
-import "./Profile.css";
-import "./accountShared.css";
+} from "@/utils/otpTiming";
+import "@/styles/OtpCodeInput.css";
+import "@/styles/profile.css";
 
 const GENDERS = ["", "Female", "Male", "Non-binary", "Prefer not to say"];
 const COUNTRIES = ["", "Vietnam", "United States", "United Kingdom", "Singapore", "Other"];
@@ -81,7 +80,6 @@ const resolveDisplayName = (profile = {}, user = {}) => {
     user?.fullName ||
     user?.name ||
     user?.displayName ||
-    user?.username ||
     getEmailPrefix(user?.email) ||
     "User"
   );
@@ -241,7 +239,7 @@ function getCoverGradient(themeId) {
 
 function buildDraft(profile) {
   return {
-    fullName: profile?.fullName || getDisplayName(profile) || "",
+    fullName: profile?.fullName || "",
     username: resolveUsername(profile, profile),
     email: profile?.email || "",
     gender: profile?.gender || "",
@@ -251,6 +249,7 @@ function buildDraft(profile) {
     phone: profile?.phone || profile?.phoneNumber || "",
     address: profile?.address || "",
     bio: profile?.bio || "",
+    preferences: Array.isArray(profile?.preferences) ? [...profile.preferences] : [],
     firstName: profile?.firstName || "",
     lastName: profile?.lastName || "",
     coverTheme: profile?.coverTheme || "blue-cream",
@@ -414,6 +413,106 @@ function AccessibilityPanel({ prefs, onChange }) {
 }
 
 
+function MembershipBadge({ profile }) {
+  const tier = profile?.membershipTier || "Bronze";
+  const icon = profile?.membershipIcon || "🥉";
+  return (
+    <span className="profile-dashboard__membership-badge">
+      {icon} {tier}
+    </span>
+  );
+}
+
+function LoyaltyPanel({ profile }) {
+  const points = profile?.loyaltyPoints ?? 0;
+  const tier = profile?.membershipTier || "Bronze";
+  const icon = profile?.membershipIcon || "🥉";
+  const nextTier = profile?.nextTier;
+  const pointsToNext = profile?.pointsToNextTier ?? 0;
+  const progress = profile?.progressPercent ?? 0;
+
+  return (
+    <section className="profile-dashboard__loyalty">
+      <h3 className="profile-gradient-title">Loyalty Points</h3>
+      <div className="profile-dashboard__loyalty-stats">
+        <p>
+          <strong>{points}</strong> points · {icon} {tier}
+        </p>
+        {nextTier ? (
+          <p className="profile-dashboard__loyalty-next">
+            {pointsToNext} points to {nextTier}
+          </p>
+        ) : (
+          <p className="profile-dashboard__loyalty-next">Top tier reached</p>
+        )}
+      </div>
+      <div className="profile-dashboard__loyalty-progress" aria-hidden="true">
+        <div
+          className="profile-dashboard__loyalty-progress-fill"
+          style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+        />
+      </div>
+    </section>
+  );
+}
+
+function PreferencesPanel({ preferences = [], isEditing, onAdd, onRemove }) {
+  const [draftPreference, setDraftPreference] = useState("");
+
+  const handleAdd = () => {
+    const value = draftPreference.trim();
+    if (!value) return;
+    onAdd?.(value);
+    setDraftPreference("");
+  };
+
+  return (
+    <section className="profile-dashboard__preferences">
+      <h3 className="profile-gradient-title">Preferences</h3>
+      <div className="profile-dashboard__preference-chips">
+        {preferences.length ? (
+          preferences.map((item) => (
+            <span key={item} className="profile-dashboard__preference-chip">
+              {item}
+              {isEditing ? (
+                <button
+                  type="button"
+                  className="profile-dashboard__preference-remove"
+                  onClick={() => onRemove?.(item)}
+                  aria-label={`Remove ${item}`}
+                >
+                  ×
+                </button>
+              ) : null}
+            </span>
+          ))
+        ) : (
+          <p className="profile-dashboard__preferences-empty">No preferences added yet.</p>
+        )}
+      </div>
+      {isEditing ? (
+        <div className="profile-dashboard__preference-add">
+          <input
+            type="text"
+            value={draftPreference}
+            placeholder="Add a preference"
+            onChange={(event) => setDraftPreference(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                handleAdd();
+              }
+            }}
+          />
+          <button type="button" className="profile-dashboard__btn profile-dashboard__btn--ghost" onClick={handleAdd}>
+            Add
+          </button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function SessionsPanel() {
   return (
     <div className="profile-dashboard__panel">
@@ -486,6 +585,8 @@ function ProfilePage({
     [profile]
   );
   const welcomeName = displayName;
+  const membershipLabel = profile?.membershipTier || "Bronze";
+  const membershipIcon = profile?.membershipIcon || "🥉";
 
   useEffect(() => {
     setIsEditing(initialEditMode);
@@ -610,6 +711,7 @@ function ProfilePage({
         ...effectiveDraft,
         phone: phoneTrimmed ? normalizePhone(phoneTrimmed) : "",
         phoneNumber: phoneTrimmed ? normalizePhone(phoneTrimmed) : "",
+        preferences: effectiveDraft.preferences || [],
       };
       await onSaveProfile?.(payload);
       setIsEditing(false);
@@ -636,6 +738,24 @@ function ProfilePage({
   const handleAccessibilityChange = (key, value) => {
     setDraft((prev) => ({ ...(prev ?? buildDraft(profile)), [key]: value }));
     onSavePreferences?.({ [key]: value });
+  };
+
+  const handleAddPreference = (value) => {
+    setDraft((prev) => {
+      const base = prev ?? buildDraft(profile);
+      const next = new Set([...(base.preferences || []), value]);
+      return { ...base, preferences: Array.from(next) };
+    });
+  };
+
+  const handleRemovePreference = (value) => {
+    setDraft((prev) => {
+      const base = prev ?? buildDraft(profile);
+      return {
+        ...base,
+        preferences: (base.preferences || []).filter((item) => item !== value),
+      };
+    });
   };
 
   const renderPanelContent = () => {
@@ -732,6 +852,15 @@ function ProfilePage({
           </div>
         </div>
 
+        <LoyaltyPanel profile={profile} />
+
+        <PreferencesPanel
+          preferences={effectiveDraft.preferences || []}
+          isEditing={isEditing}
+          onAdd={handleAddPreference}
+          onRemove={handleRemovePreference}
+        />
+
         <section className="profile-dashboard__contact">
           <h3 className="profile-gradient-title">Contact</h3>
           <div className="profile-dashboard__contact-block">
@@ -794,7 +923,9 @@ function ProfilePage({
         <div className="profile-dashboard__main">
           <header className="profile-dashboard__top">
             <div className="profile-dashboard__welcome">
-              <h1 className="profile-gradient-title">Welcome, {welcomeName}</h1>
+              <h1 className="profile-gradient-title">
+                Welcome, {welcomeName} {membershipIcon} {membershipLabel}
+              </h1>
               <p>{welcomeDate}</p>
             </div>
 
@@ -865,7 +996,9 @@ function ProfilePage({
               </div>
 
               <div className="profile-dashboard__identity">
-                <h2>{welcomeName}</h2>
+                <h2>
+                  {welcomeName} <MembershipBadge profile={profile} />
+                </h2>
                 <p>{email}</p>
               </div>
 

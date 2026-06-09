@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { getPasswordStrength, isPasswordStrong } from "./authHelpers";
-import { forgotPasswordReset } from "./api";
+import OtpCodeInput from "./OtpCodeInput";
+import { getPasswordStrength, isPasswordStrong } from "@/utils/authHelpers";
+import { forgotPasswordReset } from "@/api/authApi";
+import "@/styles/OtpCodeInput.css";
 
 function EyeIcon({ visible }) {
   if (visible) {
@@ -64,7 +66,8 @@ function StrengthMeter({ password }) {
   );
 }
 
-function ResetPasswordForm({ userId, email, resetToken, onSuccess }) {
+function ResetPasswordForm({ email, onSuccess, onBack }) {
+  const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [errors, setErrors] = useState({});
@@ -74,6 +77,11 @@ function ResetPasswordForm({ userId, email, resetToken, onSuccess }) {
 
   const validate = () => {
     const next = {};
+    const code = digits.join("");
+    if (!code) next.otp = "Verification code is required.";
+    else if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+      next.otp = "Enter the 6-digit verification code.";
+    }
     if (!password) next.password = "New password is required.";
     else if (!isPasswordStrong(password)) {
       next.password =
@@ -95,9 +103,8 @@ function ResetPasswordForm({ userId, email, resetToken, onSuccess }) {
       setLoading(true);
       setAlert("");
       await forgotPasswordReset({
-        userId,
         email,
-        resetToken,
+        otp: digits.join(""),
         newPassword: password,
         confirmPassword: confirm,
       });
@@ -115,7 +122,9 @@ function ResetPasswordForm({ userId, email, resetToken, onSuccess }) {
     <div className="auth-card">
       <p className="auth-card__brand">Phūrai</p>
       <h2 className="auth-card__title">Create New Password</h2>
-      <p className="auth-card__subtitle">Choose a strong password for your account.</p>
+      <p className="auth-card__subtitle">
+        Enter the 6-digit code sent to <strong>{email}</strong> and choose a new password.
+      </p>
 
       {alert ? (
         <div className="auth-alert auth-alert--error" role="alert">
@@ -123,7 +132,20 @@ function ResetPasswordForm({ userId, email, resetToken, onSuccess }) {
         </div>
       ) : null}
 
-      <form className="auth-form" onSubmit={handleSubmit} noValidate>
+      <form className="auth-form auth-otp__form" onSubmit={handleSubmit} noValidate>
+        <OtpCodeInput
+          idPrefix="reset-otp"
+          value={digits}
+          onChange={(next) => {
+            setDigits(next);
+            setErrors((prev) => ({ ...prev, otp: "" }));
+            setAlert("");
+          }}
+          disabled={loading}
+          error={Boolean(showErrors.otp)}
+        />
+        {showErrors.otp ? <p className="auth-field__error">{showErrors.otp}</p> : null}
+
         <PasswordField
           id="new-password"
           label="Enter New Password"
@@ -142,6 +164,11 @@ function ResetPasswordForm({ userId, email, resetToken, onSuccess }) {
         <button type="submit" className="auth-submit" disabled={loading}>
           {loading ? "SAVING..." : "RESET PASSWORD"}
         </button>
+        {onBack ? (
+          <button type="button" className="auth-form__link" onClick={onBack}>
+            Back
+          </button>
+        ) : null}
       </form>
     </div>
   );
