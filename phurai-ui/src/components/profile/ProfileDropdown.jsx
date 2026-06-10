@@ -48,6 +48,20 @@ function ProfileIcon() {
   );
 }
 
+function ReservationsIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <rect x="3" y="4.5" width="14" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M3 8h14M7 3v3M13 3v3"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function SettingsIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -77,6 +91,7 @@ function ProfileDropdown({
   currentUser,
   status,
   onMyProfile,
+  onMyReservations,
   onSettings,
   onChangePassword,
   onSignOut,
@@ -204,6 +219,18 @@ function ProfileDropdown({
                 <ProfileIcon />
               </span>
               My Profile
+            </button>
+          </li>
+          <li>
+            <button
+              type="button"
+              className="account-dropdown__item"
+              onClick={closeAnd(onMyReservations)}
+            >
+              <span className="account-dropdown__item-icon">
+                <ReservationsIcon />
+              </span>
+              My Reservations
             </button>
           </li>
           <li>

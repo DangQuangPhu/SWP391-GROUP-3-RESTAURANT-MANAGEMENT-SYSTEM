@@ -39,6 +39,7 @@ function AllMenuIcon({ active }) {
 function MenuSidebar({ categories, selectedCategory, onSelectCategory, onReserve }) {
   return (
     <aside className="menu-sidebar" aria-label="Menu categories">
+      <div className="menu-sidebar__inner">
       <nav className="menu-sidebar__nav">
         <button
           type="button"
@@ -91,6 +92,7 @@ function MenuSidebar({ categories, selectedCategory, onSelectCategory, onReserve
       <button type="button" className="menu-sidebar__cta" onClick={onReserve}>
         RESERVE A TABLE
       </button>
+      </div>
     </aside>
   );
 }

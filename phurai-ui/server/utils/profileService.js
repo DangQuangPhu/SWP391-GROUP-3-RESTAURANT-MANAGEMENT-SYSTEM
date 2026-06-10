@@ -23,7 +23,7 @@ const PROFILE_SELECT = `
     cp.membership_tier,
     cp.preferences
   FROM dbo.UserAccounts ua
-  JOIN dbo.Roles r ON ua.role_id = r.role_id
+  LEFT JOIN dbo.Roles r ON ua.role_id = r.role_id
   LEFT JOIN dbo.CustomerProfiles cp ON ua.user_id = cp.user_id
 `;
 

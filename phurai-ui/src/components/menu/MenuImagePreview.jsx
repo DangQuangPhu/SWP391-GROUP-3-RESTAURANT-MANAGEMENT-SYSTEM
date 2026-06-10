@@ -55,12 +55,7 @@ function MenuImagePreview({ dish, onClose }) {
           ×
         </button>
         <img src={dish.image} alt={dish.name} className="menu-image-preview__image" />
-        <div className="menu-image-preview__meta">
-          <h3 id="menu-image-preview-title" className="menu-image-preview__title">
-            {dish.name}
-          </h3>
-          <p className="menu-image-preview__price">{formatVND(dish.price)}</p>
-        </div>
+        
       </div>
     </div>
   );

@@ -56,7 +56,7 @@ const PROFILE_SELECT = `
     cp.membership_tier,
     cp.preferences
   FROM dbo.UserAccounts ua
-  JOIN dbo.Roles r ON ua.role_id = r.role_id
+  LEFT JOIN dbo.Roles r ON ua.role_id = r.role_id
   LEFT JOIN dbo.CustomerProfiles cp ON ua.user_id = cp.user_id
 `;
 
@@ -503,9 +503,12 @@ router.post("/auth/change-password", async (req, res) => {
   }
 });
 
-router.post("/auth/forgot-password/request-otp", async (req, res) => {
+async function handleForgotPasswordOtpRequest(req, res) {
   try {
     const email = String(req.body.email || "").trim().toLowerCase();
+    const purpose = req.body.purpose || "forgot_password";
+    const userId = req.body.userId ?? null;
+
     if (!email) {
       return res.status(400).json({ message: "Email is required." });
     }
@@ -517,8 +520,8 @@ router.post("/auth/forgot-password/request-otp", async (req, res) => {
 
     const cooldown = await checkOtpResendCooldown({
       email,
-      purpose: "PASSWORD_RESET",
-      userId: user.user_id,
+      purpose,
+      userId: userId ?? user.user_id,
     });
     if (!cooldown.allowed) {
       return res.status(429).json({
@@ -529,8 +532,8 @@ router.post("/auth/forgot-password/request-otp", async (req, res) => {
 
     const timing = await sendOtpForUser({
       email,
-      purpose: "PASSWORD_RESET",
-      userId: user.user_id,
+      purpose,
+      userId: userId ?? user.user_id,
     });
 
     return res.json({
@@ -543,6 +546,41 @@ router.post("/auth/forgot-password/request-otp", async (req, res) => {
   } catch (error) {
     console.error("Forgot password request OTP failed:", error);
     return res.status(500).json({ message: "Could not send verification code." });
+  }
+}
+
+router.post("/auth/forgot-password/request-otp", handleForgotPasswordOtpRequest);
+
+router.post("/auth/forgot-password/resend-otp", handleForgotPasswordOtpRequest);
+
+router.post("/auth/forgot-password/verify-otp", async (req, res) => {
+  try {
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const otp = String(req.body.otp || "").trim();
+    const purpose = req.body.purpose || "forgot_password";
+
+    if (!email || !otp) {
+      return res.status(400).json({ message: "Email and OTP are required." });
+    }
+
+    const normalizedPurpose = normalizeOtpPurpose(purpose);
+    const result =
+      normalizedPurpose === "CHANGE_PASSWORD"
+        ? await verifyOtpRecord({ email, purpose, otp })
+        : await verifyPasswordResetOtp({ email, otp });
+
+    if (!result.ok) {
+      return res.status(result.status || 400).json({ message: result.message });
+    }
+
+    return res.json({
+      success: true,
+      message: "Verification successful.",
+      email,
+    });
+  } catch (error) {
+    console.error("Forgot password verify OTP failed:", error);
+    return res.status(500).json({ message: "Verification failed." });
   }
 });
 

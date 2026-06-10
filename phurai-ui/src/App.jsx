@@ -7,6 +7,8 @@ import PrivateEvents from "@/pages/customer/PrivateEvents";
 import Careers from "@/pages/customer/Careers";
 import ContactHours from "@/pages/customer/ContactHours";
 import Menu from "@/pages/customer/Menu";
+import ReservationPage from "@/pages/customer/ReservationPage";
+import MyReservationsPage from "@/pages/customer/MyReservationsPage";
 import ProfilePage from "@/pages/customer/Profile";
 import SettingsPage from "@/pages/customer/Settings";
 import NotFound from "@/pages/NotFound";
@@ -53,6 +55,8 @@ function getPageFromPath(path) {
   if (normalized === "/take-out") return "takeout";
   if (normalized === "/catering") return "catering";
   if (normalized === "/menus") return "menus";
+  if (normalized === "/reservations") return "reservations";
+  if (normalized === "/my-reservations") return "myReservations";
   if (normalized === "/private-events") return "privateEvents";
   if (normalized === "/careers") return "careers";
   if (normalized === "/contact-hours") return "contactHours";
@@ -231,6 +235,16 @@ function App() {
       return;
     }
 
+    if (page === "reservations") {
+      navigateToPath("/reservations");
+      return;
+    }
+
+    if (page === "myReservations") {
+      navigateToPath("/my-reservations");
+      return;
+    }
+
     if (page === "reservation") {
       navigateToPath("/");
       window.requestAnimationFrame(() => {
@@ -338,7 +352,24 @@ function App() {
       {activePage === "home" && <Home />}
       {activePage === "takeout" && <TakeOut />}
       {activePage === "catering" && <Catering />}
-      {activePage === "menus" && <Menu />}
+      {activePage === "menus" && (
+        <Menu isAuthenticated={isAuthenticated} currentUser={currentUser} />
+      )}
+      {activePage === "reservations" && (
+        <ReservationPage
+          isAuthenticated={isAuthenticated}
+          currentUser={currentUser}
+          onNavigate={handleNavigate}
+        />
+      )}
+      {activePage === "myReservations" && (
+        <MyReservationsPage
+          isAuthenticated={isAuthenticated}
+          currentUser={currentUser}
+          onNavigate={handleNavigate}
+          onNavigateLogin={() => openAuthModal("login")}
+        />
+      )}
       {activePage === "privateEvents" && (
         <PrivateEvents onNavigate={handleNavigate} />
       )}

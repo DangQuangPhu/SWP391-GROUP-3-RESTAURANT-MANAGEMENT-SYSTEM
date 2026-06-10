@@ -19,6 +19,10 @@ import menuHokusetsuJunmai from '@/assets/images/menu/menu-hokusetsu-junmai.jpg'
 import menuLycheeMartini from '@/assets/images/menu/menu-lychee-martini.jpg';
 import menuFooterBg from '@/assets/images/menu/menu-footer-bg.png';
 import { menuCategoryIcons, utilityIcons } from './iconAssets';
+import combo2 from '@/assets/images/menu/Combo2.jpg';
+import combo4 from '@/assets/images/menu/Combo4.jpg';
+import combo6 from '@/assets/images/menu/Combo6.jpg';
+import combo8 from '@/assets/images/menu/Combo8.jpg';
 
 export const menuIcons = {
   nav: [
@@ -35,7 +39,20 @@ export const menuIcons = {
   scrollTop: utilityIcons.scrollTop,
 };
 
+export const menuComboImages = {
+  combo2,
+  combo4,
+  combo6,
+  combo8,
+};
+
 export const menuImages = {
+  combo2,
+  combo4,
+  combo6,
+  combo8,
+  omakaseExperience: combo8,
+  signatureTasting: combo6,
   hero: menuHero,
   yellowtailJalapeno: menuYellowtailJalapeno,
   toroTartare: menuToroTartare,

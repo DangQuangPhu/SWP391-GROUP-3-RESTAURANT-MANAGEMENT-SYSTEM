@@ -198,7 +198,9 @@ function PasswordAuthenticationPanel({ profile, onPasswordReset, onPhoneUpdate }
     try {
       const data = await forgotPasswordRequestOtp({
         email,
-        ...(purpose === "phone" ? { purpose: PHONE_OTP_PURPOSE } : {}),
+        ...(purpose === "phone"
+          ? { purpose: PHONE_OTP_PURPOSE, userId }
+          : {}),
       });
       applyOtpSentTiming(data, { setOtpExpiresIn, setResendSeconds });
       setOtpOpen(true);

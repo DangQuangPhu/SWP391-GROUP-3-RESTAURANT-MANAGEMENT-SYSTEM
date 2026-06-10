@@ -26,6 +26,7 @@ import avatarFaker from '@/assets/images/figma/avatar-faker.png';
 import avatarRonaldo from '@/assets/images/figma/avatar-ronaldo.png';
 import { commonIcons, contactIcons, formIcons, socialIcons, utilityIcons } from './iconAssets';
 
+
 export const homeImages = {
   heroVideo,
   hero,

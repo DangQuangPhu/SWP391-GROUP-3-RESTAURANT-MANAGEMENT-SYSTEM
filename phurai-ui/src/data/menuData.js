@@ -1,5 +1,6 @@
 import { menuImages } from './menuAssets';
 
+
 export const menuCategories = [
   {
     id: 'sushi-sashimi',
@@ -85,7 +86,7 @@ export const menuCategories = [
       {
         id: 'black-cod-miso',
         name: 'BLACK COD WITH MISO',
-        price: 420000,
+        price: 499000,
         description: 'tender black cod marinated for three days in a sweet miso glaze',
         image: menuImages.blackCodMiso,
       },
@@ -202,29 +203,68 @@ export const menuCategories = [
     variant: 'set-cards',
     items: [
       {
-        id: 'omakase-experience',
-        name: 'OMAKASE EXPERIENCE',
-        price: 1290000,
+        id: 'chef-set-2',
+        type: 'chef-set',
+        tag: "Chef's Set",
+        courses: 2,
+        name: 'CHEF\'S SET — 2 COURSES',
+        price: 590000,
         description:
-          "a personalized multi-course journey designed by our head chef to showcase the season's best.",
-        image: menuImages.hero,
+          'An intimate introduction to Phūrai with two chef-selected courses.',
+        image: menuImages.combo2,
         setCard: {
-          label: 'RECOMMENDED',
-          labelMuted: false,
-          titleLines: ['OMAKASE', 'EXPERIENCE'],
+          label: '2 COURSES',
+          labelMuted: true,
+          titleLines: ['CHEF\'S', 'SET MENU'],
         },
       },
       {
-        id: 'signature-tasting',
-        name: 'SIGNATURE TASTING',
-        price: 990000,
+        id: 'chef-set-4',
+        type: 'chef-set',
+        tag: "Chef's Set",
+        courses: 4,
+        name: 'CHEF\'S SET — 4 COURSES',
+        price: 790000,
         description:
-          'a curated seven-course menu featuring our world-renowned signature dishes.',
-        image: menuImages.hero,
+          'A balanced four-course progression through seasonal ingredients.',
+        image: menuImages.combo4,
         setCard: {
-          label: 'TRADITION',
+          label: '4 COURSES',
           labelMuted: true,
-          titleLines: ['SIGNATURE', 'TASTING'],
+          titleLines: ['CHEF\'S', 'SET MENU'],
+          alt: true,
+        },
+      },
+      {
+        id: 'chef-set-6',
+        type: 'chef-set',
+        tag: "Chef's Set",
+        courses: 6,
+        name: 'CHEF\'S SET — 6 COURSES',
+        price: 1290000,
+        description:
+          'A celebratory six-course journey featuring seafood, grill, and signature pairings.',
+        image: menuImages.combo6,
+        setCard: {
+          label: '6 COURSES',
+          labelMuted: false,
+          titleLines: ['CHEF\'S', 'SET MENU'],
+        },
+      },
+      {
+        id: 'chef-set-8',
+        type: 'chef-set',
+        tag: "Chef's Set",
+        courses: 8,
+        name: 'CHEF\'S SET — 8 COURSES',
+        price: 1890000,
+        description:
+          'A grand tasting feast crafted for sharing, pairing, and premium dining moments.',
+        image: menuImages.combo8,
+        setCard: {
+          label: '8 COURSES',
+          labelMuted: false,
+          titleLines: ['CHEF\'S', 'SET MENU'],
           alt: true,
         },
       },

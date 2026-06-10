@@ -173,15 +173,6 @@ const SIDEBAR_ITEMS = DASHBOARD_ITEMS;
 
 const getWelcomeName = (profile = {}, user = {}) => resolveDisplayName(profile, user);
 
-function formatWelcomeDate(date = new Date()) {
-  return date.toLocaleDateString("en-GB", {
-    weekday: "short",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-}
-
 function formatDateOfBirthDisplay(value) {
   if (!value) return "Not set";
   const parts = String(value).split("-");
@@ -569,7 +560,6 @@ function ProfilePage({
     setActivePanel(panelKey);
   }, []);
 
-  const welcomeDate = useMemo(() => formatWelcomeDate(), []);
   const fieldByKey = useMemo(
     () => Object.fromEntries(FORM_FIELDS.map((field) => [field.key, field])),
     []
@@ -585,8 +575,6 @@ function ProfilePage({
     [profile]
   );
   const welcomeName = displayName;
-  const membershipLabel = profile?.membershipTier || "Bronze";
-  const membershipIcon = profile?.membershipIcon || "🥉";
 
   useEffect(() => {
     setIsEditing(initialEditMode);
@@ -923,10 +911,7 @@ function ProfilePage({
         <div className="profile-dashboard__main">
           <header className="profile-dashboard__top">
             <div className="profile-dashboard__welcome">
-              <h1 className="profile-gradient-title">
-                Welcome, {welcomeName} {membershipIcon} {membershipLabel}
-              </h1>
-              <p>{welcomeDate}</p>
+              <h1 className="profile-gradient-title">Welcome, {welcomeName}</h1>
             </div>
 
             <div className="profile-dashboard__top-actions">
@@ -999,7 +984,6 @@ function ProfilePage({
                 <h2>
                   {welcomeName} <MembershipBadge profile={profile} />
                 </h2>
-                <p>{email}</p>
               </div>
 
               {activePanel === "profile" ? (

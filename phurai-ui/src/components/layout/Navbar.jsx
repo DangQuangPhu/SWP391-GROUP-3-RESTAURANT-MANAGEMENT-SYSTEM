@@ -149,6 +149,10 @@ function Navbar({
     setProfileOpen(false);
     onNavigate?.("profile");
   };
+  const handleMyReservations = () => {
+    setProfileOpen(false);
+    onNavigate?.("myReservations");
+  };
   const handleSettings = () => {
     setProfileOpen(false);
     onNavigate?.("settings");
@@ -199,9 +203,13 @@ function Navbar({
           </button>
         ) : null}
         <a
-          href="#reserve"
+          href="/reservations"
           className={`phurai-navbar__cta ${isBlackReservationPage ? "phurai-navbar__cta--black" : ""
             }`}
+          onClick={(event) => {
+            event.preventDefault();
+            onNavigate?.("reservations");
+          }}
         >
           RESERVATIONS
         </a>
@@ -228,6 +236,7 @@ function Navbar({
               onSaveStatus={onSaveStatus}
               onClearStatus={onClearStatus}
               onMyProfile={handleMyProfile}
+              onMyReservations={handleMyReservations}
               onSettings={handleSettings}
               onChangePassword={handleChangePassword}
               onSignOut={onSignOut}

@@ -1,0 +1,301 @@
+/* ── A Unique Experience · interactive image accordion ── */
+.uxp-section {
+  width: 100%;
+  background: var(--color-background);
+  padding: 5.5rem 24px;
+  box-sizing: border-box;
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.8s ease,
+    transform 0.8s ease;
+}
+
+.uxp-section--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.uxp-inner {
+  max-width: 1320px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 56px;
+}
+
+/* Left text column (≈42%) */
+.uxp-text {
+  flex: 0 0 42%;
+  max-width: 42%;
+}
+
+.uxp-eyebrow {
+  font-family: var(--font-nav);
+  font-size: 0.8rem;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+  margin-bottom: 1rem;
+}
+
+.uxp-title {
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: clamp(2.4rem, 4vw, 3.6rem);
+  line-height: 1.05;
+  color: var(--color-text);
+  margin-bottom: 1.5rem;
+}
+
+.uxp-desc {
+  font-family: var(--font-narrow);
+  font-size: 1.3rem;
+  line-height: 1.6;
+  color: var(--color-text);
+  max-width: 46ch;
+  margin-bottom: 2.25rem;
+}
+
+.uxp-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--color-primary);
+  background: transparent;
+  color: var(--color-primary);
+  font-family: var(--font-nav);
+  font-size: 0.95rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.85rem 2.1rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease,
+    transform 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.uxp-cta:hover {
+  background: var(--color-secondary);
+  border-color: transparent;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 18px -8px rgba(52, 39, 22, 0.5);
+}
+
+/* Right accordion column (≈58%) */
+.uxp-accordion-wrap {
+  flex: 1 1 58%;
+  min-width: 0;
+}
+
+.uxp-accordion {
+  display: flex;
+  gap: 10px;
+  height: 500px;
+  width: 100%;
+}
+
+.uxp-panel {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #1a140c;
+  box-shadow: 0 16px 32px -22px rgba(26, 20, 12, 0.8);
+  transition: flex-grow 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.uxp-panel--active {
+  flex-grow: 6;
+}
+
+.uxp-panel__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  transition: transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.uxp-panel--active .uxp-panel__img {
+  transform: scale(1.04);
+}
+
+.uxp-panel__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(20, 14, 8, 0.78) 0%,
+    rgba(20, 14, 8, 0.25) 42%,
+    rgba(20, 14, 8, 0.05) 100%
+  );
+  z-index: 1;
+}
+
+.uxp-panel__caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  padding: 20px 22px;
+  color: #ffffff;
+  font-family: var(--font-nav);
+  font-size: 0.95rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.4s ease 0.12s,
+    transform 0.4s ease 0.12s;
+}
+
+.uxp-panel--active .uxp-panel__caption {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Inactive panels show a vertical, letter-spaced label */
+.uxp-panel:not(.uxp-panel--active) .uxp-panel__caption {
+  left: auto;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 0;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 0.78rem;
+  letter-spacing: 0.24em;
+  opacity: 0.92;
+}
+
+.uxp-panel:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+/* ── Tablet ── */
+@media (max-width: 1024px) {
+  .uxp-inner {
+    gap: 36px;
+  }
+
+  .uxp-text {
+    flex-basis: 44%;
+    max-width: 44%;
+  }
+}
+
+/* ── Mobile / small tablet: stack + horizontal scroll ── */
+@media (max-width: 860px) {
+  .uxp-section {
+    padding: 3.5rem 16px;
+  }
+
+  .uxp-inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 28px;
+  }
+
+  .uxp-text {
+    flex: none;
+    max-width: 100%;
+    text-align: center;
+  }
+
+  .uxp-desc {
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .uxp-accordion-wrap {
+    flex: none;
+    width: 100%;
+  }
+
+  .uxp-accordion {
+    height: 420px;
+    gap: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+  }
+
+  .uxp-panel {
+    flex: 0 0 66vw;
+    scroll-snap-align: center;
+    transition: none;
+  }
+
+  .uxp-panel--active {
+    flex: 0 0 66vw;
+  }
+
+  /* Always-horizontal captions on touch layout */
+  .uxp-panel__caption,
+  .uxp-panel:not(.uxp-panel--active) .uxp-panel__caption {
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    writing-mode: horizontal-tb;
+    transform: none;
+    opacity: 1;
+    padding: 18px 20px;
+    font-size: 0.85rem;
+    letter-spacing: 0.2em;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .uxp-panel {
+    flex-basis: 78vw;
+  }
+
+  .uxp-panel--active {
+    flex-basis: 78vw;
+  }
+
+  .uxp-accordion {
+    height: 360px;
+  }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .uxp-section,
+  .uxp-panel,
+  .uxp-panel__img,
+  .uxp-panel__caption,
+  .uxp-cta {
+    transition: none;
+  }
+
+  .uxp-section {
+    opacity: 1;
+    transform: none;
+  }
+}

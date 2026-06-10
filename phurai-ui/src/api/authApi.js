@@ -109,7 +109,7 @@ export function googleLogin(payload) {
   });
 }
 
-export function forgotPasswordRequestOtp({ email } = {}) {
+export function forgotPasswordRequestOtp({ email, purpose, userId } = {}) {
   const normalizedEmail = String(email || "").trim().toLowerCase();
   if (!normalizedEmail) {
     return Promise.reject(
@@ -120,9 +120,17 @@ export function forgotPasswordRequestOtp({ email } = {}) {
     );
   }
 
+  const body = { email: normalizedEmail };
+  if (purpose) {
+    body.purpose = purpose;
+  }
+  if (userId) {
+    body.userId = userId;
+  }
+
   return request("/auth/forgot-password/request-otp", {
     method: "POST",
-    body: JSON.stringify({ email: normalizedEmail }),
+    body: JSON.stringify(body),
   });
 }
 

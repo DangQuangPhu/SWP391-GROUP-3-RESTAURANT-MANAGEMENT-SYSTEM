@@ -4,9 +4,13 @@ import MenuGrid from '@/components/menu/MenuGrid';
 import MenuImagePreview from '@/components/menu/MenuImagePreview';
 import MenuSidebar from '@/components/menu/MenuSidebar';
 import MenuToolbar from '@/components/menu/MenuToolbar';
+import MenuCartDrawer from '@/components/menu/MenuCartDrawer';
+import MenuCartFab from '@/components/menu/MenuCartFab';
+import { MenuCartProvider, useMenuCart } from '@/context/MenuCartContext';
 import { flattenMenuDishes, menuCategories } from '@/data/menuData';
 import { menuImages } from '@/data/menuAssets';
 import { normalizePrice } from '@/utils/formatCurrency';
+import { isMenuCustomer } from '@/utils/menuCustomer';
 
 function filterDishes(dishes, searchTerm) {
   const query = searchTerm.trim().toLowerCase();
@@ -34,7 +38,7 @@ function sortDishes(dishes, sortOrder, selectedCategory) {
   return next;
 }
 
-function Menu() {
+function MenuPageContent({ isAuthenticated, currentUser }) {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState('default');
@@ -42,10 +46,20 @@ function Menu() {
   const [previewDish, setPreviewDish] = useState(null);
   const [heroVisible, setHeroVisible] = useState(false);
   const heroRef = useRef(null);
+  const cartFabRef = useRef(null);
   const pendingCategoryRef = useRef(null);
   const isTransitioningRef = useRef(false);
 
-  const allDishes = useMemo(() => flattenMenuDishes(menuCategories), []);
+  const { addItem, isDrawerOpen } = useMenuCart();
+  const canAddToCart = isMenuCustomer(isAuthenticated, currentUser);
+
+  const allDishes = useMemo(
+    () =>
+      flattenMenuDishes(menuCategories).filter(
+        (dish) => dish.type !== 'chef-set' && dish.categoryId !== 'chefs-set-menu'
+      ),
+    []
+  );
 
   const activeCategory = useMemo(
     () => menuCategories.find((category) => category.id === selectedCategory) ?? null,
@@ -71,6 +85,9 @@ function Menu() {
     return sortDishes(filtered, sortOrder, selectedCategory);
   }, [baseDishes, searchTerm, sortOrder, selectedCategory]);
 
+  const gridLayoutVariant =
+    selectedCategory === 'chefs-set-menu' ? 'set-cards' : 'grid';
+
   const contentKey = `${selectedCategory}-${searchTerm}-${sortOrder}`;
 
   const handleCategorySelect = useCallback((categoryId) => {
@@ -95,6 +112,18 @@ function Menu() {
     window.location.href = '/#reserve';
   };
 
+  const handleAddToCart = useCallback(
+    (dish) => {
+      addItem({
+        id: dish.id,
+        name: dish.name,
+        price: dish.price,
+        image: dish.image,
+      });
+    },
+    [addItem]
+  );
+
   useEffect(() => {
     const heroEl = heroRef.current;
     if (!heroEl) return undefined;
@@ -113,7 +142,9 @@ function Menu() {
   const showEmptyState = visibleDishes.length === 0;
 
   return (
-    <div className="menu-page">
+    <div className={`menu-page${isDrawerOpen ? ' menu-page--cart-open' : ''}`}>
+      <MenuCartDrawer />
+
       <div className="menu-body">
         <MenuSidebar
           categories={menuCategories}
@@ -181,7 +212,14 @@ function Menu() {
                     </span>
                     <h2 className="menu-results-header__title">{selectedCategoryLabel}</h2>
                   </header>
-                  <MenuGrid dishes={visibleDishes} onPreviewImage={setPreviewDish} />
+                  <MenuGrid
+                    dishes={visibleDishes}
+                    layoutVariant={gridLayoutVariant}
+                    onPreviewImage={setPreviewDish}
+                    canAddToCart={canAddToCart}
+                    onAddToCart={handleAddToCart}
+                    cartFabRef={cartFabRef}
+                  />
                 </div>
               )}
             </div>
@@ -189,8 +227,18 @@ function Menu() {
         </main>
       </div>
 
+      {canAddToCart ? <MenuCartFab ref={cartFabRef} /> : null}
+
       <MenuImagePreview dish={previewDish} onClose={() => setPreviewDish(null)} />
     </div>
+  );
+}
+
+function Menu({ isAuthenticated = false, currentUser = null }) {
+  return (
+    <MenuCartProvider>
+      <MenuPageContent isAuthenticated={isAuthenticated} currentUser={currentUser} />
+    </MenuCartProvider>
   );
 }
 

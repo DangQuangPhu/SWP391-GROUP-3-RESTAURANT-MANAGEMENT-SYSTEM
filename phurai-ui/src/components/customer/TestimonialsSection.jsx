@@ -14,7 +14,7 @@ const testimonials = [
   {
     quote:
       '"Every dish is beautifully presented, with refined flavors and exceptional attention to detail."',
-    name: 'Faker',
+    name: 'Lee Sang-hyeok',
     role: 'Esport Player',
     title: 'Customer',
     avatarSrc: homeImages.avatarFaker,
