@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "@/styles/reservation.css";
 import ReservationHero from "@/components/reservation/ReservationHero";
-import ReservationFormPanel from "@/components/reservation/ReservationFormPanel";
+import ReservationDetailsPanel from "@/components/reservation/ReservationDetailsPanel";
 import FloorPlan from "@/components/reservation/FloorPlan";
 import ReservationSummary from "@/components/reservation/ReservationSummary";
-import ReservationConfirmation from "@/components/reservation/ReservationConfirmation";
+import ReservationSuccessPanel from "@/components/reservation/ReservationSuccessPanel";
+import PreorderModal from "@/components/reservation/PreorderModal";
+import PromotionModal from "@/components/reservation/PromotionModal";
 import {
   AREA_PREFERENCES,
   DINING_PURPOSES,
@@ -14,6 +16,7 @@ import {
   getReservationSettings,
   getAvailability,
   createReservation,
+  savePreorder,
 } from "@/services/reservationApi";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -42,7 +45,18 @@ const INITIAL_FORM = {
   equipment: "",
 };
 
-function ReservationPage({ isAuthenticated = false, currentUser = null, onNavigate }) {
+const STEPS = [
+  { id: "details", label: "Details" },
+  { id: "tables", label: "Table" },
+  { id: "success", label: "Confirmed" },
+];
+
+function ReservationPage({
+  isAuthenticated = false,
+  currentUser = null,
+  onNavigate,
+  onRequireAuth,
+}) {
   const [settings, setSettings] = useState(null);
   const [form, setForm] = useState(INITIAL_FORM);
   const [tables, setTables] = useState([]);
@@ -52,7 +66,19 @@ function ReservationPage({ isAuthenticated = false, currentUser = null, onNaviga
   const [error, setError] = useState("");
   const [successReservation, setSuccessReservation] = useState(null);
 
+  // --- guided step machine ---
+  const [step, setStep] = useState("details"); // details | tables | success
+  const [detailsReviewing, setDetailsReviewing] = useState(false);
+  const [exiting, setExiting] = useState(false);
+
+  // --- soft add-ons (presentation only) ---
+  const [preorderItems, setPreorderItems] = useState([]);
+  const [promotion, setPromotion] = useState(null);
+  const [preorderOpen, setPreorderOpen] = useState(false);
+  const [promotionOpen, setPromotionOpen] = useState(false);
+
   const bookingRef = useRef(null);
+  const tablesRef = useRef(null);
 
   const setField = useCallback((name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -124,7 +150,6 @@ function ReservationPage({ isAuthenticated = false, currentUser = null, onNaviga
           if (!active) return;
           const nextTables = res?.tables || [];
           setTables(nextTables);
-          // Drop any selected table that is no longer bookable.
           setSelectedTableIds((prev) =>
             prev.filter((id) => {
               const t = nextTables.find((x) => x.table_id === id);
@@ -163,20 +188,62 @@ function ReservationPage({ isAuthenticated = false, currentUser = null, onNaviga
     [selectedTables]
   );
 
+  /* --- validation --- */
+  const missing = useMemo(() => {
+    const out = [];
+    if (!form.date) out.push("date");
+    if (!form.time) out.push("time");
+    if (!form.guestCount || form.guestCount < 1) out.push("guests");
+    if (!form.fullName.trim()) out.push("full name");
+    if (!EMAIL_RE.test(form.email.trim())) out.push("a valid email");
+    if (!PHONE_RE.test(form.phone.trim())) out.push("a valid phone");
+    return out;
+  }, [form]);
+
+  const detailsValid = missing.length === 0;
+
   const canSubmit = useMemo(() => {
-    if (!form.date || !form.time) return false;
-    if (!form.guestCount || form.guestCount < 1) return false;
+    if (!detailsValid) return false;
     if (selectedTableIds.length === 0) return false;
     if (totalCapacity < form.guestCount) return false;
-    if (!form.fullName.trim()) return false;
-    if (!EMAIL_RE.test(form.email.trim())) return false;
-    if (!PHONE_RE.test(form.phone.trim())) return false;
     return true;
-  }, [form, selectedTableIds, totalCapacity]);
+  }, [detailsValid, selectedTableIds, totalCapacity, form.guestCount]);
+
+  const summaryVisible = step === "tables" && selectedTableIds.length > 0;
 
   const scrollToBooking = () => {
     bookingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  /* --- step transitions --- */
+  const transitionTo = useCallback((next, mid) => {
+    setExiting(true);
+    setTimeout(() => {
+      mid?.();
+      setStep(next);
+      setExiting(false);
+      requestAnimationFrame(() => {
+        bookingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }, 360);
+  }, []);
+
+  const handleDone = () => setDetailsReviewing(true);
+  const handleCancelReview = () => setDetailsReviewing(false);
+  const handleConfirmDetails = () => transitionTo("tables");
+  const handleEditDetails = () => transitionTo("details", () => setDetailsReviewing(false));
+
+  /* --- promotion --- */
+  const handleOpenPromotion = () => setPromotionOpen(true);
+  const handleApplyPromotion = (promo) => setPromotion(promo);
+  const handleClearPromotion = () => setPromotion(null);
+  const handleSignUp = () => {
+    setPromotionOpen(false);
+    onRequireAuth?.();
+  };
+
+  /* --- preorder --- */
+  const handleApplyPreorder = (items) => setPreorderItems(items);
 
   const buildSpecialRequest = () => {
     const purpose = DINING_PURPOSES.find((p) => p.id === form.diningPurpose);
@@ -187,6 +254,7 @@ function ReservationPage({ isAuthenticated = false, currentUser = null, onNaviga
       if (form.decoration.trim()) parts.push(`[Decoration: ${form.decoration.trim()}]`);
       if (form.equipment.trim()) parts.push(`[Equipment: ${form.equipment.trim()}]`);
     }
+    if (promotion) parts.push(`[Promotion: ${promotion.label}]`);
     if (!isAuthenticated) {
       parts.push(`[Guest Name: ${form.fullName.trim()}]`);
       parts.push(`[Guest Email: ${form.email.trim()}]`);
@@ -220,13 +288,25 @@ function ReservationPage({ isAuthenticated = false, currentUser = null, onNaviga
       const userId = isAuthenticated ? currentUser?.userId ?? currentUser?.id : null;
       const res = await createReservation(payload, userId);
       if (res?.reservation) {
+        // Persist pre-order for signed-in members (guests keep a local preview only).
+        if (userId && preorderItems.length > 0) {
+          try {
+            await savePreorder(
+              res.reservation.reservation_id,
+              preorderItems.map((i) => ({ dish_id: i.dish_id, quantity: i.quantity })),
+              userId
+            );
+          } catch {
+            /* non-blocking — reservation already created */
+          }
+        }
         setSuccessReservation(res.reservation);
+        setStep("success");
         window.scrollTo({ top: 0, behavior: "smooth" });
       } else {
         setError("Could not create reservation. Please try again.");
       }
     } catch (err) {
-      // Conflict -> refresh availability so the booked table updates immediately.
       if (err?.code === "TABLE_UNAVAILABLE") {
         setError(err.message);
         setSelectedTableIds([]);
@@ -237,9 +317,7 @@ function ReservationPage({ isAuthenticated = false, currentUser = null, onNaviga
           guestCount: form.guestCount,
           areaType,
         })
-          .then((r) => {
-            setTables(r?.tables || []);
-          })
+          .then((r) => setTables(r?.tables || []))
           .catch(() => {});
       } else {
         setError(err?.message || "Could not create reservation. Please try again.");
@@ -249,25 +327,23 @@ function ReservationPage({ isAuthenticated = false, currentUser = null, onNaviga
     }
   };
 
-  const resetForAnother = () => {
-    setSuccessReservation(null);
-    setSelectedTableIds([]);
-    setTables([]);
-    setForm((prev) => ({ ...INITIAL_FORM, fullName: prev.fullName, email: prev.email, phone: prev.phone }));
-    window.scrollTo({ top: 0, behavior: "auto" });
-  };
+  const activeStepIndex = STEPS.findIndex((s) => s.id === step);
 
-  if (successReservation) {
+  /* ---------- SUCCESS ---------- */
+  if (step === "success" && successReservation) {
     return (
       <main className="rzv-page">
-        <ReservationConfirmation
-          reservation={successReservation}
-          onBackHome={() => onNavigate?.("home")}
-          onBookAnother={resetForAnother}
-          onViewReservations={
-            isAuthenticated ? () => onNavigate?.("myReservations") : null
-          }
-        />
+        <section className="rzv-booking rzv-booking--success">
+          <div className="rzv-step rzv-step--enter">
+            <ReservationSuccessPanel
+              reservation={successReservation}
+              promotion={promotion}
+              preorderItems={preorderItems}
+              onReturnHome={() => onNavigate?.("home")}
+              onViewReservation={() => onNavigate?.("myReservations")}
+            />
+          </div>
+        </section>
       </main>
     );
   }
@@ -281,43 +357,120 @@ function ReservationPage({ isAuthenticated = false, currentUser = null, onNaviga
           <span className="rzv-booking__kicker">Reserve a Table</span>
           <h2 className="rzv-booking__title rzv-serif">Choose your moment</h2>
           <p className="rzv-booking__lead">
-            Pick your date and party size, then select a table on our interactive floor plan.
-            Availability updates live.
+            Complete your details, choose your table on our interactive floor plan, then review and
+            confirm. Availability updates live.
           </p>
+
+          {/* Step progress */}
+          <ol className="rzv-steps" aria-label="Reservation progress">
+            {STEPS.map((s, i) => (
+              <li
+                key={s.id}
+                className={`rzv-steps__item ${
+                  i === activeStepIndex
+                    ? "rzv-steps__item--active"
+                    : i < activeStepIndex
+                    ? "rzv-steps__item--done"
+                    : ""
+                }`}
+              >
+                <span className="rzv-steps__dot">{i < activeStepIndex ? "✓" : i + 1}</span>
+                <span className="rzv-steps__label">{s.label}</span>
+              </li>
+            ))}
+          </ol>
         </div>
 
-        <div className="rzv-grid">
-          <div className="rzv-col">
-            <ReservationFormPanel
+        {/* STEP 1 — Reservation Details */}
+        {step === "details" ? (
+          <div className={`rzv-step rzv-step--narrow ${exiting ? "rzv-step--exit" : "rzv-step--enter"}`}>
+            <ReservationDetailsPanel
               form={form}
               setField={setField}
               settings={settings}
               timeSlots={timeSlots}
               isAuthenticated={isAuthenticated}
               todayStr={todayString()}
+              detailsValid={detailsValid}
+              reviewing={detailsReviewing}
+              missing={missing}
+              onDone={handleDone}
+              onConfirm={handleConfirmDetails}
+              onCancel={handleCancelReview}
             />
           </div>
+        ) : null}
 
-          <div className="rzv-col">
-            <FloorPlan
-              tables={tables}
-              selectedTableIds={selectedTableIds}
-              onSelectTable={handleSelectTable}
-              loading={loadingAvailability}
-            />
-            <div className="rzv-summary-dock">
-              <ReservationSummary
-                form={form}
-                selectedTables={selectedTables}
-                error={error}
-                submitting={submitting}
-                canSubmit={canSubmit}
-                onSubmit={handleSubmit}
+        {/* STEP 2 + 3 — Choose Table + Summary */}
+        {step === "tables" ? (
+          <div
+            ref={tablesRef}
+            className={`rzv-step ${exiting ? "rzv-step--exit" : "rzv-step--enter"}`}
+          >
+            <div className="rzv-tablestep">
+              <div className="rzv-tablestep__bar">
+                <button type="button" className="rzv-backlink" onClick={handleEditDetails}>
+                  ← Back to details
+                </button>
+                <span className="rzv-tablestep__recap">
+                  {form.guestCount} guests ·{" "}
+                  {form.date ? new Date(`${form.date}T00:00:00`).toLocaleDateString(undefined, {
+                    day: "numeric",
+                    month: "short",
+                  }) : "—"}{" "}
+                  · {form.time || "—"}
+                </span>
+              </div>
+
+              <FloorPlan
+                tables={tables}
+                selectedTableIds={selectedTableIds}
+                onSelectTable={handleSelectTable}
+                loading={loadingAvailability}
               />
+
+              {summaryVisible ? (
+                <div className="rzv-reveal">
+                  <ReservationSummary
+                    form={form}
+                    selectedTables={selectedTables}
+                    promotion={promotion}
+                    preorderItems={preorderItems}
+                    error={error}
+                    submitting={submitting}
+                    canSubmit={canSubmit}
+                    onSubmit={handleSubmit}
+                    onEditDetails={handleEditDetails}
+                    onOpenPreorder={() => setPreorderOpen(true)}
+                    onOpenPromotion={handleOpenPromotion}
+                    onClearPromotion={handleClearPromotion}
+                  />
+                </div>
+              ) : (
+                <p className="rzv-tablestep__prompt">
+                  Select an available table on the plan to review and confirm your reservation.
+                </p>
+              )}
             </div>
           </div>
-        </div>
+        ) : null}
       </section>
+
+      {/* Overlays */}
+      <PreorderModal
+        open={preorderOpen}
+        initialItems={preorderItems}
+        onClose={() => setPreorderOpen(false)}
+        onApply={handleApplyPreorder}
+      />
+      <PromotionModal
+        open={promotionOpen}
+        isAuthenticated={isAuthenticated}
+        current={promotion}
+        onClose={() => setPromotionOpen(false)}
+        onApply={handleApplyPromotion}
+        onSignUp={handleSignUp}
+      />
     </main>
   );
 }

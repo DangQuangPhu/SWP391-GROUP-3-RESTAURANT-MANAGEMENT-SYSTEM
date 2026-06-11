@@ -1979,3 +1979,344 @@
     inset 0 0 0 2px #846d44 !important;
   transform: translateY(-2px);
 }
+
+/* ── About Us (replaces home reservation form) ── */
+
+.phurai-about {
+  position: relative;
+  background: #faf8f4;
+  padding: clamp(3.5rem, 7vw, 6rem) clamp(1.25rem, 4vw, 3rem);
+  color: var(--text-dark);
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.85s ease,
+    transform 0.85s ease;
+}
+
+.phurai-about--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.phurai-about__anchor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.phurai-about__inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: clamp(2rem, 4vw, 4.5rem);
+  align-items: center;
+}
+
+.phurai-about__media {
+  position: relative;
+  min-height: 420px;
+}
+
+.phurai-about__image-main {
+  position: relative;
+  width: 88%;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border-radius: 2px;
+  box-shadow: 0 24px 48px rgba(52, 39, 22, 0.12);
+  opacity: 0;
+  transform: scale(1.03);
+  transition:
+    opacity 0.9s ease 0.1s,
+    transform 1s ease 0.1s;
+}
+
+.phurai-about--visible .phurai-about__image-main {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.phurai-about__image-main img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.phurai-about__image-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(to top, rgba(28, 22, 18, 0.72), transparent);
+  font-family: var(--font-nav);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #f5efe6;
+}
+
+.phurai-about__image-accent {
+  position: absolute;
+  right: 0;
+  bottom: -1.5rem;
+  width: 48%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 6px solid #faf8f4;
+  border-radius: 2px;
+  box-shadow: 0 16px 32px rgba(52, 39, 22, 0.14);
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 0.85s ease 0.25s,
+    transform 0.85s ease 0.25s;
+}
+
+.phurai-about--visible .phurai-about__image-accent {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.phurai-about__image-accent img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.phurai-about__content {
+  padding: 0.5rem 0;
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.8s ease 0.15s,
+    transform 0.8s ease 0.15s;
+}
+
+.phurai-about--visible .phurai-about__content {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.phurai-about__eyebrow {
+  font-family: var(--font-nav);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.38em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0 0 0.75rem;
+}
+
+.phurai-about__divider {
+  display: block;
+  width: 56px;
+  height: 1px;
+  background: linear-gradient(to right, var(--gold), rgba(140, 118, 75, 0.15));
+  margin-bottom: 1.25rem;
+}
+
+.phurai-about__kicker {
+  font-family: var(--font-heading) !important;
+  font-size: clamp(2.5rem, 5vw, 4rem);
+    font-weight: 400 !important;
+    line-height: 1.08 !important;
+  letter-spacing: -1px !important;
+  text-transform: uppercase !important;
+  color: #000000;
+  margin: 0 0 0.75rem;
+}
+
+.phurai-about__headline {
+  font-family: var(--font-serif);
+  font-size: 1.9rem;
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: 0.02em;
+  color: #1c1612;
+  margin: 0 0 1.25rem;
+  max-width: 18ch;
+}
+
+.phurai-about__lead,
+.phurai-about__body {
+  font-family: var(--font-ui);
+  font-size: 1.05rem;
+  line-height: 1.75;
+  color: var(--text-muted);
+  margin: 0 0 1rem;
+  max-width: 54ch;
+}
+
+.phurai-about__highlights {
+  list-style: none;
+  margin: 1.75rem 0 2rem;
+  padding: 0;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.phurai-about__highlight {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  font-family: var(--font-ui);
+  font-size: 0.98rem;
+  line-height: 1.5;
+  color: var(--text-dark);
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 0.55s ease var(--delay, 0s),
+    transform 0.55s ease var(--delay, 0s);
+}
+
+.phurai-about--visible .phurai-about__highlight {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.phurai-about__highlight-mark {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  margin-top: 0.45rem;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+.phurai-about__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.phurai-about__stat {
+  padding: 1rem 0.75rem;
+  border: 1px solid rgba(140, 118, 75, 0.22);
+  background: rgba(255, 255, 255, 0.55);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.5s ease var(--delay, 0s),
+    transform 0.5s ease var(--delay, 0s);
+}
+
+.phurai-about--visible .phurai-about__stat {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.phurai-about__stat-value {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  line-height: 1.1;
+  color: #1c1612;
+  margin-bottom: 0.35rem;
+}
+
+.phurai-about__stat-label {
+  display: block;
+  font-family: var(--font-nav);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold-dark);
+  line-height: 1.35;
+}
+
+.phurai-about__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.phurai-about__btn {
+  padding: 0.9rem 1.75rem;
+  font-family: var(--font-nav);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: 9999px;
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease,
+    border-color 0.25s ease,
+    transform 0.25s ease;
+}
+
+.phurai-about__btn--primary {
+  border: 1px solid var(--gold);
+  background: var(--gold);
+  color: #fff;
+}
+
+.phurai-about__btn--primary:hover {
+  background: var(--gold-dark);
+  border-color: var(--gold-dark);
+  transform: translateY(-1px);
+}
+
+.phurai-about__btn--outline {
+  border: 1px solid var(--gold-dark);
+  background: transparent;
+  color: var(--gold-dark);
+}
+
+.phurai-about__btn--outline:hover {
+  background: var(--gold-dark);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 960px) {
+  .phurai-about__inner {
+    grid-template-columns: 1fr;
+  }
+
+  .phurai-about__media {
+    min-height: 0;
+    margin-bottom: 1rem;
+  }
+
+  .phurai-about__image-main {
+    width: 100%;
+    aspect-ratio: 16 / 11;
+  }
+
+  .phurai-about__image-accent {
+    display: none;
+  }
+
+  .phurai-about__headline {
+    max-width: none;
+  }
+
+  .phurai-about__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .phurai-about__actions {
+    flex-direction: column;
+  }
+
+  .phurai-about__btn {
+    width: 100%;
+    text-align: center;
+  }
+}

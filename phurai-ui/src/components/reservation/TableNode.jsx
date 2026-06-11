@@ -73,15 +73,18 @@ function Chair({ cx, cy, vertical }) {
   return <rect className="rzv-tbl__chair" x={cx - 8} y={cy - 5} width={16} height={10} rx={4} />;
 }
 
-function TableNode({ visual, state, onSelect }) {
+function TableNode({ visual, state, onSelect, decorative = false }) {
   const meta = TABLE_STATE_META[state] || TABLE_STATE_META.available;
-  const selectable = meta.selectable;
+  // Decorative (ambient) tables are part of the room illustration only and can
+  // never be selected — the backend stays authoritative for real bookable tables.
+  const selectable = decorative ? false : meta.selectable;
   const spec = SHAPE[visual.shape] || SHAPE.rect;
   const capacity = Number(visual.capacity) || 0;
 
   const classes = ["rzv-tbl", `rzv-tbl--${state}`];
   if (selectable) classes.push("rzv-tbl--clickable");
   if (spec.premium) classes.push("rzv-tbl--vip");
+  if (decorative) classes.push("rzv-tbl--decor");
 
   const handleSelect = () => {
     if (!selectable) return;
@@ -133,25 +136,30 @@ function TableNode({ visual, state, onSelect }) {
   }
 
   const isCircle = spec.kind === "circle";
-  const showBadge = state === "selected" || state === "suggested";
+  const showBadge = !decorative && (state === "selected" || state === "suggested");
   const badgeY = isCircle ? -(spec.r + 22) : -(spec.h / 2 + 22);
-  const showStatusText = !selectable; // Reserved / Occupied / Cleaning / Too small …
+  // Reserved / Occupied / Cleaning / Too small … (never "Available")
+  const showStatusText = !selectable && state !== "available";
+  const label = visual.displayLabel || "";
 
   return (
     <g transform={`translate(${visual.x} ${visual.y})`}>
       <g
         className={classes.join(" ")}
-        role="button"
+        role={decorative ? "presentation" : "button"}
         tabIndex={selectable ? 0 : -1}
-        aria-disabled={!selectable}
-        aria-pressed={state === "selected"}
-        aria-label={`Table ${visual.displayLabel}, ${visual.zone}, ${capacity} seats, ${meta.label}`}
+        aria-hidden={decorative ? true : undefined}
+        aria-disabled={decorative ? undefined : !selectable}
+        aria-pressed={decorative ? undefined : state === "selected"}
+        aria-label={decorative ? undefined : `Table ${label}, ${visual.zone}, ${capacity} seats, ${meta.label}`}
         onClick={handleSelect}
         onKeyDown={handleKey}
       >
-        <title>
-          {`${visual.displayLabel} · ${visual.zone}\n${capacity} seats · ${meta.label}`}
-        </title>
+        {decorative ? null : (
+          <title>
+            {`${label} · ${visual.zone}\n${capacity} seats · ${meta.label}`}
+          </title>
+        )}
 
         {chairs.map((c, i) => (
           <Chair key={i} cx={c.cx} cy={c.cy} vertical={c.vertical} />
@@ -159,10 +167,12 @@ function TableNode({ visual, state, onSelect }) {
 
         {body}
 
-        <text className="rzv-tbl__label" x={0} y={isCircle ? 1 : -4} textAnchor="middle">
-          {visual.displayLabel}
-        </text>
-        {!isCircle ? (
+        {label ? (
+          <text className="rzv-tbl__label" x={0} y={isCircle ? 1 : -4} textAnchor="middle">
+            {label}
+          </text>
+        ) : null}
+        {!isCircle && label ? (
           <text className="rzv-tbl__cap" x={0} y={14} textAnchor="middle">
             {capacity} seats
           </text>

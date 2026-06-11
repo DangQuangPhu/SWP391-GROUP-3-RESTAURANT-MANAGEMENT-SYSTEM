@@ -8,6 +8,7 @@ import kitchenSashimiSalad from '@/assets/images/kitchen-sashimi-salad.jpg';
 import kitchenRockShrimp from '@/assets/images/kitchen-rock-shrimp.jpg';
 import kitchenBlackCodMiso from '@/assets/images/kitchen-black-cod-miso.jpg';
 import hero from '@/assets/images/hero.jpg';
+import heroImage from '@/assets/images/hero.jpg';
 import barScene from '@/assets/images/figma/bar-scene.jpg';
 import happenings from '@/assets/images/figma/happenings.jpg';
 import salmon from '@/assets/images/figma/salmon.jpg';
@@ -24,12 +25,16 @@ import gallery10 from '@/assets/images/figma/gallery-10.png';
 import avatarGordon from '@/assets/images/figma/avatar-gordon.png';
 import avatarFaker from '@/assets/images/figma/avatar-faker.png';
 import avatarRonaldo from '@/assets/images/figma/avatar-ronaldo.png';
+import Abus1 from '@/assets/images/figma/Abus1.jpg';
+import Abus2 from '@/assets/images/figma/Abus2.jpg';
 import { commonIcons, contactIcons, formIcons, socialIcons, utilityIcons } from './iconAssets';
 
-
 export const homeImages = {
+  Abus1,
+  Abus2,
   heroVideo,
   hero,
+  heroImage,
   offeringSushi,
   kitchenSecrets,
   giftCard,

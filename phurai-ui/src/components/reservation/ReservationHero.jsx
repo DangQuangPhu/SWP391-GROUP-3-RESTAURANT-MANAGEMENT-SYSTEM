@@ -77,7 +77,7 @@ function ReservationHero({ onReserveClick }) {
         <img
           ref={maskRef}
           className="rzv-hero__mask-img"
-          src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1600&q=80"
+          src="/src/assets/images/hero.jpg"
           alt="Phūrai dining atmosphere"
           loading="eager"
         />

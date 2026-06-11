@@ -20,6 +20,8 @@ const pageClassMap = {
   privateEvents: "private-events",
   careers: "careers",
   contactHours: "contact-hours",
+  reservations: "reservations",
+  myReservations: "my-reservations",
 };
 
 const darkTopPages = [
@@ -28,6 +30,7 @@ const darkTopPages = [
   "privateEvents",
   "careers",
   "contactHours",
+  "reservations",
   "notFound",
 ];
 

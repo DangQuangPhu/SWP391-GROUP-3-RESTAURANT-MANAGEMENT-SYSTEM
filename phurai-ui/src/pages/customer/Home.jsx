@@ -1,12 +1,12 @@
-import HeroSection from '@/components/customer/HeroSection';
-import SignatureDishCarousel from '@/components/customer/SignatureDishCarousel';
-import OfferingBlock from '@/components/customer/OfferingBlock';
-import KitchenSecretsSection from '@/components/customer/KitchenSecretsSection';
-import GiftCardSection from '@/components/customer/GiftCardSection';
+import HeroSection from '@/components/Home/HeroSection';
+import SignatureDishCarousel from '@/components/Home/SignatureDishCarousel';
+import OfferingBlock from '@/components/Home/OfferingBlock';
+import KitchenSecretsSection from '@/components/Home/KitchenSecretsSection';
+import GiftCardSection from '@/components/Home/GiftCardSection';
 import { UniqueExperienceAccordion } from '@/components/ui/interactive-image-accordion';
-import RolledPerfectionSection from '@/components/customer/RolledPerfectionSection';
-import TestimonialsSection from '@/components/customer/TestimonialsSection';
-import ReservationForm from '@/components/reservation/ReservationForm';
+import RolledPerfectionSection from '@/components/Home/RolledPerfectionSection';
+import TestimonialsSection from '@/components/Home/TestimonialsSection';
+import AboutUsSection from '@/components/Home/AboutUsSection';
 import { homeImages } from '@/data/homeAssets';
 import '@/styles/home.css';
 
@@ -53,9 +53,7 @@ function Home() {
         <RolledPerfectionSection />
         <TestimonialsSection />
 
-        <div id="reserve">
-          <ReservationForm />
-        </div>
+        <AboutUsSection />
       </main>
     </div>
   );

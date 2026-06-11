@@ -83,7 +83,7 @@ export function UniqueExperienceAccordion() {
     >
       <div className="uxp-inner">
         <div className="uxp-text">
-          <p className="uxp-eyebrow">PH&#x16B;RAI</p>
+         
           <h2 id="uxp-heading" className="uxp-title">
             A UNIQUE EXPERIENCE
           </h2>

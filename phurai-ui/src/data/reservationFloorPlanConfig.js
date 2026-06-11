@@ -83,6 +83,55 @@ export function getTableVisual(tableNumber) {
   return TABLE_VISUALS[tableNumber] || null;
 }
 
+/**
+ * Decorative, presentation-only tables that make each floor feel like a real,
+ * fully-laid-out restaurant. They are NEVER selectable and NEVER submitted —
+ * the backend remains the single source of truth for bookable tables. Each one
+ * carries a fixed ambient status so the room reads as "alive" (some seated,
+ * some reserved, some being cleaned).
+ *
+ * ambientStatus ∈ available | reserved | occupied | cleaning
+ */
+export const DECOR_TABLES = [
+  // ---- Floor 1 · Window Area ----
+  { id: "d-w1", floor: 1, zone: "Window Area", x: 110, y: 130, shape: "round", capacity: 2, ambientStatus: "occupied" },
+  { id: "d-w2", floor: 1, zone: "Window Area", x: 276, y: 130, shape: "round", capacity: 2, ambientStatus: "available" },
+  { id: "d-w3", floor: 1, zone: "Window Area", x: 276, y: 286, shape: "round", capacity: 2, ambientStatus: "reserved" },
+  // ---- Floor 1 · Main Dining ----
+  { id: "d-m1", floor: 1, zone: "Main Dining", x: 482, y: 320, shape: "round", capacity: 4, ambientStatus: "occupied" },
+  { id: "d-m2", floor: 1, zone: "Main Dining", x: 712, y: 320, shape: "rect", capacity: 4, ambientStatus: "available" },
+  { id: "d-m3", floor: 1, zone: "Main Dining", x: 482, y: 512, shape: "round", capacity: 2, ambientStatus: "reserved" },
+  { id: "d-m4", floor: 1, zone: "Main Dining", x: 712, y: 512, shape: "round", capacity: 2, ambientStatus: "cleaning" },
+  // ---- Floor 1 · VIP Lounge ----
+  { id: "d-v1", floor: 1, zone: "VIP Lounge", x: 1003, y: 312, shape: "vip", capacity: 6, ambientStatus: "occupied" },
+  // ---- Floor 1 · Wine Bar ----
+  { id: "d-b1", floor: 1, zone: "Wine Bar", x: 193, y: 452, shape: "bar", capacity: 4, ambientStatus: "occupied" },
+  // ---- Floor 2 · Rooftop Terrace ----
+  { id: "d-t1", floor: 2, zone: "Rooftop Terrace", x: 200, y: 200, shape: "round", capacity: 2, ambientStatus: "available" },
+  { id: "d-t2", floor: 2, zone: "Rooftop Terrace", x: 540, y: 200, shape: "round", capacity: 4, ambientStatus: "occupied" },
+  { id: "d-t3", floor: 2, zone: "Rooftop Terrace", x: 200, y: 520, shape: "round", capacity: 2, ambientStatus: "reserved" },
+  { id: "d-t4", floor: 2, zone: "Rooftop Terrace", x: 540, y: 520, shape: "long", capacity: 6, ambientStatus: "available" },
+  // ---- Floor 2 · Balcony View ----
+  { id: "d-bl1", floor: 2, zone: "Balcony View", x: 930, y: 130, shape: "round", capacity: 2, ambientStatus: "occupied" },
+  { id: "d-bl2", floor: 2, zone: "Balcony View", x: 1040, y: 300, shape: "round", capacity: 2, ambientStatus: "available" },
+  // ---- Floor 2 · Event Corner ----
+  { id: "d-e1", floor: 2, zone: "Event Corner", x: 930, y: 540, shape: "private", capacity: 10, ambientStatus: "reserved" },
+];
+
+/** Map an ambient decorative status to the same visual state keys as real tables. */
+export function resolveAmbientState(ambientStatus) {
+  switch (ambientStatus) {
+    case "occupied":
+      return "occupied";
+    case "reserved":
+      return "reserved";
+    case "cleaning":
+      return "cleaning";
+    default:
+      return "available";
+  }
+}
+
 /** Premium status labels + the CSS state key used by the map and legend. */
 export const TABLE_STATE_META = {
   available: { label: "Available", selectable: true },

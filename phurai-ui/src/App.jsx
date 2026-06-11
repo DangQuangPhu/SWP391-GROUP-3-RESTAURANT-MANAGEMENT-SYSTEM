@@ -11,6 +11,7 @@ import ReservationPage from "@/pages/customer/ReservationPage";
 import MyReservationsPage from "@/pages/customer/MyReservationsPage";
 import ProfilePage from "@/pages/customer/Profile";
 import SettingsPage from "@/pages/customer/Settings";
+import StaffDashboard from "@/pages/staff/StaffDashboard";
 import NotFound from "@/pages/NotFound";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
@@ -50,6 +51,7 @@ function getPageFromPath(path) {
   const normalized = normalizePathname(path);
 
   if (normalized.startsWith("/settings")) return "settings";
+  if (normalized === "/staff" || normalized.startsWith("/staff/")) return "staff";
   if (normalized === "/profile") return "profile";
   if (normalized === "/login") return "login";
   if (normalized === "/take-out") return "takeout";
@@ -323,12 +325,14 @@ function App() {
     setShowProfile(true);
   };
 
+  const isStaffPage = pathname === "/staff" || pathname.startsWith("/staff/");
   const isAccountPage =
     pathname.startsWith("/profile") || pathname.startsWith("/settings");
+  const isPortalPage = isAccountPage || isStaffPage;
 
   return (
     <>
-      {!isAccountPage ? (
+      {!isPortalPage ? (
         <Navbar
           activePage={activePage}
           onNavigate={handleNavigate}
@@ -360,6 +364,7 @@ function App() {
           isAuthenticated={isAuthenticated}
           currentUser={currentUser}
           onNavigate={handleNavigate}
+          onRequireAuth={() => openAuthModal("register")}
         />
       )}
       {activePage === "myReservations" && (
@@ -407,11 +412,20 @@ function App() {
           onApplyAvatar={applyAvatarUpdate}
         />
       )}
+      {activePage === "staff" && (
+        <StaffDashboard
+          isAuthenticated={isAuthenticated}
+          currentUser={currentUser}
+          onSignOut={handleSignOut}
+          onNavigateHome={() => handleNavigate("home")}
+          onOpenAuth={() => openAuthModal("login")}
+        />
+      )}
       {activePage === "notFound" && <NotFound onNavigate={handleNavigate} />}
 
-      {!isAccountPage ? <Footer /> : null}
+      {!isPortalPage ? <Footer /> : null}
 
-      {!isAccountPage ? <FloatingActionButtons /> : null}
+      {!isPortalPage ? <FloatingActionButtons /> : null}
 
       <AuthModal
         isOpen={isAuthModalOpen}

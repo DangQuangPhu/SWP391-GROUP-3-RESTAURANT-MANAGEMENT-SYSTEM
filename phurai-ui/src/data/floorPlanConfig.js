@@ -111,6 +111,30 @@ export function buildTimeSlots(openTime = "10:00", closeTime = "22:00", duration
   return slots;
 }
 
+/**
+ * Promotions are a presentation-only perk for signed-in members. There is no
+ * promotion column in the database, so an applied promotion is shown in the
+ * summary / success panel for the guest's reference and is NOT sent to the
+ * backend (keeps the SQL schema and booking logic untouched).
+ */
+export const PROMOTIONS = [
+  {
+    id: "member-10",
+    label: "Member · 10% Dining Credit",
+    desc: "10% back as Phūrai dining credit on your next visit.",
+  },
+  {
+    id: "welcome-drink",
+    label: "Complimentary Welcome Drink",
+    desc: "A signature welcome cocktail or mocktail for your table.",
+  },
+  {
+    id: "birthday-dessert",
+    label: "Birthday Dessert on the House",
+    desc: "A celebratory dessert prepared by our pastry chef.",
+  },
+];
+
 // Suggested area chips shown for event-style dining purposes.
 export const EVENT_AREA_HINTS = {
   birthday: ["VIP", "Private Room", "Rooftop / Outdoor"],
