@@ -1,8 +1,7 @@
 import {
   AREA_PREFERENCES,
   DINING_PURPOSES,
-  DURATION_OPTIONS,
-  GUEST_OPTIONS,
+  HOLD_DURATION_OPTIONS,
   EVENT_AREA_HINTS,
 } from "@/data/floorPlanConfig";
 
@@ -21,8 +20,6 @@ function ReservationFormPanel({
   const selectedPurpose = DINING_PURPOSES.find((p) => p.id === form.diningPurpose);
   const isEvent = Boolean(selectedPurpose?.event);
   const areaHints = EVENT_AREA_HINTS[form.diningPurpose] || [];
-  const maxGuests = settings?.max_guests || 12;
-  const guestChoices = GUEST_OPTIONS.filter((g) => g <= maxGuests);
 
   return (
     <div className="rzv-card">
@@ -69,36 +66,64 @@ function ReservationFormPanel({
       {/* Guests + duration */}
       <div className="rzv-row">
         <div className="rzv-field">
-          <label className="rzv-field__label">Guests</label>
-          <div className="rzv-chips">
-            {guestChoices.map((g) => (
-              <button
-                key={g}
-                type="button"
-                className={`rzv-chip ${Number(form.guestCount) === g ? "rzv-chip--active" : ""}`}
-                onClick={() => setField("guestCount", g)}
-              >
-                {g}
-              </button>
-            ))}
+          <label className="rzv-field__label">GUESTS</label>
+          <div className="rzv-stepper" style={{ display: "flex", alignItems: "center", gap: "1rem", marginTop: "0.5rem" }}>
+            <button
+              type="button"
+              className="rzv-btn rzv-btn--ghost"
+              style={{ width: "40px", height: "40px", padding: 0, borderRadius: "50%" }}
+              disabled={Number(form.guestCount) <= 1}
+              onClick={() => setField("guestCount", Math.max(1, Number(form.guestCount) - 1))}
+            >
+              -
+            </button>
+            <input
+              type="number"
+              className="rzv-input"
+              style={{ width: "80px", textAlign: "center", margin: 0 }}
+              min={1}
+              max={15}
+              value={form.guestCount}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!isNaN(val)) setField("guestCount", val);
+              }}
+            />
+            <button
+              type="button"
+              className="rzv-btn rzv-btn--ghost"
+              style={{ width: "40px", height: "40px", padding: 0, borderRadius: "50%" }}
+              disabled={Number(form.guestCount) >= 10}
+              onClick={() => setField("guestCount", Math.min(10, Number(form.guestCount) + 1))}
+            >
+              +
+            </button>
           </div>
+          {Number(form.guestCount) > 10 && (
+            <div className="rzv-hintbar" style={{ marginTop: "0.75rem", color: "var(--rzv-gold)" }}>
+              For parties larger than 10 guests, please contact our staff for table arrangement.
+            </div>
+          )}
         </div>
         <div className="rzv-field">
           <label className="rzv-field__label" htmlFor="rzv-duration">
-            Duration
+            TABLE HOLD TIME
           </label>
           <select
             id="rzv-duration"
             className="rzv-select"
-            value={form.durationMinutes}
-            onChange={(e) => setField("durationMinutes", Number(e.target.value))}
+            value={form.holdDurationMinutes}
+            onChange={(e) => setField("holdDurationMinutes", Number(e.target.value))}
           >
-            {DURATION_OPTIONS.map((d) => (
+            {HOLD_DURATION_OPTIONS.map((d) => (
               <option key={d.value} value={d.value}>
                 {d.label}
               </option>
             ))}
           </select>
+          <p className="rzv-card__hint" style={{ marginTop: "0.5rem", fontSize: "0.85rem", opacity: 0.8 }}>
+            We will hold your selected table for this amount of time after your reservation time.
+          </p>
         </div>
       </div>
 
@@ -124,22 +149,7 @@ function ReservationFormPanel({
         ) : null}
       </div>
 
-      {/* Area preference */}
-      <div className="rzv-field">
-        <label className="rzv-field__label">Area preference</label>
-        <div className="rzv-chips">
-          {AREA_PREFERENCES.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              className={`rzv-chip ${form.areaPref === a.id ? "rzv-chip--active" : ""}`}
-              onClick={() => setField("areaPref", a.id)}
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
-      </div>
+
 
       {/* Event extras */}
       {isEvent ? (

@@ -160,22 +160,17 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
             aria-labelledby="menu-hero-title"
           >
             <div className="menu-hero__image-wrap">
-              <img src={menuImages.hero} alt="" />
+              <img src={menuImages.scanImage} alt="" />
             </div>
             <div className="menu-hero__content">
-              <p className="menu-hero__eyebrow">EXECUTIVE CHEF SELECTION</p>
+              <p className="menu-hero__eyebrow">QR ORDERING EXPERIENCE</p>
               <h1 className="menu-hero__title" id="menu-hero-title">
-                The Art of
+                Experience the Future of
                 <br />
-                Minimalist
-                <br />
-                Flavor, Crafted
-                <br />
-                with Precision.
+                Dining with QR Code
               </h1>
               <p className="menu-hero__desc">
-                Experience a journey through the seasons with ingredients sourced directly from
-                Japan&apos;s finest markets, prepared with ancient techniques and modern innovation.
+                Skip the line and enjoy your favorite dishes with just a scan.
               </p>
             </div>
           </section>

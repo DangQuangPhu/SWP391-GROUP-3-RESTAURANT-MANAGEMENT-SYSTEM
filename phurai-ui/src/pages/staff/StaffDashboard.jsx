@@ -4,6 +4,7 @@ import "@/styles/staff-dashboard.css";
 import StaffLayout from "@/components/staff/StaffLayout.jsx";
 import Icon from "@/components/staff/StaffIcons.jsx";
 import { NAV_GROUPS, VIEW_SUBTITLE } from "@/data/staffNav.js";
+import NotFound from "@/pages/NotFound.jsx";
 
 import OverviewSection from "@/components/staff/sections/OverviewSection.jsx";
 import TodaySection from "@/components/staff/sections/TodaySection.jsx";
@@ -40,7 +41,7 @@ function resolveRole(roleName) {
 
 const FLAT_NAV = NAV_GROUPS.flatMap((g) => g.items);
 
-function StaffDashboard({ isAuthenticated, currentUser, onSignOut, onNavigateHome, onOpenAuth }) {
+function StaffDashboard({ isAuthenticated, currentUser, onSignOut, onNavigateHome, onNavigate, onOpenAuth }) {
   const role = resolveRole(currentUser?.roleName);
   const hasAccess = isAuthenticated && Boolean(role);
 
@@ -167,38 +168,12 @@ function StaffDashboard({ isAuthenticated, currentUser, onSignOut, onNavigateHom
   /* ---- Access guard ---- */
   if (!hasAccess) {
     return (
-      <div className="sfx-gate">
-        <div className="sfx-gate__card">
-          <span className="sfx-gate__mark">P</span>
-          <h1>Phūrai Staff Portal</h1>
-          {!isAuthenticated ? (
-            <>
-              <p>Please sign in with a staff or manager account to continue.</p>
-              <div className="sfx-gate__acts">
-                <button className="sfx-btn sfx-btn--gold sfx-btn--md" onClick={onOpenAuth}>
-                  <Icon name="logout" size={16} />
-                  <span>Sign in</span>
-                </button>
-                <button className="sfx-btn sfx-btn--ghost sfx-btn--md" onClick={onNavigateHome}>
-                  <span>Back to website</span>
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <p>
-                Your account ({currentUser?.roleName || "Customer"}) does not have access to the staff
-                dashboard. Contact a manager if you believe this is a mistake.
-              </p>
-              <div className="sfx-gate__acts">
-                <button className="sfx-btn sfx-btn--gold sfx-btn--md" onClick={onNavigateHome}>
-                  <span>Back to website</span>
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+      <NotFound
+        pathname={typeof window !== "undefined" ? window.location.pathname : "/staff"}
+        currentUser={currentUser}
+        isAuthenticated={isAuthenticated}
+        onNavigate={onNavigate}
+      />
     );
   }
 

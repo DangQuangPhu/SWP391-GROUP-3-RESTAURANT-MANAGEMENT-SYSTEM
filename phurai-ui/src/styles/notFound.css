@@ -23,7 +23,7 @@
 .not-found-page__visual {
   position: relative;
   width: 100%;
-  max-width: 100%;
+  
   height: 100%;
   overflow: hidden;
   background: #15110e;
@@ -218,9 +218,8 @@
 @media (max-width: 1440px) {
   .not-found-page__visual {
     width: 100%;
-    height: auto;
-    aspect-ratio: 1440 / 1024;
-    min-height: 520px;
+    height: 100%;
+    
   }
 }
 

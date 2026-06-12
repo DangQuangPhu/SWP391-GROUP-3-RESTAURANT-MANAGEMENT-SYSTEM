@@ -1,4 +1,4 @@
-import { DINING_PURPOSES, AREA_PREFERENCES } from "@/data/floorPlanConfig";
+import { DINING_PURPOSES } from "@/data/floorPlanConfig";
 import { formatVND } from "@/utils/formatCurrency";
 
 function formatDate(dateStr) {
@@ -40,7 +40,6 @@ function ReservationSummary({
   onClearPromotion,
 }) {
   const purpose = DINING_PURPOSES.find((p) => p.id === form.diningPurpose);
-  const area = AREA_PREFERENCES.find((a) => a.id === form.areaPref);
   const totalCapacity = selectedTables.reduce((sum, t) => sum + Number(t.capacity), 0);
   const tableLabels =
     selectedTables.length > 0
@@ -52,6 +51,14 @@ function ReservationSummary({
     (sum, i) => sum + i.quantity * Number(i.price || 0),
     0
   );
+
+  let holdExpiresAt = "—";
+  if (form.date && form.time) {
+    const [y, m, d] = form.date.split("-").map(Number);
+    const [hh, mm] = form.time.split(":").map(Number);
+    const expireDate = new Date(y, m - 1, d, hh, mm + form.holdDurationMinutes);
+    holdExpiresAt = formatTime(`${expireDate.getHours()}:${expireDate.getMinutes()}`);
+  }
 
   return (
     <div className="rzv-card rzv-summary">
@@ -78,11 +85,15 @@ function ReservationSummary({
           <span className="rzv-summary__value">{purpose?.label || "—"}</span>
         </div>
         <div className="rzv-summary__row">
-          <span className="rzv-summary__label">Area</span>
-          <span className="rzv-summary__value">{area?.label || "Any area"}</span>
+          <span className="rzv-summary__label">Table hold time</span>
+          <span className="rzv-summary__value">{form.holdDurationMinutes} minutes</span>
         </div>
         <div className="rzv-summary__row">
-          <span className="rzv-summary__label">Table(s)</span>
+          <span className="rzv-summary__label">Hold expires at</span>
+          <span className="rzv-summary__value">{holdExpiresAt}</span>
+        </div>
+        <div className="rzv-summary__row">
+          <span className="rzv-summary__label">Table</span>
           <span className="rzv-summary__value">
             {tableLabels}
             {selectedTables.length > 0 ? ` · ${totalCapacity} seats` : ""}

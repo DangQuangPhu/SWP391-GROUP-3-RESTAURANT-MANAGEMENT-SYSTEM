@@ -13,6 +13,7 @@ import ProfilePage from "@/pages/customer/Profile";
 import SettingsPage from "@/pages/customer/Settings";
 import StaffDashboard from "@/pages/staff/StaffDashboard";
 import NotFound from "@/pages/NotFound";
+import LandingPage from "@/pages/public/LandingPage";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import FloatingActionButtons from "@/components/common/FloatingActionButtons";
@@ -64,6 +65,7 @@ function getPageFromPath(path) {
   if (normalized === "/contact-hours") return "contactHours";
   if (normalized === "/register") return "register";
   if (normalized === "/verify") return "verify";
+  if (normalized === "/landing") return "landing";
   if (normalized === "/") return "home";
 
   return "notFound";
@@ -274,6 +276,8 @@ function App() {
         ? "/careers"
         : page === "contactHours"
         ? "/contact-hours"
+        : page === "landing"
+        ? "/landing"
         : "/";
 
     setPathname(nextPath);
@@ -354,6 +358,7 @@ function App() {
       ) : null}
 
       {activePage === "home" && <Home />}
+      {activePage === "landing" && <LandingPage />}
       {activePage === "takeout" && <TakeOut />}
       {activePage === "catering" && <Catering />}
       {activePage === "menus" && (
@@ -418,10 +423,18 @@ function App() {
           currentUser={currentUser}
           onSignOut={handleSignOut}
           onNavigateHome={() => handleNavigate("home")}
+          onNavigate={handleNavigate}
           onOpenAuth={() => openAuthModal("login")}
         />
       )}
-      {activePage === "notFound" && <NotFound onNavigate={handleNavigate} />}
+      {activePage === "notFound" && (
+        <NotFound
+          onNavigate={handleNavigate}
+          pathname={pathname}
+          currentUser={currentUser}
+          isAuthenticated={isAuthenticated}
+        />
+      )}
 
       {!isPortalPage ? <Footer /> : null}
 

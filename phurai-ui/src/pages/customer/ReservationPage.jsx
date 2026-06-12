@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "@/styles/reservation.css";
 import ReservationHero from "@/components/reservation/ReservationHero";
 import ReservationDetailsPanel from "@/components/reservation/ReservationDetailsPanel";
-import FloorPlan from "@/components/reservation/FloorPlan";
+import TableBoard from "@/components/reservation/choose-table/TableBoard";
 import ReservationSummary from "@/components/reservation/ReservationSummary";
 import ReservationSuccessPanel from "@/components/reservation/ReservationSuccessPanel";
 import PreorderModal from "@/components/reservation/PreorderModal";
@@ -32,9 +32,8 @@ const INITIAL_FORM = {
   date: "",
   time: "",
   guestCount: 2,
-  durationMinutes: 120,
+  holdDurationMinutes: 30,
   diningPurpose: "casual",
-  areaPref: "any",
   fullName: "",
   email: "",
   phone: "",
@@ -57,10 +56,11 @@ function ReservationPage({
   onNavigate,
   onRequireAuth,
 }) {
+  const membershipTier = currentUser?.membershipTier || "Bronze";
   const [settings, setSettings] = useState(null);
   const [form, setForm] = useState(INITIAL_FORM);
   const [tables, setTables] = useState([]);
-  const [selectedTableIds, setSelectedTableIds] = useState([]);
+  const [selectedTableId, setSelectedTableId] = useState(null);
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -120,13 +120,18 @@ function ReservationPage({
 
   const timeSlots = useMemo(() => {
     if (!settings) return [];
-    return buildTimeSlots(settings.open_time, settings.close_time, form.durationMinutes);
-  }, [settings, form.durationMinutes]);
-
-  const areaType = useMemo(() => {
-    const pref = AREA_PREFERENCES.find((a) => a.id === form.areaPref);
-    return pref?.areaType || null;
-  }, [form.areaPref]);
+    let slots = buildTimeSlots(settings.open_time, settings.close_time, 120);
+    if (form.date === todayString()) {
+      const now = new Date();
+      slots = slots.filter((slot) => {
+        const [y, m, d] = form.date.split("-").map(Number);
+        const [hh, mm] = slot.value.split(":").map(Number);
+        const slotTime = new Date(y, m - 1, d, hh, mm);
+        return slotTime > now;
+      });
+    }
+    return slots;
+  }, [settings, form.date]);
 
   /* Fetch availability whenever the key selection changes (debounced). */
   useEffect(() => {
@@ -141,21 +146,20 @@ function ReservationPage({
       getAvailability({
         date: form.date,
         time: form.time,
-        durationMinutes: form.durationMinutes,
+        durationMinutes: 120,
         guestCount: form.guestCount,
-        areaType,
+        areaType: null,
         eventType: form.diningPurpose,
       })
         .then((res) => {
           if (!active) return;
           const nextTables = res?.tables || [];
           setTables(nextTables);
-          setSelectedTableIds((prev) =>
-            prev.filter((id) => {
-              const t = nextTables.find((x) => x.table_id === id);
-              return t && t.is_bookable && !t.is_too_small;
-            })
-          );
+          setSelectedTableId((prev) => {
+            if (!prev) return null;
+            const t = nextTables.find((x) => x.table_id === prev);
+            return (t && t.is_bookable && !t.is_too_small) ? prev : null;
+          });
         })
         .catch((err) => {
           if (active) setError(err?.message || "Could not load availability.");
@@ -169,18 +173,16 @@ function ReservationPage({
       active = false;
       clearTimeout(handle);
     };
-  }, [form.date, form.time, form.durationMinutes, form.guestCount, areaType, form.diningPurpose]);
+  }, [form.date, form.time, form.guestCount, form.diningPurpose]);
 
   const selectedTables = useMemo(
-    () => tables.filter((t) => selectedTableIds.includes(t.table_id)),
-    [tables, selectedTableIds]
+    () => tables.filter((t) => t.table_id === selectedTableId),
+    [tables, selectedTableId]
   );
 
   const handleSelectTable = useCallback((tableId) => {
     setError("");
-    setSelectedTableIds((prev) =>
-      prev.includes(tableId) ? prev.filter((id) => id !== tableId) : [...prev, tableId]
-    );
+    setSelectedTableId(tableId);
   }, []);
 
   const totalCapacity = useMemo(
@@ -204,12 +206,12 @@ function ReservationPage({
 
   const canSubmit = useMemo(() => {
     if (!detailsValid) return false;
-    if (selectedTableIds.length === 0) return false;
+    if (!selectedTableId) return false;
     if (totalCapacity < form.guestCount) return false;
     return true;
-  }, [detailsValid, selectedTableIds, totalCapacity, form.guestCount]);
+  }, [detailsValid, selectedTableId, totalCapacity, form.guestCount]);
 
-  const summaryVisible = step === "tables" && selectedTableIds.length > 0;
+  const summaryVisible = step === "tables" && selectedTableId !== null;
 
   const scrollToBooking = () => {
     bookingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -230,7 +232,19 @@ function ReservationPage({
 
   const handleDone = () => setDetailsReviewing(true);
   const handleCancelReview = () => setDetailsReviewing(false);
-  const handleConfirmDetails = () => transitionTo("tables");
+  const handleConfirmDetails = () => {
+    if (form.date === todayString() && form.time) {
+      const now = new Date();
+      const [y, m, d] = form.date.split("-").map(Number);
+      const [hh, mm] = form.time.split(":").map(Number);
+      const slotTime = new Date(y, m - 1, d, hh, mm);
+      if (slotTime <= now) {
+        alert("The selected time has already passed. Please choose another time.");
+        return;
+      }
+    }
+    transitionTo("tables");
+  };
   const handleEditDetails = () => transitionTo("details", () => setDetailsReviewing(false));
 
   /* --- promotion --- */
@@ -261,11 +275,16 @@ function ReservationPage({
       parts.push(`[Guest Phone: ${form.phone.trim()}]`);
     }
     if (form.specialRequest.trim()) parts.push(form.specialRequest.trim());
+    parts.push(`[Hold: ${form.holdDurationMinutes}m]`);
     return parts.join("\n").slice(0, 1000);
   };
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
+    if (!selectedTableId) {
+      setError("Please select a table before continuing.");
+      return;
+    }
     setError("");
     setSubmitting(true);
 
@@ -273,10 +292,12 @@ function ReservationPage({
     const payload = {
       date: form.date,
       time: form.time,
-      durationMinutes: form.durationMinutes,
+      durationMinutes: 120, // default dining block
+      holdDurationMinutes: form.holdDurationMinutes,
       guest_count: form.guestCount,
       preferred_area_id: preferredAreaId,
-      table_ids: selectedTableIds,
+      selectedTableId: selectedTableId,
+      table_ids: selectedTableId ? [selectedTableId] : [],
       dining_purpose: DINING_PURPOSES.find((p) => p.id === form.diningPurpose)?.label,
       contact_name: form.fullName.trim(),
       contact_email: form.email.trim(),
@@ -309,16 +330,16 @@ function ReservationPage({
     } catch (err) {
       if (err?.code === "TABLE_UNAVAILABLE") {
         setError(err.message);
-        setSelectedTableIds([]);
+        setSelectedTableId(null);
         getAvailability({
           date: form.date,
           time: form.time,
-          durationMinutes: form.durationMinutes,
+          durationMinutes: 120,
           guestCount: form.guestCount,
-          areaType,
+          areaType: null,
         })
           .then((r) => setTables(r?.tables || []))
-          .catch(() => {});
+          .catch(() => { });
       } else {
         setError(err?.message || "Could not create reservation. Please try again.");
       }
@@ -366,13 +387,12 @@ function ReservationPage({
             {STEPS.map((s, i) => (
               <li
                 key={s.id}
-                className={`rzv-steps__item ${
-                  i === activeStepIndex
+                className={`rzv-steps__item ${i === activeStepIndex
                     ? "rzv-steps__item--active"
                     : i < activeStepIndex
-                    ? "rzv-steps__item--done"
-                    : ""
-                }`}
+                      ? "rzv-steps__item--done"
+                      : ""
+                  }`}
               >
                 <span className="rzv-steps__dot">{i < activeStepIndex ? "✓" : i + 1}</span>
                 <span className="rzv-steps__label">{s.label}</span>
@@ -422,11 +442,16 @@ function ReservationPage({
                 </span>
               </div>
 
-              <FloorPlan
+              <TableBoard
                 tables={tables}
-                selectedTableIds={selectedTableIds}
+                selectedTableId={selectedTableId}
                 onSelectTable={handleSelectTable}
                 loading={loadingAvailability}
+                guestCount={form.guestCount}
+                membershipTier={membershipTier}
+                isAuthenticated={isAuthenticated}
+                onNavigateLogin={() => onNavigate("login")}
+                onNavigateRegister={onRequireAuth}
               />
 
               {summaryVisible ? (

@@ -23,6 +23,7 @@ import combo2 from '@/assets/images/menu/Combo2.jpg';
 import combo4 from '@/assets/images/menu/Combo4.jpg';
 import combo6 from '@/assets/images/menu/Combo6.jpg';
 import combo8 from '@/assets/images/menu/Combo8.jpg';
+import scanImage from '@/assets/images/menu/scan.jpg';
 
 export const menuIcons = {
   nav: [
@@ -51,6 +52,7 @@ export const menuImages = {
   combo4,
   combo6,
   combo8,
+  scanImage,
   omakaseExperience: combo8,
   signatureTasting: combo6,
   hero: menuHero,
@@ -73,4 +75,5 @@ export const menuImages = {
   hokusetsuJunmai: menuHokusetsuJunmai,
   lycheeMartini: menuLycheeMartini,
   footerBg: menuFooterBg,
+  scanImage: scanImage,
 };

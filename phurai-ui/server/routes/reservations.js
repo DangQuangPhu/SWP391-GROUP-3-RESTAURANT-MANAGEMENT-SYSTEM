@@ -1,6 +1,8 @@
 import express from "express";
-import pool from "../db.js";
+import { pool } from "../database/db.js";
 import { resolveUserId, requireUserId } from "../middleware/authMiddleware.js";
+import { TABLE_DISPLAY } from "../utils/constants.js";
+import { getMembershipInfo, canAccessArea } from "../utils/membership.js";
 
 const router = express.Router();
 
@@ -139,6 +141,46 @@ function computeRecommendations(tables, guestCount) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Expire Old Holds                                                   */
+/* ------------------------------------------------------------------ */
+
+async function expireOldHolds() {
+  try {
+    const [rows] = await pool.query(`
+      SELECT reservation_id, reservation_start_at, special_request 
+      FROM dbo.Reservations 
+      WHERE reservation_status IN (N'Pending', N'Confirmed')
+    `);
+    
+    if (rows.length === 0) return;
+    
+    const now = Date.now();
+    const toExpire = [];
+    
+    for (const r of rows) {
+      const match = String(r.special_request || '').match(/\[Hold:\s*(\d+)m\]/);
+      const holdMins = match ? parseInt(match[1], 10) : 30; // default 30 mins if not found
+      const startMs = new Date(r.reservation_start_at).getTime();
+      
+      if (now > startMs + holdMins * 60000) {
+        toExpire.push(r.reservation_id);
+      }
+    }
+    
+    if (toExpire.length > 0) {
+      const placeholders = toExpire.map(() => '?').join(',');
+      await pool.query(`
+        UPDATE dbo.Reservations
+        SET reservation_status = N'Expired', updated_at = SYSDATETIME()
+        WHERE reservation_id IN (${placeholders})
+      `, toExpire);
+    }
+  } catch (err) {
+    console.error("Failed to expire old holds:", err);
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* GET /api/reservations/settings                                      */
 /* ------------------------------------------------------------------ */
 
@@ -190,6 +232,8 @@ router.get("/menu", async (_req, res) => {
 
 router.get("/availability", async (req, res) => {
   try {
+    await expireOldHolds();
+
     const { date, time } = req.query;
     const durationMinutes = Number(req.query.durationMinutes) || 120;
     const guestCount = Number(req.query.guestCount) || 1;
@@ -401,8 +445,10 @@ router.post("/", resolveUserId, async (req, res) => {
                  AND r.reservation_end_at > ?
              ) THEN N'Booked'
              ELSE N'Available'
-           END AS availability_at_slot
+           END AS availability_at_slot,
+           a.area_name
          FROM dbo.RestaurantTables t
+         LEFT JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id
          WHERE t.table_id IN (${inPlaceholders});`,
         [slotEnd, slotStart, ...tableIds]
       );
@@ -411,6 +457,18 @@ router.post("/", resolveUserId, async (req, res) => {
         await connection.rollback();
         connection.release();
         return res.status(400).json({ success: false, message: "One or more selected tables do not exist." });
+      }
+
+      // 1. Fetch user membership tier (if logged in, else Bronze)
+      let currentTier = "Bronze";
+      if (customerId) {
+        const [userRows] = await connection.query(
+          `SELECT membership_tier FROM dbo.CustomerProfiles WHERE user_id = ?`,
+          [customerId]
+        );
+        if (userRows.length > 0 && userRows[0].membership_tier) {
+          currentTier = userRows[0].membership_tier;
+        }
       }
 
       const conflict = checkRows.find((r) => r.availability_at_slot !== "Available");
@@ -423,6 +481,17 @@ router.post("/", resolveUserId, async (req, res) => {
           message:
             "This table has just been booked or is unavailable. Please choose another table.",
         });
+      }
+
+      for (const row of checkRows) {
+        if (!canAccessArea(currentTier, row.area_name)) {
+          await connection.rollback();
+          connection.release();
+          return res.status(403).json({
+            success: false,
+            message: "Your membership tier is not eligible for this table.",
+          });
+        }
       }
 
       const totalCapacity = checkRows.reduce((sum, r) => sum + Number(r.capacity), 0);
@@ -511,6 +580,8 @@ router.post("/", resolveUserId, async (req, res) => {
 
 router.get("/my", resolveUserId, requireUserId, async (req, res) => {
   try {
+    await expireOldHolds();
+
     const [rows] = await pool.query(
       `SELECT
          r.reservation_id, r.reservation_start_at, r.reservation_end_at,
