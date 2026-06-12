@@ -1,4 +1,3 @@
-
 -- =============================================================
 -- PHŪRAI PREMIUM RESTAURANT MANAGEMENT SYSTEM
 -- SQL Server Relational Database Design
@@ -639,8 +638,8 @@ INSERT INTO dbo.UserAccounts
 VALUES
 (1, 5, N'Nguyen Van Admin',  N'admin@phurai.vn',    '0901000001', N'$2b$12$admin_hash',   1, 1, '2026-05-18T08:00:00'),
 (2, 4, N'Tran Thi Manager',  N'manager@phurai.vn',  '0901000002', N'$2b$12$manager_hash', 1, 1, '2026-05-18T08:10:00'),
-(3, 2, N'Le Van Staff',      N'staff1@phurai.vn',   '0901000003', N'$2b$12$staff1_hash',  1, 1, '2026-05-18T08:30:00'),
-(4, 2, N'Pham Thi Staff',    N'staff2@phurai.vn',   '0901000004', N'$2b$12$staff2_hash',  1, 1, NULL),
+(3, 2, N'Le Van Staff',      N'staff1@phurai.vn',   '0901000003', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, '2026-05-18T08:30:00'),
+(4, 2, N'Pham Thi Staff',    N'staff2@phurai.vn',   '0901000004', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, NULL),
 (5, 3, N'Hoang Van Chef',    N'kitchen1@phurai.vn', '0901000005', N'$2b$12$chef1_hash',   1, 1, '2026-05-18T09:00:00'),
 (6, 3, N'Do Thi Chef',       N'kitchen2@phurai.vn', '0901000006', N'$2b$12$chef2_hash',   1, 1, NULL),
 
@@ -723,26 +722,61 @@ GO
 
 SET IDENTITY_INSERT dbo.RestaurantAreas ON;
 INSERT INTO dbo.RestaurantAreas (area_id, area_name, area_type, description) VALUES
-(1, N'Main Dining',    N'Regular', N'Ground floor open seating'),
-(2, N'VIP Lounge',     N'VIP',     N'Private VIP booths with dedicated waiter'),
-(3, N'Garden Terrace', N'Outdoor', N'Outdoor seating with garden view'),
-(4, N'Wine Bar',       N'Bar',     N'Bar seating near the wine cellar'),
-(5, N'Private Room A', N'Private', N'Bookable private room for events');
+(1, N'Window Area',      N'Regular', N'Window-side seating for guests who prefer natural light and quiet dining'),
+(2, N'Standard Area',    N'Regular', N'Primary dining area with regular restaurant tables'),
+(3, N'Premium Area',     N'VIP',     N'Elevated premium seating with better spacing and atmosphere'),
+(4, N'VIP Lounge',       N'VIP',     N'VIP seating area for premium guests and special occasions'),
+(5, N'Private Room',     N'Private', N'Private dining room for business dinners, birthdays and celebrations'),
+(6, N'Kitchen View',     N'Bar',     N'Chef counter seating near the open kitchen'),
+(7, N'Rooftop Outdoor',  N'Outdoor', N'Outdoor rooftop seating with open-air dining experience');
 SET IDENTITY_INSERT dbo.RestaurantAreas OFF;
 GO
 
 SET IDENTITY_INSERT dbo.RestaurantTables ON;
-INSERT INTO dbo.RestaurantTables (table_id, area_id, table_number, capacity, table_status, static_qr_code) VALUES
-(1,  1, N'T01', 2,  N'Available', N'qr-t01-abc123'),
-(2,  1, N'T02', 4,  N'Available', N'qr-t02-def456'),
-(3,  1, N'T03', 4,  N'Occupied',  N'qr-t03-ghi789'),
-(4,  1, N'T04', 6,  N'Reserved',  N'qr-t04-jkl012'),
-(5,  2, N'V01', 4,  N'Available', N'qr-v01-vip001'),
-(6,  2, N'V02', 6,  N'Available', N'qr-v02-vip002'),
-(7,  3, N'G01', 4,  N'Available', N'qr-g01-gar001'),
-(8,  3, N'G02', 4,  N'Cleaning',  N'qr-g02-gar002'),
-(9,  4, N'B01', 2,  N'Available', N'qr-b01-bar001'),
-(10, 5, N'P01', 12, N'Available', N'qr-p01-pvt001');
+INSERT INTO dbo.RestaurantTables
+(table_id, area_id, table_number, capacity, table_status, static_qr_code)
+VALUES
+-- Window Area
+(1,  1, N'W-01',   2, N'Available', N'qr-w-01'),
+(2,  1, N'W-02',   2, N'Available', N'qr-w-02'),
+(3,  1, N'W-03',   4, N'Reserved',  N'qr-w-03'),
+(4,  1, N'W-04',   4, N'Occupied',  N'qr-w-04'),
+(5,  1, N'W-05',   2, N'Available', N'qr-w-05'),
+
+-- Standard Area
+(6,  2, N'S-01',   2, N'Available', N'qr-s-01'),
+(7,  2, N'S-02',   2, N'Available', N'qr-s-02'),
+(8,  2, N'S-03',   4, N'Available', N'qr-s-03'),
+(9,  2, N'S-04',   4, N'Occupied',  N'qr-s-04'),
+(10, 2, N'S-05',   6, N'Reserved',  N'qr-s-05'),
+(11, 2, N'S-06',   6, N'Cleaning',  N'qr-s-06'),
+(12, 2, N'S-07',   4, N'Available', N'qr-s-07'),
+(13, 2, N'S-08',   6, N'Reserved',  N'qr-s-08'),
+
+-- Premium Area
+(14, 3, N'PRE-01', 2, N'Available', N'qr-pre-01'),
+(15, 3, N'PRE-02', 4, N'Available', N'qr-pre-02'),
+(16, 3, N'PRE-03', 6, N'Reserved',  N'qr-pre-03'),
+(17, 3, N'PRE-04', 4, N'Available', N'qr-pre-04'),
+
+-- VIP Lounge
+(18, 4, N'VIP-01', 4, N'Available', N'qr-vip-01'),
+(19, 4, N'VIP-02', 6, N'Occupied',  N'qr-vip-02'),
+(20, 4, N'VIP-03', 8, N'Available', N'qr-vip-03'),
+
+-- Private Room
+(21, 5, N'PR-01', 10, N'Available', N'qr-pr-01'),
+(22, 5, N'PR-02',  8, N'Occupied',  N'qr-pr-02'),
+
+-- Kitchen View
+(23, 6, N'K-01',   1, N'Available', N'qr-k-01'),
+(24, 6, N'K-02',   2, N'Cleaning',  N'qr-k-02'),
+(25, 6, N'K-03',   1, N'Available', N'qr-k-03'),
+
+-- Rooftop / Outdoor
+(26, 7, N'R-01',   4, N'Available', N'qr-r-01'),
+(27, 7, N'R-02',   6, N'Reserved',  N'qr-r-02'),
+(28, 7, N'R-03',   4, N'Cleaning',  N'qr-r-03');
 SET IDENTITY_INSERT dbo.RestaurantTables OFF;
 GO
 
@@ -817,22 +851,22 @@ INSERT INTO dbo.Reservations
  guest_count, special_request, reservation_status, reservation_source, confirmed_by_staff_id, confirmed_at, checked_in_at)
 VALUES
 (1,  7, NULL, 1, '2026-05-20T18:30:00', '2026-05-20T20:30:00', 2, N'Window seat if possible', N'Confirmed',  N'Online',  3, '2026-05-18T09:15:00', NULL),
-(2,  8, NULL, 2, '2026-05-20T19:00:00', '2026-05-20T21:00:00', 4, N'VIP area requested',      N'Confirmed',  N'Online',  3, '2026-05-18T10:00:00', NULL),
-(3,  9, NULL, 1, '2026-05-21T12:00:00', '2026-05-21T14:00:00', 3, NULL,                       N'Pending',    N'Online',  NULL, NULL, NULL),
+(2,  8, NULL, 4, '2026-05-20T19:00:00', '2026-05-20T21:00:00', 4, N'VIP area requested',      N'Confirmed',  N'Online',  3, '2026-05-18T10:00:00', NULL),
+(3,  9, NULL, 2, '2026-05-21T12:00:00', '2026-05-21T14:00:00', 3, NULL,                       N'Pending',    N'Online',  NULL, NULL, NULL),
 (4, 10, NULL, 5, '2026-05-21T20:00:00', '2026-05-21T22:00:00', 6, N'Business dinner',          N'Confirmed',  N'Online',  4, '2026-05-19T08:00:00', NULL),
-(5, NULL,3,    1, '2026-05-18T18:00:00', '2026-05-18T20:00:00', 2, N'Walk-in guest',           N'Checked In', N'Walk-in', 3, '2026-05-18T17:55:00', '2026-05-18T18:00:00'),
-(6,  7, NULL, 1, '2026-04-10T19:00:00', '2026-04-10T21:00:00', 2, NULL,                       N'Completed',  N'Online',  3, '2026-04-08T10:00:00', '2026-04-10T18:55:00'),
-(7,  8, NULL, 2, '2026-04-15T20:00:00', '2026-04-15T22:00:00', 4, N'VIP birthday dinner',      N'Completed',  N'Online',  4, '2026-04-13T09:30:00', '2026-04-15T19:55:00');
+(5, NULL,3,    2, '2026-05-18T18:00:00', '2026-05-18T20:00:00', 2, N'Walk-in guest',           N'Checked In', N'Walk-in', 3, '2026-05-18T17:55:00', '2026-05-18T18:00:00'),
+(6,  7, NULL, 2, '2026-04-10T19:00:00', '2026-04-10T21:00:00', 2, NULL,                       N'Completed',  N'Online',  3, '2026-04-08T10:00:00', '2026-04-10T18:55:00'),
+(7,  8, NULL, 4, '2026-04-15T20:00:00', '2026-04-15T22:00:00', 4, N'VIP birthday dinner',      N'Completed',  N'Online',  4, '2026-04-13T09:30:00', '2026-04-15T19:55:00');
 SET IDENTITY_INSERT dbo.Reservations OFF;
 GO
 
 INSERT INTO dbo.ReservationTables (reservation_id, table_id, assigned_by_staff_id) VALUES
-(1, 1, 3),
-(2, 6, 3),
-(4, 10, 4),
-(5, 2, 3),
-(6, 2, 3),
-(7, 5, 4);
+(1, 1, 3),    -- W-01
+(2, 18, 3),   -- VIP-01
+(4, 21, 4),   -- PR-01
+(5, 6, 3),    -- S-01
+(6, 7, 3),    -- S-02
+(7, 18, 4);   -- VIP-01
 GO
 
 SET IDENTITY_INSERT dbo.PreorderItems ON;
@@ -1251,4 +1285,29 @@ ORDER BY cr.created_at DESC;
 GO
 
 -- End of Phūrai SQL Server Database Script
+-- Reset DB--
+
 SELECT * FROM dbo.UserAccounts
+SELECT
+    a.area_name,
+    t.table_id,
+    t.table_number,
+    t.capacity,
+    t.table_status
+FROM dbo.RestaurantTables t
+JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id
+ORDER BY t.table_id;
+
+
+-- Reset DB
+
+USE master;
+GO
+
+ALTER DATABASE [System_Restaurant]
+SET SINGLE_USER
+WITH ROLLBACK IMMEDIATE;
+GO
+
+DROP DATABASE [System_Restaurant];
+GO
