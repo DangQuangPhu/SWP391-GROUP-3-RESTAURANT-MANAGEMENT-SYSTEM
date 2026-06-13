@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { homeImages } from '@/data/homeAssets';
+import { homeImages } from '@/features/home';
 import '@/styles/unique-experience.css';
 
 const FALLBACK_IMAGE = homeImages.hero;

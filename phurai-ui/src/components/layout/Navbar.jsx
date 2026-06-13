@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import UserAvatar from "@/components/auth/UserAvatar";
-import ProfileDropdown from "@/components/profile/ProfileDropdown";
+import { UserAvatar } from "@/features/auth";
+import { ProfileDropdown } from "@/features/profile";
 import "@/styles/profile.css";
 
 const navLinks = [

@@ -1,0 +1,20 @@
+export { default as AuthModal } from "./components/AuthModal.jsx";
+export { default as AuthSuccessOverlay } from "./components/AuthSuccessOverlay.jsx";
+export { default as ProfileModal } from "./components/ProfileModal.jsx";
+export { default as AuthCard } from "./components/AuthCard.jsx";
+export { default as OtpVerification } from "./components/OtpVerification.jsx";
+export { default as UserAvatar } from "./components/UserAvatar.jsx";
+export { default as OtpCodeInput } from "./components/OtpCodeInput.jsx";
+export { default as SystemAvatarOption } from "./components/SystemAvatarOption.jsx";
+export { default as ForgotPasswordForm } from "./components/ForgotPasswordForm.jsx";
+export { default as ResetPasswordForm } from "./components/ResetPasswordForm.jsx";
+export { default as GoogleAccountChooserModal } from "./components/GoogleAccountChooserModal.jsx";
+export { default as Register } from "./pages/Register.jsx";
+export { default as VerifyEmail } from "./pages/VerifyEmail.jsx";
+
+export * from "./components/AuthFields.jsx";
+export * from "./components/googleAuth.js";
+export * from "./services/authApi.js";
+export * from "./utils/authHelpers.js";
+export * from "./utils/userMapper.js";
+export * from "./utils/otpTiming.js";

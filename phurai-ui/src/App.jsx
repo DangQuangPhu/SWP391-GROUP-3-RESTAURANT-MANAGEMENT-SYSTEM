@@ -1,27 +1,38 @@
-import { useEffect, useMemo, useState } from "react";
-import "@/styles/home.css";
-import Home from "@/pages/customer/Home";
-import TakeOut from "@/pages/customer/TakeOut";
-import Catering from "@/pages/customer/Catering";
-import PrivateEvents from "@/pages/customer/PrivateEvents";
-import Careers from "@/pages/customer/Careers";
-import ContactHours from "@/pages/customer/ContactHours";
-import Menu from "@/pages/customer/Menu";
-import ReservationPage from "@/pages/customer/ReservationPage";
-import MyReservationsPage from "@/pages/customer/MyReservationsPage";
-import ProfilePage from "@/pages/customer/Profile";
-import SettingsPage from "@/pages/customer/Settings";
-import StaffDashboard from "@/pages/staff/StaffDashboard";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import "@/features/home/styles/home.css";
+import { HomePage as Home } from "@/features/home";
+import {
+  TakeOutPage as TakeOut,
+  CateringPage as Catering,
+  PrivateEventsPage as PrivateEvents,
+  CareersPage as Careers,
+  ContactHoursPage as ContactHours,
+} from "@/features/content";
+import { MenuPage as Menu } from "@/features/menu";
+import {
+  ReservationPage,
+  MyReservationsPage,
+} from "@/features/reservations";
+import {
+  ProfilePage,
+  SettingsPage,
+  useUserProfile,
+  normalizeStoredAvatarUrl,
+} from "@/features/profile";
+import { ManagerDashboardPage as ManagerDashboard } from "@/features/manager-dashboard";
 import NotFound from "@/pages/NotFound";
 import LandingPage from "@/pages/public/LandingPage";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import FloatingActionButtons from "@/components/common/FloatingActionButtons";
-import Register from "@/pages/Register";
-import VerifyEmail from "@/pages/VerifyEmail.jsx";
-import AuthModal from "@/components/auth/AuthModal";
-import AuthSuccessOverlay from "@/components/auth/AuthSuccessOverlay";
-import ProfileModal from "@/components/auth/ProfileModal";
+import {
+  Register,
+  VerifyEmail,
+  AuthModal,
+  AuthSuccessOverlay,
+  ProfileModal,
+  blurActiveElement,
+} from "@/features/auth";
 import {
   clearAuthUser,
   getProfile,
@@ -29,9 +40,6 @@ import {
   mapApiUserToFrontend,
   saveAuthUser,
 } from "@/api";
-import { blurActiveElement } from "@/utils/authHelpers";
-import { normalizeStoredAvatarUrl } from "@/utils/avatarUtils";
-import { useUserProfile } from "@/hooks/useUserProfile";
 
 function normalizeAuthUser(user) {
   const mapped = mapApiUserToFrontend(user) || user;
@@ -43,6 +51,16 @@ function normalizeAuthUser(user) {
   };
 }
 
+function isManagerUser(user) {
+  if (!user) return false;
+  const roleId = Number(user.roleId ?? user.role_id);
+  if (roleId === 4) return true;
+  const role = String(user.roleName ?? user.role_name ?? user.role ?? "")
+    .trim()
+    .toLowerCase();
+  return role === "manager" || role === "admin";
+}
+
 function normalizePathname(path) {
   if (!path || path === "/") return "/";
   return path.replace(/\/+$/, "") || "/";
@@ -52,7 +70,7 @@ function getPageFromPath(path) {
   const normalized = normalizePathname(path);
 
   if (normalized.startsWith("/settings")) return "settings";
-  if (normalized === "/staff" || normalized.startsWith("/staff/")) return "staff";
+  if (normalized === "/manager" || normalized.startsWith("/manager/")) return "manager";
   if (normalized === "/profile") return "profile";
   if (normalized === "/login") return "login";
   if (normalized === "/take-out") return "takeout";
@@ -123,6 +141,17 @@ function App() {
     blurActiveElement();
     setIsAuthModalOpen(false);
   };
+
+  const navigateToPath = useCallback((path) => {
+    const nextPath =
+      path === "/settings" || path === "/settings/" ? "/settings/profile" : path;
+    setPathname(nextPath);
+    setActivePage(getPageFromPath(nextPath));
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState(null, "", nextPath);
+    }
+  }, []);
 
   useEffect(() => {
     const stored = loadAuthUser();
@@ -197,6 +226,9 @@ function App() {
         setIsAuthenticated(true);
         setCurrentUser(pendingAuthUser);
         saveAuthUser(pendingAuthUser, Boolean(localStorage.getItem("phurai_auth_user")));
+        if (isManagerUser(pendingAuthUser)) {
+          navigateToPath("/manager");
+        }
         setPendingAuthUser(null);
       }
     }, 3200);
@@ -205,18 +237,7 @@ function App() {
       clearTimeout(fadeTimer);
       clearTimeout(closeTimer);
     };
-  }, [showWelcome, pendingAuthUser]);
-
-  const navigateToPath = (path) => {
-    const nextPath =
-      path === "/settings" || path === "/settings/" ? "/settings/profile" : path;
-    setPathname(nextPath);
-    setActivePage(getPageFromPath(nextPath));
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    if (window.location.pathname !== nextPath) {
-      window.history.pushState(null, "", nextPath);
-    }
-  };
+  }, [showWelcome, pendingAuthUser, navigateToPath]);
 
   const handleNavigate = (page) => {
     if (page === "login") {
@@ -260,6 +281,11 @@ function App() {
       return;
     }
 
+    if (page === "manager") {
+      navigateToPath("/manager");
+      return;
+    }
+
     setActivePage(page);
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
 
@@ -278,6 +304,8 @@ function App() {
         ? "/contact-hours"
         : page === "landing"
         ? "/landing"
+        : page === "manager"
+        ? "/manager"
         : "/";
 
     setPathname(nextPath);
@@ -300,6 +328,9 @@ function App() {
     saveAuthUser(normalized, options.remember);
     blurActiveElement();
     setIsAuthModalOpen(false);
+    if (isManagerUser(normalized)) {
+      navigateToPath("/manager");
+    }
   };
 
   const handleSignOut = () => {
@@ -329,10 +360,10 @@ function App() {
     setShowProfile(true);
   };
 
-  const isStaffPage = pathname === "/staff" || pathname.startsWith("/staff/");
+  const isManagerPage = pathname === "/manager" || pathname.startsWith("/manager/");
   const isAccountPage =
     pathname.startsWith("/profile") || pathname.startsWith("/settings");
-  const isPortalPage = isAccountPage || isStaffPage;
+  const isPortalPage = isAccountPage || isManagerPage;
 
   return (
     <>
@@ -417,8 +448,8 @@ function App() {
           onApplyAvatar={applyAvatarUpdate}
         />
       )}
-      {activePage === "staff" && (
-        <StaffDashboard
+      {activePage === "manager" && (
+        <ManagerDashboard
           isAuthenticated={isAuthenticated}
           currentUser={currentUser}
           onSignOut={handleSignOut}

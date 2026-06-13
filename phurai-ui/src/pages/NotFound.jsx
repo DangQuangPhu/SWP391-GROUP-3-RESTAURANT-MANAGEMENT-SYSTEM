@@ -21,9 +21,8 @@ function getErrorContent({ pathname = "", currentUser, isAuthenticated }) {
   const lowerPath = pathname.toLowerCase();
 
   const isAdminRoute = lowerPath.startsWith("/admin");
-  const isStaffRoute = lowerPath.startsWith("/staff");
   const isManagerRoute = lowerPath.startsWith("/manager");
-  const isRestrictedRoute = isAdminRoute || isStaffRoute || isManagerRoute;
+  const isRestrictedRoute = isAdminRoute || isManagerRoute;
 
   const isOldManagementRoute =
     lowerPath.includes("wp-admin") ||
@@ -49,9 +48,9 @@ function getErrorContent({ pathname = "", currentUser, isAuthenticated }) {
       type: "guest-restricted",
       title: "Restricted Area",
       subtitle: "This section is reserved for authorized Phūrai team members.",
-      description: "You may have opened an old management link, changed the URL manually, or tried to access a staff-only workspace. Please sign in with an authorized account to continue.",
+      description: "You may have opened an old management link, changed the URL manually, or tried to access a manager-only workspace. Please sign in with an authorized account to continue.",
       helperText: "If you are a customer, please use the reservation and dining features from the main website.",
-      primaryAction: { label: "Staff Sign In", target: "login" },
+      primaryAction: { label: "Manager Sign In", target: "login" },
       secondaryAction: { label: "Back to Home", target: "home" },
     };
   }
@@ -61,7 +60,7 @@ function getErrorContent({ pathname = "", currentUser, isAuthenticated }) {
       type: "customer-restricted",
       title: "Access Not Allowed",
       subtitle: "Your customer account cannot access this workspace.",
-      description: "This page belongs to the internal restaurant management system. Customer accounts can manage reservations, view booking history, order from the menu, and update profile information, but cannot access staff or admin tools.",
+      description: "This page belongs to the internal restaurant management system. Customer accounts can manage reservations, view booking history, order from the menu, and update profile information, but cannot access manager or admin tools.",
       primaryAction: { label: "Go to My Reservations", target: "myReservations" },
       secondaryAction: { label: "Back to Home", target: "home" },
       tertiaryAction: { label: "Switch Account", target: "login" },
@@ -70,11 +69,11 @@ function getErrorContent({ pathname = "", currentUser, isAuthenticated }) {
 
   if ((isAdminRoute || isManagerRoute) && role === "Staff") {
     return {
-      type: "staff-permission-required",
+      type: "manager-permission-required",
       title: "Permission Required",
-      subtitle: "Your staff account does not have permission to open this page.",
+      subtitle: "Your account does not have permission to open this page.",
       description: "This area requires a manager or admin account. Please contact your manager if you believe you should have access.",
-      primaryAction: { label: "Go to Staff Dashboard", target: "staff" },
+      primaryAction: { label: "Go to Manager Dashboard", target: "manager" },
       secondaryAction: { label: "Back to Home", target: "home" },
     };
   }
@@ -85,7 +84,7 @@ function getErrorContent({ pathname = "", currentUser, isAuthenticated }) {
       title: "Admin Permission Required",
       subtitle: "This page is only available to system administrators.",
       description: "Managers can manage restaurant operations, reports, staff scheduling, reservations, menu items, vouchers, and inventory, but cannot access system-level admin controls.",
-      primaryAction: { label: "Go to Manager Dashboard", target: "staff" },
+      primaryAction: { label: "Go to Manager Dashboard", target: "manager" },
       secondaryAction: { label: "Back to Home", target: "home" },
     };
   }
@@ -112,7 +111,7 @@ function NotFound({ onNavigate, pathname = "", currentUser, isAuthenticated }) {
       reservation: "/",
       login: "/login",
       myReservations: "/my-reservations",
-      staff: "/staff",
+      manager: "/manager",
     };
     window.location.href = paths[page] || "/";
   };

@@ -3,9 +3,8 @@ export {
   saveAuthUser,
   loadAuthUser,
   clearAuthUser,
-} from "./httpClient.js";
+} from "@/core/api/index.js";
 
-export { mapApiUserToFrontend } from "@/utils/userMapper.js";
-
-export * from "./authApi.js";
-export * from "./profileApi.js";
+export { mapApiUserToFrontend } from "@/features/auth";
+export * from "@/features/auth/services/authApi.js";
+export * from "@/features/profile/services/profileApi.js";

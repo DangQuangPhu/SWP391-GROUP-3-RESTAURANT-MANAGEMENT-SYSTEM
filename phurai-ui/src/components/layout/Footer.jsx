@@ -1,4 +1,4 @@
-import { homeIcons } from '@/data/homeAssets';
+import { homeIcons } from '@/features/home';
 
 const exploreLinks = ['Home', 'About Us', 'Our Menu', 'Gallery', 'Reservations'];
 const serviceLinks = [
