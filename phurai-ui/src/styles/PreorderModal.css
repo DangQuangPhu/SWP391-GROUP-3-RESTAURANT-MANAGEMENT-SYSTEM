@@ -1,0 +1,206 @@
+/* src/components/reservation/PreorderModal.css */
+
+.rzv-preorder-panel {
+  max-width: 1000px;
+  width: 95vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.rzv-preorder-body {
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.rzv-preorder-toolbar {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.rzv-preorder-search {
+  flex: 1;
+  min-width: 200px;
+  padding: 12px 16px;
+  border: 1px solid #d0c5ba;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 15px;
+}
+
+.rzv-preorder-sort {
+  padding: 12px 16px;
+  border: 1px solid #d0c5ba;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 15px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.rzv-preorder-group {
+  margin-bottom: 48px;
+}
+
+.rzv-preorder-group-name {
+  font-family: 'Libre Caslon Text', Georgia, serif;
+  font-size: 28px;
+  color: #9b845e;
+  text-transform: uppercase;
+  letter-spacing: 1.6px;
+  border-bottom: 1px solid rgba(208, 197, 186, 0.3);
+  padding-bottom: 12px;
+  margin-bottom: 24px;
+}
+
+.rzv-preorder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 32px 24px;
+}
+
+.rzv-preorder-card {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.rzv-preorder-card.rzv-preorder-card--active {
+  border-color: #9b845e;
+}
+
+.rzv-preorder-img-btn {
+  display: block;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+  position: relative;
+}
+
+.rzv-preorder-img-wrap {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #f5f1ea;
+  overflow: hidden;
+}
+
+.rzv-preorder-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.rzv-preorder-img-btn:hover .rzv-preorder-img {
+  transform: scale(1.05);
+}
+
+.rzv-preorder-img-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  opacity: 0;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 50%;
+  padding: 12px;
+  transition: all 0.3s ease;
+  display: flex;
+}
+
+.rzv-preorder-img-btn:hover .rzv-preorder-img-icon {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.rzv-preorder-card-body {
+  padding: 16px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.rzv-preorder-name {
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: #9b845e;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.rzv-preorder-desc {
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 20px;
+  color: #4d463d;
+  margin-bottom: 16px;
+  flex: 1;
+}
+
+.rzv-preorder-price-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+}
+
+.rzv-preorder-price {
+  font-family: 'Libre Caslon Text', Georgia, serif;
+  font-size: 18px;
+  color: #342716;
+}
+
+.rzv-preorder-stepper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f9f8f6;
+  border-radius: 20px;
+  padding: 4px 8px;
+  border: 1px solid #e5dfd5;
+}
+
+.rzv-preorder-step {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+.rzv-preorder-step--active {
+  background: #9b845e;
+  color: #fff;
+  cursor: pointer;
+}
+
+.rzv-preorder-step--disabled {
+  background: #d0c5ba;
+  color: #fff;
+  cursor: not-allowed;
+}
+
+.rzv-preorder-qty {
+  font-size: 14px;
+  font-weight: 600;
+  color: #342716;
+  min-width: 16px;
+  text-align: center;
+}

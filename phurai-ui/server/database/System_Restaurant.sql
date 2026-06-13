@@ -214,6 +214,8 @@ CREATE TABLE dbo.Dishes (
     cost_price       DECIMAL(12,2) NULL,
     is_available     BIT NOT NULL CONSTRAINT DF_Dishes_is_available DEFAULT 1,
     is_recommended   BIT NOT NULL CONSTRAINT DF_Dishes_is_recommended DEFAULT 0,
+    allow_preorder   BIT NOT NULL CONSTRAINT DF_Dishes_allow_preorder DEFAULT 0,
+    preorder_sort    INT NULL,
     spicy_level      TINYINT NOT NULL CONSTRAINT DF_Dishes_spicy DEFAULT 0,
     prep_time_min    SMALLINT NULL,
     created_at       DATETIME2(0) NOT NULL CONSTRAINT DF_Dishes_created_at DEFAULT SYSDATETIME(),
@@ -600,6 +602,7 @@ GO
 CREATE INDEX IX_UserAccounts_role_id ON dbo.UserAccounts(role_id);
 CREATE INDEX IX_RestaurantTables_area_status ON dbo.RestaurantTables(area_id, table_status);
 CREATE INDEX IX_Dishes_category_available ON dbo.Dishes(category_id, is_available);
+CREATE INDEX IX_Dishes_preorder_available ON dbo.Dishes(allow_preorder, is_available, preorder_sort);
 CREATE INDEX IX_Reservations_start_status ON dbo.Reservations(reservation_start_at, reservation_status);
 CREATE INDEX IX_Reservations_customer ON dbo.Reservations(customer_id);
 CREATE INDEX IX_PreorderItems_reservation ON dbo.PreorderItems(reservation_id);
@@ -818,6 +821,12 @@ VALUES
 (19, 8, N'OMAKASE EXPERIENCE',          N'a personalized multi-course journey designed by our head chef',                          1290000, 450000, 1, 1, 0, 90),
 (20, 8, N'SIGNATURE TASTING',           N'a curated seven-course menu featuring our world-renowned signature dishes',                990000, 346000, 1, 1, 0, 75);
 SET IDENTITY_INSERT dbo.Dishes OFF;
+GO
+
+UPDATE dbo.Dishes
+SET allow_preorder = 1,
+    preorder_sort = dish_id
+WHERE dish_id IN (1, 4, 5, 7, 9, 10, 12, 13, 15, 18, 20);
 GO
 
 SET IDENTITY_INSERT dbo.DishImages ON;

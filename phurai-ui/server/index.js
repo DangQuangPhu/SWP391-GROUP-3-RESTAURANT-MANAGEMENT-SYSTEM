@@ -10,6 +10,8 @@ import reservationRoutes from "./routes/reservations.js";
 import staffRoutes from "./routes/staff.js";
 import { runOtpLifecycleCleanup } from "./utils/otpService.js";
 import { isSmtpConfigured } from "./email.js";
+import dishRoutes from "./routes/dishes.js";
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -37,9 +39,13 @@ app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/reservations", reservationRoutes);
 app.use("/api/staff", staffRoutes);
+app.use("/api/dishes", dishRoutes);
 
-app.use("/api", (_req, res) => {
-  res.status(404).json({ success: false, message: "API endpoint not found." });
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "API endpoint not found.",
+  });
 });
 
 const distPath = path.join(__dirname, "../dist");

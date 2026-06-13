@@ -303,24 +303,13 @@ function ReservationPage({
       contact_email: form.email.trim(),
       contact_phone: form.phone.trim(),
       special_request: buildSpecialRequest(),
+      preorderItems: preorderItems,
     };
 
     try {
       const userId = isAuthenticated ? currentUser?.userId ?? currentUser?.id : null;
       const res = await createReservation(payload, userId);
       if (res?.reservation) {
-        // Persist pre-order for signed-in members (guests keep a local preview only).
-        if (userId && preorderItems.length > 0) {
-          try {
-            await savePreorder(
-              res.reservation.reservation_id,
-              preorderItems.map((i) => ({ dish_id: i.dish_id, quantity: i.quantity })),
-              userId
-            );
-          } catch {
-            /* non-blocking — reservation already created */
-          }
-        }
         setSuccessReservation(res.reservation);
         setStep("success");
         window.scrollTo({ top: 0, behavior: "smooth" });

@@ -371,6 +371,8 @@ router.get("/availability", async (req, res) => {
   }
 });
 
+
+
 /* ------------------------------------------------------------------ */
 /* POST /api/reservations                                              */
 /* ------------------------------------------------------------------ */
@@ -389,7 +391,14 @@ router.post("/", resolveUserId, async (req, res) => {
     contact_email,
     contact_phone,
     special_request,
+    preorderItems,
   } = req.body || {};
+
+  console.log("POST /api/reservations body:", JSON.stringify(req.body, null, 2));
+  console.log("Parsed preorderItems:", preorderItems);
+  console.log("Parsed table_ids:", table_ids);
+  console.log("Parsed preferred_area_id:", preferred_area_id);
+  console.log("Parsed userId:", req.userId);
 
   let slotStart = reservation_start_at
     ? new Date(reservation_start_at)
@@ -447,8 +456,12 @@ router.post("/", resolveUserId, async (req, res) => {
     });
   }
 
-  const customerId = req.userId || null;
+  let customerId = Number(req.userId);
 
+  if (!Number.isFinite(customerId) || customerId <= 0) {
+    customerId = null;
+  }
+  
   if (!customerId) {
     if (
       !String(contact_name || "").trim() ||
@@ -539,13 +552,31 @@ router.post("/", resolveUserId, async (req, res) => {
       let currentTier = "Bronze";
 
       if (customerId) {
+        const [accountRows] = await connection.query(
+          `SELECT user_id
+           FROM dbo.UserAccounts
+           WHERE user_id = ?
+             AND is_active = 1`,
+          [customerId]
+        );
+      
+        if (accountRows.length === 0) {
+          console.warn(
+            `User id ${customerId} from token does not exist in dbo.UserAccounts. Creating reservation as guest.`
+          );
+      
+          customerId = null;
+        }
+      }
+      
+      if (customerId) {
         const [userRows] = await connection.query(
           `SELECT membership_tier
            FROM dbo.CustomerProfiles
            WHERE user_id = ?`,
           [customerId]
         );
-
+      
         if (userRows.length > 0 && userRows[0].membership_tier) {
           currentTier = userRows[0].membership_tier;
         }
@@ -624,6 +655,33 @@ router.post("/", resolveUserId, async (req, res) => {
         );
       }
 
+      if (Array.isArray(preorderItems) && preorderItems.length > 0) {
+        for (const item of preorderItems) {
+          const dishId = Number(item.dish_id || item.dishId || item.id);
+          const qty = Number(item.quantity || item.qty || 1);
+
+          if (!Number.isFinite(dishId) || dishId <= 0 || !Number.isFinite(qty) || qty <= 0) {
+            console.log("Skipping invalid preorder item:", item);
+            continue;
+          }
+
+          const [dishRows] = await connection.query(
+            `SELECT price FROM dbo.Dishes WHERE dish_id = ? AND is_available = 1`,
+            [dishId]
+          );
+          
+          if (dishRows.length > 0) {
+            const unitPrice = dishRows[0].price;
+            await connection.query(
+              `INSERT INTO dbo.PreorderItems (reservation_id, dish_id, quantity, unit_price, notes) VALUES (?, ?, ?, ?, ?)`,
+              [reservationId, dishId, qty, unitPrice, item.notes || null]
+            );
+          } else {
+            console.log(`Preorder skipped: dish ${dishId} not found or unavailable.`);
+          }
+        }
+      }
+
       await connection.commit();
       connection.release();
 
@@ -664,11 +722,12 @@ router.post("/", resolveUserId, async (req, res) => {
       throw txError;
     }
   } catch (error) {
-    console.error("Create reservation failed:", error);
+    console.error("POST /api/reservations failed:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Could not create reservation. Please try again.",
+      message: "Could not create reservation.",
+      error: error.message
     });
   }
 });

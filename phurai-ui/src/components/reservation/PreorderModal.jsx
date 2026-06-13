@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatVND } from "@/utils/formatCurrency";
-import { getPreorderMenu } from "@/services/reservationApi";
+import { menuImages } from "@/data/menuAssets";
+import MenuImagePreview from "@/components/menu/MenuImagePreview";
+import "../../styles/preorderModal.css";
+
+function resolveImage(url) {
+  if (!url) return menuImages.hero;
+  const filename = url.split('/').pop().replace(/\.\w+$/, '');
+  const camel = filename.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+  return menuImages[camel] || menuImages.hero;
+}
 
 /**
  * Order-in-advance overlay shown INSIDE the reservation flow (never navigates
@@ -12,23 +21,45 @@ function PreorderModal({ open, initialItems = [], onClose, onApply }) {
   const [menu, setMenu] = useState([]);
   const [status, setStatus] = useState("idle"); // idle | loading | ready | error
   const [quantities, setQuantities] = useState({});
+  const [previewDish, setPreviewDish] = useState(null);
+
+  const [searchText, setSearchText] = useState("");
+  const [sortOrder, setSortOrder] = useState("");
 
   // Load menu the first time the modal opens.
   useEffect(() => {
-    if (!open || status !== "idle") return undefined;
+    console.log("Preorder modal open:", open);
+    if (!open) return undefined;
+    if (menu.length > 0 && status === "ready") return undefined; // already loaded
+
     let active = true;
     setStatus("loading");
-    getPreorderMenu()
+    console.log("Loading preorder dishes...");
+
+    fetch("http://localhost:5001/api/dishes/preorder")
       .then((res) => {
+        if (!res.ok) throw new Error("Network response was not ok");
+        return res.json();
+      })
+      .then((json) => {
         if (!active) return;
-        setMenu(res?.dishes || []);
+        console.log("Preorder API json:", json);
+        const items = Array.isArray(json) ? json : json.data || [];
+        console.log("Parsed preorder items:", items);
+        setMenu(items);
         setStatus("ready");
       })
-      .catch(() => active && setStatus("error"));
+      .catch((err) => {
+        if (active) {
+          console.error("Failed to load preorder menu:", err);
+          setStatus("error");
+        }
+      });
+
     return () => {
       active = false;
     };
-  }, [open, status]);
+  }, [open, menu.length, status]);
 
   // Seed quantities from current selection each time it opens.
   useEffect(() => {
@@ -54,14 +85,34 @@ function PreorderModal({ open, initialItems = [], onClose, onApply }) {
   }, [open, onClose]);
 
   const grouped = useMemo(() => {
+    let filtered = menu.filter((d) => {
+      const cat = (d.category_name || "").toLowerCase();
+      return !cat.includes("chef") && !cat.includes("set menu");
+    });
+
+    if (searchText) {
+      const q = searchText.toLowerCase();
+      filtered = filtered.filter(
+        (d) =>
+          d.dish_name.toLowerCase().includes(q) ||
+          (d.description && d.description.toLowerCase().includes(q))
+      );
+    }
+
+    if (sortOrder === "price_asc") {
+      filtered.sort((a, b) => a.price - b.price);
+    } else if (sortOrder === "price_desc") {
+      filtered.sort((a, b) => b.price - a.price);
+    }
+
     const map = new Map();
-    for (const dish of menu) {
+    for (const dish of filtered) {
       const key = dish.category_name || "Menu";
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(dish);
     }
     return [...map.entries()];
-  }, [menu]);
+  }, [menu, searchText, sortOrder]);
 
   const dishById = useMemo(() => {
     const map = new Map();
@@ -112,7 +163,7 @@ function PreorderModal({ open, initialItems = [], onClose, onApply }) {
   return (
     <div className="rzv-modal" role="dialog" aria-modal="true" aria-label="Order in advance">
       <div className="rzv-modal__scrim" onClick={onClose} />
-      <div className="rzv-modal__panel rzv-modal__panel--menu">
+      <div className="rzv-modal__panel rzv-modal__panel--menu rzv-preorder-panel">
         <header className="rzv-modal__head">
           <div>
             <span className="rzv-modal__kicker">Order in advance</span>
@@ -123,7 +174,29 @@ function PreorderModal({ open, initialItems = [], onClose, onApply }) {
           </button>
         </header>
 
-        <div className="rzv-modal__body">
+        <div className="rzv-modal__body rzv-preorder-body">
+
+          {status === "ready" && menu.length > 0 ? (
+            <div className="rzv-preorder-toolbar">
+              <input
+                type="text"
+                placeholder="Search dishes..."
+                className="rzv-preorder-search"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+              />
+              <select
+                className="rzv-preorder-sort"
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+              >
+                <option value="">Sort by: Default</option>
+                <option value="price_asc">Price: Low to High</option>
+                <option value="price_desc">Price: High to Low</option>
+              </select>
+            </div>
+          ) : null}
+
           {status === "loading" ? (
             <p className="rzv-preorder__state">Loading menu…</p>
           ) : null}
@@ -133,42 +206,67 @@ function PreorderModal({ open, initialItems = [], onClose, onApply }) {
             </p>
           ) : null}
 
-          {status === "ready" ? (
+          {status === "ready" && menu.length === 0 ? (
+            <p className="rzv-preorder__state">No pre-order dishes available.</p>
+          ) : null}
+
+          {status === "ready" && menu.length > 0 ? (
             <div className="rzv-premenu">
               {grouped.map(([category, dishes]) => (
-                <section key={category} className="rzv-premenu__group">
-                  <h4 className="rzv-premenu__group-name">{category}</h4>
-                  <div className="rzv-premenu__grid">
+                <section key={category} className="rzv-preorder-group">
+                  <h4 className="rzv-preorder-group-name">{category}</h4>
+                  <div className="rzv-preorder-grid">
                     {dishes.map((dish) => {
                       const qty = quantities[dish.dish_id] || 0;
                       return (
                         <article
                           key={dish.dish_id}
-                          className={`rzv-premenu__card ${qty > 0 ? "rzv-premenu__card--active" : ""}`}
+                          className={`rzv-preorder-card ${qty > 0 ? "rzv-preorder-card--active" : ""}`}
                         >
-                          <div className="rzv-premenu__card-body">
-                            <span className="rzv-premenu__name">{dish.dish_name}</span>
-                            <span className="rzv-premenu__price">{formatVND(dish.price)}</span>
-                          </div>
-                          <div className="rzv-premenu__stepper">
-                            <button
-                              type="button"
-                              className="rzv-preorder__step"
-                              aria-label={`Remove one ${dish.dish_name}`}
-                              disabled={qty <= 0}
-                              onClick={() => setQty(dish.dish_id, qty - 1)}
-                            >
-                              −
-                            </button>
-                            <span className="rzv-preorder__qty">{qty}</span>
-                            <button
-                              type="button"
-                              className="rzv-preorder__step"
-                              aria-label={`Add one ${dish.dish_name}`}
-                              onClick={() => setQty(dish.dish_id, qty + 1)}
-                            >
-                              +
-                            </button>
+                          <button
+                            type="button"
+                            className="rzv-preorder-img-btn"
+                            onClick={() => setPreviewDish({ ...dish, image: resolveImage(dish.image_url), name: dish.dish_name })}
+                            aria-label={`View full image of ${dish.dish_name}`}
+                          >
+                            <div className="rzv-preorder-img-wrap">
+                              <img src={resolveImage(dish.image_url)} alt={dish.dish_name} className="rzv-preorder-img" />
+                              <div className="rzv-preorder-img-icon">
+                                <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+                              </div>
+                            </div>
+                          </button>
+
+                          <div className="rzv-preorder-card-body">
+                            <span className="rzv-preorder-name">{dish.dish_name}</span>
+                            {dish.description && (
+                              <span className="rzv-preorder-desc">{dish.description}</span>
+                            )}
+
+                            <div className="rzv-preorder-price-row">
+                              <span className="rzv-preorder-price">{formatVND(dish.price)}</span>
+
+                              <div className="rzv-preorder-stepper">
+                                <button
+                                  type="button"
+                                  className={`rzv-preorder-step ${qty > 0 ? "rzv-preorder-step--active" : "rzv-preorder-step--disabled"}`}
+                                  aria-label={`Remove one ${dish.dish_name}`}
+                                  disabled={qty <= 0}
+                                  onClick={() => setQty(dish.dish_id, qty - 1)}
+                                >
+                                  −
+                                </button>
+                                <span className="rzv-preorder-qty">{qty}</span>
+                                <button
+                                  type="button"
+                                  className="rzv-preorder-step rzv-preorder-step--active"
+                                  aria-label={`Add one ${dish.dish_name}`}
+                                  onClick={() => setQty(dish.dish_id, qty + 1)}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </article>
                       );
@@ -200,6 +298,10 @@ function PreorderModal({ open, initialItems = [], onClose, onApply }) {
           </div>
         </footer>
       </div>
+
+      {previewDish && (
+        <MenuImagePreview dish={previewDish} onClose={() => setPreviewDish(null)} />
+      )}
     </div>
   );
 }
