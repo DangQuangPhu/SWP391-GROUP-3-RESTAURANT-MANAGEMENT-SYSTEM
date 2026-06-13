@@ -1,5 +1,6 @@
 import OutlineButton from '@/components/common/OutlineButton';
 import { homeImages } from '@/data/homeAssets';
+import { useScrollReveal } from '@/hooks/useScrollReveal';
 
 const recommendations = [
   {
@@ -37,23 +38,31 @@ const recommendations = [
   },
 ];
 
+function KitchenRecRow({ item }) {
+  const revealRef = useScrollReveal();
+
+  return (
+    <article
+      ref={revealRef}
+      className={`phurai-kitchen-rec__row home-reveal-parent ${item.reverse ? 'phurai-kitchen-rec__row--reverse' : ''}`}
+    >
+      <div className="phurai-kitchen-rec__media home-reveal-child">
+        <img src={item.imageSrc} alt={item.imageAlt} />
+      </div>
+      <div className="phurai-kitchen-rec__content">
+        {item.label ? <p className="phurai-kitchen-rec__label home-reveal-child home-reveal-child--delay-1">{item.label}</p> : null}
+        <h3 className="home-reveal-child home-reveal-child--delay-2">{item.title}</h3>
+        <p className="home-reveal-child home-reveal-child--delay-3">{item.description}</p>
+      </div>
+    </article>
+  );
+}
+
 function KitchenRecommendations({ onShowLess }) {
   return (
     <div className="phurai-kitchen-rec">
       {recommendations.map((item) => (
-        <article
-          key={item.title}
-          className={`phurai-kitchen-rec__row ${item.reverse ? 'phurai-kitchen-rec__row--reverse' : ''}`}
-        >
-          <div className="phurai-kitchen-rec__media">
-            <img src={item.imageSrc} alt={item.imageAlt} />
-          </div>
-          <div className="phurai-kitchen-rec__content">
-            {item.label ? <p className="phurai-kitchen-rec__label">{item.label}</p> : null}
-            <h3>{item.title}</h3>
-            <p>{item.description}</p>
-          </div>
-        </article>
+        <KitchenRecRow key={item.title} item={item} />
       ))}
 
       <div className="phurai-kitchen-rec__footer">

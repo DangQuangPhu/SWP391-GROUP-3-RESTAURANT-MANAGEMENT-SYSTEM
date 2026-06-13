@@ -35,7 +35,6 @@ function Home() {
           imageSrc={homeImages.happenings}
           imageAlt="Restaurant bar and lounge"
           reverse
-          buttonLabel="RESERVE"
         />
 
         <OfferingBlock
@@ -44,7 +43,6 @@ function Home() {
           description="For $45 enjoy a curated three-course menu featuring one cold dish, one hot main, and a decadent dessert. Savor signature favorites like our Yellowtail Jalapeno, Sashimi Salad, Shrimp and Vegetable Spicy Garlic, and Fish & Chips, then finish with seasonal mochi."
           imageSrc={homeImages.salmon}
           imageAlt="Guest enjoying baked salmon"
-          buttonLabel="RESERVE"
         />
 
         <KitchenSecretsSection />

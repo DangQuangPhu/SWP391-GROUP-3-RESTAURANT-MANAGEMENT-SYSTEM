@@ -24,6 +24,10 @@ import combo4 from '@/assets/images/menu/Combo4.jpg';
 import combo6 from '@/assets/images/menu/Combo6.jpg';
 import combo8 from '@/assets/images/menu/Combo8.jpg';
 import scanImage from '@/assets/images/menu/scan.jpg';
+import wine from '@/assets/images/menu/Ruouvang1.jpg';
+import wine2 from '@/assets/images/menu/Ruouvang2.jpg';
+import wine3 from '@/assets/images/menu/Ruouvang3.jpg';
+import orangejuice from '@/assets/images/menu/Nuoccam.jpg';
 
 export const menuIcons = {
   nav: [
@@ -76,4 +80,8 @@ export const menuImages = {
   lycheeMartini: menuLycheeMartini,
   footerBg: menuFooterBg,
   scanImage: scanImage,
+  wine: wine,
+  wine2: wine2,
+  wine3: wine3,
+  orangejuice: orangejuice,
 };

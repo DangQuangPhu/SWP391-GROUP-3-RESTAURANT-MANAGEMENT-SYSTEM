@@ -330,6 +330,7 @@
   font-size: 1.25rem;
   padding: 0.625rem 1.5rem;
 }
+
 .phurai-navbar__cta--black {
   background: #111111;
   color: #ffffff;
@@ -342,6 +343,7 @@
   color: #ffffff;
   border-color: #000000;
 }
+
 .phurai-navbar--page-takeout .phurai-navbar__cta--black,
 .phurai-navbar--page-catering .phurai-navbar__cta--black,
 .phurai-navbar--page-menus .phurai-navbar__cta--black {
@@ -439,18 +441,8 @@
   font-family: var(--font-ui);
   font-size: 1.1rem;
   line-height: 1.45;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0;
   color: #111;
-}
-
-.phurai-offering .phurai-btn-outline {
-  width: auto !important;
-  min-width: 88px;
-  align-self: flex-start;
-  padding: 0.55rem 1rem;
-  font-size: 0.75rem;
-  line-height: 1;
-  box-shadow: none;
 }
 
 
@@ -638,61 +630,398 @@
   padding: 2rem 0 3rem;
 }
 
+.phurai-offering {
+  overflow: visible;
+  isolation: isolate;
+}
+
+.phurai-offering__content {
+  position: relative;
+  background: #f3f3f3;
+  z-index: 0;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+
+  padding: 64px 72px;
+  box-sizing: border-box;
+}
+
+.phurai-offering:not(.phurai-offering--reverse) .phurai-offering__content::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 100vw;
+  background: inherit;
+  z-index: -1;
+}
+
+.phurai-offering:not(.phurai-offering--reverse) .phurai-offering__content::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 100vw;
+  background: inherit;
+  z-index: -1;
+}
+
+
+.phurai-offering.phurai-offering--reverse .phurai-offering__content::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 100%;
+  width: 100vw;
+  background: inherit;
+  z-index: -1;
+}
+
+.phurai-kitchen-rec__row {
+  width: min(100%, 1280px);
+  margin-left: auto;
+  margin-right: auto;
+
+  display: grid;
+  grid-template-columns: 640px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0;
+
+  min-height: 415px;
+  margin-bottom: 72px;
+}
+
+
+.phurai-kitchen-rec__row--reverse,
+.phurai-kitchen-rec__row.reverse,
+.phurai-kitchen-rec__row.is-reverse {
+  grid-template-columns: minmax(0, 1fr) 640px;
+}
+
+
+.phurai-kitchen-rec__media {
+  width: 640px;
+  height: 415px;
+  overflow: hidden;
+}
+
+.phurai-kitchen-rec__media img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+
+.phurai-kitchen-rec__content {
+  min-height: 415px;
+  background: #f3f3f3;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+
+  box-sizing: border-box;
+  padding: 64px 72px;
+}
+
+
+.phurai-kitchen-rec__content > * {
+  max-width: 520px;
+}
+
+
+.phurai-kitchen-rec__content p:first-child,
+.phurai-kitchen-rec__eyebrow,
+.phurai-kitchen-rec__label {
+  margin: 0 0 12px;
+  font-size: 15px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #8c7a55;
+}
+
+.phurai-kitchen-rec__content h2,
+.phurai-kitchen-rec__content h3 {
+  margin: 0 0 16px;
+  font-size: 26px;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #2a2926;
+}
+
+.phurai-kitchen-rec__content p {
+  font-size: 18px;
+  line-height: 1.55;
+  color: #2f2f2f;
+}
+
+
+.phurai-kitchen-rec__content p:last-child {
+  margin-bottom: 0;
+}
+
+
+@media (max-width: 900px) {
+  .phurai-kitchen-rec__row,
+  .phurai-kitchen-rec__row--reverse,
+  .phurai-kitchen-rec__row.reverse,
+  .phurai-kitchen-rec__row.is-reverse {
+    width: 100%;
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .phurai-kitchen-rec__media {
+    width: 100%;
+    height: 320px;
+  }
+
+  .phurai-kitchen-rec__content {
+    min-height: auto;
+    padding: 40px 28px;
+  }
+
+  .phurai-kitchen-rec__content h2,
+  .phurai-kitchen-rec__content h3 {
+    font-size: 23px;
+  }
+
+  .phurai-kitchen-rec__content p {
+    font-size: 16px;
+  }
+}
+.phurai-kitchen-rec__content {
+  min-height: 415px;
+  background: #f3f3f3;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+
+  box-sizing: border-box;
+  padding: 64px 72px;
+
+  text-align: left;
+}
+
+
+.phurai-kitchen-rec__content > * {
+  max-width: 520px;
+}
+
+
+.phurai-kitchen-rec__content p:first-child,
+.phurai-kitchen-rec__eyebrow,
+.phurai-kitchen-rec__label {
+  margin: 0 0 14px;
+  font-size: 15px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #8c7a55;
+  text-align: left;
+}
+
+
+.phurai-kitchen-rec__content h2,
+.phurai-kitchen-rec__content h3 {
+  margin: 0 0 18px;
+  font-size: 26px;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #2a2926;
+  text-align: left;
+}
+
+.phurai-kitchen-rec__content p {
+  margin: 0 0 10px;
+  font-size: 18px;
+  line-height: 1.55;
+  color: #2f2f2f;
+  text-align: left;
+}
+
+.phurai-kitchen-rec__content p:last-child {
+  margin-bottom: 0;
+}
+
+.phurai-kitchen-rec__row {
+  overflow: visible;
+  isolation: isolate;
+}
+
+.phurai-kitchen-rec__content {
+  position: relative;
+  z-index: 0;
+  background: #f3f3f3;
+}
+
+
+.phurai-kitchen-rec__row:not(.phurai-kitchen-rec__row--reverse)
+  .phurai-kitchen-rec__content::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 100vw;
+  background: inherit;
+  z-index: -1;
+}
+
+
+.phurai-kitchen-rec__row.phurai-kitchen-rec__row--reverse
+  .phurai-kitchen-rec__content::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 100%;
+  width: 100vw;
+  background: inherit;
+  z-index: -1;
+}
+
 /* ── Gift card ── */
 .phurai-gift {
   position: relative;
   z-index: 0;
+  isolation: isolate;
+
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(1.25rem, 2.5vw, 2rem);
+  grid-template-columns: minmax(0, 1fr) 640px;
+  gap: 0;
+
   width: min(96vw, 1440px);
   max-width: none;
   margin: 0 auto;
   padding: clamp(2.5rem, 4vw, 3.5rem) clamp(2rem, 4vw, 4rem);
-  align-items: center;
+
+  align-items: stretch;
   box-sizing: border-box;
+  overflow: visible;
 }
 
+/* XÓA nền full section cũ, không dùng nữa */
 .phurai-gift::before {
-  content: '';
+  content: none;
+}
+
+/* Text column */
+.phurai-gift__content {
+  position: relative;
+  z-index: 0;
+
+  min-width: 0;
+  min-height: 415px;
+  background: #f3f3f3;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+
+  box-sizing: border-box;
+  padding: 64px 72px;
+  text-align: left;
+}
+
+/* Kéo nền xám của phần chữ sát mép trái, giống Offering */
+.phurai-gift__content::before {
+  content: "";
   position: absolute;
-  z-index: -1;
   top: 0;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  right: 100%;
   width: 100vw;
-  background: #f3f3f3;
+  background: inherit;
+  z-index: -1;
 }
 
-.phurai-gift__content {
-  min-width: 0;
-  padding: clamp(0.5rem, 2vw, 1rem) clamp(1.5rem, 3vw, 2.5rem);
+/* Giữ chữ gọn, không kéo quá dài */
+.phurai-gift__content > * {
+  max-width: 520px;
 }
 
-.phurai-gift__media {
-  min-width: 0;
-}
-
+/* Heading */
 .phurai-gift__content h2 {
   font-family: var(--font-ui-bold);
   font-size: 2rem;
+  line-height: 1.15;
   font-weight: 700;
-  margin-bottom: 1rem;
+  margin: 0 0 1rem;
+  color: #2a2926;
 }
 
+/* Description */
 .phurai-gift__content p {
   font-family: var(--font-narrow);
-  font-size: 1.5rem;
-  margin-bottom: 1.5rem;
+  font-size: 1.35rem;
+  line-height: 1.45;
+  margin: 0 0 1.5rem;
+  color: #2f2f2f;
 }
 
+/* Button nếu còn nút Explore */
+.phurai-gift__content .phurai-btn-outline {
+  margin-top: 0.25rem;
+}
+
+/* Image column */
+.phurai-gift__media {
+  min-width: 0;
+  width: 640px;
+  height: 415px;
+  overflow: hidden;
+}
+
+/* Giữ ảnh đúng khung, không méo */
 .phurai-gift__media img {
   width: 100%;
-  height: clamp(280px, 32vw, 360px);
+  height: 100%;
   object-fit: cover;
   object-position: center;
   display: block;
+}
+
+/* Tablet / Mobile */
+@media (max-width: 900px) {
+  .phurai-gift {
+    width: 100%;
+    grid-template-columns: 1fr;
+    padding: 0;
+  }
+
+  .phurai-gift__content {
+    min-height: auto;
+    padding: 40px 28px;
+  }
+
+  .phurai-gift__content::before {
+    content: none;
+  }
+
+  .phurai-gift__media {
+    width: 100%;
+    height: 415px;
+  }
+
+  .phurai-gift__content h2 {
+    font-size: 1.6rem;
+  }
+
+  .phurai-gift__content p {
+    font-size: 1.1rem;
+  }
 }
 
 /* ── Gallery ── */
@@ -951,12 +1280,14 @@
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
+
 .phurai-res-section__ornament-line {
   display: block;
   width: 60px;
   height: 1px;
   background: linear-gradient(to right, transparent, #8c764b);
 }
+
 .phurai-res-section__ornament-line:last-child {
   background: linear-gradient(to left, transparent, #8c764b);
 }
@@ -1012,6 +1343,7 @@
   display: flex;
   flex-direction: column;
 }
+
 .phurai-res-card__info::before {
   content: '';
   position: absolute;
@@ -1067,6 +1399,7 @@
   flex-direction: column;
   gap: 0.75rem;
 }
+
 .phurai-res-card__perks li {
   display: flex;
   align-items: flex-start;
@@ -1076,6 +1409,7 @@
   color: rgba(245, 240, 232, 0.75);
   line-height: 1.45;
 }
+
 .phurai-res-card__perk-icon {
   color: #8c764b;
   font-size: 0.625rem;
@@ -1092,14 +1426,21 @@
   flex-direction: column;
   gap: 0.5rem;
 }
+
 .phurai-res-card__hours-row {
   display: flex;
   justify-content: space-between;
   font-family: var(--font-body);
   font-size: 0.8125rem;
 }
-.phurai-res-card__hours-row span:first-child { color: rgba(245, 240, 232, 0.45); }
-.phurai-res-card__hours-row span:last-child  { color: rgba(245, 240, 232, 0.85); }
+
+.phurai-res-card__hours-row span:first-child {
+  color: rgba(245, 240, 232, 0.45);
+}
+
+.phurai-res-card__hours-row span:last-child {
+  color: rgba(245, 240, 232, 0.85);
+}
 
 /* Phone link */
 .phurai-res-card__phone {
@@ -1113,7 +1454,10 @@
   text-decoration: none;
   transition: color 0.2s;
 }
-.phurai-res-card__phone:hover { color: #f5c76e; }
+
+.phurai-res-card__phone:hover {
+  color: #f5c76e;
+}
 
 /* Gold corner accent */
 .phurai-res-card__corner {
@@ -1148,6 +1492,7 @@
 .res-field {
   position: relative;
 }
+
 .res-field input,
 .res-field textarea {
   width: 100%;
@@ -1164,10 +1509,12 @@
   border-radius: 0;
   appearance: none;
 }
+
 .res-field input:focus,
 .res-field textarea:focus {
   border-color: #8c764b;
 }
+
 .res-field label {
   position: absolute;
   top: 1.15rem;
@@ -1179,18 +1526,21 @@
   transform-origin: left top;
   transition: transform 0.2s ease, color 0.2s ease, font-size 0.2s ease;
 }
-.res-field input:focus ~ label,
-.res-field input:not(:placeholder-shown) ~ label,
-.res-field textarea:focus ~ label,
-.res-field textarea:not(:placeholder-shown) ~ label,
-.res-field--date input:not([value=""]) ~ label,
+
+.res-field input:focus~label,
+.res-field input:not(:placeholder-shown)~label,
+.res-field textarea:focus~label,
+.res-field textarea:not(:placeholder-shown)~label,
+.res-field--date input:not([value=""])~label,
 .res-field--filled label {
   transform: translateY(-1.1rem) scale(0.78);
   color: #8c764b;
   font-size: 0.875rem;
 }
+
 .res-field__line {
-  display: none; /* handled by border */
+  display: none;
+  /* handled by border */
 }
 
 /* Date input color fix */
@@ -1222,6 +1572,7 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 0.5rem;
 }
+
 .phurai-res-slot {
   padding: 0.55rem 0.25rem;
   font-family: var(--font-body);
@@ -1235,11 +1586,13 @@
   border-radius: 2px;
   text-align: center;
 }
+
 .phurai-res-slot:hover {
   border-color: #8c764b;
   color: #8c764b;
   background: rgba(140, 118, 75, 0.05);
 }
+
 .phurai-res-slot--active {
   background: #1c1612;
   border-color: #1c1612;
@@ -1252,6 +1605,7 @@
   gap: 0.5rem;
   flex-wrap: wrap;
 }
+
 .phurai-res-seat {
   width: 44px;
   height: 44px;
@@ -1268,10 +1622,12 @@
   transition: all 0.2s ease;
   border-radius: 2px;
 }
+
 .phurai-res-seat:hover {
   border-color: #8c764b;
   color: #8c764b;
 }
+
 .phurai-res-seat--active {
   background: #1c1612;
   border-color: #1c1612;
@@ -1299,14 +1655,17 @@
   border-radius: 2px;
   margin-top: 0.5rem;
 }
+
 .phurai-res-form__submit:hover {
   background: #8c764b;
   color: #fff;
   transform: translateY(-1px);
 }
+
 .phurai-res-form__submit svg {
   transition: transform 0.2s;
 }
+
 .phurai-res-form__submit:hover svg {
   transform: translateX(4px);
 }
@@ -1334,12 +1693,14 @@
   letter-spacing: 2.5px;
   color: rgba(28, 22, 18, 0.45);
 }
+
 .phurai-res-section__contact-line {
   display: block;
   width: 60px;
   height: 1px;
   background: rgba(140, 118, 75, 0.3);
 }
+
 .phurai-res-section__contact-dot {
   color: #8c764b;
   font-size: 0.625rem;
@@ -1350,18 +1711,25 @@
   .phurai-res-card {
     grid-template-columns: 1fr;
   }
+
   .phurai-res-card__info {
     padding: 2.5rem 2rem;
   }
-  .phurai-res-card__corner { display: none; }
+
+  .phurai-res-card__corner {
+    display: none;
+  }
 }
+
 @media (max-width: 640px) {
   .phurai-res-card__form-wrap {
     padding: 2rem 1.5rem;
   }
+
   .phurai-res-form__row {
     grid-template-columns: 1fr;
   }
+
   .phurai-res-slots {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -1560,6 +1928,7 @@
   position: relative;
   z-index: 1;
 }
+
 .phurai-footer {
   position: relative;
   margin-top: 0rem;
@@ -1849,7 +2218,7 @@
   border-color: #846d44 !important;
   color: #846d44 !important;
   background: transparent !important;
-  
+
 }
 
 /* Take Out page specific Sign In color overrides for all states */
@@ -1939,7 +2308,7 @@
   border-color: #846d44 !important;
   color: #ffffff !important;
   transform: translateY(-2px);
-  box-shadow:  none;
+  box-shadow: none;
 }
 
 /* 3. "Solid to Ghost" Swap Effect (Reservation / CTA buttons) */
@@ -1954,6 +2323,7 @@
     inset 0 0 0 2px #ffffff !important;
   transform: translateY(-2px);
 }
+
 .phurai-gallery__cta:hover {
   background: #846d44;
   color: #ffffff !important;
@@ -1984,7 +2354,7 @@
 
 .phurai-about {
   position: relative;
-  background: #faf8f4;
+  background: #ffffff;
   padding: clamp(3.5rem, 7vw, 6rem) clamp(1.25rem, 4vw, 3rem);
   color: var(--text-dark);
   opacity: 0;
@@ -2128,8 +2498,8 @@
 .phurai-about__kicker {
   font-family: var(--font-heading) !important;
   font-size: clamp(2.5rem, 5vw, 4rem);
-    font-weight: 400 !important;
-    line-height: 1.08 !important;
+  font-weight: 400 !important;
+  line-height: 1.08 !important;
   letter-spacing: -1px !important;
   text-transform: uppercase !important;
   color: #000000;
@@ -2318,5 +2688,42 @@
   .phurai-about__btn {
     width: 100%;
     text-align: center;
+  }
+}
+/* ── Scroll Reveal Animations ── */
+.home-reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: opacity, transform;
+}
+
+.home-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.home-reveal-parent.is-visible .home-reveal-child {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.home-reveal-child {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: opacity, transform;
+}
+
+.home-reveal--delay-1, .home-reveal-child--delay-1 { transition-delay: 0.1s; }
+.home-reveal--delay-2, .home-reveal-child--delay-2 { transition-delay: 0.2s; }
+.home-reveal--delay-3, .home-reveal-child--delay-3 { transition-delay: 0.3s; }
+.home-reveal--delay-4, .home-reveal-child--delay-4 { transition-delay: 0.4s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .home-reveal, .home-reveal-child {
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }

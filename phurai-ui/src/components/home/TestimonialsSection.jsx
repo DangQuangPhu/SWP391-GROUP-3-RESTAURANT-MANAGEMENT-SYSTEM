@@ -1,6 +1,7 @@
 import SectionHeader from '@/components/common/SectionHeader';
 import TestimonialCard from '@/components/common/TestimonialCard';
 import { homeImages } from '@/data/homeAssets';
+import { useScrollReveal } from '@/hooks/useScrollReveal';
 
 const testimonials = [
   {
@@ -30,12 +31,18 @@ const testimonials = [
 ];
 
 function TestimonialsSection() {
+  const revealRef = useScrollReveal();
+
   return (
-    <section className="phurai-testimonials" aria-labelledby="testimonials-heading">
-      <SectionHeader title="WHAT OUR GUESTS SAY" />
+    <section className="phurai-testimonials home-reveal-parent" aria-labelledby="testimonials-heading" ref={revealRef}>
+      <div className="home-reveal-child">
+        <SectionHeader title="WHAT OUR GUESTS SAY" />
+      </div>
       <div className="phurai-testimonials__grid">
-        {testimonials.map((item) => (
-          <TestimonialCard key={item.name} {...item} />
+        {testimonials.map((item, index) => (
+          <div key={item.name} className={`home-reveal-child home-reveal-child--delay-${index + 1}`}>
+            <TestimonialCard {...item} />
+          </div>
         ))}
       </div>
     </section>

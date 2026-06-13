@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import OutlineButton from '@/components/common/OutlineButton';
+import { useScrollReveal } from '@/hooks/useScrollReveal';
 import '@/styles/SignatureDishCarousel.css';
 
 const CARDS = [
@@ -46,6 +47,7 @@ function getCardStateClass(index, activeIndex) {
 function SignatureDishCarousel() {
   const sectionRef = useRef(null);
   const trackRef = useRef(null);
+  useScrollReveal({}, sectionRef);
 
   const animationFrameRef = useRef(null);
   const autoPlayTimerRef = useRef(null);
@@ -322,13 +324,13 @@ function SignatureDishCarousel() {
   return (
     <section
       ref={sectionRef}
-      className={`signature-dish-carousel${
+      className={`signature-dish-carousel home-reveal-parent${
         isReady ? ' signature-dish-carousel--ready' : ''
       }`}
       aria-labelledby="signature-dish-heading"
     >
       <div
-        className="signature-dish-carousel__header"
+        className="signature-dish-carousel__header home-reveal-child"
         style={{ '--heading-parallax': `${headingOffset}px` }}
       >
         <h2 id="signature-dish-heading" className="signature-dish-carousel__heading">
@@ -336,7 +338,7 @@ function SignatureDishCarousel() {
         </h2>
       </div>
 
-      <div className="signature-dish-carousel__viewport">
+      <div className="signature-dish-carousel__viewport home-reveal-child home-reveal-child--delay-1">
         <div
           ref={trackRef}
           className="signature-dish-carousel__track"
