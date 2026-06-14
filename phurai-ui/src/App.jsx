@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import "@/features/home/styles/home.css";
 import { HomePage as Home } from "@/features/home";
 import {
@@ -19,7 +26,7 @@ import {
   useUserProfile,
   normalizeStoredAvatarUrl,
 } from "@/features/profile";
-import { ManagerDashboardPage as ManagerDashboard } from "@/features/manager-dashboard";
+import { ManagerPortalPage } from "@/features/manager-dashboard";
 import { StaffDashboardPage as StaffDashboard, isStaffPortalUser } from "@/features/staff-dashboard";
 import NotFound from "@/pages/NotFound";
 import LandingPage from "@/pages/public/LandingPage";
@@ -41,6 +48,25 @@ import {
   mapApiUserToFrontend,
   saveAuthUser,
 } from "@/api";
+
+const PAGE_PATHS = {
+  home: "/",
+  landing: "/landing",
+  takeout: "/take-out",
+  catering: "/catering",
+  menus: "/menus",
+  reservations: "/reservations",
+  myReservations: "/my-reservations",
+  privateEvents: "/private-events",
+  careers: "/careers",
+  contactHours: "/contact-hours",
+  register: "/register",
+  verify: "/verify",
+  profile: "/profile",
+  settings: "/settings/profile",
+  manager: "/manager/dashboard",
+  staff: "/staff",
+};
 
 function normalizeAuthUser(user) {
   const mapped = mapApiUserToFrontend(user) || user;
@@ -92,10 +118,11 @@ function getPageFromPath(path) {
 }
 
 function App() {
-  const [activePage, setActivePage] = useState("home");
-  const [pathname, setPathname] = useState(
-    typeof window !== "undefined" ? window.location.pathname : "/"
-  );
+  const location = useLocation();
+  const navigate = useNavigate();
+  const pathname = location.pathname;
+  const activePage = getPageFromPath(pathname);
+
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [pendingAuthUser, setPendingAuthUser] = useState(null);
@@ -130,9 +157,18 @@ function App() {
 
   const profileEditMode = useMemo(() => {
     if (activePage !== "profile") return false;
-    const params = new URLSearchParams(window.location.search);
-    return params.get("mode") === "edit";
-  }, [pathname, activePage]);
+    return new URLSearchParams(location.search).get("mode") === "edit";
+  }, [location.search, activePage]);
+
+  const navigateToPath = useCallback(
+    (path) => {
+      const nextPath =
+        path === "/settings" || path === "/settings/" ? "/settings/profile" : path;
+      navigate(nextPath);
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    },
+    [navigate]
+  );
 
   const openAuthModal = (mode = "login") => {
     setAuthModalMode(mode);
@@ -143,17 +179,6 @@ function App() {
     blurActiveElement();
     setIsAuthModalOpen(false);
   };
-
-  const navigateToPath = useCallback((path) => {
-    const nextPath =
-      path === "/settings" || path === "/settings/" ? "/settings/profile" : path;
-    setPathname(nextPath);
-    setActivePage(getPageFromPath(nextPath));
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    if (window.location.pathname !== nextPath) {
-      window.history.pushState(null, "", nextPath);
-    }
-  }, []);
 
   useEffect(() => {
     const stored = loadAuthUser();
@@ -174,46 +199,27 @@ function App() {
       }
     }
 
-    let initialPath = window.location.pathname;
-    if (initialPath === "/settings" || initialPath === "/settings/") {
-      initialPath = "/settings/profile";
-      window.history.replaceState(null, "", initialPath);
+    if (pathname === "/login") {
+      openAuthModal("login");
+      navigate("/", { replace: true });
     }
-    setPathname(initialPath);
-    const initialPage = getPageFromPath(initialPath);
-    if (initialPage === "login") {
-      setActivePage("home");
-      setIsAuthModalOpen(true);
-      if (window.location.pathname === "/login") {
-        window.history.replaceState(null, "", "/");
-        setPathname("/");
-      }
-    } else {
-      setActivePage(initialPage);
-    }
-
-    const onPopState = () => {
-      let path = window.location.pathname;
-      if (path === "/settings" || path === "/settings/") {
-        path = "/settings/profile";
-        window.history.replaceState(null, "", path);
-      }
-      setPathname(path);
-      const page = getPageFromPath(path);
-      if (page === "login") {
-        setActivePage("home");
-        openAuthModal("login");
-        window.history.replaceState(null, "", "/");
-        setPathname("/");
-        return;
-      }
-      setActivePage(page);
-      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    };
-
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
   }, []);
+
+  useEffect(() => {
+    if (pathname === "/settings" || pathname === "/settings/") {
+      navigate("/settings/profile", { replace: true });
+    }
+  }, [pathname, navigate]);
+
+  /* Managers/Admins belong on /manager — never on /staff (waiter/kitchen portal). */
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser) return;
+    if (!isManagerUser(currentUser)) return;
+    const onStaffRoute = pathname === "/staff" || pathname.startsWith("/staff/");
+    if (onStaffRoute) {
+      navigateToPath("/manager/dashboard");
+    }
+  }, [isAuthenticated, currentUser, pathname, navigateToPath]);
 
   useEffect(() => {
     if (!showWelcome) return undefined;
@@ -229,7 +235,7 @@ function App() {
         setCurrentUser(pendingAuthUser);
         saveAuthUser(pendingAuthUser, Boolean(localStorage.getItem("phurai_auth_user")));
         if (isManagerUser(pendingAuthUser)) {
-          navigateToPath("/manager");
+          navigateToPath("/manager/dashboard");
         } else if (isStaffPortalUser(pendingAuthUser)) {
           navigateToPath("/staff");
         }
@@ -264,16 +270,6 @@ function App() {
       return;
     }
 
-    if (page === "reservations") {
-      navigateToPath("/reservations");
-      return;
-    }
-
-    if (page === "myReservations") {
-      navigateToPath("/my-reservations");
-      return;
-    }
-
     if (page === "reservation") {
       navigateToPath("/");
       window.requestAnimationFrame(() => {
@@ -285,43 +281,9 @@ function App() {
       return;
     }
 
-    if (page === "manager") {
-      navigateToPath("/manager");
-      return;
-    }
-
-    if (page === "staff") {
-      navigateToPath("/staff");
-      return;
-    }
-
-    setActivePage(page);
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-
-    const nextPath =
-      page === "takeout"
-        ? "/take-out"
-        : page === "catering"
-        ? "/catering"
-        : page === "menus"
-        ? "/menus"
-        : page === "privateEvents"
-        ? "/private-events"
-        : page === "careers"
-        ? "/careers"
-        : page === "contactHours"
-        ? "/contact-hours"
-        : page === "landing"
-        ? "/landing"
-        : page === "manager"
-        ? "/manager"
-        : page === "staff"
-        ? "/staff"
-        : "/";
-
-    setPathname(nextPath);
-    if (window.location.pathname !== nextPath) {
-      window.history.pushState(null, "", nextPath);
+    const nextPath = PAGE_PATHS[page];
+    if (nextPath) {
+      navigateToPath(nextPath);
     }
   };
 
@@ -340,7 +302,7 @@ function App() {
     blurActiveElement();
     setIsAuthModalOpen(false);
     if (isManagerUser(normalized)) {
-      navigateToPath("/manager");
+      navigateToPath("/manager/dashboard");
     } else if (isStaffPortalUser(normalized)) {
       navigateToPath("/staff");
     }
@@ -402,95 +364,115 @@ function App() {
         />
       ) : null}
 
-      {activePage === "home" && <Home />}
-      {activePage === "landing" && <LandingPage />}
-      {activePage === "takeout" && <TakeOut />}
-      {activePage === "catering" && <Catering />}
-      {activePage === "menus" && (
-        <Menu isAuthenticated={isAuthenticated} currentUser={currentUser} />
-      )}
-      {activePage === "reservations" && (
-        <ReservationPage
-          isAuthenticated={isAuthenticated}
-          currentUser={currentUser}
-          onNavigate={handleNavigate}
-          onRequireAuth={() => openAuthModal("register")}
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/landing" element={<LandingPage />} />
+        <Route path="/take-out" element={<TakeOut />} />
+        <Route path="/catering" element={<Catering />} />
+        <Route
+          path="/menus"
+          element={<Menu isAuthenticated={isAuthenticated} currentUser={currentUser} />}
         />
-      )}
-      {activePage === "myReservations" && (
-        <MyReservationsPage
-          isAuthenticated={isAuthenticated}
-          currentUser={currentUser}
-          onNavigate={handleNavigate}
-          onNavigateLogin={() => openAuthModal("login")}
+        <Route
+          path="/reservations"
+          element={
+            <ReservationPage
+              isAuthenticated={isAuthenticated}
+              currentUser={currentUser}
+              onNavigate={handleNavigate}
+              onRequireAuth={() => openAuthModal("register")}
+            />
+          }
         />
-      )}
-      {activePage === "privateEvents" && (
-        <PrivateEvents onNavigate={handleNavigate} />
-      )}
-      {activePage === "careers" && <Careers />}
-      {activePage === "contactHours" && <ContactHours />}
-      {activePage === "register" && <Register />}
-      {activePage === "verify" && <VerifyEmail />}
-      {activePage === "profile" && (
-        <ProfilePage
-          profile={profile}
-          profileLoading={profileLoading}
-          profileError={profileLoadError}
-          onRetryProfile={refetchProfile}
-          isAuthenticated={isAuthenticated}
-          initialEditMode={profileEditMode}
-          onSaveProfile={saveProfileFields}
-          onSavePhone={savePhoneNumber}
-          onSavePreferences={persistExtended}
-          onApplyAvatar={applyAvatarUpdate}
-          onOpenChangePassword={openChangePassword}
-          onPasswordReset={handlePasswordReset}
-          onNavigateLogin={() => openAuthModal("login")}
-          onNavigateHome={() => handleNavigate("home")}
+        <Route
+          path="/my-reservations"
+          element={
+            <MyReservationsPage
+              isAuthenticated={isAuthenticated}
+              currentUser={currentUser}
+              onNavigate={handleNavigate}
+              onNavigateLogin={() => openAuthModal("login")}
+            />
+          }
         />
-      )}
-      {activePage === "settings" && (
-        <SettingsPage
-          profile={profile}
-          pathname={pathname}
-          isAuthenticated={isAuthenticated}
-          onNavigatePath={navigateToPath}
-          onNavigateLogin={() => openAuthModal("login")}
-          onNavigateHome={() => handleNavigate("home")}
-          onOpenChangePassword={openChangePassword}
-          onApplyAvatar={applyAvatarUpdate}
+        <Route path="/private-events" element={<PrivateEvents onNavigate={handleNavigate} />} />
+        <Route path="/careers" element={<Careers />} />
+        <Route path="/contact-hours" element={<ContactHours />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/verify" element={<VerifyEmail />} />
+        <Route
+          path="/profile"
+          element={
+            <ProfilePage
+              profile={profile}
+              profileLoading={profileLoading}
+              profileError={profileLoadError}
+              onRetryProfile={refetchProfile}
+              isAuthenticated={isAuthenticated}
+              initialEditMode={profileEditMode}
+              onSaveProfile={saveProfileFields}
+              onSavePhone={savePhoneNumber}
+              onSavePreferences={persistExtended}
+              onApplyAvatar={applyAvatarUpdate}
+              onOpenChangePassword={openChangePassword}
+              onPasswordReset={handlePasswordReset}
+              onNavigateLogin={() => openAuthModal("login")}
+              onNavigateHome={() => handleNavigate("home")}
+            />
+          }
         />
-      )}
-      {activePage === "manager" && (
-        <ManagerDashboard
-          isAuthenticated={isAuthenticated}
-          currentUser={currentUser}
-          onSignOut={handleSignOut}
-          onNavigateHome={() => handleNavigate("home")}
-          onNavigate={handleNavigate}
-          onOpenAuth={() => openAuthModal("login")}
+        <Route
+          path="/settings/*"
+          element={
+            <SettingsPage
+              profile={profile}
+              pathname={pathname}
+              isAuthenticated={isAuthenticated}
+              onNavigatePath={navigateToPath}
+              onNavigateLogin={() => openAuthModal("login")}
+              onNavigateHome={() => handleNavigate("home")}
+              onOpenChangePassword={openChangePassword}
+              onApplyAvatar={applyAvatarUpdate}
+            />
+          }
         />
-      )}
-      {activePage === "staff" && (
-        <StaffDashboard
-          isAuthenticated={isAuthenticated}
-          currentUser={currentUser}
-          onSignOut={handleSignOut}
-          onNavigate={handleNavigate}
+        <Route path="/manager" element={<Navigate to="/manager/dashboard" replace />} />
+        <Route
+          path="/manager/*"
+          element={
+            <ManagerPortalPage
+              isAuthenticated={isAuthenticated}
+              currentUser={currentUser}
+              onSignOut={handleSignOut}
+              onNavigate={handleNavigate}
+            />
+          }
         />
-      )}
-      {activePage === "notFound" && (
-        <NotFound
-          onNavigate={handleNavigate}
-          pathname={pathname}
-          currentUser={currentUser}
-          isAuthenticated={isAuthenticated}
+        <Route
+          path="/staff/*"
+          element={
+            <StaffDashboard
+              isAuthenticated={isAuthenticated}
+              currentUser={currentUser}
+              onSignOut={handleSignOut}
+              onNavigate={handleNavigate}
+            />
+          }
         />
-      )}
+        <Route
+          path="*"
+          element={
+            <NotFound
+              onNavigate={handleNavigate}
+              pathname={pathname}
+              currentUser={currentUser}
+              isAuthenticated={isAuthenticated}
+            />
+          }
+        />
+      </Routes>
 
       {!isPortalPage ? <Footer /> : null}
-
       {!isPortalPage ? <FloatingActionButtons /> : null}
 
       <AuthModal

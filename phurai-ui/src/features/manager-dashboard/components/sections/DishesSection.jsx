@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ManagerModal } from "../ManagerOverlay.jsx";
 import {
   SectionHead,
@@ -11,6 +12,7 @@ import {
 } from "../ManagerUI.jsx";
 import { DISH_CATEGORIES } from "../../data/managerDashboardMockData.js";
 import { formatVND } from "@/utils/formatCurrency.js";
+import { getMenuTabFromSearch } from "../../config/managerRoutes.js";
 
 const EMPTY = {
   dish_name: "",
@@ -23,7 +25,11 @@ const EMPTY = {
 };
 
 function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, toast, dishSource }) {
-  const [tab, setTab] = useState("list");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = useMemo(
+    () => getMenuTabFromSearch(`?${searchParams.toString()}`),
+    [searchParams]
+  );
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("all");
   const [editing, setEditing] = useState(null);
@@ -31,8 +37,15 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
   const [confirmDel, setConfirmDel] = useState(null);
   const isManager = role === "manager";
 
+  const selectTab = (nextTab) => {
+    if (nextTab === "best") {
+      setSearchParams({ tab: "best" }, { replace: true });
+      return;
+    }
+    setSearchParams({}, { replace: true });
+  };
+
   useEffect(() => {
-    if (pendingAction === "tab-best") setTab("best");
     if (pendingAction === "add" && isManager) {
       setEditing({ ...EMPTY });
       setIsNew(true);
@@ -75,7 +88,7 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
   return (
     <div className="sfx-stack">
       <SectionHead
-        title="Menu & Dishes"
+        title="Menu"
         subtitle={dishSource === "api" ? "Live menu data" : "Sample menu data"}
         actions={
           isManager ? (
@@ -86,11 +99,23 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
         }
       />
 
-      <div className="sfx-tabs">
-        <button className={`sfx-tab ${tab === "list" ? "is-active" : ""}`} onClick={() => setTab("list")}>
+      <div className="sfx-tabs" role="tablist" aria-label="Menu views">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "list"}
+          className={`sfx-tab ${tab === "list" ? "is-active" : ""}`}
+          onClick={() => selectTab("list")}
+        >
           Dish List
         </button>
-        <button className={`sfx-tab ${tab === "best" ? "is-active" : ""}`} onClick={() => setTab("best")}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "best"}
+          className={`sfx-tab ${tab === "best" ? "is-active" : ""}`}
+          onClick={() => selectTab("best")}
+        >
           Best-selling
         </button>
       </div>

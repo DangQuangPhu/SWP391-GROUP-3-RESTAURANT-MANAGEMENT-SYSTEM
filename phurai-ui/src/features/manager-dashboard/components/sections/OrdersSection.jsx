@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   SectionHead,
   StatusBadge,
@@ -7,6 +8,7 @@ import {
 } from "../ManagerUI.jsx";
 import { ORDER_STATUS_META } from "../../data/managerDashboardMockData.js";
 import { formatVND } from "@/utils/formatCurrency.js";
+import { getOrdersTabFromSearch, ORDER_TAB_IDS } from "../../config/managerRoutes.js";
 
 const KITCHEN_FLOW = { queued: "cooking", cooking: "ready", ready: "done" };
 const KITCHEN_NEXT_LABEL = { queued: "Start cooking", cooking: "Mark ready", ready: "Mark served" };
@@ -18,13 +20,21 @@ const TABS = [
   { id: "history", label: "Order History" },
 ];
 
-function OrdersSection({ orders, setOrders, pendingAction, toast }) {
-  const [tab, setTab] = useState("active");
+function OrdersSection({ orders, setOrders, toast }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = useMemo(
+    () => getOrdersTabFromSearch(`?${searchParams.toString()}`),
+    [searchParams]
+  );
 
-  useEffect(() => {
-    if (pendingAction === "tab-kitchen") setTab("kitchen");
-    if (pendingAction === "tab-ready") setTab("ready");
-  }, [pendingAction]);
+  const selectTab = (nextTab) => {
+    if (!ORDER_TAB_IDS.includes(nextTab)) return;
+    if (nextTab === "active") {
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    setSearchParams({ tab: nextTab }, { replace: true });
+  };
 
   const filtered = useMemo(() => {
     switch (tab) {
@@ -53,9 +63,16 @@ function OrdersSection({ orders, setOrders, pendingAction, toast }) {
     <div className="sfx-stack">
       <SectionHead title="Orders & Kitchen" subtitle={`${orders.length} orders on the floor`} />
 
-      <div className="sfx-tabs">
+      <div className="sfx-tabs" role="tablist" aria-label="Order lanes">
         {TABS.map((t) => (
-          <button key={t.id} className={`sfx-tab ${tab === t.id ? "is-active" : ""}`} onClick={() => setTab(t.id)}>
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            className={`sfx-tab ${tab === t.id ? "is-active" : ""}`}
+            onClick={() => selectTab(t.id)}
+          >
             {t.label}
           </button>
         ))}

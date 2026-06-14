@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import RevenueChart from "../RevenueChart.jsx";
 import KpiCard from "../KpiCard.jsx";
 import Icon from "../ManagerIcons.jsx";
@@ -19,6 +20,7 @@ import {
   prepareChartSeries,
 } from "../../data/managerDashboardMockData.js";
 import { formatVND } from "@/utils/formatCurrency.js";
+import { getReportsTabFromSearch, REPORT_TAB_IDS } from "../../config/managerRoutes.js";
 
 const TABS = [
   { id: "revenue", label: "Revenue Dashboard" },
@@ -33,10 +35,13 @@ function ReportsSection({
   bestSellers,
   stats,
   utilization,
-  pendingAction,
   toast,
 }) {
-  const [tab, setTab] = useState("revenue");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = useMemo(
+    () => getReportsTabFromSearch(`?${searchParams.toString()}`),
+    [searchParams]
+  );
 
   const dateRange = useMemo(() => getDefaultDateRange(DASHBOARD_TODAY), []);
   const dailyRevenueSeries = useMemo(
@@ -53,12 +58,14 @@ function ReportsSection({
     [kpis, dailyRevenueSeries, dateRange, reservations]
   );
 
-  useEffect(() => {
-    if (pendingAction?.startsWith("tab-")) {
-      const t = pendingAction.replace("tab-", "");
-      if (TABS.some((x) => x.id === t)) setTab(t);
+  const selectTab = (nextTab) => {
+    if (!REPORT_TAB_IDS.includes(nextTab)) return;
+    if (nextTab === "revenue") {
+      setSearchParams({}, { replace: true });
+      return;
     }
-  }, [pendingAction]);
+    setSearchParams({ tab: nextTab }, { replace: true });
+  };
 
   const revenueKpis = rangeKpis.filter((k) => ["revenue", "reservations", "promos", "rating"].includes(k.id));
 
@@ -66,9 +73,16 @@ function ReportsSection({
     <div className="sfx-stack">
       <SectionHead title="Reports" subtitle="Revenue, statistics and exports" />
 
-      <div className="sfx-tabs">
+      <div className="sfx-tabs" role="tablist" aria-label="Report sections">
         {TABS.map((t) => (
-          <button key={t.id} className={`sfx-tab ${tab === t.id ? "is-active" : ""}`} onClick={() => setTab(t.id)}>
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            className={`sfx-tab ${tab === t.id ? "is-active" : ""}`}
+            onClick={() => selectTab(t.id)}
+          >
             {t.label}
           </button>
         ))}
@@ -201,17 +215,17 @@ function ReportsSection({
       {tab === "export" ? (
         <Card title="Export & View Reports">
           <div className="sfx-exportgrid">
-            <button className="sfx-export" onClick={() => toast("Excel export API not connected yet", "info")}>
+            <button type="button" className="sfx-export" onClick={() => toast("Excel export API not connected yet", "info")}>
               <Icon name="download" size={20} />
               <strong>Export Excel</strong>
               <small>Revenue + reservations (.xlsx)</small>
             </button>
-            <button className="sfx-export" onClick={() => toast("PDF export API not connected yet", "info")}>
+            <button type="button" className="sfx-export" onClick={() => toast("PDF export API not connected yet", "info")}>
               <Icon name="report" size={20} />
               <strong>Export PDF</strong>
               <small>Formatted summary report</small>
             </button>
-            <button className="sfx-export" onClick={() => toast("Report viewer not connected yet", "info")}>
+            <button type="button" className="sfx-export" onClick={() => toast("Report viewer not connected yet", "info")}>
               <Icon name="eye" size={20} />
               <strong>View Report</strong>
               <small>Open full report snapshot</small>

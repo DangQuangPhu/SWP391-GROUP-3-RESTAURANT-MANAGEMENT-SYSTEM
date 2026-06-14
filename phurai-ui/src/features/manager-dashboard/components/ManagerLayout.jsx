@@ -6,8 +6,6 @@ import Icon from "./ManagerIcons.jsx";
 function ManagerLayout({
   role,
   user,
-  activeId,
-  onSelect,
   title,
   subtitle,
   search,
@@ -20,20 +18,15 @@ function ManagerLayout({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const handleSelect = (item) => {
-    onSelect(item);
-    setMobileOpen(false);
-  };
+  const closeMobile = () => setMobileOpen(false);
 
   return (
     <div className={`sfx-shell ${collapsed ? "sfx-shell--collapsed" : ""}`}>
       <ManagerSidebar
-        activeId={activeId}
-        onSelect={handleSelect}
         collapsed={collapsed}
         role={role}
         mobileOpen={mobileOpen}
-        onCloseMobile={() => setMobileOpen(false)}
+        onCloseMobile={closeMobile}
         onSignOut={onSignOut}
       />
 

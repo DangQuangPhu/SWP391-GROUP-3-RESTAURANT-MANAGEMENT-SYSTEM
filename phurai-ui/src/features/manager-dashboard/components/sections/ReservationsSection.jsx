@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ManagerDrawer } from "../ManagerOverlay.jsx";
 import {
   SectionHead,
@@ -10,16 +11,36 @@ import {
   NotConnectedNote,
 } from "../ManagerUI.jsx";
 import { RESERVATION_STATUS_META, AREAS } from "../../data/managerDashboardMockData.js";
+import { getReservationsFilterFromSearch } from "../../config/managerRoutes.js";
 
-function ReservationsSection({ reservations, setReservations, pendingAction, toast }) {
+const FILTER_TABS = [
+  { id: "all", label: "Live Reservations" },
+  { id: "arriving", label: "Check-in Guests" },
+];
+
+function ReservationsSection({ reservations, setReservations, toast }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [area, setArea] = useState("all");
   const [active, setActive] = useState(null);
 
+  const urlFilter = useMemo(
+    () => getReservationsFilterFromSearch(`?${searchParams.toString()}`),
+    [searchParams]
+  );
+
+  const selectFilterTab = (nextFilter) => {
+    if (nextFilter === "arriving") {
+      setSearchParams({ filter: "arriving" }, { replace: true });
+      return;
+    }
+    setSearchParams({}, { replace: true });
+  };
+
   useEffect(() => {
-    if (pendingAction === "filter-arriving") setStatus("upcoming");
-  }, [pendingAction]);
+    if (urlFilter === "arriving") setStatus("upcoming");
+  }, [urlFilter]);
 
   const filtered = useMemo(() => {
     return reservations.filter((r) => {
@@ -50,9 +71,24 @@ function ReservationsSection({ reservations, setReservations, pendingAction, toa
   return (
     <div className="sfx-stack">
       <SectionHead
-        title="Live Reservations"
+        title="Reservations"
         subtitle={`${filtered.length} of ${reservations.length} bookings`}
       />
+
+      <div className="sfx-tabs" role="tablist" aria-label="Reservation views">
+        {FILTER_TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={urlFilter === t.id}
+            className={`sfx-tab ${urlFilter === t.id ? "is-active" : ""}`}
+            onClick={() => selectFilterTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
       <Toolbar>
         <SearchField

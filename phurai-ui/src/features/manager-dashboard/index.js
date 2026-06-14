@@ -1,4 +1,6 @@
 export { default as ManagerDashboardPage } from "./pages/ManagerDashboardPage.jsx";
+export { default as ManagerPortalPage } from "./pages/ManagerPortalPage.jsx";
+export { default as ManagerPortalLayout } from "./pages/ManagerPortalLayout.jsx";
 
 export { default as ManagerLayout } from "./components/ManagerLayout.jsx";
 export { default as ManagerHeader } from "./components/ManagerHeader.jsx";

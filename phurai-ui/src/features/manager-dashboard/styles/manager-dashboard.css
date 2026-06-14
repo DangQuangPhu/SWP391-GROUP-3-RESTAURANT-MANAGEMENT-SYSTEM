@@ -169,8 +169,12 @@
   font-size: 13.5px;
   font-weight: 500;
   text-align: left;
+  text-decoration: none;
+  box-sizing: border-box;
   transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease, padding 0.2s ease;
 }
+a.sfx-nav__item:visited { color: var(--sfx-side-text); }
+a.sfx-nav__item.is-active:visited { color: #fff; }
 .sfx-nav__item:hover {
   background: rgba(255, 255, 255, 0.06);
   color: #fff;
@@ -450,15 +454,21 @@
   top: calc(100% + 8px);
   right: 0;
   z-index: 50;
-  width: min(920px, calc(100vw - 48px));
+  width: max-content;
+  max-width: min(920px, calc(100vw - 48px));
 }
 .sfx-dp-popover-shell .sfx-dp-popover {
   position: relative;
-  width: 100%;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: max-content;
+  max-width: 100%;
   background: var(--sfx-card);
   border: 1px solid var(--sfx-border-soft);
   border-radius: 18px;
   box-shadow: 0 24px 70px rgba(20, 16, 12, 0.28);
+  overflow: hidden;
 }
 button.sfx-kpi__icon--trigger {
   border: none;
@@ -568,7 +578,11 @@ button.sfx-kpi__icon--trigger:focus-visible {
 .sfx-dp-popover {
   position: relative;
   z-index: 1;
-  width: min(920px, 100%);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: max-content;
+  max-width: min(920px, calc(100vw - 40px));
   background: var(--sfx-card);
   border: 1px solid var(--sfx-border-soft);
   border-radius: 18px;
@@ -577,6 +591,9 @@ button.sfx-kpi__icon--trigger:focus-visible {
   animation: sfxPop 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .sfx-dp-head {
+  width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
   padding: 16px 20px;
   border-bottom: 1px solid var(--sfx-border-soft);
 }
@@ -584,8 +601,11 @@ button.sfx-kpi__icon--trigger:focus-visible {
 .sfx-dp-sub { margin: 4px 0 0; font-size: 12.5px; color: var(--sfx-muted); }
 .sfx-dp-body {
   display: grid;
-  grid-template-columns: 190px 1fr;
+  grid-template-columns: 190px max-content;
+  width: max-content;
+  max-width: 100%;
   min-height: 360px;
+  flex: 0 0 auto;
 }
 .sfx-dp-presets {
   display: flex;
@@ -615,7 +635,23 @@ button.sfx-kpi__icon--trigger:focus-visible {
 }
 .sfx-dp-cal {
   padding: 8px 10px 4px;
+  min-width: max-content;
+  max-width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* Hide react-date-range built-in presets — portal uses .sfx-dp-presets */
+.sfx-dp-cal .rdrDefinedRangesWrapper {
+  display: none;
+}
+.sfx-dp-cal .rdrDateRangePickerWrapper {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+}
+.sfx-dp-cal .rdrMonths,
+.sfx-dp-cal .rdrMonthsHorizontal {
+  flex-wrap: nowrap;
 }
 .sfx-dp-cal .rdrCalendarWrapper {
   color: var(--sfx-text);
@@ -632,6 +668,9 @@ button.sfx-kpi__icon--trigger:focus-visible {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
   padding: 14px 18px;
   border-top: 1px solid var(--sfx-border-soft);
   background: var(--sfx-card);
