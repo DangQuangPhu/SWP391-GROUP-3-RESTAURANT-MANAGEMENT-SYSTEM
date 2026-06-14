@@ -12,7 +12,7 @@ import ReservationsSection from "../components/sections/ReservationsSection.jsx"
 import TablesSection from "../components/sections/TablesSection.jsx";
 import DishesSection from "../components/sections/DishesSection.jsx";
 import OrdersSection from "../components/sections/OrdersSection.jsx";
-import ManagerSection from "../components/sections/ManagerSection.jsx";
+import StaffSection from "../components/sections/StaffSection.jsx";
 import PromotionsSection from "../components/sections/PromotionsSection.jsx";
 import ReportsSection from "../components/sections/ReportsSection.jsx";
 import SettingsSection from "../components/sections/SettingsSection.jsx";
@@ -244,9 +244,9 @@ function ManagerDashboard({ isAuthenticated, currentUser, onSignOut, onNavigateH
         );
       case "manager":
         return (
-          <ManagerSection
-            manager={data.manager}
-            setManager={setList("manager")}
+          <StaffSection
+            staff={data.manager}
+            setStaff={setList("manager")}
             pendingAction={pendingAction}
             toast={toast}
           />

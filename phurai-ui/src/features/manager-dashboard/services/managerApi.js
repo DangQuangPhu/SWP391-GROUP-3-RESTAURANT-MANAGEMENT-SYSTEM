@@ -17,6 +17,7 @@ import {
   BEST_SELLERS,
   ORDERS,
   MANAGER,
+  STAFF_ASSIGNABLE_ROLES,
   PROMOTIONS,
   RESERVATION_STATS,
   TABLE_UTILIZATION,
@@ -98,8 +99,16 @@ export function fetchKitchen() {
   return managerGet("/staff/kitchen", []);
 }
 
-export function fetchManager() {
-  return managerGet("/staff/staff", MANAGER);
+function filterSubordinateStaff(list) {
+  const allowed = new Set(STAFF_ASSIGNABLE_ROLES);
+  return (Array.isArray(list) ? list : []).filter((member) =>
+    allowed.has(String(member?.role_name ?? "").trim())
+  );
+}
+
+export async function fetchManager() {
+  const res = await managerGet("/staff/staff", MANAGER);
+  return { ...res, data: filterSubordinateStaff(res.data) };
 }
 
 export function fetchPromotions() {

@@ -1,0 +1,58 @@
+/* Staff portal — reuses the manager portal sfx design system for visual parity. */
+@import "../../manager-dashboard/styles/manager-dashboard.css";
+
+.sfx-shell--staff .sfx-brand__text small {
+  color: #9eb8d4;
+}
+
+.sfx-role--restaurant_staff {
+  background: rgba(47, 125, 79, 0.14);
+  color: var(--sfx-green);
+}
+
+.sfx-role--kitchen_staff {
+  background: rgba(183, 121, 31, 0.14);
+  color: var(--sfx-amber);
+}
+
+.sfx-queue-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  border-radius: var(--sfx-radius-sm);
+  background: rgba(58, 110, 165, 0.08);
+  border: 1px solid rgba(58, 110, 165, 0.18);
+  font-size: 13px;
+  color: var(--sfx-blue);
+}
+
+.sfx-queue-banner--mock {
+  background: rgba(183, 121, 31, 0.1);
+  border-color: rgba(183, 121, 31, 0.22);
+  color: var(--sfx-amber);
+}
+
+.sfx-assign-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sfx-assign-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--sfx-muted);
+}
+
+.sfx-assign-form select {
+  padding: 10px 12px;
+  border-radius: var(--sfx-radius-sm);
+  border: 1px solid var(--sfx-border);
+  background: var(--sfx-card);
+  font-size: 14px;
+  color: var(--sfx-text);
+}

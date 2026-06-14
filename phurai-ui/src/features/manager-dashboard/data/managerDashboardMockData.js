@@ -477,16 +477,16 @@ export const ORDER_STATUS_META = {
   done: { label: "Done", tone: "muted" },
 };
 
-/* ---- Manager (dbo.ManagerProfiles + UserAccounts + Roles) ---- */
+/* ---- Staff roster mock (dbo.UserAccounts + dbo.Roles) — subordinates only ---- */
 export const MANAGER = [
-  { manager_id: 1, full_name: "Hoa Dang", role_name: "Manager", phone: "0901 234 567", email: "hoa.dang@phurai.com", status: "active", shift: "Morning" },
-  { manager_id: 2, full_name: "Tuan Le", role_name: "Restaurant Manager", phone: "0902 345 678", email: "tuan.le@phurai.com", status: "active", shift: "Evening" },
-  { manager_id: 3, full_name: "Minh Vo", role_name: "Kitchen Manager", phone: "0903 456 789", email: "minh.vo@phurai.com", status: "active", shift: "Evening" },
-  { manager_id: 4, full_name: "Lan Pham", role_name: "Restaurant Manager", phone: "0904 567 890", email: "lan.pham@phurai.com", status: "on_leave", shift: "Morning" },
-  { manager_id: 5, full_name: "Bao Nguyen", role_name: "Kitchen Manager", phone: "0905 678 901", email: "bao.nguyen@phurai.com", status: "inactive", shift: "Night" },
+  { manager_id: 2, full_name: "Tuan Le", role_name: "Restaurant Staff", phone: "0902 345 678", email: "tuan.le@phurai.com", status: "active", shift: "Evening" },
+  { manager_id: 3, full_name: "Minh Vo", role_name: "Kitchen Staff", phone: "0903 456 789", email: "minh.vo@phurai.com", status: "active", shift: "Evening" },
+  { manager_id: 4, full_name: "Lan Pham", role_name: "Restaurant Staff", phone: "0904 567 890", email: "lan.pham@phurai.com", status: "on_leave", shift: "Morning" },
+  { manager_id: 5, full_name: "Bao Nguyen", role_name: "Kitchen Staff", phone: "0905 678 901", email: "bao.nguyen@phurai.com", status: "inactive", shift: "Night" },
 ];
 
-export const MANAGER_ROLES = ["Manager", "Restaurant Manager", "Kitchen Manager", "Admin"];
+/** Roles a Manager may view and manage on /manager (UC-M05). */
+export const STAFF_ASSIGNABLE_ROLES = ["Restaurant Staff", "Kitchen Staff"];
 export const MANAGER_STATUS_META = {
   active: { label: "Active", tone: "green" },
   on_leave: { label: "On Leave", tone: "amber" },

@@ -47,10 +47,10 @@ export const NAV_GROUPS = [
     ],
   },
   {
-    group: "Manager",
+    group: "Staff",
     items: [
-      { id: "manager-list", label: "Manager List", view: "manager", icon: "users", managerOnly: true },
-      { id: "manager-add", label: "Add Manager", view: "manager", icon: "plus", action: "add", managerOnly: true },
+      { id: "manager-list", label: "Staff List", view: "manager", icon: "users", managerOnly: true },
+      { id: "manager-add", label: "Add Staff", view: "manager", icon: "plus", action: "add", managerOnly: true },
     ],
   },
   {
@@ -80,7 +80,7 @@ export const VIEW_SUBTITLE = {
   tables: "Floor layout, capacity and status",
   dishes: "Menu items and best-sellers",
   orders: "Active orders and kitchen queue",
-  manager: "Team roster and scheduling",
+  manager: "Staff roster and scheduling",
   promotions: "Campaigns, vouchers and discounts",
   reports: "Revenue, statistics and exports",
   settings: "Portal and restaurant configuration",

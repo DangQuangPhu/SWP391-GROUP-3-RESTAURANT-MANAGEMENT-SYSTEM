@@ -22,7 +22,8 @@ function getErrorContent({ pathname = "", currentUser, isAuthenticated }) {
 
   const isAdminRoute = lowerPath.startsWith("/admin");
   const isManagerRoute = lowerPath.startsWith("/manager");
-  const isRestrictedRoute = isAdminRoute || isManagerRoute;
+  const isStaffRoute = lowerPath.startsWith("/staff");
+  const isRestrictedRoute = isAdminRoute || isManagerRoute || isStaffRoute;
 
   const isOldManagementRoute =
     lowerPath.includes("wp-admin") ||
@@ -48,9 +49,14 @@ function getErrorContent({ pathname = "", currentUser, isAuthenticated }) {
       type: "guest-restricted",
       title: "Restricted Area",
       subtitle: "This section is reserved for authorized Phūrai team members.",
-      description: "You may have opened an old management link, changed the URL manually, or tried to access a manager-only workspace. Please sign in with an authorized account to continue.",
+      description: isStaffRoute
+        ? "The staff portal is for restaurant and kitchen team members. Please sign in with an authorized staff account to manage the reservation queue."
+        : "You may have opened an old management link, changed the URL manually, or tried to access a manager-only workspace. Please sign in with an authorized account to continue.",
       helperText: "If you are a customer, please use the reservation and dining features from the main website.",
-      primaryAction: { label: "Manager Sign In", target: "login" },
+      primaryAction: {
+        label: isStaffRoute ? "Staff Sign In" : "Manager Sign In",
+        target: "login",
+      },
       secondaryAction: { label: "Back to Home", target: "home" },
     };
   }
@@ -60,7 +66,9 @@ function getErrorContent({ pathname = "", currentUser, isAuthenticated }) {
       type: "customer-restricted",
       title: "Access Not Allowed",
       subtitle: "Your customer account cannot access this workspace.",
-      description: "This page belongs to the internal restaurant management system. Customer accounts can manage reservations, view booking history, order from the menu, and update profile information, but cannot access manager or admin tools.",
+      description: isStaffRoute
+        ? "The staff portal is for restaurant and kitchen team members. Customer accounts can manage reservations, view booking history, order from the menu, and update profile information."
+        : "This page belongs to the internal restaurant management system. Customer accounts can manage reservations, view booking history, order from the menu, and update profile information, but cannot access manager or admin tools.",
       primaryAction: { label: "Go to My Reservations", target: "myReservations" },
       secondaryAction: { label: "Back to Home", target: "home" },
       tertiaryAction: { label: "Switch Account", target: "login" },
@@ -112,6 +120,7 @@ function NotFound({ onNavigate, pathname = "", currentUser, isAuthenticated }) {
       login: "/login",
       myReservations: "/my-reservations",
       manager: "/manager",
+      staff: "/staff",
     };
     window.location.href = paths[page] || "/";
   };

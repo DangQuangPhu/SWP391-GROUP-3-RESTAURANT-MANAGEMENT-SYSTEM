@@ -640,7 +640,7 @@ INSERT INTO dbo.UserAccounts
 (user_id, role_id, full_name, email, phone, password_hash, is_active, email_verified, last_login_at)
 VALUES
 (1, 5, N'Nguyen Van Admin',  N'admin@phurai.vn',    '0901000001', N'$2b$12$admin_hash',   1, 1, '2026-05-18T08:00:00'),
-(2, 4, N'Tran Thi Manager',  N'manager@phurai.vn',  '0901000002', N'$2b$12$manager_hash', 1, 1, '2026-05-18T08:10:00'),
+(2, 4, N'Tran Thi Manager',  N'manager@phurai.vn',  '0901000002', N'$2b$10$e04PpX9xUpPuRyW89qcv7.X/Lgfq.6sl319ehCioPrEW1nLXeQis6', 1, 1, '2026-05-18T08:10:00'),
 (3, 2, N'Le Van Staff',      N'staff1@phurai.vn',   '0901000003', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, '2026-05-18T08:30:00'),
 (4, 2, N'Pham Thi Staff',    N'staff2@phurai.vn',   '0901000004', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, NULL),
 (5, 3, N'Hoang Van Chef',    N'kitchen1@phurai.vn', '0901000005', N'$2b$12$chef1_hash',   1, 1, '2026-05-18T09:00:00'),
@@ -1237,7 +1237,8 @@ SELECT
         WHEN EXISTS (
             SELECT 1
             FROM dbo.ReservationTables rt
-            JOIN dbo.Reservations r ON rt.reservation_id = r.reservation_id
+            JOIN dbo.Reservations r 
+                ON rt.reservation_id = r.reservation_id
             WHERE rt.table_id = t.table_id
               AND r.reservation_status IN (N'Pending', N'Confirmed', N'Checked In')
               AND r.reservation_start_at < @SlotEnd
@@ -1246,7 +1247,8 @@ SELECT
         ELSE N'Available'
     END AS availability_at_slot
 FROM dbo.RestaurantTables t
-JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id
+JOIN dbo.RestaurantAreas a 
+    ON t.area_id = a.area_id
 WHERE a.is_active = 1
 ORDER BY a.area_type, t.table_number;
 GO
@@ -1306,6 +1308,28 @@ SELECT
 FROM dbo.RestaurantTables t
 JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id
 ORDER BY t.table_id;
+
+SELECT
+    d.dish_id,
+    d.dish_name,
+    d.description,
+    d.price,
+    d.spicy_level,
+    d.prep_time_min,
+    c.category_name,
+    img.image_url
+FROM dbo.Dishes d
+JOIN dbo.MenuCategories c
+    ON d.category_id = c.category_id
+LEFT JOIN dbo.DishImages img
+    ON d.dish_id = img.dish_id
+   AND img.is_primary = 1
+WHERE d.is_available = 1
+  AND d.allow_preorder = 1
+ORDER BY
+    ISNULL(d.preorder_sort, 9999),
+    c.display_order,
+    d.dish_name;
 
 
 -- Reset DB

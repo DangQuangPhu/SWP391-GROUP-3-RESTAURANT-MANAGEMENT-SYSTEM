@@ -20,6 +20,7 @@ import {
   normalizeStoredAvatarUrl,
 } from "@/features/profile";
 import { ManagerDashboardPage as ManagerDashboard } from "@/features/manager-dashboard";
+import { StaffDashboardPage as StaffDashboard, isStaffPortalUser } from "@/features/staff-dashboard";
 import NotFound from "@/pages/NotFound";
 import LandingPage from "@/pages/public/LandingPage";
 import Navbar from "@/components/layout/Navbar";
@@ -54,7 +55,7 @@ function normalizeAuthUser(user) {
 function isManagerUser(user) {
   if (!user) return false;
   const roleId = Number(user.roleId ?? user.role_id);
-  if (roleId === 4) return true;
+  if (roleId === 4 || roleId === 5) return true;
   const role = String(user.roleName ?? user.role_name ?? user.role ?? "")
     .trim()
     .toLowerCase();
@@ -71,6 +72,7 @@ function getPageFromPath(path) {
 
   if (normalized.startsWith("/settings")) return "settings";
   if (normalized === "/manager" || normalized.startsWith("/manager/")) return "manager";
+  if (normalized === "/staff" || normalized.startsWith("/staff/")) return "staff";
   if (normalized === "/profile") return "profile";
   if (normalized === "/login") return "login";
   if (normalized === "/take-out") return "takeout";
@@ -228,6 +230,8 @@ function App() {
         saveAuthUser(pendingAuthUser, Boolean(localStorage.getItem("phurai_auth_user")));
         if (isManagerUser(pendingAuthUser)) {
           navigateToPath("/manager");
+        } else if (isStaffPortalUser(pendingAuthUser)) {
+          navigateToPath("/staff");
         }
         setPendingAuthUser(null);
       }
@@ -286,6 +290,11 @@ function App() {
       return;
     }
 
+    if (page === "staff") {
+      navigateToPath("/staff");
+      return;
+    }
+
     setActivePage(page);
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
 
@@ -306,6 +315,8 @@ function App() {
         ? "/landing"
         : page === "manager"
         ? "/manager"
+        : page === "staff"
+        ? "/staff"
         : "/";
 
     setPathname(nextPath);
@@ -330,6 +341,8 @@ function App() {
     setIsAuthModalOpen(false);
     if (isManagerUser(normalized)) {
       navigateToPath("/manager");
+    } else if (isStaffPortalUser(normalized)) {
+      navigateToPath("/staff");
     }
   };
 
@@ -361,9 +374,10 @@ function App() {
   };
 
   const isManagerPage = pathname === "/manager" || pathname.startsWith("/manager/");
+  const isStaffPage = pathname === "/staff" || pathname.startsWith("/staff/");
   const isAccountPage =
     pathname.startsWith("/profile") || pathname.startsWith("/settings");
-  const isPortalPage = isAccountPage || isManagerPage;
+  const isPortalPage = isAccountPage || isManagerPage || isStaffPage;
 
   return (
     <>
@@ -456,6 +470,14 @@ function App() {
           onNavigateHome={() => handleNavigate("home")}
           onNavigate={handleNavigate}
           onOpenAuth={() => openAuthModal("login")}
+        />
+      )}
+      {activePage === "staff" && (
+        <StaffDashboard
+          isAuthenticated={isAuthenticated}
+          currentUser={currentUser}
+          onSignOut={handleSignOut}
+          onNavigate={handleNavigate}
         />
       )}
       {activePage === "notFound" && (

@@ -335,6 +335,7 @@ router.get("/reservations/today", async (_req, res) => {
          r.guest_count,
          r.special_request,
          r.reservation_status,
+         r.reservation_source,
          ua.full_name AS customer_name,
          ua.email,
          ua.phone,
@@ -379,6 +380,7 @@ router.get("/reservations/today", async (_req, res) => {
         area_name: row.area_name || "Unassigned",
         table_label: tableLabels.join(", ") || "—",
         status: slugStatus(row.reservation_status),
+        source: slugStatus(row.reservation_source),
         occasion: "",
         special_request: row.special_request || "",
         preorder: [],
@@ -677,17 +679,20 @@ router.get("/staff", async (_req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT
-         sp.staff_id,
-         sp.staff_code,
-         sp.job_title,
-         sp.employment_status,
+         ua.user_id,
          ua.full_name,
          ua.email,
          ua.phone,
-         r.role_name
-       FROM dbo.StaffProfiles sp
-       JOIN dbo.UserAccounts ua ON sp.user_id = ua.user_id
-       JOIN dbo.Roles r ON ua.role_id = r.role_id
+         r.role_name,
+         sp.staff_id,
+         sp.staff_code,
+         sp.job_title,
+         sp.employment_status
+       FROM dbo.UserAccounts AS ua
+       INNER JOIN dbo.Roles AS r ON ua.role_id = r.role_id
+       LEFT JOIN dbo.StaffProfiles AS sp ON sp.user_id = ua.user_id
+       WHERE r.role_name IN (N'Manager', N'Restaurant Staff', N'Kitchen Staff')
+         AND ua.is_active = 1
        ORDER BY ua.full_name ASC;`
     );
 

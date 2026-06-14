@@ -15,7 +15,7 @@ export { default as ReservationsSection } from "./components/sections/Reservatio
 export { default as TablesSection } from "./components/sections/TablesSection.jsx";
 export { default as DishesSection } from "./components/sections/DishesSection.jsx";
 export { default as OrdersSection } from "./components/sections/OrdersSection.jsx";
-export { default as ManagerSection } from "./components/sections/ManagerSection.jsx";
+export { default as StaffSection } from "./components/sections/StaffSection.jsx";
 export { default as PromotionsSection } from "./components/sections/PromotionsSection.jsx";
 export { default as ReportsSection } from "./components/sections/ReportsSection.jsx";
 export { default as SettingsSection } from "./components/sections/SettingsSection.jsx";
