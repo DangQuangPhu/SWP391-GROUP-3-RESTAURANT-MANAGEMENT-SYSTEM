@@ -1,7 +1,12 @@
 /* Phūrai — Staff Portal API wrapper (reservation queue). */
 
 import { request } from "@/core/api/httpClient.js";
-import { QUEUE_RESERVATIONS } from "../data/staffDashboardMockData.js";
+import {
+  KITCHEN_TICKETS,
+  QUEUE_RESERVATIONS,
+  STAFF_ORDERS,
+  STAFF_TABLES,
+} from "../data/staffDashboardMockData.js";
 
 const MOCK_DELAY = 220;
 
@@ -60,5 +65,23 @@ export async function fetchReservationQueue() {
   const res = await staffGet("/staff/reservations/today", QUEUE_RESERVATIONS);
   const rows = Array.isArray(res.data) ? res.data : QUEUE_RESERVATIONS;
   const data = rows.filter(isPendingOnlineReservation);
+  return { source: res.source, data };
+}
+
+export async function fetchStaffTables() {
+  return staffGet("/staff/tables", STAFF_TABLES);
+}
+
+export async function fetchStaffOrders() {
+  const res = await staffGet("/staff/orders/active", STAFF_ORDERS);
+  const rows = Array.isArray(res.data) ? res.data : STAFF_ORDERS;
+  const data = rows.filter((o) => o.kitchen_status !== "done");
+  return { source: res.source, data };
+}
+
+export async function fetchKitchenQueue() {
+  const res = await staffGet("/staff/kitchen/queue", KITCHEN_TICKETS);
+  const rows = Array.isArray(res.data) ? res.data : KITCHEN_TICKETS;
+  const data = rows.filter((t) => ["queued", "cooking", "ready"].includes(t.kitchen_status));
   return { source: res.source, data };
 }

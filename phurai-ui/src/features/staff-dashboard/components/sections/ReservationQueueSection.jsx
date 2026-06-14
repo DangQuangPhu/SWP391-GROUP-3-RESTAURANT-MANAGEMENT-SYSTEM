@@ -13,6 +13,7 @@ import {
   DEMO_NOTICE,
   RESERVATION_STATUS_META,
 } from "../../data/staffDashboardMockData.js";
+import { KITCHEN_VIEW_AREA_NAME } from "@/features/reservations/data/floorPlanConfig.js";
 import {
   isPendingOnlineReservation,
   normalizeQueueToken,
@@ -58,6 +59,29 @@ function ReservationQueueSection({
 
   const confirmAssign = () => {
     if (!assignTarget) return;
+    const isKitchenView = assignTarget.area_name === KITCHEN_VIEW_AREA_NAME;
+
+    if (isKitchenView) {
+      setQueue((prev) =>
+        prev.map((r) =>
+          r.reservation_id === assignTarget.reservation_id
+            ? {
+                ...r,
+                table_label: `Counter · ${assignTarget.party_size} seat(s)`,
+                status: "confirmed",
+              }
+            : r
+        )
+      );
+      toast(
+        `Kitchen View: ${assignTarget.party_size} counter seat(s) confirmed (local only)`,
+        "info"
+      );
+      setAssignTarget(null);
+      setSelectedTable("");
+      return;
+    }
+
     if (!selectedTable) {
       toast("Please select a table", "error");
       return;
@@ -182,7 +206,9 @@ function ReservationQueueSection({
                             icon="table"
                             onClick={() => openAssign(r)}
                           >
-                            Assign Table
+                            {r.area_name === KITCHEN_VIEW_AREA_NAME
+                              ? "Confirm seats"
+                              : "Assign Table"}
                           </Button>
                         </div>
                       ) : (
@@ -225,25 +251,34 @@ function ReservationQueueSection({
               Party of <strong>{assignTarget.party_size}</strong> · preferred{" "}
               <strong>{assignTarget.area_name}</strong>
             </p>
+            {assignTarget.area_name === KITCHEN_VIEW_AREA_NAME ? (
+              <p className="sfx-note">
+                Kitchen View uses counter seats — no individual table assignment. Confirm{" "}
+                <strong>{assignTarget.party_size}</strong> seat
+                {assignTarget.party_size === 1 ? "" : "s"} for this booking.
+              </p>
+            ) : null}
             {assignTarget.special_request ? (
               <p className="sfx-note">
                 <span>{assignTarget.special_request}</span>
               </p>
             ) : null}
-            <label>
-              Select table
-              <select
-                value={selectedTable}
-                onChange={(e) => setSelectedTable(e.target.value)}
-              >
-                <option value="">Choose a table…</option>
-                {eligibleTables.map((t) => (
-                  <option key={t.table_id} value={String(t.table_id)}>
-                    {t.table_number} · {t.area_name} (seats {t.capacity})
-                  </option>
-                ))}
-              </select>
-            </label>
+            {assignTarget.area_name !== KITCHEN_VIEW_AREA_NAME ? (
+              <label>
+                Select table
+                <select
+                  value={selectedTable}
+                  onChange={(e) => setSelectedTable(e.target.value)}
+                >
+                  <option value="">Choose a table…</option>
+                  {eligibleTables.map((t) => (
+                    <option key={t.table_id} value={String(t.table_id)}>
+                      {t.table_number} · {t.area_name} (seats {t.capacity})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
           </div>
         ) : null}
       </StaffDrawer>

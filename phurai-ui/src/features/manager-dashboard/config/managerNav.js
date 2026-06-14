@@ -19,7 +19,7 @@ export const NAV_GROUPS = [
       { id: "reservations", label: "Reservations", view: "reservations", icon: "calendar" },
       { id: "tables", label: "Tables", view: "tables", icon: "table" },
       { id: "menu", label: "Menu", view: "menu", icon: "dish" },
-      { id: "orders", label: "Orders & Kitchen", view: "orders", icon: "receipt" },
+      { id: "orders", label: "Orders", view: "orders", icon: "receipt" },
     ],
   },
   {
@@ -35,10 +35,6 @@ export const NAV_GROUPS = [
       { id: "reports", label: "Reports", view: "reports", icon: "chart", managerOnly: true },
     ],
   },
-  {
-    group: "Settings",
-    items: [{ id: "settings", label: "Settings", view: "settings", icon: "settings" }],
-  },
 ];
 
 export const VIEW_SUBTITLE = {
@@ -48,8 +44,7 @@ export const VIEW_SUBTITLE = {
   tables: "Floor layout, capacity and status",
   menu: "Menu items and best-sellers",
   orders: "Active orders and kitchen queue",
-  staff: "Staff roster and scheduling",
+  staff: "Staff roster, shifts and working status",
   promotions: "Campaigns, vouchers and discounts",
   reports: "Revenue, statistics and exports",
-  settings: "Portal and restaurant configuration",
 };

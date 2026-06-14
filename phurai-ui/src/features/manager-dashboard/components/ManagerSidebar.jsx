@@ -12,8 +12,7 @@ function SidebarNavItem({ item, collapsed, onCloseMobile }) {
   return (
     <NavLink
       to={navItemToPath(item)}
-      className={({ isActive }) => `sfx-nav__item${isActive ? " is-active" : ""}`}
-      isActive={() => isItemActive}
+      className={`sfx-nav__item${isItemActive ? " is-active" : ""}`}
       onClick={onCloseMobile}
       title={collapsed ? item.label : undefined}
     >

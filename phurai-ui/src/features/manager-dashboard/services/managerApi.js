@@ -7,7 +7,7 @@
    Every getter resolves to: { source: "api" | "mock", data }
    ============================================================ */
 
-import { request } from "@/core/api/httpClient.js";
+import { request, profileRequestHeaders, createApiError } from "@/core/api/httpClient.js";
 import {
   KPI_CARDS,
   REVENUE_SERIES,
@@ -133,6 +133,144 @@ export async function fetchTableUtilization() {
   return res.source === "mock"
     ? mock(TABLE_UTILIZATION)
     : mock(res.data?.tableUtilization ?? TABLE_UTILIZATION);
+}
+
+/* ---- Shift scheduling (/api/manager/*) --------------------------- */
+
+function resolveManagerUserId(userId) {
+  const parsed = Number(userId);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+async function managerAuthRequest(path, options = {}, userId) {
+  const uid = resolveManagerUserId(userId);
+  if (!uid) {
+    throw createApiError("Manager session required.", { status: 401 });
+  }
+  return request(path, {
+    ...options,
+    headers: profileRequestHeaders(uid, options.headers),
+  });
+}
+
+export async function fetchShifts(userId) {
+  try {
+    const res = await managerAuthRequest("/manager/shifts", { method: "GET" }, userId);
+    if (res?.success) {
+      return { source: "api", data: res.data ?? [] };
+    }
+  } catch {
+    /* fall through */
+  }
+  return mock([]);
+}
+
+export async function fetchSchedules(date, userId) {
+  try {
+    const qs = new URLSearchParams({ date });
+    const res = await managerAuthRequest(
+      `/manager/schedules?${qs.toString()}`,
+      { method: "GET" },
+      userId
+    );
+    if (res?.success) {
+      return { source: "api", data: res.data ?? [] };
+    }
+  } catch {
+    /* fall through */
+  }
+  return mock([]);
+}
+
+export async function assignSchedule({ work_date, user_id, shift_id }, userId) {
+  const res = await managerAuthRequest(
+    "/manager/schedules",
+    {
+      method: "POST",
+      body: JSON.stringify({ work_date, user_id, shift_id }),
+    },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not assign shift.");
+  }
+  return res.data;
+}
+
+export async function updateScheduleAttendance(scheduleId, attendance_status, userId) {
+  const res = await managerAuthRequest(
+    `/manager/schedules/${scheduleId}/status`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ attendance_status }),
+    },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not update attendance status.");
+  }
+  return res.data;
+}
+
+/* ---- Table management (/api/manager/*) --------------------------- */
+
+export async function fetchAreas(userId) {
+  try {
+    const res = await managerAuthRequest("/manager/areas", { method: "GET" }, userId);
+    if (res?.success) {
+      return { source: "api", data: res.data ?? [] };
+    }
+  } catch {
+    /* fall through */
+  }
+  return mock([]);
+}
+
+export async function createTable(payload, userId) {
+  const res = await managerAuthRequest(
+    "/manager/tables",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not create table.");
+  }
+  return res.data;
+}
+
+export async function fetchNextTableNumber(areaId, userId, options = {}) {
+  const qs = new URLSearchParams({ area_id: String(areaId) });
+  const res = await managerAuthRequest(
+    `/manager/next-table-number?${qs.toString()}`,
+    { method: "GET", signal: options.signal },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not suggest next table number.");
+  }
+  return res.data;
+}
+
+export async function fetchFilteredTables({ search, area_id, statuses } = {}, userId) {
+  try {
+    const qs = new URLSearchParams();
+    if (search) qs.set("search", search);
+    if (area_id) qs.set("area_id", String(area_id));
+    if (statuses) qs.set("statuses", statuses);
+
+    const query = qs.toString();
+    const path = query ? `/manager/tables-filtered?${query}` : "/manager/tables-filtered";
+    const res = await managerAuthRequest(path, { method: "GET" }, userId);
+    if (res?.success) {
+      return { source: "api", data: res.data ?? [] };
+    }
+  } catch {
+    /* fall through */
+  }
+  return mock([]);
 }
 
 /* ---- Write operations (UI-ready, not yet persisted) ------------ */

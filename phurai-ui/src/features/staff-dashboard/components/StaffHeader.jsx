@@ -23,6 +23,7 @@ function StaffHeader({
   onMobileMenu,
   onRefresh,
   refreshing,
+  refreshLabel = "Refresh",
 }) {
   const name = user?.fullName || user?.username || "Phūrai Staff";
   const initials = name
@@ -82,7 +83,7 @@ function StaffHeader({
           disabled={refreshing}
         >
           <Icon name="refresh" size={16} />
-          <span>{refreshing ? "Refreshing…" : "Refresh queue"}</span>
+          <span>{refreshing ? "Refreshing…" : refreshLabel}</span>
         </button>
 
         <div className="sfx-header__user">

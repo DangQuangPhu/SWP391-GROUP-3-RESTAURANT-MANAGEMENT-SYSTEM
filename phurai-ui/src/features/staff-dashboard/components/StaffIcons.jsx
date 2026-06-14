@@ -11,8 +11,13 @@ const PATHS = {
   menu: "M4 6h16M4 12h16M4 18h16",
   table:
     "M4 7h16M4 7v10M20 7v10M4 17h16M9 7v10M15 7v10",
+  grid: "M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z",
+  receipt:
+    "M6 3h12v18l-3-2-3 2-3-2-3 2V3zM9 7h6M9 11h6M9 15h4",
+  fire: "M12 3c1 3-2 4-2 7a2 2 0 104 0c0-1 1-1.5 1-3 2 2 3 4 3 6a6 6 0 11-12 0c0-4 4-5 6-10z",
   spark: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18",
   refresh: "M4 4v5h5M20 20v-5h-5M20 9A8 8 0 006.3 6.3M4 15a8 8 0 0013.7 2.7",
+  plus: "M12 5v14M5 12h14",
 };
 
 function Icon({ name, size = 18, strokeWidth = 1.7, className = "" }) {

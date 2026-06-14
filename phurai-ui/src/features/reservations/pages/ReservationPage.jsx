@@ -11,6 +11,8 @@ import {
   AREA_PREFERENCES,
   DINING_PURPOSES,
   buildTimeSlots,
+  KITCHEN_VIEW_AREA_NAME,
+  KITCHEN_VIEW_COUNTER_CAPACITY,
 } from "../data/floorPlanConfig.js";
 import {
   getReservationSettings,
@@ -34,6 +36,8 @@ const INITIAL_FORM = {
   guestCount: 2,
   holdDurationMinutes: 30,
   diningPurpose: "casual",
+  selectedArea: "",
+  preferredAreaId: null,
   fullName: "",
   email: "",
   phone: "",
@@ -133,10 +137,13 @@ function ReservationPage({
     return slots;
   }, [settings, form.date]);
 
+  const isKitchenView = form.selectedArea === KITCHEN_VIEW_AREA_NAME;
+
   /* Fetch availability whenever the key selection changes (debounced). */
   useEffect(() => {
-    if (!form.date || !form.time) {
+    if (isKitchenView || !form.date || !form.time) {
       setTables([]);
+      setSelectedTableId(null);
       return undefined;
     }
 
@@ -173,7 +180,7 @@ function ReservationPage({
       active = false;
       clearTimeout(handle);
     };
-  }, [form.date, form.time, form.guestCount, form.diningPurpose]);
+  }, [form.date, form.time, form.guestCount, form.diningPurpose, isKitchenView]);
 
   const selectedTables = useMemo(
     () => tables.filter((t) => t.table_id === selectedTableId),
@@ -206,12 +213,27 @@ function ReservationPage({
 
   const canSubmit = useMemo(() => {
     if (!detailsValid) return false;
+    if (isKitchenView) {
+      return (
+        form.guestCount >= 1 &&
+        form.guestCount <= KITCHEN_VIEW_COUNTER_CAPACITY &&
+        Boolean(form.preferredAreaId)
+      );
+    }
     if (!selectedTableId) return false;
     if (totalCapacity < form.guestCount) return false;
     return true;
-  }, [detailsValid, selectedTableId, totalCapacity, form.guestCount]);
+  }, [
+    detailsValid,
+    isKitchenView,
+    form.guestCount,
+    form.preferredAreaId,
+    selectedTableId,
+    totalCapacity,
+  ]);
 
-  const summaryVisible = step === "tables" && selectedTableId !== null;
+  const summaryVisible =
+    step === "tables" && (isKitchenView || selectedTableId !== null);
 
   const scrollToBooking = () => {
     bookingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -281,23 +303,24 @@ function ReservationPage({
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
-    if (!selectedTableId) {
+    if (!isKitchenView && !selectedTableId) {
       setError("Please select a table before continuing.");
       return;
     }
     setError("");
     setSubmitting(true);
 
-    const preferredAreaId = selectedTables[0]?.area_id || null;
+    const preferredAreaId = isKitchenView
+      ? form.preferredAreaId
+      : selectedTables[0]?.area_id || null;
     const payload = {
       date: form.date,
       time: form.time,
-      durationMinutes: 120, // default dining block
+      durationMinutes: 120,
       holdDurationMinutes: form.holdDurationMinutes,
       guest_count: form.guestCount,
       preferred_area_id: preferredAreaId,
-      selectedTableId: selectedTableId,
-      table_ids: selectedTableId ? [selectedTableId] : [],
+      table_ids: isKitchenView ? [] : selectedTableId ? [selectedTableId] : [],
       dining_purpose: DINING_PURPOSES.find((p) => p.id === form.diningPurpose)?.label,
       contact_name: form.fullName.trim(),
       contact_email: form.email.trim(),
@@ -317,7 +340,7 @@ function ReservationPage({
         setError("Could not create reservation. Please try again.");
       }
     } catch (err) {
-      if (err?.code === "TABLE_UNAVAILABLE") {
+      if (err?.code === "TABLE_UNAVAILABLE" || err?.code === "SEATS_UNAVAILABLE") {
         setError(err.message);
         setSelectedTableId(null);
         getAvailability({
@@ -431,23 +454,35 @@ function ReservationPage({
                 </span>
               </div>
 
-              <TableBoard
-                tables={tables}
-                selectedTableId={selectedTableId}
-                onSelectTable={handleSelectTable}
-                loading={loadingAvailability}
-                guestCount={form.guestCount}
-                membershipTier={membershipTier}
-                isAuthenticated={isAuthenticated}
-                onNavigateLogin={() => onNavigate("login")}
-                onNavigateRegister={onRequireAuth}
-              />
+              {isKitchenView ? (
+                <div className="rzv-kitchen-seat">
+                  <h3 className="rzv-card__title">Kitchen View counter</h3>
+                  <p className="rzv-card__hint">
+                    You are booking {form.guestCount} seat{form.guestCount === 1 ? "" : "s"} at the
+                    open-kitchen counter. No table number is assigned — seats are managed as a
+                    shared counter.
+                  </p>
+                </div>
+              ) : (
+                <TableBoard
+                  tables={tables}
+                  selectedTableId={selectedTableId}
+                  onSelectTable={handleSelectTable}
+                  loading={loadingAvailability}
+                  guestCount={form.guestCount}
+                  membershipTier={membershipTier}
+                  isAuthenticated={isAuthenticated}
+                  onNavigateLogin={() => onNavigate("login")}
+                  onNavigateRegister={onRequireAuth}
+                />
+              )}
 
               {summaryVisible ? (
                 <div className="rzv-reveal">
                   <ReservationSummary
                     form={form}
                     selectedTables={selectedTables}
+                    isKitchenView={isKitchenView}
                     promotion={promotion}
                     preorderItems={preorderItems}
                     error={error}
@@ -462,7 +497,9 @@ function ReservationPage({
                 </div>
               ) : (
                 <p className="rzv-tablestep__prompt">
-                  Select an available table on the plan to review and confirm your reservation.
+                  {isKitchenView
+                    ? "Review your counter seat booking below and confirm."
+                    : "Select an available table on the plan to review and confirm your reservation."}
                 </p>
               )}
             </div>

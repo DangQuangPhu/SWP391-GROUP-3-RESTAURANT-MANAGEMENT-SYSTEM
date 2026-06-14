@@ -1,8 +1,11 @@
 import {
   AREA_PREFERENCES,
+  BOOKING_AREAS,
   DINING_PURPOSES,
   HOLD_DURATION_OPTIONS,
   EVENT_AREA_HINTS,
+  KITCHEN_VIEW_AREA_NAME,
+  KITCHEN_VIEW_COUNTER_CAPACITY,
 } from "../data/floorPlanConfig.js";
 
 /**
@@ -20,6 +23,8 @@ function ReservationFormPanel({
   const selectedPurpose = DINING_PURPOSES.find((p) => p.id === form.diningPurpose);
   const isEvent = Boolean(selectedPurpose?.event);
   const areaHints = EVENT_AREA_HINTS[form.diningPurpose] || [];
+  const isKitchenView = form.selectedArea === KITCHEN_VIEW_AREA_NAME;
+  const counterCapacity = KITCHEN_VIEW_COUNTER_CAPACITY;
 
   return (
     <div className="rzv-card">
@@ -63,10 +68,40 @@ function ReservationFormPanel({
         </div>
       </div>
 
+      {/* Dining area — table vs Kitchen View counter */}
+      <div className="rzv-field">
+        <label className="rzv-field__label" htmlFor="rzv-area">
+          Dining area
+        </label>
+        <select
+          id="rzv-area"
+          className="rzv-select"
+          value={form.selectedArea || ""}
+          onChange={(e) => {
+            const next = BOOKING_AREAS.find((a) => a.area_name === e.target.value) || BOOKING_AREAS[0];
+            setField("selectedArea", next.area_name || "");
+            setField("preferredAreaId", next.area_id);
+          }}
+        >
+          {BOOKING_AREAS.map((area) => (
+            <option key={area.label} value={area.area_name || ""}>
+              {area.label}
+            </option>
+          ))}
+        </select>
+        {isKitchenView ? (
+          <p className="rzv-card__hint" style={{ marginTop: "0.5rem" }}>
+            Counter seating near the open kitchen — reserve by number of seats, not a specific table.
+          </p>
+        ) : null}
+      </div>
+
       {/* Guests + duration */}
       <div className="rzv-row">
         <div className="rzv-field">
-          <label className="rzv-field__label">GUESTS</label>
+          <label className="rzv-field__label">
+            {isKitchenView ? "NUMBER OF SEATS" : "GUESTS"}
+          </label>
           <div className="rzv-stepper" style={{ display: "flex", alignItems: "center", gap: "1rem", marginTop: "0.5rem" }}>
             <button
               type="button"
@@ -82,24 +117,45 @@ function ReservationFormPanel({
               className="rzv-input"
               style={{ width: "80px", textAlign: "center", margin: 0 }}
               min={1}
-              max={15}
+              max={isKitchenView ? counterCapacity : 15}
               value={form.guestCount}
               onChange={(e) => {
                 const val = parseInt(e.target.value, 10);
-                if (!isNaN(val)) setField("guestCount", val);
+                if (!isNaN(val)) {
+                  const capped = isKitchenView
+                    ? Math.min(counterCapacity, Math.max(1, val))
+                    : val;
+                  setField("guestCount", capped);
+                }
               }}
             />
             <button
               type="button"
               className="rzv-btn rzv-btn--ghost"
               style={{ width: "40px", height: "40px", padding: 0, borderRadius: "50%" }}
-              disabled={Number(form.guestCount) >= 10}
-              onClick={() => setField("guestCount", Math.min(10, Number(form.guestCount) + 1))}
+              disabled={
+                isKitchenView
+                  ? Number(form.guestCount) >= counterCapacity
+                  : Number(form.guestCount) >= 10
+              }
+              onClick={() =>
+                setField(
+                  "guestCount",
+                  isKitchenView
+                    ? Math.min(counterCapacity, Number(form.guestCount) + 1)
+                    : Math.min(10, Number(form.guestCount) + 1)
+                )
+              }
             >
               +
             </button>
           </div>
-          {Number(form.guestCount) > 10 && (
+          {isKitchenView ? (
+            <p className="rzv-card__hint" style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>
+              Kitchen counter has up to {counterCapacity} seats for this time slot.
+            </p>
+          ) : null}
+          {!isKitchenView && Number(form.guestCount) > 10 && (
             <div className="rzv-hintbar" style={{ marginTop: "0.75rem", color: "var(--rzv-gold)" }}>
               For parties larger than 10 guests, please contact our staff for table arrangement.
             </div>

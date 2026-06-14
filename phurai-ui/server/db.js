@@ -84,4 +84,9 @@ const pool = {
   },
 };
 
+export async function createDbRequest() {
+  const connection = await getPool();
+  return connection.request();
+}
+
 export default pool;

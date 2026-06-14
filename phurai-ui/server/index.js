@@ -8,6 +8,7 @@ import authRoutes from "./routes/auth.js";
 import profileRoutes from "./routes/profile.js";
 import reservationRoutes from "./routes/reservations.js";
 import staffRoutes from "./routes/staff.js";
+import managerRoutes from "./routes/manager.js";
 import { runOtpLifecycleCleanup } from "./utils/otpService.js";
 import { isSmtpConfigured } from "./email.js";
 import dishRoutes from "./routes/dishes.js";
@@ -39,6 +40,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/reservations", reservationRoutes);
 app.use("/api/staff", staffRoutes);
+app.use("/api/manager", managerRoutes);
 app.use("/api/dishes", dishRoutes);
 
 app.use((req, res) => {

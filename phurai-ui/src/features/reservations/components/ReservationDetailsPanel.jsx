@@ -51,7 +51,9 @@ function ReservationDetailsPanel({
         ) : (
           <div className="rzv-details__review">
             <span className="rzv-details__review-note">
-              Details locked for review. Confirm to choose your table.
+              {form.selectedArea === "Kitchen View"
+                ? "Details locked for review. Confirm to reserve counter seats."
+                : "Details locked for review. Confirm to choose your table."}
             </span>
             <div className="rzv-details__review-actions">
               <button type="button" className="rzv-btn rzv-btn--ghost" onClick={onCancel}>

@@ -2,6 +2,13 @@ import express from "express";
 import pool from "../db.js";
 import { resolveUserId, requireUserId } from "../middleware/authMiddleware.js";
 import { getMembershipInfo, canAccessArea } from "../utils/membership.js";
+import {
+  getKitchenViewPlaceholderTableId,
+  getKitchenViewSeatsBooked,
+  isKitchenViewAreaName,
+  KITCHEN_VIEW_AREA_NAME,
+  resolveKitchenViewCounterCapacity,
+} from "../utils/kitchenViewBooking.js";
 
 const router = express.Router();
 
@@ -449,7 +456,21 @@ router.post("/", resolveUserId, async (req, res) => {
     ? [...new Set(table_ids.map(Number).filter((n) => Number.isFinite(n) && n > 0))]
     : [];
 
-  if (tableIds.length === 0) {
+  let kitchenViewBooking = false;
+  let kitchenArea = null;
+
+  if (preferred_area_id) {
+    const [areaRows] = await pool.query(
+      `SELECT TOP 1 area_id, area_name, area_type, is_active
+       FROM dbo.RestaurantAreas
+       WHERE area_id = ?;`,
+      [Number(preferred_area_id)]
+    );
+    kitchenArea = areaRows[0] || null;
+    kitchenViewBooking = Boolean(kitchenArea && isKitchenViewAreaName(kitchenArea.area_name));
+  }
+
+  if (!kitchenViewBooking && tableIds.length === 0) {
     return res.status(400).json({
       success: false,
       message: "Please select at least one table.",
@@ -509,44 +530,109 @@ router.post("/", resolveUserId, async (req, res) => {
     try {
       await connection.beginTransaction();
 
-      const inPlaceholders = tableIds.map(() => "?").join(", ");
+      let checkRows = [];
+      let effectiveTableIds = tableIds;
 
-      const [checkRows] = await connection.query(
-        `SELECT
-           t.table_id,
-           t.table_number,
-           t.capacity,
-           t.table_status,
-           CASE
-             WHEN t.table_status IN (N'Occupied', N'Cleaning', N'Inactive', N'Reserved')
-               THEN t.table_status
-             WHEN EXISTS (
-               SELECT 1
-               FROM dbo.ReservationTables rt WITH (UPDLOCK, HOLDLOCK)
-               JOIN dbo.Reservations r WITH (UPDLOCK, HOLDLOCK)
-                 ON rt.reservation_id = r.reservation_id
-               WHERE rt.table_id = t.table_id
-                 AND r.reservation_status IN (N'Pending', N'Confirmed', N'Checked In')
-                 AND r.reservation_start_at < ?
-                 AND r.reservation_end_at > ?
-             ) THEN N'Booked'
-             ELSE N'Available'
-           END AS availability_at_slot,
-           a.area_name
-         FROM dbo.RestaurantTables t
-         LEFT JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id
-         WHERE t.table_id IN (${inPlaceholders});`,
-        [slotEnd, slotStart, ...tableIds]
-      );
+      if (kitchenViewBooking) {
+        const counterCapacity = await resolveKitchenViewCounterCapacity(
+          connection,
+          kitchenArea.area_id,
+          settings
+        );
 
-      if (checkRows.length !== tableIds.length) {
-        await connection.rollback();
-        connection.release();
+        if (guestCount > counterCapacity) {
+          await connection.rollback();
+          connection.release();
+          return res.status(400).json({
+            success: false,
+            message: `Kitchen View counter has ${counterCapacity} seats. Please reduce your party size or choose another area.`,
+          });
+        }
 
-        return res.status(400).json({
-          success: false,
-          message: "One or more selected tables do not exist.",
-        });
+        const seatsBooked = await getKitchenViewSeatsBooked(
+          connection,
+          kitchenArea.area_id,
+          slotStart,
+          slotEnd
+        );
+
+        if (seatsBooked + guestCount > counterCapacity) {
+          await connection.rollback();
+          connection.release();
+          return res.status(409).json({
+            success: false,
+            code: "SEATS_UNAVAILABLE",
+            message: `Only ${Math.max(0, counterCapacity - seatsBooked)} counter seat(s) remain for this time. Please choose another slot or area.`,
+          });
+        }
+
+        const placeholder = await getKitchenViewPlaceholderTableId(
+          connection,
+          kitchenArea.area_id
+        );
+
+        if (!placeholder) {
+          await connection.rollback();
+          connection.release();
+          return res.status(400).json({
+            success: false,
+            message: "Kitchen View counter is not configured. Please contact the restaurant.",
+          });
+        }
+
+        effectiveTableIds = [placeholder.table_id];
+        checkRows = [
+          {
+            table_id: placeholder.table_id,
+            table_number: placeholder.table_number,
+            capacity: counterCapacity,
+            table_status: "Available",
+            availability_at_slot: "Available",
+            area_name: KITCHEN_VIEW_AREA_NAME,
+          },
+        ];
+      } else {
+        const inPlaceholders = effectiveTableIds.map(() => "?").join(", ");
+
+        const [tableRows] = await connection.query(
+          `SELECT
+             t.table_id,
+             t.table_number,
+             t.capacity,
+             t.table_status,
+             CASE
+               WHEN t.table_status IN (N'Occupied', N'Cleaning', N'Inactive', N'Reserved')
+                 THEN t.table_status
+               WHEN EXISTS (
+                 SELECT 1
+                 FROM dbo.ReservationTables rt WITH (UPDLOCK, HOLDLOCK)
+                 JOIN dbo.Reservations r WITH (UPDLOCK, HOLDLOCK)
+                   ON rt.reservation_id = r.reservation_id
+                 WHERE rt.table_id = t.table_id
+                   AND r.reservation_status IN (N'Pending', N'Confirmed', N'Checked In')
+                   AND r.reservation_start_at < ?
+                   AND r.reservation_end_at > ?
+               ) THEN N'Booked'
+               ELSE N'Available'
+             END AS availability_at_slot,
+             a.area_name
+           FROM dbo.RestaurantTables t
+           LEFT JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id
+           WHERE t.table_id IN (${inPlaceholders});`,
+          [slotEnd, slotStart, ...effectiveTableIds]
+        );
+
+        checkRows = tableRows;
+
+        if (checkRows.length !== effectiveTableIds.length) {
+          await connection.rollback();
+          connection.release();
+
+          return res.status(400).json({
+            success: false,
+            message: "One or more selected tables do not exist.",
+          });
+        }
       }
 
       let currentTier = "Bronze";
@@ -582,9 +668,9 @@ router.post("/", resolveUserId, async (req, res) => {
         }
       }
 
-      const conflict = checkRows.find(
-        (r) => r.availability_at_slot !== "Available"
-      );
+      const conflict = kitchenViewBooking
+        ? null
+        : checkRows.find((r) => r.availability_at_slot !== "Available");
 
       if (conflict) {
         await connection.rollback();
@@ -599,7 +685,8 @@ router.post("/", resolveUserId, async (req, res) => {
       }
 
       for (const row of checkRows) {
-        if (!canAccessArea(currentTier, row.area_name)) {
+        const areaName = kitchenViewBooking ? KITCHEN_VIEW_AREA_NAME : row.area_name;
+        if (!canAccessArea(currentTier, areaName)) {
           await connection.rollback();
           connection.release();
 
@@ -610,12 +697,11 @@ router.post("/", resolveUserId, async (req, res) => {
         }
       }
 
-      const totalCapacity = checkRows.reduce(
-        (sum, r) => sum + Number(r.capacity),
-        0
-      );
+      const totalCapacity = kitchenViewBooking
+        ? guestCount
+        : checkRows.reduce((sum, r) => sum + Number(r.capacity), 0);
 
-      if (totalCapacity < guestCount) {
+      if (!kitchenViewBooking && totalCapacity < guestCount) {
         await connection.rollback();
         connection.release();
 
@@ -636,7 +722,11 @@ router.post("/", resolveUserId, async (req, res) => {
          VALUES (?, ?, ?, ?, ?, ?, N'Pending', N'Online');`,
         [
           customerId,
-          preferred_area_id ? Number(preferred_area_id) : null,
+          kitchenViewBooking
+            ? kitchenArea.area_id
+            : preferred_area_id
+            ? Number(preferred_area_id)
+            : null,
           slotStart,
           slotEnd,
           guestCount,
@@ -647,7 +737,7 @@ router.post("/", resolveUserId, async (req, res) => {
       const created = insertedRows[0];
       const reservationId = created.reservation_id;
 
-      for (const tableId of tableIds) {
+      for (const tableId of effectiveTableIds) {
         await connection.query(
           `INSERT INTO dbo.ReservationTables (reservation_id, table_id)
            VALUES (?, ?);`,
@@ -685,18 +775,27 @@ router.post("/", resolveUserId, async (req, res) => {
       await connection.commit();
       connection.release();
 
-      const tableSummaries = checkRows.map((r) => {
-        const meta = TABLE_DISPLAY[r.table_number] || {
-          displayLabel: r.table_number,
-        };
+      const tableSummaries = kitchenViewBooking
+        ? [
+            {
+              table_id: checkRows[0]?.table_id,
+              table_number: "COUNTER",
+              display_label: `${KITCHEN_VIEW_AREA_NAME} · ${guestCount} seat(s)`,
+              capacity: guestCount,
+            },
+          ]
+        : checkRows.map((r) => {
+            const meta = TABLE_DISPLAY[r.table_number] || {
+              displayLabel: r.table_number,
+            };
 
-        return {
-          table_id: r.table_id,
-          table_number: r.table_number,
-          display_label: meta.displayLabel,
-          capacity: r.capacity,
-        };
-      });
+            return {
+              table_id: r.table_id,
+              table_number: r.table_number,
+              display_label: meta.displayLabel,
+              capacity: r.capacity,
+            };
+          });
 
       return res.status(201).json({
         success: true,

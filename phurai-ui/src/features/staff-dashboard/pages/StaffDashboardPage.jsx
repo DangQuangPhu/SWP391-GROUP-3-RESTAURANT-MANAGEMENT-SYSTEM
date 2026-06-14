@@ -1,30 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
 import "../styles/staff-dashboard.css";
 
-import StaffLayout from "../components/StaffLayout.jsx";
-import ReservationQueueSection from "../components/sections/ReservationQueueSection.jsx";
-import { NAV_GROUPS, VIEW_SUBTITLE } from "../config/staffNav.js";
-import { fetchReservationQueue } from "../services/staffApi.js";
 import NotFound from "@/pages/NotFound.jsx";
+import { StaffPortalContext } from "../context/StaffPortalContext.jsx";
+import StaffPortalLayout from "./StaffPortalLayout.jsx";
+import StaffRoleGuard from "./StaffRoleGuard.jsx";
 
-const FLAT_NAV = NAV_GROUPS.flatMap((g) => g.items);
+import ReservationQueueSection from "../components/sections/ReservationQueueSection.jsx";
+import TableMapSection from "../components/sections/TableMapSection.jsx";
+import ActiveOrdersSection from "../components/sections/ActiveOrdersSection.jsx";
+import KitchenDisplaySection from "../components/sections/KitchenDisplaySection.jsx";
 
-function resolveStaffRole(user) {
-  if (!user) return null;
-  const roleId = Number(user.roleId ?? user.role_id);
-  if (roleId === 2) return "restaurant_staff";
-  if (roleId === 3) return "kitchen_staff";
-  const role = String(user.roleName ?? user.role_name ?? user.role ?? "")
-    .trim()
-    .toLowerCase();
-  if (role === "restaurant staff") return "restaurant_staff";
-  if (role === "kitchen staff") return "kitchen_staff";
-  return null;
-}
-
-export function isStaffPortalUser(user) {
-  return Boolean(resolveStaffRole(user));
-}
+import {
+  getDefaultStaffPath,
+  isStaffPortalUser,
+  resolveStaffRole,
+  STAFF_ROLE,
+} from "../config/staffRoutes.js";
+import {
+  fetchKitchenQueue,
+  fetchReservationQueue,
+  fetchStaffOrders,
+  fetchStaffTables,
+} from "../services/staffApi.js";
+import { useStaffPortal } from "../context/StaffPortalContext.jsx";
 
 function isManagerPortalUser(user) {
   if (!user) return false;
@@ -36,7 +36,79 @@ function isManagerPortalUser(user) {
   return role === "manager" || role === "admin";
 }
 
+function LoadingState({ label = "Loading staff data…" }) {
+  return (
+    <div className="sfx-loading">
+      <span className="sfx-spinner" />
+      <p>{label}</p>
+    </div>
+  );
+}
+
+function StaffIndexRedirect() {
+  const { staffRole } = useStaffPortal();
+  return <Navigate to={getDefaultStaffPath(staffRole)} replace />;
+}
+
+function StaffUnknownRedirect() {
+  const { staffRole } = useStaffPortal();
+  return <Navigate to={getDefaultStaffPath(staffRole)} replace />;
+}
+
+function ReservationsRoute() {
+  const { loading, queue, setQueue, dataSources, toast } = useStaffPortal();
+  if (loading) return <LoadingState label="Loading reservation queue…" />;
+  return (
+    <ReservationQueueSection
+      queue={queue}
+      setQueue={setQueue}
+      dataSource={dataSources.reservations}
+      toast={toast}
+    />
+  );
+}
+
+function TablesRoute() {
+  const { loading, tables, setTables, dataSources, toast } = useStaffPortal();
+  if (loading) return <LoadingState label="Loading table map…" />;
+  return (
+    <TableMapSection
+      tables={tables}
+      setTables={setTables}
+      dataSource={dataSources.tables}
+      toast={toast}
+    />
+  );
+}
+
+function OrdersRoute() {
+  const { loading, orders, setOrders, dataSources, toast } = useStaffPortal();
+  if (loading) return <LoadingState label="Loading active orders…" />;
+  return (
+    <ActiveOrdersSection
+      orders={orders}
+      setOrders={setOrders}
+      dataSource={dataSources.orders}
+      toast={toast}
+    />
+  );
+}
+
+function KitchenRoute() {
+  const { loading, kitchenTickets, setKitchenTickets, dataSources, toast } = useStaffPortal();
+  if (loading) return <LoadingState label="Loading cooking queue…" />;
+  return (
+    <KitchenDisplaySection
+      tickets={kitchenTickets}
+      setTickets={setKitchenTickets}
+      dataSource={dataSources.kitchen}
+      toast={toast}
+    />
+  );
+}
+
 function StaffDashboardPage({
+  authReady = true,
   isAuthenticated,
   currentUser,
   onSignOut,
@@ -46,13 +118,19 @@ function StaffDashboardPage({
   const managerUser = isManagerPortalUser(currentUser);
   const hasAccess = isAuthenticated && Boolean(staffRole);
 
-  const [activeId, setActiveId] = useState("reservation-queue");
-  const [view, setView] = useState("reservation-queue");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [dataSource, setDataSource] = useState("mock");
   const [queue, setQueue] = useState([]);
+  const [tables, setTables] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [kitchenTickets, setKitchenTickets] = useState([]);
+  const [dataSources, setDataSources] = useState({
+    reservations: "mock",
+    tables: "mock",
+    orders: "mock",
+    kitchen: "mock",
+  });
 
   const [toasts, setToasts] = useState([]);
   const toastSeq = useRef(0);
@@ -65,20 +143,68 @@ function StaffDashboardPage({
     }, 3600);
   }, []);
 
-  const loadQueue = useCallback(async (isRefresh = false) => {
+  const loadReservations = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
-    else setLoading(true);
     try {
       const res = await fetchReservationQueue();
       setQueue(res.data);
-      setDataSource(res.source);
+      setDataSources((prev) => ({ ...prev, reservations: res.source }));
     } catch {
       toast("Could not load reservation queue", "error");
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isRefresh) setRefreshing(false);
     }
   }, [toast]);
+
+  const loadTables = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    try {
+      const res = await fetchStaffTables();
+      setTables(res.data);
+      setDataSources((prev) => ({ ...prev, tables: res.source }));
+    } catch {
+      toast("Could not load table map", "error");
+    } finally {
+      if (isRefresh) setRefreshing(false);
+    }
+  }, [toast]);
+
+  const loadOrders = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    try {
+      const res = await fetchStaffOrders();
+      setOrders(res.data);
+      setDataSources((prev) => ({ ...prev, orders: res.source }));
+    } catch {
+      toast("Could not load active orders", "error");
+    } finally {
+      if (isRefresh) setRefreshing(false);
+    }
+  }, [toast]);
+
+  const loadKitchen = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    try {
+      const res = await fetchKitchenQueue();
+      setKitchenTickets(res.data);
+      setDataSources((prev) => ({ ...prev, kitchen: res.source }));
+    } catch {
+      toast("Could not load cooking queue", "error");
+    } finally {
+      if (isRefresh) setRefreshing(false);
+    }
+  }, [toast]);
+
+  const refreshCurrentSection = useCallback(
+    (segment) => {
+      if (segment === "reservations") return loadReservations(true);
+      if (segment === "tables") return loadTables(true);
+      if (segment === "orders") return loadOrders(true);
+      if (segment === "kitchen") return loadKitchen(true);
+      return undefined;
+    },
+    [loadKitchen, loadOrders, loadReservations, loadTables]
+  );
 
   useEffect(() => {
     if (isAuthenticated && managerUser) {
@@ -88,28 +214,77 @@ function StaffDashboardPage({
 
   useEffect(() => {
     if (!hasAccess) return undefined;
-    loadQueue(false);
-    return undefined;
-  }, [hasAccess, loadQueue]);
 
-  const onSelect = useCallback((item) => {
-    setActiveId(item.id);
-    setView(item.view);
-  }, []);
+    let cancelled = false;
 
-  const title = useMemo(() => {
-    const item = FLAT_NAV.find((it) => it.id === activeId);
-    return item?.label || "Staff Portal";
-  }, [activeId]);
+    async function bootstrap() {
+      setLoading(true);
+      try {
+        const loaders =
+          staffRole === STAFF_ROLE.KITCHEN
+            ? [loadKitchen(false)]
+            : [loadReservations(false), loadTables(false), loadOrders(false)];
 
-  const subtitle = VIEW_SUBTITLE[view] || "Daily front-of-house operations";
+        await Promise.all(loaders);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
 
-  if (managerUser) {
+    bootstrap();
+    return () => {
+      cancelled = true;
+    };
+  }, [hasAccess, staffRole, loadKitchen, loadOrders, loadReservations, loadTables]);
+
+  const portalValue = useMemo(
+    () => ({
+      staffRole,
+      user: currentUser,
+      search,
+      setSearch,
+      toast,
+      toasts,
+      loading,
+      refreshing,
+      queue,
+      setQueue,
+      tables,
+      setTables,
+      orders,
+      setOrders,
+      kitchenTickets,
+      setKitchenTickets,
+      dataSources,
+      refreshCurrentSection,
+    }),
+    [
+      staffRole,
+      currentUser,
+      search,
+      toast,
+      toasts,
+      loading,
+      refreshing,
+      queue,
+      tables,
+      orders,
+      kitchenTickets,
+      dataSources,
+      refreshCurrentSection,
+    ]
+  );
+
+  if (!authReady || (isAuthenticated && managerUser)) {
     return (
       <div className="sfx-gate">
         <div className="sfx-loading">
           <span className="sfx-spinner" />
-          <p>Redirecting to Manager Portal…</p>
+          <p>
+            {!authReady
+              ? "Loading staff portal…"
+              : "Redirecting to Manager Portal…"}
+          </p>
         </div>
       </div>
     );
@@ -126,45 +301,47 @@ function StaffDashboardPage({
     );
   }
 
-  const renderSection = () => {
-    if (loading) {
-      return (
-        <div className="sfx-loading">
-          <span className="sfx-spinner" />
-          <p>Loading reservation queue…</p>
-        </div>
-      );
-    }
-    if (view === "reservation-queue") {
-      return (
-        <ReservationQueueSection
-          queue={queue}
-          setQueue={setQueue}
-          dataSource={dataSource}
-          toast={toast}
-        />
-      );
-    }
-    return null;
-  };
-
   return (
-    <StaffLayout
-      role={staffRole}
-      user={currentUser}
-      activeId={activeId}
-      onSelect={onSelect}
-      title={title}
-      subtitle={subtitle}
-      search={search}
-      onSearch={setSearch}
-      onRefresh={() => loadQueue(true)}
-      refreshing={refreshing}
-      onSignOut={onSignOut}
-      toasts={toasts}
-    >
-      {renderSection()}
-    </StaffLayout>
+    <StaffPortalContext.Provider value={portalValue}>
+      <Routes>
+        <Route element={<StaffPortalLayout onSignOut={onSignOut} />}>
+          <Route index element={<StaffIndexRedirect />} />
+          <Route
+            path="reservations"
+            element={
+              <StaffRoleGuard segment="reservations">
+                <ReservationsRoute />
+              </StaffRoleGuard>
+            }
+          />
+          <Route
+            path="tables"
+            element={
+              <StaffRoleGuard segment="tables">
+                <TablesRoute />
+              </StaffRoleGuard>
+            }
+          />
+          <Route
+            path="orders"
+            element={
+              <StaffRoleGuard segment="orders">
+                <OrdersRoute />
+              </StaffRoleGuard>
+            }
+          />
+          <Route
+            path="kitchen"
+            element={
+              <StaffRoleGuard segment="kitchen">
+                <KitchenRoute />
+              </StaffRoleGuard>
+            }
+          />
+          <Route path="*" element={<StaffUnknownRedirect />} />
+        </Route>
+      </Routes>
+    </StaffPortalContext.Provider>
   );
 }
 

@@ -125,6 +125,7 @@ function App() {
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
   const [pendingAuthUser, setPendingAuthUser] = useState(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeFading, setWelcomeFading] = useState(false);
@@ -203,6 +204,8 @@ function App() {
       openAuthModal("login");
       navigate("/", { replace: true });
     }
+
+    setAuthReady(true);
   }, []);
 
   useEffect(() => {
@@ -449,9 +452,22 @@ function App() {
           }
         />
         <Route
+          path="/staff"
+          element={
+            <StaffDashboard
+              authReady={authReady}
+              isAuthenticated={isAuthenticated}
+              currentUser={currentUser}
+              onSignOut={handleSignOut}
+              onNavigate={handleNavigate}
+            />
+          }
+        />
+        <Route
           path="/staff/*"
           element={
             <StaffDashboard
+              authReady={authReady}
               isAuthenticated={isAuthenticated}
               currentUser={currentUser}
               onSignOut={handleSignOut}

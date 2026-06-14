@@ -28,6 +28,7 @@ function formatTime(timeStr) {
 function ReservationSummary({
   form,
   selectedTables,
+  isKitchenView = false,
   promotion,
   preorderItems = [],
   error,
@@ -41,8 +42,9 @@ function ReservationSummary({
 }) {
   const purpose = DINING_PURPOSES.find((p) => p.id === form.diningPurpose);
   const totalCapacity = selectedTables.reduce((sum, t) => sum + Number(t.capacity), 0);
-  const tableLabels =
-    selectedTables.length > 0
+  const tableLabels = isKitchenView
+    ? `Kitchen View counter · ${form.guestCount} seat(s)`
+    : selectedTables.length > 0
       ? selectedTables.map((t) => t.display_label).join(", ")
       : "Not selected";
 
@@ -77,7 +79,7 @@ function ReservationSummary({
           <span className="rzv-summary__value">{formatTime(form.time)}</span>
         </div>
         <div className="rzv-summary__row">
-          <span className="rzv-summary__label">Guests</span>
+          <span className="rzv-summary__label">{isKitchenView ? "Seats" : "Guests"}</span>
           <span className="rzv-summary__value">{form.guestCount}</span>
         </div>
         <div className="rzv-summary__row">
@@ -93,10 +95,10 @@ function ReservationSummary({
           <span className="rzv-summary__value">{holdExpiresAt}</span>
         </div>
         <div className="rzv-summary__row">
-          <span className="rzv-summary__label">Table</span>
+          <span className="rzv-summary__label">{isKitchenView ? "Seating" : "Table"}</span>
           <span className="rzv-summary__value">
             {tableLabels}
-            {selectedTables.length > 0 ? ` · ${totalCapacity} seats` : ""}
+            {!isKitchenView && selectedTables.length > 0 ? ` · ${totalCapacity} seats` : ""}
           </span>
         </div>
       </div>

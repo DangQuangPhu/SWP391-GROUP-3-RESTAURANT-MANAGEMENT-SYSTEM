@@ -1,7 +1,33 @@
-import { NAV_GROUPS } from "../config/staffNav.js";
+import { useMemo } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import { getNavForRole } from "../config/staffNav.js";
+import { navItemToPath, resolveActiveNavItem } from "../config/staffRoutes.js";
 import Icon from "./StaffIcons.jsx";
 
-function StaffSidebar({ activeId, onSelect, collapsed, mobileOpen, onCloseMobile, onSignOut }) {
+function SidebarNavItem({ item, collapsed, onCloseMobile }) {
+  const location = useLocation();
+  const isItemActive =
+    resolveActiveNavItem(location.pathname)?.id === item.id;
+
+  return (
+    <NavLink
+      to={navItemToPath(item)}
+      className={`sfx-nav__item${isItemActive ? " is-active" : ""}`}
+      onClick={onCloseMobile}
+      title={collapsed ? item.label : undefined}
+    >
+      <span className="sfx-nav__icon">
+        <Icon name={item.icon} size={18} />
+      </span>
+      <span className="sfx-nav__text">{item.label}</span>
+      {isItemActive ? <span className="sfx-nav__pill" /> : null}
+    </NavLink>
+  );
+}
+
+function StaffSidebar({ role, collapsed, mobileOpen, onCloseMobile, onSignOut }) {
+  const groups = useMemo(() => getNavForRole(role), [role]);
+
   return (
     <>
       <div
@@ -23,23 +49,16 @@ function StaffSidebar({ activeId, onSelect, collapsed, mobileOpen, onCloseMobile
         </div>
 
         <nav className="sfx-nav">
-          {NAV_GROUPS.map((g) => (
+          {groups.map((g) => (
             <div className="sfx-nav__group" key={g.group}>
               <p className="sfx-nav__label">{g.group}</p>
               {g.items.map((item) => (
-                <button
+                <SidebarNavItem
                   key={item.id}
-                  type="button"
-                  className={`sfx-nav__item ${activeId === item.id ? "is-active" : ""}`}
-                  onClick={() => onSelect(item)}
-                  title={collapsed ? item.label : undefined}
-                >
-                  <span className="sfx-nav__icon">
-                    <Icon name={item.icon} size={18} />
-                  </span>
-                  <span className="sfx-nav__text">{item.label}</span>
-                  {activeId === item.id ? <span className="sfx-nav__pill" /> : null}
-                </button>
+                  item={item}
+                  collapsed={collapsed}
+                  onCloseMobile={onCloseMobile}
+                />
               ))}
             </div>
           ))}

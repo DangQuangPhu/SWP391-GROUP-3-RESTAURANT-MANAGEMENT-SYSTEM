@@ -6,14 +6,13 @@ import Icon from "./StaffIcons.jsx";
 function StaffLayout({
   role,
   user,
-  activeId,
-  onSelect,
   title,
   subtitle,
   search,
   onSearch,
   onRefresh,
   refreshing,
+  refreshLabel = "Refresh",
   onSignOut,
   toasts,
   children,
@@ -21,16 +20,10 @@ function StaffLayout({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const handleSelect = (item) => {
-    onSelect(item);
-    setMobileOpen(false);
-  };
-
   return (
     <div className={`sfx-shell sfx-shell--staff ${collapsed ? "sfx-shell--collapsed" : ""}`}>
       <StaffSidebar
-        activeId={activeId}
-        onSelect={handleSelect}
+        role={role}
         collapsed={collapsed}
         mobileOpen={mobileOpen}
         onCloseMobile={() => setMobileOpen(false)}
@@ -49,6 +42,7 @@ function StaffLayout({
           onMobileMenu={() => setMobileOpen(true)}
           onRefresh={onRefresh}
           refreshing={refreshing}
+          refreshLabel={refreshLabel}
         />
         <main className="sfx-canvas">{children}</main>
       </div>

@@ -140,3 +140,18 @@ export const EVENT_AREA_HINTS = {
   private: ["Private Room", "VIP", "Rooftop / Outdoor"],
   corporate: ["Private Room", "VIP"],
 };
+
+export const KITCHEN_VIEW_AREA_NAME = "Kitchen View";
+export const KITCHEN_VIEW_AREA_ID = 6;
+/** Fallback when settings/API capacity is unavailable (K-01 + K-02 + K-03). */
+export const KITCHEN_VIEW_COUNTER_CAPACITY = 4;
+
+/** Dining area choices in the booking form (table-based vs counter seats). */
+export const BOOKING_AREAS = [
+  { area_id: null, area_name: null, label: "Standard dining (choose a table)" },
+  {
+    area_id: KITCHEN_VIEW_AREA_ID,
+    area_name: KITCHEN_VIEW_AREA_NAME,
+    label: "Kitchen View (counter seats)",
+  },
+];

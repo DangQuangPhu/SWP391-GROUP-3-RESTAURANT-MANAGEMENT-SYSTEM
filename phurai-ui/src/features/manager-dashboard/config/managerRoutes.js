@@ -118,6 +118,13 @@ export function getReservationsFilterFromSearch(search = "") {
   return filter === "arriving" ? "arriving" : "all";
 }
 
+export const STAFF_TAB_IDS = ["list", "shifts"];
+
+export function getStaffTabFromSearch(search = "") {
+  const tab = parseSearchParams(search).get("tab");
+  return tab === "shifts" ? "shifts" : "list";
+}
+
 export function isEphemeralPendingAction(action) {
   return action === "add";
 }

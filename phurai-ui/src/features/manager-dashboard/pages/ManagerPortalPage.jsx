@@ -16,7 +16,6 @@ import OrdersSection from "../components/sections/OrdersSection.jsx";
 import StaffSection from "../components/sections/StaffSection.jsx";
 import PromotionsSection from "../components/sections/PromotionsSection.jsx";
 import ReportsSection from "../components/sections/ReportsSection.jsx";
-import SettingsSection from "../components/sections/SettingsSection.jsx";
 
 import {
   fetchKpis,
@@ -176,11 +175,6 @@ function ReportsRoute() {
   );
 }
 
-function SettingsRoute() {
-  const { currentUser, role, toast, onSignOut } = useSectionContext();
-  return <SettingsSection user={currentUser} role={role} onSignOut={onSignOut} toast={toast} />;
-}
-
 function ManagerPortalPage({
   isAuthenticated,
   currentUser,
@@ -330,7 +324,7 @@ function ManagerPortalPage({
           <Route path="staff" element={<StaffRoute />} />
           <Route path="promotions" element={<PromotionsRoute />} />
           <Route path="reports" element={<ReportsRoute />} />
-          <Route path="settings" element={<SettingsRoute />} />
+          <Route path="settings" element={<Navigate to="dashboard" replace />} />
           <Route path="*" element={<Navigate to="dashboard" replace />} />
         </Route>
       </Routes>
