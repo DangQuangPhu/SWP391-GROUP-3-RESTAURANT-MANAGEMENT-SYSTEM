@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import HeroSection from '../components/HeroSection.jsx';
 import SignatureDishCarousel from '../components/SignatureDishCarousel.jsx';
 import OfferingBlock from '../components/OfferingBlock.jsx';
@@ -11,6 +13,23 @@ import { homeImages } from '../data/homeAssets.js';
 import '../styles/home.css';
 
 function Home() {
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.hash !== "#about") return undefined;
+
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+
+    const timer = window.setTimeout(() => {
+      document.getElementById("about-section")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 100);
+
+    return () => window.clearTimeout(timer);
+  }, [location.pathname, location.hash]);
+
   return (
     <div className="phurai-home">
       <div className="phurai-home__header-wrap">

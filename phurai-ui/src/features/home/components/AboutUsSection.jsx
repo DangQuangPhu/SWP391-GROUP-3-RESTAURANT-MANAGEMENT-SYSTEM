@@ -48,7 +48,7 @@ function AboutUsSection() {
   return (
     <section
       ref={sectionRef}
-      id="about"
+      id="about-section"
       className="phurai-about"
       aria-labelledby="about-heading"
     >

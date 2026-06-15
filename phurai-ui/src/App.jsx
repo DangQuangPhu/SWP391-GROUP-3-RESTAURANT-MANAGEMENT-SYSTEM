@@ -27,6 +27,8 @@ import {
   normalizeStoredAvatarUrl,
 } from "@/features/profile";
 import { ManagerPortalPage } from "@/features/manager-dashboard";
+import { GiftCardPage } from "@/features/gift-cards";
+import ScrollToTop from "@/components/common/ScrollToTop.jsx";
 import { StaffDashboardPage as StaffDashboard, isStaffPortalUser } from "@/features/staff-dashboard";
 import NotFound from "@/pages/NotFound";
 import LandingPage from "@/pages/public/LandingPage";
@@ -60,6 +62,7 @@ const PAGE_PATHS = {
   privateEvents: "/private-events",
   careers: "/careers",
   contactHours: "/contact-hours",
+  giftCards: "/gift-cards",
   register: "/register",
   verify: "/verify",
   profile: "/profile",
@@ -109,6 +112,7 @@ function getPageFromPath(path) {
   if (normalized === "/private-events") return "privateEvents";
   if (normalized === "/careers") return "careers";
   if (normalized === "/contact-hours") return "contactHours";
+  if (normalized === "/gift-cards") return "giftCards";
   if (normalized === "/register") return "register";
   if (normalized === "/verify") return "verify";
   if (normalized === "/landing") return "landing";
@@ -346,6 +350,7 @@ function App() {
 
   return (
     <>
+      <ScrollToTop />
       {!isPortalPage ? (
         <Navbar
           activePage={activePage}
@@ -401,6 +406,16 @@ function App() {
         <Route path="/private-events" element={<PrivateEvents onNavigate={handleNavigate} />} />
         <Route path="/careers" element={<Careers />} />
         <Route path="/contact-hours" element={<ContactHours />} />
+        <Route
+          path="/gift-cards"
+          element={
+            <GiftCardPage
+              isAuthenticated={isAuthenticated}
+              currentUser={currentUser}
+              onRequireAuth={() => openAuthModal("login")}
+            />
+          }
+        />
         <Route path="/register" element={<Register />} />
         <Route path="/verify" element={<VerifyEmail />} />
         <Route

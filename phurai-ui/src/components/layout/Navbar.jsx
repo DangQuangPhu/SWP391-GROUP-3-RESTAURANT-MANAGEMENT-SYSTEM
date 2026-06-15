@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { UserAvatar } from "@/features/auth";
 import { ProfileDropdown } from "@/features/profile";
 import "@/styles/profile.css";
+import "./Navbar.css";
 
 const navLinks = [
   "TAKE OUT",
@@ -22,10 +23,12 @@ const pageClassMap = {
   contactHours: "contact-hours",
   reservations: "reservations",
   myReservations: "my-reservations",
+  giftCards: "gift-cards",
 };
 
 const darkTopPages = [
   "home",
+  "giftCards",
   "takeout",
   "privateEvents",
   "careers",
@@ -51,6 +54,7 @@ function Navbar({
     onOpenProfile?.(view);
   };
   const [navState, setNavState] = useState("top");
+  const [isScrolled, setIsScrolled] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const lastScrollY = useRef(0);
 
@@ -60,10 +64,13 @@ function Navbar({
   const isBlackReservationPage = ["takeout", "catering", "menus"].includes(activePage);
   useEffect(() => {
     setNavState("top");
+    setIsScrolled(window.scrollY > 0);
     lastScrollY.current = window.scrollY;
 
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
+
+      setIsScrolled(currentScrollY > 0);
 
       if (currentScrollY <= 40) {
         setNavState("top");
@@ -164,7 +171,9 @@ function Navbar({
 
   return (
     <header
-      className={`phurai-navbar phurai-navbar--${navState} phurai-navbar--page-${pageClass} ${isDarkTopPage
+      className={`phurai-navbar phurai-navbar--${navState} phurai-navbar--page-${pageClass} ${
+        isScrolled ? "phurai-navbar--scrolled" : ""
+      } ${isDarkTopPage
           ? "phurai-navbar--dark-top-page"
           : "phurai-navbar--light-top-page"
         }`}
@@ -207,8 +216,9 @@ function Navbar({
         ) : null}
         <a
           href="/reservations"
-          className={`phurai-navbar__cta ${isBlackReservationPage ? "phurai-navbar__cta--black" : ""
-            }`}
+          className={`phurai-navbar__cta phurai-navbar__cta--reservations ${
+            isBlackReservationPage ? "phurai-navbar__cta--black" : ""
+          }`}
           onClick={(event) => {
             event.preventDefault();
             onNavigate?.("reservations");

@@ -1,19 +1,28 @@
-import { homeIcons } from '@/features/home';
+import { Link } from "react-router-dom";
+import { homeIcons } from "@/features/home";
 
-const exploreLinks = ['Home', 'About Us', 'Our Menu', 'Gallery', 'Reservations'];
-const serviceLinks = [
-  'Private Dining',
-  'Catering',
-  'Event Hosting',
-  'Gift Cards',
-  'Loyalty Program',
+const exploreLinks = [
+  { label: "Home", to: "/" },
+  { label: "About Us", to: "/#about" },
+  { label: "Our Menu", to: "/menus" },
+  { label: "Gallery", to: "#" },
+  { label: "Reservations", to: "/reservations" },
 ];
 
-const socialLinks = [
-  { label: 'Instagram', icon: homeIcons.socialInstagram },
-  { label: 'Facebook', icon: homeIcons.socialFacebook },
-  { label: 'Twitter', icon: homeIcons.socialTwitter },
-  { label: 'YouTube', icon: homeIcons.socialYoutube },
+const serviceLinks = [
+  { label: "Private Dining", to: "#" },
+  { label: "Catering", to: "#" },
+  { label: "Event Hosting", to: "#" },
+  { label: "Gift Cards", to: "/gift-cards" },
+  { label: "Loyalty Program", to: "#" },
+];
+
+const legalLinks = [
+  { label: "MENU", to: "/menus" },
+  { label: "ABOUT", to: "/#about" },
+  { label: "CONTRACT", to: "/contact-hours" },
+  { label: "PRIVACY POLICY", to: "#" },
+  { label: "TERMS OF SERVICE", to: "#" },
 ];
 
 function Footer() {
@@ -53,8 +62,8 @@ function Footer() {
           <h3>EXPLORE</h3>
           <ul>
             {exploreLinks.map((link) => (
-              <li key={link}>
-                <a href="#">{link}</a>
+              <li key={link.label}>
+                <Link to={link.to}>{link.label}</Link>
               </li>
             ))}
           </ul>
@@ -64,8 +73,8 @@ function Footer() {
           <h3>SERVICES</h3>
           <ul>
             {serviceLinks.map((link) => (
-              <li key={link}>
-                <a href="#">{link}</a>
+              <li key={link.label}>
+                <Link to={link.to}>{link.label}</Link>
               </li>
             ))}
           </ul>
@@ -101,20 +110,20 @@ function Footer() {
         </p>
         <p>
           <img src={homeIcons.phone} alt="" className="contact-icon" />
-          +84 964 813 966
+          <a href="tel:+84964813966">+84 964 813 966</a>
         </p>
         <p>
           <img src={homeIcons.email} alt="" className="contact-icon" />
-          quagphu159@gmail.com
+          <a href="mailto:quagphu159@gmail.com">quagphu159@gmail.com</a>
         </p>
       </div>
 
       <nav className="phurai-footer__legal" aria-label="Legal">
-        <a href="#">MENU</a>
-        <a href="#">ABOUT</a>
-        <a href="#">CONTRACT</a>
-        <a href="#">PRIVACY POLICY</a>
-        <a href="#">TERMS OF SERVICE</a>
+        {legalLinks.map((link) => (
+          <Link key={link.label} to={link.to}>
+            {link.label}
+          </Link>
+        ))}
       </nav>
 
       <p className="phurai-footer__copyright">© 2026 PHŪRAI. ALL RIGHTS RESERVED.</p>

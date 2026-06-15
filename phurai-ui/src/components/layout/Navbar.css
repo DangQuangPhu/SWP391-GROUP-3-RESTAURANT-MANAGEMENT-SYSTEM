@@ -1,0 +1,59 @@
+/* Scroll-state hover fixes — keep CTA & nav links visible on white navbar */
+
+/* Gift Cards — dark hero: transparent bar + light text at top (matches Home) */
+.phurai-navbar.phurai-navbar--page-gift-cards.phurai-navbar--dark-top-page.phurai-navbar--top {
+  background: transparent !important;
+  border-bottom: 1px solid transparent !important;
+  box-shadow: none !important;
+}
+
+.phurai-navbar.phurai-navbar--page-gift-cards.phurai-navbar--dark-top-page.phurai-navbar--top
+  .phurai-navbar__logo,
+.phurai-navbar.phurai-navbar--page-gift-cards.phurai-navbar--dark-top-page.phurai-navbar--top
+  .phurai-navbar__nav a {
+  color: #ffffff !important;
+}
+
+.phurai-navbar.phurai-navbar--page-gift-cards.phurai-navbar--dark-top-page.phurai-navbar--top
+  .phurai-navbar__nav a::after {
+  background: #ffffff !important;
+}
+
+.phurai-navbar.phurai-navbar--page-gift-cards.phurai-navbar--dark-top-page.phurai-navbar--top
+  .phurai-navbar__auth {
+  border-color: #ffffff !important;
+  color: #ffffff !important;
+  background: transparent !important;
+}
+
+.phurai-navbar.phurai-navbar--page-gift-cards.phurai-navbar--dark-top-page.phurai-navbar--top
+  .phurai-navbar__auth:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.phurai-navbar.phurai-navbar--scrolled .phurai-navbar__cta:not(.phurai-navbar__cta--black):hover,
+.phurai-navbar.phurai-navbar--visible .phurai-navbar__cta:not(.phurai-navbar__cta--black):hover,
+.phurai-navbar.phurai-navbar--light-top-page.phurai-navbar--top
+  .phurai-navbar__cta:not(.phurai-navbar__cta--black):hover {
+  background: transparent !important;
+  color: #000000 !important;
+  border-color: transparent !important;
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -4px rgba(0, 0, 0, 0.1),
+    inset 0 0 0 2px #846d44 !important;
+  transform: translateY(-2px);
+}
+
+.phurai-navbar.phurai-navbar--scrolled .phurai-navbar__cta--reservations:hover,
+.phurai-navbar.phurai-navbar--visible .phurai-navbar__cta--reservations:hover,
+.phurai-navbar.phurai-navbar--light-top-page.phurai-navbar--top
+  .phurai-navbar__cta--reservations:hover {
+  color: #000000 !important;
+}
+
+.phurai-navbar.phurai-navbar--scrolled .phurai-navbar__nav a:hover,
+.phurai-navbar.phurai-navbar--visible .phurai-navbar__nav a:hover,
+.phurai-navbar.phurai-navbar--light-top-page.phurai-navbar--top .phurai-navbar__nav a:hover {
+  color: #000000 !important;
+}

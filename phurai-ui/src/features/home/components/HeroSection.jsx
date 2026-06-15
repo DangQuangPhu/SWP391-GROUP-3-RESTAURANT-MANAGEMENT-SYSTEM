@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { homeImages } from "../data/homeAssets.js";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 
@@ -38,12 +39,12 @@ function HeroSection() {
         </p>
 
         <div className="phurai-hero__actions home-reveal-child home-reveal-child--delay-3">
-          <button type="button" className="phurai-btn-primary">
+          <Link to="/menus" className="phurai-btn-primary">
             EXPLORE MENU
-          </button>
-          <button type="button" className="phurai-btn-ghost">
+          </Link>
+          <Link to="/reservations" className="phurai-btn-ghost">
             RESERVE TABLE
-          </button>
+          </Link>
         </div>
       </div>
     </section>

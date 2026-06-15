@@ -1,0 +1,299 @@
+/* Gift Cards — customer purchase page (pure CSS, no Tailwind) */
+
+.gift-cards-page {
+  min-height: 100vh;
+  padding: 7.5rem 1.5rem 5rem;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(140, 118, 75, 0.22), transparent 70%),
+    linear-gradient(180deg, #1a1410 0%, #231b14 45%, #1a1410 100%);
+  color: #f5efe6;
+}
+
+.gift-cards-page__hero {
+  max-width: 720px;
+  margin: 0 auto 3.5rem;
+  text-align: center;
+}
+
+.gift-cards-page__eyebrow {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-nav);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: #c9b08a;
+}
+
+.gift-cards-page__title {
+  margin: 0 0 1.25rem;
+  font-family: var(--font-heading);
+  font-size: clamp(2.4rem, 5vw, 3.6rem);
+  font-weight: 400;
+  line-height: 1.15;
+  color: #fff8ef;
+}
+
+.gift-cards-page__lead {
+  margin: 0;
+  font-family: var(--font-narrow);
+  font-size: clamp(1.1rem, 2.2vw, 1.35rem);
+  line-height: 1.55;
+  color: rgba(245, 239, 230, 0.82);
+}
+
+.gift-cards-page__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.gift-card-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 2rem 1.75rem 1.75rem;
+  border: 1px solid rgba(201, 176, 138, 0.35);
+  background: linear-gradient(160deg, rgba(52, 39, 22, 0.92), rgba(26, 20, 16, 0.98));
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.gift-card-option:hover {
+  transform: translateY(-4px);
+  border-color: rgba(201, 176, 138, 0.65);
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.36);
+}
+
+.gift-card-option__tier {
+  margin: 0;
+  font-family: var(--font-nav);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #c9b08a;
+}
+
+.gift-card-option__amount {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(1.5rem, 2.4vw, 1.9rem);
+  font-weight: 400;
+  color: #fff8ef;
+}
+
+.gift-card-option__desc {
+  margin: 0;
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: rgba(245, 239, 230, 0.75);
+}
+
+.gift-card-option__btn {
+  margin-top: 0.5rem;
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border: 1px solid #c9b08a;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #f5efe6;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.gift-card-option__btn:hover {
+  background: #8c764b;
+  border-color: #8c764b;
+  color: #fff;
+}
+
+.gift-cards-page__note {
+  max-width: 720px;
+  margin: 2.5rem auto 0;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  color: rgba(245, 239, 230, 0.55);
+}
+
+/* ── Mock payment modal ── */
+
+.gift-pay-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(10, 8, 6, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.gift-pay-modal__panel {
+  width: min(100%, 480px);
+  padding: 2rem 2rem 1.75rem;
+  border: 1px solid rgba(201, 176, 138, 0.4);
+  background: linear-gradient(165deg, #2a2118, #1a1410);
+  color: #f5efe6;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.gift-pay-modal__eyebrow {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-nav);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #c9b08a;
+}
+
+.gift-pay-modal__title {
+  margin: 0 0 1rem;
+  font-family: var(--font-heading);
+  font-size: 1.75rem;
+  font-weight: 400;
+  color: #fff8ef;
+}
+
+.gift-pay-modal__text {
+  margin: 0 0 1.25rem;
+  font-family: var(--font-body);
+  font-size: 0.98rem;
+  line-height: 1.6;
+  color: rgba(245, 239, 230, 0.85);
+}
+
+.gift-pay-modal__text strong {
+  color: #fff8ef;
+  font-weight: 600;
+}
+
+.gift-pay-modal__error {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(220, 90, 90, 0.45);
+  background: rgba(120, 30, 30, 0.25);
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #ffb4b4;
+}
+
+.gift-pay-modal__code {
+  margin: 0 0 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px dashed rgba(201, 176, 138, 0.65);
+  background: rgba(0, 0, 0, 0.25);
+  font-family: "Roboto Flex", monospace;
+  font-size: clamp(1.1rem, 3vw, 1.35rem);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: center;
+  color: #fff8ef;
+  word-break: break-all;
+}
+
+.gift-pay-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.gift-pay-modal__btn {
+  min-width: 8.5rem;
+  padding: 0.75rem 1.1rem;
+  border: 1px solid transparent;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.gift-pay-modal__btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.gift-pay-modal__btn--ghost {
+  border-color: rgba(201, 176, 138, 0.45);
+  background: transparent;
+  color: #e8dcc8;
+}
+
+.gift-pay-modal__btn--ghost:hover:not(:disabled) {
+  background: rgba(201, 176, 138, 0.12);
+}
+
+.gift-pay-modal__btn--primary {
+  border-color: #8c764b;
+  background: #8c764b;
+  color: #fff;
+}
+
+.gift-pay-modal__btn--primary:hover:not(:disabled) {
+  background: #a0895e;
+  border-color: #a0895e;
+}
+
+.gift-pay-modal__loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gift-pay-modal__spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: gift-pay-spin 0.7s linear infinite;
+}
+
+@keyframes gift-pay-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 900px) {
+  .gift-cards-page__grid {
+    grid-template-columns: 1fr;
+    max-width: 420px;
+  }
+}
+
+@media (max-width: 600px) {
+  .gift-cards-page {
+    padding-top: 6.5rem;
+  }
+
+  .gift-pay-modal__panel {
+    padding: 1.5rem;
+  }
+
+  .gift-pay-modal__actions {
+    flex-direction: column;
+  }
+
+  .gift-pay-modal__btn {
+    width: 100%;
+  }
+}

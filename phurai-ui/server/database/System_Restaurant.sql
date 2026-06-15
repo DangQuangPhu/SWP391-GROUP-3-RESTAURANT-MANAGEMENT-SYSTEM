@@ -595,6 +595,35 @@ CREATE TABLE dbo.RecommendationLogs (
     CONSTRAINT CK_RecommendationLogs_score CHECK (score BETWEEN 0 AND 1)
 );
 GO
+-- 1. Bảng cấu hình Ca làm việc (Ví dụ: Ca Sáng, Ca Tối)
+CREATE TABLE dbo.Shifts (
+    shift_id        TINYINT IDENTITY(1,1) NOT NULL,
+    shift_name      NVARCHAR(50) NOT NULL,
+    start_time      TIME(0) NOT NULL,
+    end_time        TIME(0) NOT NULL,
+    is_active       BIT NOT NULL CONSTRAINT DF_Shifts_is_active DEFAULT 1,
+    CONSTRAINT PK_Shifts PRIMARY KEY (shift_id)
+);
+GO
+
+-- 2. Bảng Xếp lịch làm việc (Nhân viên nào, làm ca nào, ngày nào)
+CREATE TABLE dbo.StaffSchedules (
+    schedule_id     INT IDENTITY(1,1) NOT NULL,
+    user_id         INT NOT NULL, -- Tham chiếu tới nhân viên
+    shift_id        TINYINT NOT NULL,
+    work_date       DATE NOT NULL,
+    attendance_status NVARCHAR(20) NOT NULL CONSTRAINT DF_StaffSchedules_status DEFAULT N'Scheduled',
+    assigned_by     INT NULL, -- Manager nào xếp lịch
+    created_at      DATETIME2(0) NOT NULL CONSTRAINT DF_StaffSchedules_created_at DEFAULT SYSDATETIME(),
+    updated_at      DATETIME2(0) NOT NULL CONSTRAINT DF_StaffSchedules_updated_at DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_StaffSchedules PRIMARY KEY (schedule_id),
+    CONSTRAINT UQ_StaffSchedules_user_date_shift UNIQUE (user_id, work_date, shift_id),
+    CONSTRAINT FK_StaffSchedules_UserAccounts FOREIGN KEY (user_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE CASCADE,
+    CONSTRAINT FK_StaffSchedules_Shifts FOREIGN KEY (shift_id) REFERENCES dbo.Shifts(shift_id),
+    CONSTRAINT FK_StaffSchedules_AssignedBy FOREIGN KEY (assigned_by) REFERENCES dbo.UserAccounts(user_id),
+    CONSTRAINT CK_StaffSchedules_status CHECK (attendance_status IN (N'Scheduled', N'Present', N'Absent', N'On Leave'))
+);
+GO
 
 -- =============================================================
 -- INDEXES
@@ -640,9 +669,9 @@ INSERT INTO dbo.UserAccounts
 (user_id, role_id, full_name, email, phone, password_hash, is_active, email_verified, last_login_at)
 VALUES
 (1, 5, N'Nguyen Van Admin',  N'admin@phurai.vn',    '0901000001', N'$2b$12$admin_hash',   1, 1, '2026-05-18T08:00:00'),
-(2, 4, N'Tran Thi Manager',  N'manager@phurai.vn',  '0901000002', N'$2b$10$e04PpX9xUpPuRyW89qcv7.X/Lgfq.6sl319ehCioPrEW1nLXeQis6', 1, 1, '2026-05-18T08:10:00'),
-(3, 2, N'Le Van Staff',      N'staff1@phurai.vn',   '0901000003', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, '2026-05-18T08:30:00'),
-(4, 2, N'Pham Thi Staff',    N'staff2@phurai.vn',   '0901000004', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, NULL),
+(2, 4, N'Dang Quang Phu',  N'phumanager@phurai.vn',  '0901000002', N'$2b$10$e04PpX9xUpPuRyW89qcv7.X/Lgfq.6sl319ehCioPrEW1nLXeQis6', 1, 1, '2026-05-18T08:10:00'),
+(3, 2, N'Dang Quang Phu',      N'phustaff1@phurai.vn',   '0901000003', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, '2026-05-18T08:30:00'),
+(4, 2, N'Pham Thi Thuy',    N'thuystaff@phurai.vn',   '0901000004', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, NULL),
 (5, 3, N'Hoang Van Chef',    N'kitchen1@phurai.vn', '0901000005', N'$2b$12$chef1_hash',   1, 1, '2026-05-18T09:00:00'),
 (6, 3, N'Do Thi Chef',       N'kitchen2@phurai.vn', '0901000006', N'$2b$12$chef2_hash',   1, 1, NULL),
 
@@ -1039,6 +1068,34 @@ VALUES
 SET IDENTITY_INSERT dbo.RecommendationLogs OFF;
 GO
 
+
+INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description, updated_by) VALUES
+(N'hours_mon_thu', N'7:00 AM — 12:00 AM',      N'Opening hours: Monday to Thursday', 1),
+(N'hours_fri_sat', N'7:00 AM — 12:00 AM',      N'Opening hours: Friday to Saturday', 1),
+(N'hours_sunday',  N'7:00 PM — 10:00 PM',      N'Opening hours: Sunday', 1),
+(N'hours_happy',   N'4:00 PM — 7:00 PM Daily', N'Happy Hour timing', 1);
+GO
+
+-- 3. Cập nhật luôn lại bảng Shifts (Ca làm việc) cho khớp với giờ mở cửa thực tế
+-- Khách vào lúc 7:00 AM thì nhân viên phải có mặt từ 6:30 AM
+DELETE FROM dbo.Shifts;
+DBCC CHECKIDENT ('dbo.Shifts', RESEED, 0); -- Reset Identity ID về lại từ đầu
+
+INSERT INTO dbo.Shifts (shift_name, start_time, end_time) VALUES
+(N'Morning Shift',   '06:30:00', '14:30:00'), -- Ca Sáng: Bao gồm cả giờ chuẩn bị quán
+(N'Afternoon Shift', '14:00:00', '22:00:00'), -- Ca Chiều
+(N'Night Shift',     '16:30:00', '00:30:00'); -- Ca Tối: Đóng cửa lúc 12:00 AM, dọn dẹp đến 00:30
+GO
+
+SET IDENTITY_INSERT dbo.RestaurantAreas ON;
+
+INSERT INTO dbo.RestaurantAreas (area_id, area_name, area_type, description) VALUES
+(8, N'Wine Bar',        N'Bar',      N'Counter seating for wine tasting'),
+(9, N'Event Corner',    N'Regular',  N'Flexible space for events'),
+(10, N'Rooftop Terrace', N'Outdoor',  N'Outdoor open-air seating');
+
+SET IDENTITY_INSERT dbo.RestaurantAreas OFF;
+GO
 -- =============================================================
 -- SAMPLE SELECT QUERIES
 -- =============================================================
@@ -1295,6 +1352,8 @@ WHERE cr.is_visible = 1
 ORDER BY cr.created_at DESC;
 GO
 
+
+
 -- End of Phūrai SQL Server Database Script
 -- Reset DB--
 
@@ -1330,6 +1389,21 @@ ORDER BY
     ISNULL(d.preorder_sort, 9999),
     c.display_order,
     d.dish_name;
+
+-- 1. Kiểm tra lại bảng cấu hình giờ mở cửa
+SELECT setting_key, setting_value, description 
+FROM dbo.RestaurantSettings 
+WHERE setting_key LIKE 'hours_%';
+
+-- 2. Kiểm tra lại bảng Ca làm việc
+SELECT shift_id, shift_name, start_time, end_time, is_active 
+FROM dbo.Shifts;
+
+
+--Add more row---
+ALTER TABLE dbo.RestaurantTables 
+ADD is_counter BIT NOT NULL CONSTRAINT DF_RestaurantTables_is_counter DEFAULT 0;
+GO
 
 
 -- Reset DB
