@@ -5,6 +5,7 @@ import KpiCard from "../KpiCard.jsx";
 import Icon from "../ManagerIcons.jsx";
 import {
   SectionHead,
+  ContentPanel,
   Card,
   StatusBadge,
   NotConnectedNote,
@@ -19,6 +20,7 @@ import {
   getDefaultDateRange,
   prepareChartSeries,
 } from "../../data/managerDashboardMockData.js";
+import { asArray } from "@/utils/asArray.js";
 import { formatVND } from "@/utils/formatCurrency.js";
 import { getReportsTabFromSearch, REPORT_TAB_IDS } from "../../config/managerRoutes.js";
 
@@ -37,6 +39,10 @@ function ReportsSection({
   utilization,
   toast,
 }) {
+  const reservationList = asArray(reservations);
+  const bestSellerList = asArray(bestSellers);
+  const utilizationList = asArray(utilization);
+  const statsByArea = asArray(stats?.byArea);
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = useMemo(
     () => getReportsTabFromSearch(`?${searchParams.toString()}`),
@@ -67,12 +73,15 @@ function ReportsSection({
     setSearchParams({ tab: nextTab }, { replace: true });
   };
 
-  const revenueKpis = rangeKpis.filter((k) => ["revenue", "reservations", "promos", "rating"].includes(k.id));
+  const revenueKpis = asArray(rangeKpis).filter((k) =>
+    ["revenue", "reservations", "promos", "rating"].includes(k.id)
+  );
 
   return (
     <div className="sfx-stack">
       <SectionHead title="Reports" subtitle="Revenue, statistics and exports" />
 
+      <ContentPanel compact>
       <div className="sfx-tabs" role="tablist" aria-label="Report sections">
         {TABS.map((t) => (
           <button
@@ -104,7 +113,7 @@ function ReportsSection({
           </Card>
           <Card title="Top dishes by revenue">
             <ul className="sfx-rank">
-              {bestSellers.map((d) => (
+              {bestSellerList.map((d) => (
                 <li key={d.rank} className="sfx-rank__row">
                   <span className="sfx-rank__no">{d.rank}</span>
                   <span className="sfx-rank__main">
@@ -134,7 +143,7 @@ function ReportsSection({
                 </tr>
               </thead>
               <tbody>
-                {reservations.map((r) => (
+                {reservationList.map((r) => (
                   <tr key={r.reservation_id}>
                     <td className="sfx-mono">#{r.reservation_id}</td>
                     <td>{r.customer_name}</td>
@@ -181,8 +190,8 @@ function ReportsSection({
           <div className="sfx-grid sfx-grid--2">
             <Card title="Reservations by area">
               <ul className="sfx-barlist">
-                {stats.byArea.map((a) => {
-                  const max = Math.max(...stats.byArea.map((x) => x.count));
+                {statsByArea.map((a) => {
+                  const max = Math.max(...statsByArea.map((x) => x.count));
                   return (
                     <li key={a.area}>
                       <span className="sfx-barlist__label">{a.area}</span>
@@ -197,7 +206,7 @@ function ReportsSection({
             </Card>
             <Card title="Table utilization">
               <ul className="sfx-barlist">
-                {utilization.map((u) => (
+                {utilizationList.map((u) => (
                   <li key={u.area}>
                     <span className="sfx-barlist__label">{u.area}</span>
                     <span className="sfx-bar">
@@ -236,6 +245,7 @@ function ReportsSection({
           </NotConnectedNote>
         </Card>
       ) : null}
+      </ContentPanel>
     </div>
   );
 }

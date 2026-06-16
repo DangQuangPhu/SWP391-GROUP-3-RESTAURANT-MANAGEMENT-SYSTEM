@@ -60,6 +60,7 @@ export default function UpgradeMembershipModal({
   const modalRef = useRef(null);
 
   useEffect(() => {
+    if (!overlayRef.current || !modalRef.current) return;
     if (isOpen) {
       gsap.to(overlayRef.current, {
         autoAlpha: 1,

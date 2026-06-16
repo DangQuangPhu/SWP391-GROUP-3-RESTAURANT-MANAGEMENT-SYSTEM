@@ -61,6 +61,17 @@ function ReservationsIcon() {
   );
 }
 
+function QrTableIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="10" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="3" y="10" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M11 11h2v2h-2zM14 14h3v3h-3zM11 14h2v2h-2zM14 11h3v2h-3z" fill="currentColor" />
+    </svg>
+  );
+}
+
 function SettingsIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -91,6 +102,7 @@ function ProfileDropdown({
   status,
   onMyProfile,
   onMyReservations,
+  onViewQrTable,
   onSettings,
   onChangePassword,
   onSignOut,
@@ -232,6 +244,20 @@ function ProfileDropdown({
               My Reservations
             </button>
           </li>
+          {onViewQrTable ? (
+            <li>
+              <button
+                type="button"
+                className="account-dropdown__item"
+                onClick={closeAnd(onViewQrTable)}
+              >
+                <span className="account-dropdown__item-icon">
+                  <QrTableIcon />
+                </span>
+                View QR Table
+              </button>
+            </li>
+          ) : null}
           <li>
             <button type="button" className="account-dropdown__item" onClick={closeAnd(onSettings)}>
               <span className="account-dropdown__item-icon">

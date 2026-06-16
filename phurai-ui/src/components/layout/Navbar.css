@@ -57,3 +57,10 @@
 .phurai-navbar.phurai-navbar--light-top-page.phurai-navbar--top .phurai-navbar__nav a:hover {
   color: #000000 !important;
 }
+
+/* Match <a> CTA styling when the same classes are used on <button> */
+.phurai-navbar button.phurai-navbar__cta {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}

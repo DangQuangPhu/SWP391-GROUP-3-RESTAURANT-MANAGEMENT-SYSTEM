@@ -1,0 +1,142 @@
+/* Staff — Shift Reports tab */
+
+.staff-report-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.staff-report-tab__loading {
+  min-height: 220px;
+}
+
+.staff-report-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .staff-report-kpis {
+    grid-template-columns: 1fr;
+  }
+}
+
+.staff-report-kpi {
+  padding: 20px 22px;
+  border-radius: var(--sfx-radius-sm);
+  border: 1px solid var(--sfx-border);
+  background: linear-gradient(
+    145deg,
+    rgba(58, 110, 165, 0.12) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+}
+
+.staff-report-kpi__label {
+  margin: 0 0 8px;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sfx-muted);
+}
+
+.staff-report-kpi__value {
+  margin: 0 0 6px;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--sfx-text);
+}
+
+.staff-report-kpi__hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sfx-muted);
+}
+
+.staff-report-shift {
+  padding: 18px 20px;
+  border-radius: var(--sfx-radius-sm);
+  border: 1px solid var(--sfx-border);
+  background: var(--sfx-card);
+}
+
+.staff-report-shift__title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.staff-report-shift__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.staff-report-audit {
+  border-radius: var(--sfx-radius-sm);
+  border: 1px solid var(--sfx-border);
+  background: var(--sfx-card);
+  overflow: hidden;
+}
+
+.staff-report-audit__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--sfx-border-soft);
+}
+
+.staff-report-audit__head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.staff-report-audit__head span {
+  font-size: 12px;
+  color: var(--sfx-muted);
+}
+
+.staff-report-audit__table-wrap {
+  overflow-x: auto;
+}
+
+.staff-report-audit__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.staff-report-audit__table th,
+.staff-report-audit__table td {
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--sfx-border-soft);
+  vertical-align: top;
+}
+
+.staff-report-audit__table th {
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sfx-muted);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.staff-report-audit__table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.staff-report-audit__action {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(58, 110, 165, 0.14);
+  color: #9ec4ef;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}

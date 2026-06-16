@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { ManagerModal } from "../ManagerOverlay.jsx";
 import {
   SectionHead,
+  ContentPanel,
   Toolbar,
   SearchField,
   StatusBadge,
@@ -11,6 +12,7 @@ import {
   NotConnectedNote,
 } from "../ManagerUI.jsx";
 import { DISH_CATEGORIES } from "../../data/managerDashboardMockData.js";
+import { asArray } from "@/utils/asArray.js";
 import { formatVND } from "@/utils/formatCurrency.js";
 import { getMenuTabFromSearch } from "../../config/managerRoutes.js";
 
@@ -25,6 +27,8 @@ const EMPTY = {
 };
 
 function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, toast, dishSource }) {
+  const dishList = asArray(dishes);
+  const bestSellerList = asArray(bestSellers);
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = useMemo(
     () => getMenuTabFromSearch(`?${searchParams.toString()}`),
@@ -53,13 +57,13 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
   }, [pendingAction, isManager]);
 
   const filtered = useMemo(() => {
-    return dishes.filter((d) => {
+    return dishList.filter((d) => {
       const kw = search.trim().toLowerCase();
       const matchKw = !kw || d.dish_name.toLowerCase().includes(kw);
       const matchCat = cat === "all" || d.category_name === cat;
       return matchKw && matchCat;
     });
-  }, [dishes, search, cat]);
+  }, [dishList, search, cat]);
 
   const save = () => {
     if (!editing.dish_name.trim()) {
@@ -99,6 +103,7 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
         }
       />
 
+      <ContentPanel compact>
       <div className="sfx-tabs" role="tablist" aria-label="Menu views">
         <button
           type="button"
@@ -204,8 +209,8 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
                   </tr>
                 </thead>
                 <tbody>
-                  {bestSellers.map((d) => {
-                    const max = Math.max(...bestSellers.map((b) => b.revenue));
+                  {bestSellerList.map((d) => {
+                    const max = Math.max(...bestSellerList.map((b) => b.revenue));
                     return (
                       <tr key={d.rank}>
                         <td><span className="sfx-rank__no">{d.rank}</span></td>
@@ -226,6 +231,8 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
           </div>
         </div>
       )}
+
+      </ContentPanel>
 
       <ManagerModal
         open={Boolean(editing)}

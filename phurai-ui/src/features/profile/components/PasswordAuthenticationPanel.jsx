@@ -370,7 +370,11 @@ function PasswordAuthenticationPanel({ profile, onPasswordReset, onPhoneUpdate }
     }
     setPhoneSaving(true);
     try {
-      await startOtpFlow("phone");
+      const pendingPhone = normalizePhone(trimmed);
+      await onPhoneUpdate?.(pendingPhone);
+      setManagePhone(false);
+    } catch (error) {
+      setPhoneError(mapPhoneSaveError(error).message);
     } finally {
       setPhoneSaving(false);
     }
@@ -550,9 +554,9 @@ function PasswordAuthenticationPanel({ profile, onPasswordReset, onPhoneUpdate }
           type="button"
           className="profile-dashboard__btn profile-dashboard__btn--primary"
           onClick={handlePhoneSave}
-          disabled={phoneSaving || sendOtpSaving}
+          disabled={phoneSaving}
         >
-          {phoneSaving || sendOtpSaving ? "Sending code…" : "Save phone number"}
+          {phoneSaving ? "Saving…" : "Save phone number"}
         </button>
       </SignInMethodRow>
 

@@ -1,6 +1,16 @@
 /* Staff portal — reuses the manager portal sfx design system for visual parity. */
 @import "../../manager-dashboard/styles/manager-dashboard.css";
 
+/* Staff shell uses the same gray canvas; header stays solid white */
+.sfx-shell--staff {
+  --sfx-bg: #f3f4f6;
+}
+
+.sfx-shell--staff .sfx-header {
+  background: #ffffff;
+  backdrop-filter: none;
+}
+
 .sfx-shell--staff .sfx-brand__text small {
   color: #9eb8d4;
 }

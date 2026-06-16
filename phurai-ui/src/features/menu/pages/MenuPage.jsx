@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import '../styles/menu.css';
 import MenuGrid from '../components/MenuGrid.jsx';
 import MenuImagePreview from '../components/MenuImagePreview.jsx';
@@ -7,6 +8,8 @@ import MenuToolbar from '../components/MenuToolbar.jsx';
 import MenuCartDrawer from '../components/MenuCartDrawer.jsx';
 import MenuCartFab from '../components/MenuCartFab.jsx';
 import { MenuCartProvider, useMenuCart } from '../context/MenuCartContext.jsx';
+import { useTableSession } from '@/features/table-session';
+import '@/features/table-session/styles/table-session.css';
 import { flattenMenuDishes, menuCategories } from '../data/menuData.js';
 import { menuImages } from '../data/menuAssets.js';
 import { normalizePrice } from '@/utils/formatCurrency';
@@ -39,6 +42,14 @@ function sortDishes(dishes, sortOrder, selectedCategory) {
 }
 
 function MenuPageContent({ isAuthenticated, currentUser }) {
+  const [searchParams] = useSearchParams();
+  const {
+    session: tableSession,
+    bindFromQuery,
+    loading: tableSessionLoading,
+    error: tableSessionError,
+    hasActiveSession,
+  } = useTableSession();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState('default');
@@ -125,6 +136,14 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
   );
 
   useEffect(() => {
+    const tableId = searchParams.get('table_id');
+    const sessionId = searchParams.get('session_id');
+    if (!tableId || !sessionId) return;
+
+    bindFromQuery({ tableId, sessionId });
+  }, [searchParams, bindFromQuery]);
+
+  useEffect(() => {
     const heroEl = heroRef.current;
     if (!heroEl) return undefined;
 
@@ -172,6 +191,24 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
               <p className="menu-hero__desc">
                 Skip the line and enjoy your favorite dishes with just a scan.
               </p>
+              {tableSessionError && !tableSessionLoading ? (
+                <div
+                  className="menu-session-banner menu-session-banner--error"
+                  role="status"
+                >
+                  {tableSessionError}
+                </div>
+              ) : null}
+              {hasActiveSession && tableSession ? (
+                <div className="menu-session-banner" role="status">
+                  <span className="menu-session-banner__table">
+                    Table {tableSession.table_number || tableSession.table_id}
+                  </span>
+                  <span className="menu-session-banner__session">
+                    Session #{tableSession.session_id}
+                  </span>
+                </div>
+              ) : null}
             </div>
           </section>
 

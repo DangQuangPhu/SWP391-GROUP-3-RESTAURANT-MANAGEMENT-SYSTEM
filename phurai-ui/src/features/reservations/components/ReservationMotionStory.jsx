@@ -150,6 +150,7 @@ function ReservationMotionStory() {
     setActiveStep(0);
 
     const ctx = gsap.context(() => {
+      if (!trackRef.current || !stageRef.current) return;
       ScrollTrigger.create({
         trigger: trackRef.current,
         start: "top top",

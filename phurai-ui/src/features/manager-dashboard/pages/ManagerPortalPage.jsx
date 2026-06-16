@@ -20,7 +20,7 @@ import ReportsSection from "../components/sections/ReportsSection.jsx";
 import {
   fetchKpis,
   fetchRevenueSeries,
-  fetchReservations,
+  fetchAllReservations,
   fetchTables,
   fetchDishes,
   fetchBestSellers,
@@ -30,6 +30,13 @@ import {
   fetchReservationStats,
   fetchTableUtilization,
 } from "../services/managerApi.js";
+import { asArray } from "@/utils/asArray.js";
+import {
+  appToastError,
+  appToastInfo,
+  appToastSuccess,
+} from "@/core/notifications/appToast.js";
+import { useSocket } from "@/core/socket/SocketContext.jsx";
 
 function resolveRole(roleName) {
   const r = String(roleName || "").toLowerCase();
@@ -87,6 +94,8 @@ function ReservationsRoute() {
     <ReservationsSection
       reservations={data.reservations}
       setReservations={setList("reservations")}
+      tables={data.tables}
+      setTables={setList("tables")}
       toast={toast}
     />
   );
@@ -181,6 +190,7 @@ function ManagerPortalPage({
   onSignOut,
   onNavigate,
 }) {
+  const { socket } = useSocket();
   const role = resolveRole(currentUser?.roleName);
   const hasAccess = isAuthenticated && Boolean(role);
 
@@ -214,14 +224,25 @@ function ManagerPortalPage({
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3600);
+
+    if (tone === "success") appToastSuccess(message);
+    else if (tone === "error") appToastError(message);
+    else appToastInfo(message);
   }, []);
 
   const setList = useCallback(
     (key) => (updater) =>
-      setData((prev) => ({
-        ...prev,
-        [key]: typeof updater === "function" ? updater(prev[key]) : updater,
-      })),
+      setData((prev) => {
+        const current = prev[key];
+        const next =
+          typeof updater === "function"
+            ? updater(Array.isArray(current) ? current : [])
+            : updater;
+        return {
+          ...prev,
+          [key]: Array.isArray(next) ? next : current,
+        };
+      }),
     []
   );
 
@@ -232,7 +253,7 @@ function ManagerPortalPage({
     Promise.all([
       fetchKpis(),
       fetchRevenueSeries(),
-      fetchReservations(),
+      fetchAllReservations(currentUser?.user_id),
       fetchTables(),
       fetchDishes(),
       fetchBestSellers(),
@@ -257,18 +278,22 @@ function ManagerPortalPage({
           stats,
           utilization,
         ] = res;
+
+        // 1. We are using the real API now, so no need to intercept with Global Local Storage Engine
+        let localReservations = asArray(reservations.data);
+
         setData({
           kpis: kpis.data,
           revenue: revenue.data,
-          reservations: reservations.data,
-          tables: tables.data,
-          dishes: dishes.data,
-          bestSellers: bestSellers.data,
-          orders: orders.data,
-          manager: manager.data,
-          promotions: promotions.data,
-          stats: stats.data,
-          utilization: utilization.data,
+          reservations: localReservations,
+          tables: asArray(tables.data),
+          dishes: asArray(dishes.data),
+          bestSellers: asArray(bestSellers.data),
+          orders: asArray(orders.data),
+          manager: asArray(manager.data),
+          promotions: asArray(promotions.data),
+          stats: stats.data ?? {},
+          utilization: asArray(utilization.data),
         });
         setDishSource(dishes.source);
         setLoading(false);
@@ -276,12 +301,57 @@ function ManagerPortalPage({
       .catch(() => {
         if (!alive) return;
         setLoading(false);
-        toast("Could not load dashboard data", "error");
       });
     return () => {
       alive = false;
     };
   }, [hasAccess, toast]);
+
+  /* 2. Real-time Socket Notification */
+  useEffect(() => {
+    if (!hasAccess || !socket) return;
+    
+    const handleNewReservation = (data) => {
+      toast(`New booking request from ${data.customer_name}`, "info");
+      window.dispatchEvent(new Event("phurai_manager_refresh"));
+    };
+
+    const handleCheckedIn = (data) => {
+      toast(`Reservation #${data.reservation_id} checked in by staff`, "success");
+      window.dispatchEvent(new Event("phurai_manager_refresh"));
+    };
+
+    const handleRejected = (data) => {
+      toast(`Reservation #${data.reservation_id} marked as ${data.new_status} by staff`, "info");
+      window.dispatchEvent(new Event("phurai_manager_refresh"));
+    };
+    
+    socket.on("reservation:new", handleNewReservation);
+    socket.on("reservation:checked_in", handleCheckedIn);
+    socket.on("reservation:rejected", handleRejected);
+
+    return () => {
+      socket.off("reservation:new", handleNewReservation);
+      socket.off("reservation:checked_in", handleCheckedIn);
+      socket.off("reservation:rejected", handleRejected);
+    };
+  }, [hasAccess, toast, socket]);
+
+  // Listen to refresh events
+  useEffect(() => {
+    const handleRefresh = () => {
+      // Reload reservations
+      fetchAllReservations(currentUser?.user_id).then(res => {
+         setList("reservations")(res.data);
+      });
+    };
+    window.addEventListener("phurai_manager_refresh", handleRefresh);
+    window.addEventListener("phurai_reservations_updated", handleRefresh); // Catch same-tab edits
+    return () => {
+      window.removeEventListener("phurai_manager_refresh", handleRefresh);
+      window.removeEventListener("phurai_reservations_updated", handleRefresh);
+    };
+  }, [setList, currentUser]);
 
   if (!hasAccess) {
     return (

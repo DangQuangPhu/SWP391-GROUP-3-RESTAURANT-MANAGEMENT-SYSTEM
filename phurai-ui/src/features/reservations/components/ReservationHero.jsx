@@ -22,6 +22,10 @@ function ReservationHero({ onReserveClick }) {
     if (prefersReducedMotion()) return undefined;
 
     const ctx = gsap.context(() => {
+      if (!rootRef.current || !bgRef.current || !maskRef.current || !titleRef.current) {
+        return;
+      }
+
       // Subtle background scale as the hero scrolls away.
       gsap.to(bgRef.current, {
         scale: 1.18,

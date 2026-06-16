@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ManagerModal } from "../ManagerOverlay.jsx";
-import { SectionHead, StatusBadge, Button } from "../ManagerUI.jsx";
+import { SectionHead, ContentPanel, StatusBadge, Button } from "../ManagerUI.jsx";
 import { useManagerPortal } from "../../context/ManagerPortalContext.jsx";
 import { TABLE_STATUS_META, AREAS } from "../../data/managerDashboardMockData.js";
 import { fetchAreas, fetchFilteredTables } from "../../services/managerApi.js";
+import { asArray } from "@/utils/asArray.js";
 import AddTableModal from "./AddTableModal.jsx";
 import TableMapFilterBar from "./TableMapFilterBar.jsx";
 import { STATUS_KEYS, STATUS_SLUG_TO_API } from "./tableConstants.js";
@@ -44,6 +45,7 @@ function buildFilterSearchParams(searchParams, { search, areaId, selectedStatuse
 }
 
 function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
+  const tableList = asArray(tables);
   const { currentUser } = useManagerPortal();
   const managerUserId = currentUser?.userId ?? currentUser?.id ?? null;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -152,11 +154,11 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
 
   const grouped = useMemo(() => {
     const map = {};
-    tables.forEach((t) => {
+    tableList.forEach((t) => {
       (map[t.area_name] = map[t.area_name] || []).push(t);
     });
     return map;
-  }, [tables]);
+  }, [tableList]);
 
   const areaCount = areas.length || AREAS.length;
   const groupedEntries = Object.entries(grouped);
@@ -178,7 +180,7 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
       return;
     }
     setTables((prev) =>
-      prev.map((t) =>
+      asArray(prev).map((t) =>
         t.table_id === editing.table_id
           ? { ...editing, capacity: Number(editing.capacity) || 1 }
           : t
@@ -189,12 +191,12 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
   };
 
   const quickStatus = (t, status) => {
-    setTables((prev) => prev.map((x) => (x.table_id === t.table_id ? { ...x, status } : x)));
+    setTables((prev) => asArray(prev).map((x) => (x.table_id === t.table_id ? { ...x, status } : x)));
     toast(`${t.table_number} → ${TABLE_STATUS_META[status].label}`, "info");
   };
 
   const remove = () => {
-    setTables((prev) => prev.filter((t) => t.table_id !== confirmDel.table_id));
+    setTables((prev) => asArray(prev).filter((t) => t.table_id !== confirmDel.table_id));
     toast("Table removed", "info");
     setConfirmDel(null);
   };
@@ -203,7 +205,7 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
     <div className="sfx-stack">
       <SectionHead
         title="Table Map"
-        subtitle={`${tables.length} tables across ${areaCount} areas`}
+        subtitle={`${tableList.length} tables across ${areaCount} areas`}
         actions={
           isManager ? (
             <Button variant="gold" icon="plus" onClick={() => setAddModalOpen(true)}>
@@ -213,6 +215,7 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
         }
       />
 
+      <ContentPanel compact>
       <TableMapFilterBar
         search={searchInput}
         onSearchChange={setSearchInput}
@@ -260,6 +263,7 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
           </div>
         ))}
       </div>
+      </ContentPanel>
 
       <AddTableModal
         open={addModalOpen}

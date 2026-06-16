@@ -1,0 +1,27 @@
+.live-clock {
+  display: block;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #6b7280;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  text-align: right;
+  line-height: 1.35;
+}
+
+.live-clock--header {
+  padding: 0 2px;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 1100px) {
+  .live-clock--header {
+    display: none;
+  }
+}

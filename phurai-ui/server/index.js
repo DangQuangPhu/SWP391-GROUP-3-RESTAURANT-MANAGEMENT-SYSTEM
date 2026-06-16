@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import fs from "node:fs";
+import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import "./config.js";
@@ -9,10 +10,12 @@ import profileRoutes from "./routes/profile.js";
 import reservationRoutes from "./routes/reservations.js";
 import staffRoutes from "./routes/staff.js";
 import managerRoutes from "./routes/manager.js";
+import notificationRoutes from "./routes/notifications.js";
 import { runOtpLifecycleCleanup } from "./utils/otpService.js";
 import { isSmtpConfigured } from "./email.js";
 import dishRoutes from "./routes/dishes.js";
 import customerRoutes from "./routes/customer.js";
+import { initSocket } from "./socket.js";
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -44,6 +47,7 @@ app.use("/api/staff", staffRoutes);
 app.use("/api/manager", managerRoutes);
 app.use("/api/dishes", dishRoutes);
 app.use("/api/customer", customerRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
@@ -72,7 +76,11 @@ setInterval(() => {
   });
 }, OTP_CLEANUP_INTERVAL_MS);
 
-app.listen(port, () => {
+const server = http.createServer(app);
+initSocket(server, { allowedOrigins });
+
+server.listen(port, () => {
   console.log(`Backend server listening on http://localhost:${port}`);
   console.log("SMTP configured:", isSmtpConfigured());
+  console.log("Socket.IO enabled");
 });

@@ -31,6 +31,38 @@ function ReservationForm() {
   const [selectedTime, setSelectedTime] = useState('');
   const [selectedSeats, setSelectedSeats] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [bookingId, setBookingId] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!selectedDate || !selectedTime || !selectedSeats) {
+      alert("Please fill out all required fields.");
+      return;
+    }
+
+    const generatedId = Math.floor(Math.random() * 1000000);
+    const formattedId = `#${generatedId.toString().padStart(6, '0')}`;
+    setBookingId(formattedId);
+
+    const newBooking = {
+      id: formattedId,
+      date: selectedDate,
+      time: selectedTime,
+      pax: selectedSeats,
+      status: "Pending",
+      timestamp: new Date().toISOString()
+    };
+
+    const existing = JSON.parse(localStorage.getItem('customer_reservations')) || [];
+    existing.push(newBooking);
+    localStorage.setItem('customer_reservations', JSON.stringify(existing));
+
+    setIsSuccess(true);
+    
+    // Dispatch event to notify Navbar
+    window.dispatchEvent(new Event('reservation_added'));
+  };
 
   return (
     <section className="phurai-res-section" aria-labelledby="reservation-heading">
@@ -107,80 +139,104 @@ function ReservationForm() {
 
         {/* RIGHT — Form */}
         <div className="phurai-res-card__form-wrap">
-          <form className="phurai-res-form" onSubmit={e => e.preventDefault()} noValidate>
-
-            <div className="phurai-res-form__row">
-              <FloatField id="res-name"  label="Full Name"     name="name"  required />
-              <FloatField id="res-phone" label="Phone Number"  name="phone" type="tel" required />
+          {isSuccess ? (
+            <div className="phurai-res-success" style={{ textAlign: 'center', padding: '40px 20px' }}>
+              <div style={{ fontSize: '48px', color: '#8c764b', marginBottom: '20px' }}>✓</div>
+              <h3 style={{ fontSize: '24px', margin: '0 0 10px' }}>Reservation Confirmed</h3>
+              <p style={{ margin: '0 0 20px', color: '#666' }}>Your booking ID is:</p>
+              <div style={{ 
+                fontSize: '32px', 
+                fontWeight: 'bold', 
+                color: '#8c764b', 
+                background: '#1a1a1a', 
+                padding: '10px 20px', 
+                display: 'inline-block',
+                borderRadius: '8px',
+                letterSpacing: '2px'
+              }}>
+                {bookingId}
+              </div>
+              <p style={{ marginTop: '20px', color: '#666', fontSize: '14px' }}>
+                We'll see you on {selectedDate} at {selectedTime}.<br/>
+                You can track this in "My Reservations" at the top.
+              </p>
             </div>
+          ) : (
+            <form className="phurai-res-form" onSubmit={handleSubmit} noValidate>
 
-            <FloatField id="res-email" label="Email Address" name="email" type="email" required />
+              <div className="phurai-res-form__row">
+                <FloatField id="res-name"  label="Full Name"     name="name"  required />
+                <FloatField id="res-phone" label="Phone Number"  name="phone" type="tel" required />
+              </div>
 
-            {/* Date picker */}
-            <div className="res-field res-field--date">
-              <input
-                id="res-date"
-                type="date"
-                name="date"
-                value={selectedDate}
-                onChange={e => setSelectedDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-                placeholder=" "
-              />
-              <label htmlFor="res-date">Preferred Date</label>
-              <span className="res-field__line" />
-            </div>
+              <FloatField id="res-email" label="Email Address" name="email" type="email" required />
 
-            {/* Time slots */}
-            <div className="phurai-res-form__section-label">Select Time</div>
-            <div className="phurai-res-slots" role="group" aria-label="Time slots">
-              {TIME_SLOTS.map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  className={`phurai-res-slot ${selectedTime === t ? 'phurai-res-slot--active' : ''}`}
-                  onClick={() => setSelectedTime(t)}
-                  aria-pressed={selectedTime === t}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
+              {/* Date picker */}
+              <div className="res-field res-field--date">
+                <input
+                  id="res-date"
+                  type="date"
+                  name="date"
+                  value={selectedDate}
+                  onChange={e => setSelectedDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  placeholder=" "
+                />
+                <label htmlFor="res-date">Preferred Date</label>
+                <span className="res-field__line" />
+              </div>
 
-            {/* Guest count */}
-            <div className="phurai-res-form__section-label">Number of Guests</div>
-            <div className="phurai-res-seats" role="group" aria-label="Number of guests">
-              {SEAT_OPTIONS.map(s => (
-                <button
-                  key={s}
-                  type="button"
-                  className={`phurai-res-seat ${selectedSeats === String(s) ? 'phurai-res-seat--active' : ''}`}
-                  onClick={() => setSelectedSeats(String(s))}
-                  aria-pressed={selectedSeats === String(s)}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
+              {/* Time slots */}
+              <div className="phurai-res-form__section-label">Select Time</div>
+              <div className="phurai-res-slots" role="group" aria-label="Time slots">
+                {TIME_SLOTS.map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    className={`phurai-res-slot ${selectedTime === t ? 'phurai-res-slot--active' : ''}`}
+                    onClick={() => setSelectedTime(t)}
+                    aria-pressed={selectedTime === t}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
 
-            {/* Special requests */}
-            <div className="res-field res-field--textarea">
-              <textarea id="res-msg" name="message" rows={4} placeholder=" " />
-              <label htmlFor="res-msg">Special Requests or Allergies</label>
-              <span className="res-field__line" />
-            </div>
+              {/* Guest count */}
+              <div className="phurai-res-form__section-label">Number of Guests</div>
+              <div className="phurai-res-seats" role="group" aria-label="Number of guests">
+                {SEAT_OPTIONS.map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={`phurai-res-seat ${selectedSeats === String(s) ? 'phurai-res-seat--active' : ''}`}
+                    onClick={() => setSelectedSeats(String(s))}
+                    aria-pressed={selectedSeats === String(s)}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
 
-            <button type="submit" className="phurai-res-form__submit">
-              <span>Confirm Reservation</span>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12h14M12 5l7 7-7 7"/>
-              </svg>
-            </button>
+              {/* Special requests */}
+              <div className="res-field res-field--textarea">
+                <textarea id="res-msg" name="message" rows={4} placeholder=" " />
+                <label htmlFor="res-msg">Special Requests or Allergies</label>
+                <span className="res-field__line" />
+              </div>
 
-            <p className="phurai-res-form__note">
-              We'll confirm your reservation within 2 hours. For same-day bookings, please call us.
-            </p>
-          </form>
+              <button type="submit" className="phurai-res-form__submit">
+                <span>Confirm Reservation</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12h14M12 5l7 7-7 7"/>
+                </svg>
+              </button>
+
+              <p className="phurai-res-form__note">
+                We'll confirm your reservation within 2 hours. For same-day bookings, please call us.
+              </p>
+            </form>
+          )}
         </div>
       </div>
 

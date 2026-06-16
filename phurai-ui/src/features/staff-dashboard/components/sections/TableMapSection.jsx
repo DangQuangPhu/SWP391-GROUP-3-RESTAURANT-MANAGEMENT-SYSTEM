@@ -11,25 +11,29 @@ import {
   TABLE_STATUS_META,
   DEMO_NOTICE,
 } from "../../data/staffDashboardMockData.js";
+import { asArray } from "@/utils/asArray.js";
 
 const STATUS_KEYS = Object.keys(TABLE_STATUS_META);
 
 function TableMapSection({ tables, setTables, dataSource, toast }) {
+  const tableList = asArray(tables);
   const [areaFilter, setAreaFilter] = useState("all");
 
   const grouped = useMemo(() => {
     const list =
-      areaFilter === "all" ? tables : tables.filter((t) => t.area_name === areaFilter);
+      areaFilter === "all"
+        ? tableList
+        : tableList.filter((t) => t.area_name === areaFilter);
     const map = {};
     list.forEach((t) => {
       (map[t.area_name] = map[t.area_name] || []).push(t);
     });
     return map;
-  }, [tables, areaFilter]);
+  }, [tableList, areaFilter]);
 
   const quickStatus = (table, status) => {
     setTables((prev) =>
-      prev.map((x) => (x.table_id === table.table_id ? { ...x, status } : x))
+      asArray(prev).map((x) => (x.table_id === table.table_id ? { ...x, status } : x))
     );
     toast(`${table.table_number} → ${TABLE_STATUS_META[status].label} (local only)`, "info");
   };
@@ -38,7 +42,7 @@ function TableMapSection({ tables, setTables, dataSource, toast }) {
     <div className="sfx-stack">
       <SectionHead
         title="Table Map"
-        subtitle={`${tables.length} tables across ${STAFF_AREAS.length} areas`}
+        subtitle={`${tableList.length} tables across ${STAFF_AREAS.length} areas`}
       />
 
       {dataSource === "mock" ? <NotConnectedNote>{DEMO_NOTICE}</NotConnectedNote> : null}

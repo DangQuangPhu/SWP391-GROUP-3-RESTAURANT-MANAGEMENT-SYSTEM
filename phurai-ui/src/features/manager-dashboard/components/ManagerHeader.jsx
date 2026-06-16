@@ -1,4 +1,6 @@
 import Icon from "./ManagerIcons.jsx";
+import NotificationBell from "@/components/notifications/NotificationBell.jsx";
+import LiveClock from "@/components/common/LiveClock.jsx";
 
 function greeting() {
   const h = new Date().getHours();
@@ -66,10 +68,9 @@ function ManagerHeader({
           />
         </label>
 
-        <button type="button" className="sfx-iconbtn sfx-header__bell" aria-label="Notifications">
-          <Icon name="bell" size={18} />
-          <span className="sfx-header__dot" />
-        </button>
+        <LiveClock variant="header" />
+
+        <NotificationBell user={user} listenForStaffEvents />
 
         <button type="button" className="sfx-btn sfx-btn--gold sfx-btn--md" onClick={onQuickAction}>
           <Icon name="plus" size={16} />

@@ -23,15 +23,17 @@ const ROLE_NAME_MAP = {
 };
 
 export const STAFF_DEFAULT_PATH = {
-  [STAFF_ROLE.RESTAURANT]: `${STAFF_BASE}/reservations`,
-  [STAFF_ROLE.KITCHEN]: `${STAFF_BASE}/kitchen`,
+  [STAFF_ROLE.RESTAURANT]: `${STAFF_BASE}/tables`,
+  [STAFF_ROLE.KITCHEN]: `${STAFF_BASE}/kds`,
 };
 
 const SEGMENT_ROLE_ACCESS = {
-  reservations: [STAFF_ROLE.RESTAURANT],
-  tables: [STAFF_ROLE.RESTAURANT],
-  orders: [STAFF_ROLE.RESTAURANT],
-  kitchen: [STAFF_ROLE.KITCHEN],
+  orders: [STAFF_ROLE.RESTAURANT, STAFF_ROLE.KITCHEN],
+  tables: [STAFF_ROLE.RESTAURANT, STAFF_ROLE.KITCHEN],
+  reservations: [STAFF_ROLE.RESTAURANT, STAFF_ROLE.KITCHEN],
+  kds: [STAFF_ROLE.RESTAURANT, STAFF_ROLE.KITCHEN],
+  payments: [STAFF_ROLE.RESTAURANT, STAFF_ROLE.KITCHEN],
+  shifts: [STAFF_ROLE.RESTAURANT, STAFF_ROLE.KITCHEN],
 };
 
 export function resolveStaffRole(user) {
@@ -69,7 +71,7 @@ export function getStaffSegment(pathname) {
 }
 
 export function getDefaultStaffPath(role) {
-  return STAFF_DEFAULT_PATH[role] || STAFF_BASE;
+  return STAFF_DEFAULT_PATH[role] || `${STAFF_BASE}/tables`;
 }
 
 export function canAccessStaffSegment(role, segment) {

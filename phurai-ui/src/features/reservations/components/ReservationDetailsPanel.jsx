@@ -33,6 +33,13 @@ function ReservationDetailsPanel({
       </div>
 
       <div className="rzv-details__footer">
+        {form.holdDurationMinutes === 45 || form.holdDurationMinutes === 60 ? (
+          <div className="rzv-alert rzv-alert--surcharge" role="status">
+            Note: Reservations for 45 minutes or 1 hour are subject to an additional premium
+            VAT/surcharge fee.
+          </div>
+        ) : null}
+
         {!reviewing ? (
           detailsValid ? (
             <div className="rzv-details__ready">

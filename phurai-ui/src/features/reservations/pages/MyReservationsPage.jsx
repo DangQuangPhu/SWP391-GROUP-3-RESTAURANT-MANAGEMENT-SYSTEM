@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "../styles/reservation.css";
 import { formatVND } from "@/utils/formatCurrency";
+import { useTableSession, ViewQrTableModal } from "@/features/table-session";
 import PreorderPanel from "../components/PreorderPanel.jsx";
 import { getMyReservations, cancelReservation } from "../services/reservationApi.js";
+import { useSocket } from "@/core/socket/SocketContext.jsx";
 
 const ACTIVE_STATUSES = ["Pending", "Confirmed"];
 const PREORDER_STATUSES = ["Pending", "Confirmed"];
@@ -39,6 +41,9 @@ function MyReservationsPage({
   const [error, setError] = useState("");
   const [openPreorderId, setOpenPreorderId] = useState(null);
   const [cancelingId, setCancelingId] = useState(null);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+
+  const { hasActiveSession, session: tableSession } = useTableSession();
 
   const load = useCallback(() => {
     if (!isAuthenticated || !userId) return;
@@ -58,6 +63,14 @@ function MyReservationsPage({
   useEffect(() => {
     load();
   }, [load]);
+
+  const { socket } = useSocket();
+  useEffect(() => {
+    if (!socket) return;
+    const handleProcessed = () => load();
+    socket.on("reservation:processed", handleProcessed);
+    return () => socket.off("reservation:processed", handleProcessed);
+  }, [socket, load]);
 
   const { upcoming, past } = useMemo(() => {
     const now = Date.now();
@@ -118,7 +131,7 @@ function MyReservationsPage({
       <article className="rzv-res-card" key={r.reservation_id}>
         <header className="rzv-res-card__head">
           <div>
-            <span className="rzv-res-card__id">Reservation #{r.reservation_id}</span>
+            <span className="rzv-res-card__id">Reservation #{String(r.reservation_id).padStart(6, '0')}</span>
             <h3 className="rzv-res-card__when rzv-serif">
               {formatDateTime(r.reservation_start_at)}
             </h3>
@@ -225,7 +238,7 @@ function MyReservationsPage({
     <main className="rzv-page rzv-myres">
       <section className="rzv-myres__hero">
         <span className="rzv-booking__kicker">Your Table</span>
-        <h1 className="rzv-myres__title rzv-serif">My Reservations</h1>
+        <h1 className="rzv-myres__title rzv-serif">MY RESERVATIONS</h1>
         <p className="rzv-myres__lead">
           Review upcoming visits, attach a pre-order, or cancel a booking.
         </p>
@@ -262,6 +275,34 @@ function MyReservationsPage({
           <>
             {error ? <p className="rzv-summary__error">{error}</p> : null}
 
+            {hasActiveSession ? (
+              <section className="rzv-myres__group rzv-myres__qr-card">
+                <h2 className="rzv-myres__group-title">Active table session</h2>
+                <div className="rzv-res-card">
+                  <header className="rzv-res-card__head">
+                    <div>
+                      <p className="rzv-res-card__id">
+                        Table {tableSession?.table_number || `T-${tableSession?.table_id}`}
+                      </p>
+                      <p className="rzv-res-card__when">
+                        Session #{tableSession?.session_id}
+                        {tableSession?.area_name ? ` · ${tableSession.area_name}` : ""}
+                      </p>
+                    </div>
+                  </header>
+                  <footer className="rzv-res-card__actions">
+                    <button
+                      type="button"
+                      className="rzv-btn rzv-btn--solid"
+                      onClick={() => setQrModalOpen(true)}
+                    >
+                      View QR Table
+                    </button>
+                  </footer>
+                </div>
+              </section>
+            ) : null}
+
             {reservations.length === 0 ? (
               <div className="rzv-myres__empty">
                 <p>You have no reservations yet.</p>
@@ -291,6 +332,10 @@ function MyReservationsPage({
           </>
         ) : null}
       </div>
+
+      {hasActiveSession ? (
+        <ViewQrTableModal isOpen={qrModalOpen} onClose={() => setQrModalOpen(false)} />
+      ) : null}
     </main>
   );
 }

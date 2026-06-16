@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { DateRangePicker } from "react-date-range";
 import "react-date-range/dist/styles.css";
 import "react-date-range/dist/theme/default.css";
@@ -34,14 +35,16 @@ function DashboardDateRangePicker({
     });
   };
 
-  return (
-    <div
-      className="sfx-dp-popover"
-      role="dialog"
-      aria-label="Date range picker"
-      onClick={(event) => event.stopPropagation()}
-    >
-      <div className="sfx-dp-body">
+  const content = (
+    <div className="sfx-dp-root">
+      <div className="sfx-dp-backdrop" onClick={onCancel} />
+      <div
+        className="sfx-dp-popover"
+        role="dialog"
+        aria-label="Date range picker"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="sfx-dp-body">
         <aside className="sfx-dp-presets">
           {presets.map((preset) => (
             <button
@@ -80,8 +83,11 @@ function DashboardDateRangePicker({
           </button>
         </div>
       </footer>
+      </div>
     </div>
   );
+
+  return createPortal(content, document.body);
 }
 
 export default DashboardDateRangePicker;

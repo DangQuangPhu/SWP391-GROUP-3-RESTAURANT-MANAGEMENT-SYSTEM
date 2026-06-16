@@ -21,7 +21,7 @@ function ManagerLayout({
   const closeMobile = () => setMobileOpen(false);
 
   return (
-    <div className={`sfx-shell ${collapsed ? "sfx-shell--collapsed" : ""}`}>
+    <div className={`sfx-shell sfx-shell--manager ${collapsed ? "sfx-shell--collapsed" : ""}`}>
       <ManagerSidebar
         collapsed={collapsed}
         role={role}

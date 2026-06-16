@@ -6,12 +6,22 @@ import {
   ORDER_STATUS_META,
 } from "../../data/managerDashboardMockData.js";
 
+import { asArray } from "@/utils/asArray.js";
+
 /* Operations-focused view (no revenue) for floor & kitchen manager. */
 function TodaySection({ kpis, reservations, tables, orders, onNavigate }) {
-  const opsKpis = kpis.filter((k) =>
+  const kpiList = asArray(kpis);
+  const reservationList = asArray(reservations);
+  const tableList = asArray(tables);
+  const orderList = asArray(orders);
+
+  const opsKpis = kpiList.filter((k) =>
     ["reservations", "occupied", "pendingOrders", "kitchen"].includes(k.id)
   );
-  const arriving = reservations.filter((r) => ["pending", "confirmed"].includes(r.status));
+  const arriving = reservationList.filter((r) =>
+    ["pending", "confirmed"].includes(r.status)
+  );
+  const kitchenQueue = orderList.filter((o) => o.kitchen_status !== "done");
 
   return (
     <div className="sfx-stack">
@@ -51,9 +61,8 @@ function TodaySection({ kpis, reservations, tables, orders, onNavigate }) {
           action={<Button size="sm" variant="ghost" onClick={() => onNavigate("orders", "tab-kitchen")}>Open</Button>}
         >
           <ul className="sfx-timeline">
-            {orders
-              .filter((o) => o.kitchen_status !== "done")
-              .map((o) => (
+            {kitchenQueue.length ? (
+              kitchenQueue.map((o) => (
                 <li key={o.order_id} className="sfx-timeline__row">
                   <span className="sfx-timeline__time">{o.order_number}</span>
                   <span className="sfx-timeline__main">
@@ -64,7 +73,10 @@ function TodaySection({ kpis, reservations, tables, orders, onNavigate }) {
                     {ORDER_STATUS_META[o.kitchen_status]?.label}
                   </StatusBadge>
                 </li>
-              ))}
+              ))
+            ) : (
+              <li className="sfx-muted">No orders in the kitchen queue.</li>
+            )}
           </ul>
         </Card>
       </div>
@@ -74,7 +86,7 @@ function TodaySection({ kpis, reservations, tables, orders, onNavigate }) {
         action={<Button size="sm" variant="ghost" onClick={() => onNavigate("tables")}>Manage</Button>}
       >
         <div className="sfx-tiles">
-          {tables.map((t) => (
+          {tableList.map((t) => (
             <div key={t.table_id} className={`sfx-tile sfx-tile--${TABLE_STATUS_META[t.status]?.tone}`}>
               <strong>{t.table_number}</strong>
               <small>{TABLE_STATUS_META[t.status]?.label}</small>

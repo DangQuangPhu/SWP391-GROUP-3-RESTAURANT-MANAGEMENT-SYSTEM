@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ManagerModal } from "../ManagerOverlay.jsx";
 import {
   SectionHead,
+  ContentPanel,
   Toolbar,
   SearchField,
   StatusBadge,
@@ -10,6 +11,7 @@ import {
   NotConnectedNote,
 } from "../ManagerUI.jsx";
 import { PROMO_STATUS_META } from "../../data/managerDashboardMockData.js";
+import { asArray } from "@/utils/asArray.js";
 import { formatVND } from "@/utils/formatCurrency.js";
 
 const EMPTY = {
@@ -29,6 +31,7 @@ function discountText(p) {
 }
 
 function PromotionsSection({ promotions, setPromotions, pendingAction, toast }) {
+  const promotionList = asArray(promotions);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [editing, setEditing] = useState(null);
@@ -43,13 +46,13 @@ function PromotionsSection({ promotions, setPromotions, pendingAction, toast }) 
   }, [pendingAction]);
 
   const filtered = useMemo(() => {
-    return promotions.filter((p) => {
+    return promotionList.filter((p) => {
       const kw = search.trim().toLowerCase();
       const matchKw = !kw || p.name.toLowerCase().includes(kw) || p.code.toLowerCase().includes(kw);
       const matchStatus = statusFilter === "all" || p.status === statusFilter;
       return matchKw && matchStatus;
     });
-  }, [promotions, search, statusFilter]);
+  }, [promotionList, search, statusFilter]);
 
   const save = () => {
     if (!editing.name.trim() || !editing.code.trim()) {
@@ -82,7 +85,7 @@ function PromotionsSection({ promotions, setPromotions, pendingAction, toast }) 
     <div className="sfx-stack">
       <SectionHead
         title="Promotions"
-        subtitle={`${promotions.length} campaigns`}
+        subtitle={`${promotionList.length} campaigns`}
         actions={
           <Button variant="gold" icon="plus" onClick={() => { setEditing({ ...EMPTY }); setIsNew(true); }}>
             Create Promotion
@@ -90,6 +93,7 @@ function PromotionsSection({ promotions, setPromotions, pendingAction, toast }) 
         }
       />
 
+      <ContentPanel compact>
       <Toolbar>
         <SearchField value={search} onChange={setSearch} placeholder="Name or code…" />
         <select className="sfx-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
@@ -147,6 +151,8 @@ function PromotionsSection({ promotions, setPromotions, pendingAction, toast }) 
         </div>
         {filtered.length === 0 ? <EmptyState icon="tag" title="No promotions found" /> : null}
       </div>
+
+      </ContentPanel>
 
       <ManagerModal
         open={Boolean(editing)}

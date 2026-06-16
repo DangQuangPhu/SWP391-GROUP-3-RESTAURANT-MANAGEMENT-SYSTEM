@@ -5,8 +5,6 @@ import ReservationDetailsPanel from "../components/ReservationDetailsPanel.jsx";
 import TableBoard from "../components/choose-table/TableBoard.jsx";
 import ReservationSummary from "../components/ReservationSummary.jsx";
 import ReservationSuccessPanel from "../components/ReservationSuccessPanel.jsx";
-import PreorderModal from "../components/PreorderModal.jsx";
-import PromotionModal from "../components/PromotionModal.jsx";
 import {
   AREA_PREFERENCES,
   DINING_PURPOSES,
@@ -18,7 +16,6 @@ import {
   getReservationSettings,
   getAvailability,
   createReservation,
-  savePreorder,
 } from "../services/reservationApi.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -41,11 +38,7 @@ const INITIAL_FORM = {
   fullName: "",
   email: "",
   phone: "",
-  specialRequest: "",
-  eventTitle: "",
-  cakeRequest: "",
-  decoration: "",
-  equipment: "",
+  notes: "",
 };
 
 const STEPS = [
@@ -74,12 +67,6 @@ function ReservationPage({
   const [step, setStep] = useState("details"); // details | tables | success
   const [detailsReviewing, setDetailsReviewing] = useState(false);
   const [exiting, setExiting] = useState(false);
-
-  // --- soft add-ons (presentation only) ---
-  const [preorderItems, setPreorderItems] = useState([]);
-  const [promotion, setPromotion] = useState(null);
-  const [preorderOpen, setPreorderOpen] = useState(false);
-  const [promotionOpen, setPromotionOpen] = useState(false);
 
   const bookingRef = useRef(null);
   const tablesRef = useRef(null);
@@ -124,7 +111,8 @@ function ReservationPage({
 
   const timeSlots = useMemo(() => {
     if (!settings) return [];
-    let slots = buildTimeSlots(settings.open_time, settings.close_time, 120);
+    const duration = form.holdDurationMinutes || 60;
+    let slots = buildTimeSlots(settings.open_time, settings.close_time, duration);
     if (form.date === todayString()) {
       const now = new Date();
       slots = slots.filter((slot) => {
@@ -135,13 +123,13 @@ function ReservationPage({
       });
     }
     return slots;
-  }, [settings, form.date]);
+  }, [settings, form.date, form.holdDurationMinutes]);
 
   const isKitchenView = form.selectedArea === KITCHEN_VIEW_AREA_NAME;
 
   /* Fetch availability whenever the key selection changes (debounced). */
   useEffect(() => {
-    if (isKitchenView || !form.date || !form.time) {
+    if (!form.date || !form.time) {
       setTables([]);
       setSelectedTableId(null);
       return undefined;
@@ -153,7 +141,7 @@ function ReservationPage({
       getAvailability({
         date: form.date,
         time: form.time,
-        durationMinutes: 120,
+        durationMinutes: form.holdDurationMinutes,
         guestCount: form.guestCount,
         areaType: null,
         eventType: form.diningPurpose,
@@ -180,7 +168,7 @@ function ReservationPage({
       active = false;
       clearTimeout(handle);
     };
-  }, [form.date, form.time, form.guestCount, form.diningPurpose, isKitchenView]);
+  }, [form.date, form.time, form.guestCount, form.diningPurpose, form.holdDurationMinutes]);
 
   const selectedTables = useMemo(
     () => tables.filter((t) => t.table_id === selectedTableId),
@@ -213,13 +201,6 @@ function ReservationPage({
 
   const canSubmit = useMemo(() => {
     if (!detailsValid) return false;
-    if (isKitchenView) {
-      return (
-        form.guestCount >= 1 &&
-        form.guestCount <= KITCHEN_VIEW_COUNTER_CAPACITY &&
-        Boolean(form.preferredAreaId)
-      );
-    }
     if (!selectedTableId) return false;
     if (totalCapacity < form.guestCount) return false;
     return true;
@@ -232,8 +213,7 @@ function ReservationPage({
     totalCapacity,
   ]);
 
-  const summaryVisible =
-    step === "tables" && (isKitchenView || selectedTableId !== null);
+  const summaryVisible = step === "tables" && selectedTableId !== null;
 
   const scrollToBooking = () => {
     bookingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -269,41 +249,24 @@ function ReservationPage({
   };
   const handleEditDetails = () => transitionTo("details", () => setDetailsReviewing(false));
 
-  /* --- promotion --- */
-  const handleOpenPromotion = () => setPromotionOpen(true);
-  const handleApplyPromotion = (promo) => setPromotion(promo);
-  const handleClearPromotion = () => setPromotion(null);
-  const handleSignUp = () => {
-    setPromotionOpen(false);
-    onRequireAuth?.();
-  };
-
-  /* --- preorder --- */
-  const handleApplyPreorder = (items) => setPreorderItems(items);
-
   const buildSpecialRequest = () => {
     const purpose = DINING_PURPOSES.find((p) => p.id === form.diningPurpose);
     const parts = [`[Dining Purpose: ${purpose?.label || "Casual Dinner"}]`];
-    if (purpose?.event) {
-      if (form.eventTitle.trim()) parts.push(`[Event Title: ${form.eventTitle.trim()}]`);
-      if (form.cakeRequest.trim()) parts.push(`[Cake Request: ${form.cakeRequest.trim()}]`);
-      if (form.decoration.trim()) parts.push(`[Decoration: ${form.decoration.trim()}]`);
-      if (form.equipment.trim()) parts.push(`[Equipment: ${form.equipment.trim()}]`);
-    }
-    if (promotion) parts.push(`[Promotion: ${promotion.label}]`);
     if (!isAuthenticated) {
       parts.push(`[Guest Name: ${form.fullName.trim()}]`);
       parts.push(`[Guest Email: ${form.email.trim()}]`);
       parts.push(`[Guest Phone: ${form.phone.trim()}]`);
     }
-    if (form.specialRequest.trim()) parts.push(form.specialRequest.trim());
     parts.push(`[Hold: ${form.holdDurationMinutes}m]`);
+    if (form.notes && form.notes.trim()) {
+      parts.push(`[Notes: ${form.notes.trim()}]`);
+    }
     return parts.join("\n").slice(0, 1000);
   };
 
   const handleSubmit = async () => {
     if (!canSubmit || submitting) return;
-    if (!isKitchenView && !selectedTableId) {
+    if (!selectedTableId) {
       setError("Please select a table before continuing.");
       return;
     }
@@ -316,23 +279,37 @@ function ReservationPage({
     const payload = {
       date: form.date,
       time: form.time,
-      durationMinutes: 120,
+      durationMinutes: form.holdDurationMinutes,
       holdDurationMinutes: form.holdDurationMinutes,
       guest_count: form.guestCount,
       preferred_area_id: preferredAreaId,
-      table_ids: isKitchenView ? [] : selectedTableId ? [selectedTableId] : [],
+      table_ids: selectedTableId ? [selectedTableId] : [],
       dining_purpose: DINING_PURPOSES.find((p) => p.id === form.diningPurpose)?.label,
       contact_name: form.fullName.trim(),
       contact_email: form.email.trim(),
       contact_phone: form.phone.trim(),
       special_request: buildSpecialRequest(),
-      preorderItems: preorderItems,
     };
 
     try {
       const userId = isAuthenticated ? currentUser?.userId ?? currentUser?.id : null;
       const res = await createReservation(payload, userId);
       if (res?.reservation) {
+        try {
+          const existing = JSON.parse(localStorage.getItem('customer_reservations')) || [];
+          existing.push({
+            id: `#${String(res.reservation.reservation_id).padStart(6, '0')}`,
+            date: form.date,
+            time: form.time,
+            status: "Pending",
+            timestamp: new Date().toISOString()
+          });
+          localStorage.setItem('customer_reservations', JSON.stringify(existing));
+          window.dispatchEvent(new Event('reservation_added'));
+        } catch (e) {
+          // ignore localStorage errors
+        }
+
         setSuccessReservation(res.reservation);
         setStep("success");
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -346,7 +323,7 @@ function ReservationPage({
         getAvailability({
           date: form.date,
           time: form.time,
-          durationMinutes: 120,
+          durationMinutes: form.holdDurationMinutes,
           guestCount: form.guestCount,
           areaType: null,
         })
@@ -370,8 +347,6 @@ function ReservationPage({
           <div className="rzv-step rzv-step--enter">
             <ReservationSuccessPanel
               reservation={successReservation}
-              promotion={promotion}
-              preorderItems={preorderItems}
               onReturnHome={() => onNavigate?.("home")}
               onViewReservation={() => onNavigate?.("myReservations")}
             />
@@ -454,45 +429,30 @@ function ReservationPage({
                 </span>
               </div>
 
-              {isKitchenView ? (
-                <div className="rzv-kitchen-seat">
-                  <h3 className="rzv-card__title">Kitchen View counter</h3>
-                  <p className="rzv-card__hint">
-                    You are booking {form.guestCount} seat{form.guestCount === 1 ? "" : "s"} at the
-                    open-kitchen counter. No table number is assigned — seats are managed as a
-                    shared counter.
-                  </p>
-                </div>
-              ) : (
-                <TableBoard
-                  tables={tables}
-                  selectedTableId={selectedTableId}
-                  onSelectTable={handleSelectTable}
-                  loading={loadingAvailability}
-                  guestCount={form.guestCount}
-                  membershipTier={membershipTier}
-                  isAuthenticated={isAuthenticated}
-                  onNavigateLogin={() => onNavigate("login")}
-                  onNavigateRegister={onRequireAuth}
-                />
-              )}
+              <TableBoard
+                tables={tables}
+                selectedTableId={selectedTableId}
+                onSelectTable={handleSelectTable}
+                loading={loadingAvailability}
+                guestCount={form.guestCount}
+                membershipTier={membershipTier}
+                isAuthenticated={isAuthenticated}
+                onNavigateLogin={() => onNavigate("login")}
+                onNavigateRegister={onRequireAuth}
+              />
 
               {summaryVisible ? (
                 <div className="rzv-reveal">
                   <ReservationSummary
                     form={form}
+                    setField={setField}
                     selectedTables={selectedTables}
                     isKitchenView={isKitchenView}
-                    promotion={promotion}
-                    preorderItems={preorderItems}
                     error={error}
                     submitting={submitting}
                     canSubmit={canSubmit}
                     onSubmit={handleSubmit}
                     onEditDetails={handleEditDetails}
-                    onOpenPreorder={() => setPreorderOpen(true)}
-                    onOpenPromotion={handleOpenPromotion}
-                    onClearPromotion={handleClearPromotion}
                   />
                 </div>
               ) : (
@@ -506,22 +466,6 @@ function ReservationPage({
           </div>
         ) : null}
       </section>
-
-      {/* Overlays */}
-      <PreorderModal
-        open={preorderOpen}
-        initialItems={preorderItems}
-        onClose={() => setPreorderOpen(false)}
-        onApply={handleApplyPreorder}
-      />
-      <PromotionModal
-        open={promotionOpen}
-        isAuthenticated={isAuthenticated}
-        current={promotion}
-        onClose={() => setPromotionOpen(false)}
-        onApply={handleApplyPromotion}
-        onSignUp={handleSignUp}
-      />
     </main>
   );
 }

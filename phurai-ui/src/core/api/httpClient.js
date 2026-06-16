@@ -156,3 +156,11 @@ export function profileRequestHeaders(userId, extra = {}) {
   }
   return headers;
 }
+
+export async function apiGet(path, options = {}) {
+  return request(path, { ...options, method: "GET", headers: { ...authHeaders(), ...(options.headers || {}) } });
+}
+
+export async function apiPatch(path, body, options = {}) {
+  return request(path, { ...options, method: "PATCH", body: body ? JSON.stringify(body) : undefined, headers: { ...authHeaders(), ...(options.headers || {}) } });
+}

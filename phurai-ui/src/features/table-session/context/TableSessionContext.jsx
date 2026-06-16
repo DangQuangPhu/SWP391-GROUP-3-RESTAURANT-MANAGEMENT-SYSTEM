@@ -1,0 +1,164 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { fetchActiveQrSession, validateQrSession } from "../services/qrSessionApi.js";
+import {
+  clearStoredTableSession,
+  loadStoredTableSession,
+  persistTableSession,
+} from "../utils/sessionStorage.js";
+
+const TableSessionContext = createContext(null);
+
+function normalizeSession(session) {
+  if (!session?.table_id || !session?.session_id) return null;
+
+  return {
+    table_id: Number(session.table_id),
+    session_id: Number(session.session_id),
+    table_number: session.table_number ?? null,
+    area_name: session.area_name ?? null,
+    token: session.token ?? null,
+    session_status: session.session_status ?? "Active",
+  };
+}
+
+export function TableSessionProvider({
+  children,
+  userId = null,
+  isCustomer = false,
+}) {
+  const [session, setSession] = useState(() => {
+    const stored = loadStoredTableSession();
+    return stored;
+  });
+  const [hasActiveSession, setHasActiveSession] = useState(() => {
+    const stored = loadStoredTableSession();
+    return Boolean(stored?.table_id && stored?.session_id);
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const applySession = useCallback((nextSession, activeFlag = null) => {
+    const normalized = normalizeSession(nextSession);
+    setSession(normalized);
+    setHasActiveSession(
+      activeFlag === null ? Boolean(normalized) : Boolean(activeFlag)
+    );
+    if (normalized) {
+      persistTableSession(normalized);
+    } else {
+      clearStoredTableSession();
+    }
+    return normalized;
+  }, []);
+
+  const clearSession = useCallback(() => {
+    setSession(null);
+    setHasActiveSession(false);
+    setError(null);
+    clearStoredTableSession();
+  }, []);
+
+  const refreshActiveSession = useCallback(async () => {
+    if (!userId || !isCustomer) {
+      return null;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await fetchActiveQrSession(userId);
+      const normalized = applySession(
+        result?.session ?? null,
+        result?.hasActiveSession ?? Boolean(result?.session)
+      );
+      return normalized;
+    } catch (err) {
+      setError(err.message || "Could not load your table session.");
+      if (err.status === 404) {
+        applySession(null, false);
+      }
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, isCustomer, applySession]);
+
+  const bindFromQuery = useCallback(
+    async ({ tableId, sessionId }) => {
+      const parsedTableId = Number(tableId);
+      const parsedSessionId = Number(sessionId);
+
+      if (!Number.isFinite(parsedTableId) || !Number.isFinite(parsedSessionId)) {
+        setError("Invalid table session link.");
+        return null;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const result = await validateQrSession(parsedTableId, parsedSessionId);
+        return applySession(result?.session ?? null);
+      } catch (err) {
+        setError(err.message || "This table session is not available.");
+        clearSession();
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [applySession, clearSession]
+  );
+
+  useEffect(() => {
+    if (!userId || !isCustomer) {
+      return;
+    }
+    refreshActiveSession();
+  }, [userId, isCustomer, refreshActiveSession]);
+
+  const value = useMemo(
+    () => ({
+      session,
+      hasActiveSession,
+      loading,
+      error,
+      refreshActiveSession,
+      bindFromQuery,
+      clearSession,
+      setSession: applySession,
+    }),
+    [
+      session,
+      hasActiveSession,
+      loading,
+      error,
+      refreshActiveSession,
+      bindFromQuery,
+      clearSession,
+      applySession,
+    ]
+  );
+
+  return (
+    <TableSessionContext.Provider value={value}>
+      {children}
+    </TableSessionContext.Provider>
+  );
+}
+
+export function useTableSession() {
+  const ctx = useContext(TableSessionContext);
+  if (!ctx) {
+    throw new Error("useTableSession must be used within TableSessionProvider");
+  }
+  return ctx;
+}

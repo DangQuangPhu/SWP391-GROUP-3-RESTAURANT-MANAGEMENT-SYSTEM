@@ -54,7 +54,7 @@
   width: 100%;
   min-height: 100vh;
   padding-top: var(--menu-navbar-height);
-  background: var(--menu-bg);
+  background: #f3f4f6;
   color: var(--menu-text);
   font-family: 'Hanken Grotesk', system-ui, sans-serif;
   position: relative;

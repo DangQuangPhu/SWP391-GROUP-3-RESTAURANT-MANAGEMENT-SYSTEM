@@ -8,16 +8,19 @@ import {
 } from "../StaffUI.jsx";
 import { DEMO_NOTICE, ORDER_STATUS_META } from "../../data/staffDashboardMockData.js";
 import { formatVND } from "@/utils/formatCurrency.js";
+import { asArray } from "@/utils/asArray.js";
 
 function ActiveOrdersSection({ orders, setOrders, dataSource, toast }) {
+  const orderList = asArray(orders);
+
   const activeOrders = useMemo(
-    () => orders.filter((o) => o.kitchen_status !== "done" && o.status !== "served"),
-    [orders]
+    () => orderList.filter((o) => o.kitchen_status !== "done" && o.status !== "served"),
+    [orderList]
   );
 
   const markServed = (order) => {
     setOrders((prev) =>
-      prev.map((x) =>
+      asArray(prev).map((x) =>
         x.order_id === order.order_id
           ? { ...x, status: "served", kitchen_status: "done" }
           : x

@@ -7,6 +7,7 @@ import {
   NotConnectedNote,
 } from "../StaffUI.jsx";
 import { DEMO_NOTICE, ORDER_STATUS_META } from "../../data/staffDashboardMockData.js";
+import { asArray } from "@/utils/asArray.js";
 
 const KITCHEN_FLOW = { queued: "cooking", cooking: "ready", ready: "done" };
 const KITCHEN_NEXT_LABEL = {
@@ -16,18 +17,20 @@ const KITCHEN_NEXT_LABEL = {
 };
 
 function KitchenDisplaySection({ tickets, setTickets, dataSource, toast }) {
+  const ticketList = asArray(tickets);
+
   const lanes = useMemo(() => {
-    const queued = tickets.filter((t) => t.kitchen_status === "queued");
-    const cooking = tickets.filter((t) => t.kitchen_status === "cooking");
-    const ready = tickets.filter((t) => t.kitchen_status === "ready");
+    const queued = ticketList.filter((t) => t.kitchen_status === "queued");
+    const cooking = ticketList.filter((t) => t.kitchen_status === "cooking");
+    const ready = ticketList.filter((t) => t.kitchen_status === "ready");
     return { queued, cooking, ready };
-  }, [tickets]);
+  }, [ticketList]);
 
   const advance = (ticket) => {
     const next = KITCHEN_FLOW[ticket.kitchen_status];
     if (!next) return;
     setTickets((prev) =>
-      prev.map((x) =>
+      asArray(prev).map((x) =>
         x.ticket_id === ticket.ticket_id ? { ...x, kitchen_status: next } : x
       )
     );
@@ -62,7 +65,7 @@ function KitchenDisplaySection({ tickets, setTickets, dataSource, toast }) {
                 </StatusBadge>
               </header>
               <ul className="sfx-kdsticket__items">
-                {t.items.map((item, idx) => (
+                {asArray(t.items).map((item, idx) => (
                   <li key={`${t.ticket_id}-${idx}`}>
                     <span>{item.qty}×</span> {item.name}
                   </li>

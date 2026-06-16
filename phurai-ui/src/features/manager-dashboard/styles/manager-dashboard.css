@@ -11,9 +11,9 @@
   --sfx-side-line: rgba(255, 255, 255, 0.08);
   --sfx-side-text: #cdc3b3;
   --sfx-side-muted: #8c8170;
-  --sfx-bg: #f7f3ec;
+  --sfx-bg: #f3f4f6;
   --sfx-card: #ffffff;
-  --sfx-card-2: #fbfaf7;
+  --sfx-card-2: #f9fafb;
   --sfx-text: #1f1a17;
   --sfx-muted: #8a8175;
   --sfx-gold: #9f8655;
@@ -224,8 +224,7 @@ a.sfx-nav__item.is-active:visited { color: #fff; }
   justify-content: space-between;
   gap: 18px;
   padding: 14px 30px;
-  background: rgba(247, 243, 236, 0.82);
-  backdrop-filter: saturate(140%) blur(10px);
+  background: #ffffff;
   border-bottom: 1px solid var(--sfx-border);
 }
 .sfx-header__left { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -431,16 +430,28 @@ a.sfx-nav__item.is-active:visited { color: #fff; }
 .sfx-kpi__suffix { font-size: 14px; color: var(--sfx-muted); font-weight: 600; }
 .sfx-kpi__label { font-size: 12.5px; color: var(--sfx-muted); margin: 4px 0 0; }
 
-.sfx-card--overflow-visible {
+.sfx-card--overflow-visible,
+.sfx-card--overflow-visible .sfx-card__body {
   overflow: visible;
 }
 
 /* ---------- Chart ---------- */
-.sfx-chart__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
-.sfx-chart-anchor { position: relative; }
+.sfx-chart__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  overflow: visible;
+}
+.sfx-chart-anchor {
+  position: relative;
+  overflow: visible;
+}
 .sfx-chart__actions {
   flex-shrink: 0;
   align-self: flex-start;
+  overflow: visible;
 }
 .sfx-chart__picker-anchor {
   position: relative;
@@ -448,23 +459,28 @@ a.sfx-nav__item.is-active:visited { color: #fff; }
   width: 36px;
   height: 36px;
   flex-shrink: 0;
+  z-index: 2;
+}
+.sfx-chart__picker-anchor.is-open {
+  z-index: 1000;
 }
 .sfx-dp-popover-shell {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 50;
+  z-index: 999;
   width: max-content;
   max-width: min(920px, calc(100vw - 48px));
 }
 .sfx-dp-popover-shell .sfx-dp-popover {
   position: relative;
+  z-index: 999;
   display: inline-flex;
   flex-direction: column;
   align-items: stretch;
   width: max-content;
   max-width: 100%;
-  background: var(--sfx-card);
+  background: #ffffff;
   border: 1px solid var(--sfx-border-soft);
   border-radius: 18px;
   box-shadow: 0 24px 70px rgba(20, 16, 12, 0.28);

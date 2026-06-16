@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   SectionHead,
+  ContentPanel,
   StatusBadge,
   Button,
   EmptyState,
@@ -36,33 +37,39 @@ function OrdersSection({ orders, setOrders, toast }) {
     setSearchParams({ tab: nextTab }, { replace: true });
   };
 
+  const orderList = Array.isArray(orders) ? orders : [];
+
   const filtered = useMemo(() => {
     switch (tab) {
       case "kitchen":
-        return orders.filter((o) => ["queued", "cooking"].includes(o.kitchen_status));
+        return orderList.filter((o) => ["queued", "cooking"].includes(o.kitchen_status));
       case "ready":
-        return orders.filter((o) => o.kitchen_status === "ready");
+        return orderList.filter((o) => o.kitchen_status === "ready");
       case "history":
-        return orders.filter((o) => ["done"].includes(o.kitchen_status));
+        return orderList.filter((o) => ["done"].includes(o.kitchen_status));
       default:
-        return orders.filter((o) => o.kitchen_status !== "done");
+        return orderList.filter((o) => o.kitchen_status !== "done");
     }
-  }, [orders, tab]);
+  }, [orderList, tab]);
 
   const advance = (o) => {
     const next = KITCHEN_FLOW[o.kitchen_status];
     if (!next) return;
     const nextStatus = next === "done" ? "served" : o.status;
-    setOrders((prev) =>
-      prev.map((x) => (x.order_id === o.order_id ? { ...x, kitchen_status: next, status: nextStatus } : x))
-    );
+    setOrders((prev) => {
+      const list = Array.isArray(prev) ? prev : [];
+      return list.map((x) =>
+        x.order_id === o.order_id ? { ...x, kitchen_status: next, status: nextStatus } : x
+      );
+    });
     toast(`${o.order_number} → ${ORDER_STATUS_META[next].label} (local only — order API not connected)`, "info");
   };
 
   return (
     <div className="sfx-stack">
-      <SectionHead title="Orders & Kitchen" subtitle={`${orders.length} orders on the floor`} />
+      <SectionHead title="Orders & Kitchen" subtitle={`${orderList.length} orders on the floor`} />
 
+      <ContentPanel compact>
       <div className="sfx-tabs" role="tablist" aria-label="Order lanes">
         {TABS.map((t) => (
           <button
@@ -110,6 +117,7 @@ function OrdersSection({ orders, setOrders, toast }) {
       {filtered.length === 0 ? (
         <EmptyState icon="receipt" title="No orders in this lane" hint="Orders will appear here as they move through the kitchen." />
       ) : null}
+      </ContentPanel>
     </div>
   );
 }

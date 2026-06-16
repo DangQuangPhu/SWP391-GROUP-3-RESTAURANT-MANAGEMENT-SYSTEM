@@ -1,5 +1,4 @@
 import { DINING_PURPOSES } from "../data/floorPlanConfig.js";
-import { formatVND } from "@/utils/formatCurrency";
 
 function formatDate(dateStr) {
   if (!dateStr) return "—";
@@ -22,37 +21,24 @@ function formatTime(timeStr) {
 }
 
 /**
- * Final review of the booking. Surfaces every detail plus the two soft add-ons
- * (Promotion + Order in advance) before the guest confirms.
+ * Final review of the booking before the guest confirms.
  */
 function ReservationSummary({
   form,
+  setField,
   selectedTables,
   isKitchenView = false,
-  promotion,
-  preorderItems = [],
   error,
   submitting,
   canSubmit,
   onSubmit,
   onEditDetails,
-  onOpenPreorder,
-  onOpenPromotion,
-  onClearPromotion,
 }) {
   const purpose = DINING_PURPOSES.find((p) => p.id === form.diningPurpose);
   const totalCapacity = selectedTables.reduce((sum, t) => sum + Number(t.capacity), 0);
-  const tableLabels = isKitchenView
-    ? `Kitchen View counter · ${form.guestCount} seat(s)`
-    : selectedTables.length > 0
-      ? selectedTables.map((t) => t.display_label).join(", ")
-      : "Not selected";
-
-  const preorderCount = preorderItems.reduce((sum, i) => sum + i.quantity, 0);
-  const preorderTotal = preorderItems.reduce(
-    (sum, i) => sum + i.quantity * Number(i.price || 0),
-    0
-  );
+  const tableLabels = selectedTables.length > 0
+    ? selectedTables.map((t) => t.display_label).join(", ")
+    : "Not selected";
 
   let holdExpiresAt = "—";
   if (form.date && form.time) {
@@ -61,6 +47,9 @@ function ReservationSummary({
     const expireDate = new Date(y, m - 1, d, hh, mm + form.holdDurationMinutes);
     holdExpiresAt = formatTime(`${expireDate.getHours()}:${expireDate.getMinutes()}`);
   }
+
+  const showVatWarning =
+    form.holdDurationMinutes === 45 || form.holdDurationMinutes === 60;
 
   return (
     <div className="rzv-card rzv-summary">
@@ -79,7 +68,7 @@ function ReservationSummary({
           <span className="rzv-summary__value">{formatTime(form.time)}</span>
         </div>
         <div className="rzv-summary__row">
-          <span className="rzv-summary__label">{isKitchenView ? "Seats" : "Guests"}</span>
+          <span className="rzv-summary__label">Guests</span>
           <span className="rzv-summary__value">{form.guestCount}</span>
         </div>
         <div className="rzv-summary__row">
@@ -87,7 +76,7 @@ function ReservationSummary({
           <span className="rzv-summary__value">{purpose?.label || "—"}</span>
         </div>
         <div className="rzv-summary__row">
-          <span className="rzv-summary__label">Table hold time</span>
+          <span className="rzv-summary__label">Duration</span>
           <span className="rzv-summary__value">{form.holdDurationMinutes} minutes</span>
         </div>
         <div className="rzv-summary__row">
@@ -95,66 +84,41 @@ function ReservationSummary({
           <span className="rzv-summary__value">{holdExpiresAt}</span>
         </div>
         <div className="rzv-summary__row">
-          <span className="rzv-summary__label">{isKitchenView ? "Seating" : "Table"}</span>
+          <span className="rzv-summary__label">Table</span>
           <span className="rzv-summary__value">
             {tableLabels}
-            {!isKitchenView && selectedTables.length > 0 ? ` · ${totalCapacity} seats` : ""}
+            {selectedTables.length > 0 ? ` · ${totalCapacity} seats` : ""}
           </span>
+        </div>
+        <div className="rzv-field" style={{ gridColumn: "1 / -1", marginTop: 8 }}>
+          <label className="rzv-field__label" htmlFor="rzv-notes">
+            Special Requests / Notes
+          </label>
+          <textarea
+            id="rzv-notes"
+            className="rzv-input"
+            placeholder="Any allergies, special occasions, or other requests?"
+            rows={3}
+            value={form.notes || ""}
+            onChange={(e) => setField("notes", e.target.value)}
+          />
         </div>
       </div>
-
-      {/* Promotion */}
-      <div className="rzv-summary__addon">
-        <div className="rzv-summary__addon-info">
-          <span className="rzv-summary__addon-title">
-            <span className="rzv-summary__addon-icon" aria-hidden>✦</span> Promotion
-          </span>
-          <span className="rzv-summary__addon-sub">
-            {promotion ? promotion.label : "Apply a member promotion"}
-          </span>
-        </div>
-        {promotion ? (
-          <button type="button" className="rzv-chiplink" onClick={onClearPromotion}>
-            Remove
-          </button>
-        ) : (
-          <button type="button" className="rzv-chiplink" onClick={onOpenPromotion}>
-            Add
-          </button>
-        )}
-      </div>
-
-      {/* Order in advance */}
-      <div className="rzv-summary__addon">
-        <div className="rzv-summary__addon-info">
-          <span className="rzv-summary__addon-title">
-            <span className="rzv-summary__addon-icon" aria-hidden>☖</span> Order in advance
-          </span>
-          <span className="rzv-summary__addon-sub">
-            {preorderCount > 0
-              ? `${preorderCount} item${preorderCount === 1 ? "" : "s"} · ${formatVND(preorderTotal)}`
-              : "Pre-select dishes for your table"}
-          </span>
-        </div>
-        <button type="button" className="rzv-chiplink" onClick={onOpenPreorder}>
-          {preorderCount > 0 ? "Edit" : "Add dishes"}
-        </button>
-      </div>
-
-      {form.specialRequest?.trim() ? (
-        <div className="rzv-summary__note">
-          <span className="rzv-summary__label">Special request</span>
-          <p className="rzv-summary__note-text">{form.specialRequest.trim()}</p>
-        </div>
-      ) : null}
 
       {error ? <div className="rzv-error" style={{ marginTop: 16 }}>{error}</div> : null}
 
-      <div className="rzv-summary__actions">
+      {showVatWarning ? (
+        <div className="rzv-alert rzv-alert--surcharge" role="status" style={{ marginTop: 16 }}>
+          Note: Reservations for 45 minutes or 1 hour are subject to an additional premium
+          VAT/surcharge fee.
+        </div>
+      ) : null}
+
+      <div className="summary-actions-footer">
         {onEditDetails ? (
           <button
             type="button"
-            className="rzv-btn rzv-btn--ghost"
+            className="btn-edit-details"
             onClick={onEditDetails}
             disabled={submitting}
           >
@@ -163,7 +127,7 @@ function ReservationSummary({
         ) : null}
         <button
           type="button"
-          className="rzv-submit"
+          className="btn-confirm-reservation"
           onClick={onSubmit}
           disabled={!canSubmit || submitting}
         >

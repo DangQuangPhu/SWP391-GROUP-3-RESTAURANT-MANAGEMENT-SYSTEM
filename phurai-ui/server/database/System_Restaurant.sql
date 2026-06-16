@@ -271,7 +271,7 @@ CREATE TABLE dbo.Reservations (
     CONSTRAINT CK_Reservations_guest_count CHECK (guest_count > 0),
     CONSTRAINT CK_Reservations_time CHECK (reservation_end_at > reservation_start_at),
     CONSTRAINT CK_Reservations_status CHECK (reservation_status IN
-        (N'Pending', N'Confirmed', N'Checked In', N'Completed', N'Cancelled', N'No Show')),
+        (N'Pending', N'Confirmed', N'Checked In', N'Completed', N'Cancelled', N'No Show', N'Rejected', N'Check-in Rejected')),
     CONSTRAINT CK_Reservations_source CHECK (reservation_source IN (N'Online', N'Walk-in', N'Phone'))
 );
 GO
@@ -285,6 +285,19 @@ CREATE TABLE dbo.ReservationTables (
     CONSTRAINT FK_ReservationTables_Reservations FOREIGN KEY (reservation_id) REFERENCES dbo.Reservations(reservation_id) ON DELETE CASCADE,
     CONSTRAINT FK_ReservationTables_RestaurantTables FOREIGN KEY (table_id) REFERENCES dbo.RestaurantTables(table_id),
     CONSTRAINT FK_ReservationTables_AssignedBy FOREIGN KEY (assigned_by_staff_id) REFERENCES dbo.UserAccounts(user_id)
+);
+GO
+
+CREATE TABLE dbo.ReservationHistory (
+    history_id      INT IDENTITY(1,1) NOT NULL,
+    reservation_id  INT NOT NULL,
+    action_name     NVARCHAR(100) NOT NULL,
+    actor_user_id   INT NULL,
+    notes           NVARCHAR(MAX) NULL,
+    created_at      DATETIME2(0) NOT NULL CONSTRAINT DF_ReservationHistory_created_at DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_ReservationHistory PRIMARY KEY (history_id),
+    CONSTRAINT FK_ReservationHistory_Reservations FOREIGN KEY (reservation_id) REFERENCES dbo.Reservations(reservation_id) ON DELETE CASCADE,
+    CONSTRAINT FK_ReservationHistory_Actor FOREIGN KEY (actor_user_id) REFERENCES dbo.UserAccounts(user_id)
 );
 GO
 
@@ -624,6 +637,43 @@ CREATE TABLE dbo.StaffSchedules (
     CONSTRAINT CK_StaffSchedules_status CHECK (attendance_status IN (N'Scheduled', N'Present', N'Absent', N'On Leave'))
 );
 GO
+-- =================================================================
+-- 1. BỔ SUNG BẢNG SHIFT_LOG (Ghi nhận giờ làm việc thực tế của Staff)
+-- =================================================================
+CREATE TABLE dbo.ShiftLogs (
+    log_id INT IDENTITY(1,1) NOT NULL,
+    staff_user_id INT NOT NULL, -- Tham chiếu đến nhân viên (UserAccounts)
+    shift_id TINYINT NULL,      -- Ca làm việc đăng ký (Shifts)
+    check_in_time DATETIME2(0) NOT NULL CONSTRAINT DF_ShiftLogs_checkin DEFAULT SYSDATETIME(),
+    check_out_time DATETIME2(0) NULL,
+    total_hours DECIMAL(5,2) NULL, -- Tính toán số giờ làm
+    status NVARCHAR(20) NOT NULL CONSTRAINT DF_ShiftLogs_status DEFAULT N'Active',
+    
+    CONSTRAINT PK_ShiftLogs PRIMARY KEY (log_id),
+    CONSTRAINT FK_ShiftLogs_Staff FOREIGN KEY (staff_user_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE CASCADE,
+    CONSTRAINT FK_ShiftLogs_Shift FOREIGN KEY (shift_id) REFERENCES dbo.Shifts(shift_id),
+    CONSTRAINT CK_ShiftLogs_status CHECK (status IN (N'Active', N'Completed'))
+);
+GO
+
+-- =================================================================
+-- 2. BỔ SUNG BẢNG BILL_SPLIT (Xử lý nghiệp vụ chia tiền thanh toán)
+-- =================================================================
+CREATE TABLE dbo.BillSplits (
+    split_id INT IDENTITY(1,1) NOT NULL,
+    order_id INT NOT NULL, -- Tham chiếu đến Order (Bill gốc)
+    split_name NVARCHAR(50) NULL, -- Tên người trả (vd: "Khách A", "Khách B")
+    split_amount DECIMAL(12,2) NOT NULL,
+    payment_status NVARCHAR(20) NOT NULL CONSTRAINT DF_BillSplits_status DEFAULT N'Pending',
+    paid_at DATETIME2(0) NULL,
+    created_at DATETIME2(0) NOT NULL CONSTRAINT DF_BillSplits_created DEFAULT SYSDATETIME(),
+    
+    CONSTRAINT PK_BillSplits PRIMARY KEY (split_id),
+    CONSTRAINT FK_BillSplits_Order FOREIGN KEY (order_id) REFERENCES dbo.Orders(order_id) ON DELETE CASCADE,
+    CONSTRAINT CK_BillSplits_amount CHECK (split_amount > 0),
+    CONSTRAINT CK_BillSplits_status CHECK (payment_status IN (N'Pending', N'Paid', N'Cancelled'))
+);
+GO
 
 -- =============================================================
 -- INDEXES
@@ -648,6 +698,9 @@ CREATE INDEX IX_CustomerReviews_order ON dbo.CustomerReviews(order_id);
 CREATE INDEX IX_Notifications_user_read ON dbo.Notifications(user_id, is_read);
 CREATE INDEX IX_OtpTokens_email_purpose_created ON dbo.OtpTokens(email, purpose, created_at DESC);
 CREATE INDEX IX_OtpTokens_user_purpose_created ON dbo.OtpTokens(user_id, purpose, created_at DESC);
+CREATE INDEX IX_ShiftLogs_staff_time ON dbo.ShiftLogs(staff_user_id, check_in_time);
+CREATE INDEX IX_BillSplits_order_status ON dbo.BillSplits(order_id, payment_status);
+
 GO
 
 -- =============================================================
@@ -761,6 +814,7 @@ INSERT INTO dbo.RestaurantAreas (area_id, area_name, area_type, description) VAL
 (5, N'Private Room',     N'Private', N'Private dining room for business dinners, birthdays and celebrations'),
 (6, N'Kitchen View',     N'Bar',     N'Chef counter seating near the open kitchen'),
 (7, N'Rooftop Outdoor',  N'Outdoor', N'Outdoor rooftop seating with open-air dining experience');
+
 SET IDENTITY_INSERT dbo.RestaurantAreas OFF;
 GO
 
@@ -1405,7 +1459,10 @@ ALTER TABLE dbo.RestaurantTables
 ADD is_counter BIT NOT NULL CONSTRAINT DF_RestaurantTables_is_counter DEFAULT 0;
 GO
 
-
+UPDATE dbo.RestaurantTables
+SET is_counter = 1
+WHERE area_id IN (6, 8); -- Bạn hãy kiểm tra lại area_id của Wine Bar trong DB của bạn nhé
+GO
 -- Reset DB
 
 USE master;

@@ -51,7 +51,7 @@
   --rzv-disabled: #d8d2c8;
   --rzv-line: rgba(31, 26, 23, 0.12);
 
-  background: var(--rzv-bg);
+  background: #f3f4f6;
   color: var(--rzv-text);
   font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
   min-height: 100vh;
@@ -64,8 +64,8 @@
   box-sizing: border-box;
 }
 
-.rzv-serif {
-  font-family: "Cormorant Garamond", "Playfair Display", Georgia, serif;
+.rzv-myres__title.rzv-serif {
+  font-family: var(--font-heading);
 }
 
 /* ---------- Hero ---------- */
@@ -363,6 +363,20 @@
   border-radius: 10px;
   padding: 10px 12px;
   line-height: 1.5;
+}
+
+.rzv-alert {
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.rzv-alert--surcharge {
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
 }
 
 .rzv-autofill {
@@ -1728,13 +1742,44 @@
   line-height: 1.55;
   white-space: pre-line;
 }
-.rzv-summary__actions {
+.summary-actions-footer {
   display: flex;
+  justify-content: flex-end;
+  align-items: center;
   gap: 12px;
-  margin-top: 22px;
+  margin-top: 24px;
+  width: 100%;
 }
-.rzv-summary__actions .rzv-btn { flex-shrink: 0; }
-.rzv-summary__actions .rzv-submit { flex: 1; }
+
+.btn-edit-details,
+.btn-confirm-reservation {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 10px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.btn-edit-details {
+  background-color: transparent;
+  border: 1px solid #dcd1c4;
+  color: #4a3e3d;
+}
+
+.btn-confirm-reservation {
+  background-color: #111111;
+  border: none;
+  color: #ffffff;
+  min-width: 180px;
+}
 
 /* ---------- Modal overlay (preorder + promotion) ---------- */
 .rzv-modal {
@@ -1988,7 +2033,7 @@
   .rzv-booking { padding: 70px 16px 90px; }
   .rzv-details__ready { justify-content: stretch; }
   .rzv-details__done { width: 100%; }
-  .rzv-summary__actions { flex-direction: column; }
+  .summary-actions-footer { flex-direction: column; }
   .rzv-success__actions .rzv-btn { width: 100%; }
   .rzv-modal { padding: 0; }
   .rzv-modal__panel { max-height: 100vh; border-radius: 0; }

@@ -1,7 +1,75 @@
 import express from "express";
 import pool from "../db.js";
+import { resolveUserId, requireUserId } from "../middleware/authMiddleware.js";
+import {
+  listStaffTables,
+  checkInTable,
+  resetTable,
+  getActiveOccupiedOrders,
+  addOrderItem,
+  updateOrderItemStatus,
+  voidOrderItem,
+  listStaffMenuDishes,
+  getTableBill,
+  applyTableVoucher,
+  checkoutTablePayment,
+  voidTableBill,
+  splitOrderBill,
+  payBillSplit,
+  getKdsReadyQueue,
+  getKdsDelayedItems,
+  getShiftReportSummary,
+  getShiftReportAudit,
+  shiftCheckIn,
+  shiftCheckOut,
+} from "../controllers/staffController.js";
+import { getStaffShiftMapping } from "../controllers/shiftMappingController.js";
+import {
+  getStaffReservations,
+  checkinReservation,
+  rejectReservation,
+} from "../controllers/staffReservationController.js";
 
 const router = express.Router();
+
+router.get("/tables", listStaffTables);
+router.get("/shift-mapping", getStaffShiftMapping);
+router.get("/reservations", resolveUserId, getStaffReservations);
+router.patch(
+  "/reservations/:id/checkin",
+  resolveUserId,
+  requireUserId,
+  checkinReservation
+);
+router.patch(
+  "/reservations/:id/reject",
+  resolveUserId,
+  requireUserId,
+  rejectReservation
+);
+router.post("/tables/:tableId/check-in", resolveUserId, checkInTable);
+router.post("/tables/:tableId/reset", resolveUserId, resetTable);
+
+router.get("/orders/active", getActiveOccupiedOrders);
+router.post("/orders/:tableId/items", resolveUserId, addOrderItem);
+router.patch("/orders/items/:itemId/status", resolveUserId, updateOrderItemStatus);
+router.patch("/orders/items/:itemId/void", resolveUserId, voidOrderItem);
+router.get("/dishes/menu", listStaffMenuDishes);
+
+router.post("/shifts/check-in", resolveUserId, requireUserId, shiftCheckIn);
+router.post("/shifts/check-out", resolveUserId, requireUserId, shiftCheckOut);
+
+router.patch("/payments/split/:splitId/pay", resolveUserId, requireUserId, payBillSplit);
+router.post("/payments/:orderId/split", resolveUserId, requireUserId, splitOrderBill);
+router.get("/payments/:tableId", getTableBill);
+router.post("/payments/:tableId/voucher", resolveUserId, applyTableVoucher);
+router.post("/payments/:tableId/checkout", resolveUserId, checkoutTablePayment);
+router.post("/payments/:tableId/void", resolveUserId, voidTableBill);
+
+router.get("/kds/ready", getKdsReadyQueue);
+router.get("/kds/delayed", getKdsDelayedItems);
+router.get("/reports/summary", getShiftReportSummary);
+router.get("/reports/audit", getShiftReportAudit);
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -323,78 +391,6 @@ router.get("/overview", async (_req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* GET /api/staff/reservations/today                                   */
-/* ------------------------------------------------------------------ */
-
-router.get("/reservations/today", async (_req, res) => {
-  try {
-    const [rows] = await pool.query(
-      `SELECT
-         r.reservation_id,
-         r.reservation_start_at,
-         r.guest_count,
-         r.special_request,
-         r.reservation_status,
-         r.reservation_source,
-         ua.full_name AS customer_name,
-         ua.email,
-         ua.phone,
-         a.area_name
-       FROM dbo.Reservations r
-       LEFT JOIN dbo.UserAccounts ua ON r.customer_id = ua.user_id
-       LEFT JOIN dbo.RestaurantAreas a ON r.preferred_area_id = a.area_id
-       WHERE CAST(r.reservation_start_at AS DATE) = CAST(SYSDATETIME() AS DATE)
-       ORDER BY r.reservation_start_at ASC;`
-    );
-
-    const ids = rows.map((r) => r.reservation_id);
-    let tablesByReservation = {};
-
-    if (ids.length > 0) {
-      const placeholders = ids.map(() => "?").join(", ");
-      const [tableRows] = await pool.query(
-        `SELECT rt.reservation_id, t.table_number
-         FROM dbo.ReservationTables rt
-         JOIN dbo.RestaurantTables t ON rt.table_id = t.table_id
-         WHERE rt.reservation_id IN (${placeholders});`,
-        ids
-      );
-      tablesByReservation = tableRows.reduce((acc, row) => {
-        acc[row.reservation_id] = acc[row.reservation_id] || [];
-        acc[row.reservation_id].push(row.table_number);
-        return acc;
-      }, {});
-    }
-
-    const reservations = rows.map((row) => {
-      const start = parseDbDate(row.reservation_start_at);
-      const tableLabels = tablesByReservation[row.reservation_id] || [];
-      return {
-        reservation_id: row.reservation_id,
-        customer_name: row.customer_name || "Walk-in guest",
-        email: row.email || "",
-        phone: row.phone || "",
-        reservation_date: formatDatePart(start),
-        start_time: formatTimePart(start),
-        party_size: row.guest_count,
-        area_name: row.area_name || "Unassigned",
-        table_label: tableLabels.join(", ") || "—",
-        status: slugStatus(row.reservation_status),
-        source: slugStatus(row.reservation_source),
-        occasion: "",
-        special_request: row.special_request || "",
-        preorder: [],
-      };
-    });
-
-    return jsonOk(res, reservations);
-  } catch (error) {
-    console.error("Staff reservations/today failed:", error);
-    return jsonError(res, "Could not load today's reservations.");
-  }
-});
-
-/* ------------------------------------------------------------------ */
 /* GET /api/staff/tables/status                                        */
 /* ------------------------------------------------------------------ */
 
@@ -431,10 +427,10 @@ router.get("/tables/status", async (_req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* GET /api/staff/orders/active                                        */
+/* GET /api/staff/orders/active — see staffController.getActiveOccupiedOrders */
 /* ------------------------------------------------------------------ */
 
-router.get("/orders/active", async (_req, res) => {
+router.get("/orders/active-legacy", async (_req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT

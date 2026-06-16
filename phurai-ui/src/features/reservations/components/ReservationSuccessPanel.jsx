@@ -1,5 +1,3 @@
-import { formatVND } from "@/utils/formatCurrency";
-
 function formatDate(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -21,13 +19,9 @@ function formatTime(iso) {
 
 /**
  * Premium reservation-success panel with an animated green check.
- * Shows date, time, table(s), promotion (or None) and pre-ordered dishes
- * (or None) plus the two closing actions.
  */
 function ReservationSuccessPanel({
   reservation,
-  promotion,
-  preorderItems = [],
   onReturnHome,
   onViewReservation,
 }) {
@@ -55,7 +49,7 @@ function ReservationSuccessPanel({
         <div className="rzv-summary__row">
           <span className="rzv-summary__label">Reservation</span>
           <span className="rzv-summary__value">
-            #{reservation.reservation_id}
+            #{String(reservation.reservation_id).padStart(6, '0')}
             {reservation.reservation_status ? (
               <span className="rzv-status-pill" style={{ marginLeft: 8 }}>
                 {reservation.reservation_status}
@@ -77,29 +71,6 @@ function ReservationSuccessPanel({
             {tables.length > 0
               ? tables.map((t) => `${t.display_label} (${t.capacity})`).join(", ")
               : "—"}
-          </span>
-        </div>
-        <div className="rzv-summary__row">
-          <span className="rzv-summary__label">Promotion</span>
-          <span className="rzv-summary__value">{promotion ? promotion.label : "None"}</span>
-        </div>
-        <div className="rzv-summary__row rzv-summary__row--top">
-          <span className="rzv-summary__label">Pre-ordered dishes</span>
-          <span className="rzv-summary__value">
-            {preorderItems.length === 0 ? (
-              "None"
-            ) : (
-              <span className="rzv-success__dishes">
-                {preorderItems.map((i) => (
-                  <span key={i.dish_id} className="rzv-success__dish">
-                    {i.quantity}× {i.dish_name}
-                    <span className="rzv-success__dish-price">
-                      {formatVND(i.quantity * Number(i.price || 0))}
-                    </span>
-                  </span>
-                ))}
-              </span>
-            )}
           </span>
         </div>
       </div>

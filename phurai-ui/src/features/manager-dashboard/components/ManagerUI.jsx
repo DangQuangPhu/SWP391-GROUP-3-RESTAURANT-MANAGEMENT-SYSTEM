@@ -5,16 +5,32 @@ export function StatusBadge({ tone = "muted", children }) {
   return <span className={`sfx-badge sfx-badge--${tone}`}>{children}</span>;
 }
 
-export function SectionHead({ title, subtitle, actions }) {
+export function SectionHead({ title, subtitle, actions, children }) {
   return (
-    <div className="sfx-sechead">
-      <div>
-        <h2 className="sfx-sechead__title">{title}</h2>
-        {subtitle ? <p className="sfx-sechead__sub">{subtitle}</p> : null}
+    <div className="manager-card manager-page-intro">
+      <div className="sfx-sechead">
+        <div>
+          <h2 className="sfx-sechead__title">{title}</h2>
+          {subtitle ? <p className="sfx-sechead__sub">{subtitle}</p> : null}
+        </div>
+        {actions ? <div className="sfx-sechead__actions">{actions}</div> : null}
       </div>
-      {actions ? <div className="sfx-sechead__actions">{actions}</div> : null}
+      {children}
     </div>
   );
+}
+
+export function ContentPanel({ children, className = "", compact = false }) {
+  const classes = [
+    "manager-card",
+    compact ? "manager-card--compact" : "",
+    "manager-card--flush",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return <div className={classes}>{children}</div>;
 }
 
 export function Toolbar({ children }) {

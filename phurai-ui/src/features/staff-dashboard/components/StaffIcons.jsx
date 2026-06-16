@@ -18,6 +18,8 @@ const PATHS = {
   spark: "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18",
   refresh: "M4 4v5h5M20 20v-5h-5M20 9A8 8 0 006.3 6.3M4 15a8 8 0 0013.7 2.7",
   plus: "M12 5v14M5 12h14",
+  card: "M3 7h18v10H3zM3 10h18",
+  chart: "M4 19V5M4 19h16M8 17V11M12 17V7M16 17v-4",
 };
 
 function Icon({ name, size = 18, strokeWidth = 1.7, className = "" }) {

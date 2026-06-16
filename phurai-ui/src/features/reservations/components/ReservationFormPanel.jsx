@@ -20,8 +20,6 @@ function ReservationFormPanel({
   isAuthenticated,
   todayStr,
 }) {
-  const selectedPurpose = DINING_PURPOSES.find((p) => p.id === form.diningPurpose);
-  const isEvent = Boolean(selectedPurpose?.event);
   const areaHints = EVENT_AREA_HINTS[form.diningPurpose] || [];
   const isKitchenView = form.selectedArea === KITCHEN_VIEW_AREA_NAME;
   const counterCapacity = KITCHEN_VIEW_COUNTER_CAPACITY;
@@ -163,7 +161,7 @@ function ReservationFormPanel({
         </div>
         <div className="rzv-field">
           <label className="rzv-field__label" htmlFor="rzv-duration">
-            TABLE HOLD TIME
+            Duration
           </label>
           <select
             id="rzv-duration"
@@ -178,7 +176,7 @@ function ReservationFormPanel({
             ))}
           </select>
           <p className="rzv-card__hint" style={{ marginTop: "0.5rem", fontSize: "0.85rem", opacity: 0.8 }}>
-            We will hold your selected table for this amount of time after your reservation time.
+            How long you would like the table reserved for your dining session.
           </p>
         </div>
       </div>
@@ -204,68 +202,6 @@ function ReservationFormPanel({
           </div>
         ) : null}
       </div>
-
-
-
-      {/* Event extras */}
-      {isEvent ? (
-        <>
-          <div className="rzv-field">
-            <label className="rzv-field__label" htmlFor="rzv-event-title">
-              Event title (optional)
-            </label>
-            <input
-              id="rzv-event-title"
-              type="text"
-              className="rzv-input"
-              placeholder="e.g. Sophie's 30th Birthday"
-              value={form.eventTitle}
-              onChange={(e) => setField("eventTitle", e.target.value)}
-            />
-          </div>
-          <div className="rzv-row">
-            <div className="rzv-field">
-              <label className="rzv-field__label" htmlFor="rzv-cake">
-                Cake / dessert request
-              </label>
-              <input
-                id="rzv-cake"
-                type="text"
-                className="rzv-input"
-                placeholder="e.g. Chocolate cake for 8"
-                value={form.cakeRequest}
-                onChange={(e) => setField("cakeRequest", e.target.value)}
-              />
-            </div>
-            <div className="rzv-field">
-              <label className="rzv-field__label" htmlFor="rzv-decor">
-                Decoration request
-              </label>
-              <input
-                id="rzv-decor"
-                type="text"
-                className="rzv-input"
-                placeholder="e.g. Minimal red / gold setup"
-                value={form.decoration}
-                onChange={(e) => setField("decoration", e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="rzv-field">
-            <label className="rzv-field__label" htmlFor="rzv-equip">
-              Microphone / projector need
-            </label>
-            <input
-              id="rzv-equip"
-              type="text"
-              className="rzv-input"
-              placeholder="e.g. Microphone + projector for a short speech"
-              value={form.equipment}
-              onChange={(e) => setField("equipment", e.target.value)}
-            />
-          </div>
-        </>
-      ) : null}
 
       <h3 className="rzv-card__title" style={{ marginTop: 26 }}>
         Your information
@@ -318,20 +254,6 @@ function ReservationFormPanel({
             onChange={(e) => setField("phone", e.target.value)}
           />
         </div>
-      </div>
-
-      <div className="rzv-field">
-        <label className="rzv-field__label" htmlFor="rzv-special">
-          Special request
-        </label>
-        <textarea
-          id="rzv-special"
-          className="rzv-textarea"
-          maxLength={600}
-          placeholder="Allergies, child seat, quiet table, window seat, wine pairing, arrival note…"
-          value={form.specialRequest}
-          onChange={(e) => setField("specialRequest", e.target.value)}
-        />
       </div>
     </div>
   );

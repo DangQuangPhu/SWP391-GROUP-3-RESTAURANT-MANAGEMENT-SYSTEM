@@ -16,6 +16,9 @@ import {
   ContactHoursPage as ContactHours,
 } from "@/features/content";
 import { MenuPage as Menu } from "@/features/menu";
+import { isMenuCustomer } from "@/features/menu/utils/menuCustomer.js";
+import { TableSessionProvider } from "@/features/table-session";
+import AppRealtimeShell from "@/components/notifications/AppRealtimeShell.jsx";
 import {
   ReservationPage,
   MyReservationsPage,
@@ -121,6 +124,11 @@ function getPageFromPath(path) {
   return "notFound";
 }
 
+function MenuRouteRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/menus${search}`} replace />;
+}
+
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -164,6 +172,17 @@ function App() {
     if (activePage !== "profile") return false;
     return new URLSearchParams(location.search).get("mode") === "edit";
   }, [location.search, activePage]);
+
+  const customerUserId = useMemo(() => {
+    const id = currentUser?.userId ?? currentUser?.id;
+    const parsed = Number(id);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }, [currentUser]);
+
+  const isCustomerUser = useMemo(
+    () => isMenuCustomer(isAuthenticated, currentUser),
+    [isAuthenticated, currentUser]
+  );
 
   const navigateToPath = useCallback(
     (path) => {
@@ -349,7 +368,11 @@ function App() {
   const isPortalPage = isAccountPage || isManagerPage || isStaffPage;
 
   return (
-    <>
+    <TableSessionProvider userId={customerUserId} isCustomer={isCustomerUser}>
+      <AppRealtimeShell
+        currentUser={currentUser}
+        isAuthenticated={isAuthenticated}
+      >
       <ScrollToTop />
       {!isPortalPage ? (
         <Navbar
@@ -375,6 +398,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/landing" element={<LandingPage />} />
+        <Route path="/menu" element={<MenuRouteRedirect />} />
         <Route path="/take-out" element={<TakeOut />} />
         <Route path="/catering" element={<Catering />} />
         <Route
@@ -530,7 +554,8 @@ function App() {
         initialView={profileView}
         onPasswordReset={handlePasswordReset}
       />
-    </>
+      </AppRealtimeShell>
+    </TableSessionProvider>
   );
 }
 

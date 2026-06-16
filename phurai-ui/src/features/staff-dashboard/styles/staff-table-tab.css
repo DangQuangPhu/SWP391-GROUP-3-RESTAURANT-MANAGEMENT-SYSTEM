@@ -1,0 +1,710 @@
+/* Staff — Table Management (action modal; map tiles use shared sfx-mtile from manager-dashboard.css) */
+
+.staff-table-intro .sfx-note {
+  margin-top: 16px;
+}
+
+.staff-table-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.staff-table-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(4, 8, 14, 0.72);
+  backdrop-filter: blur(4px);
+  cursor: pointer;
+}
+
+.staff-table-modal__panel {
+  position: relative;
+  width: min(100%, 420px);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(165deg, #121820 0%, #0c1016 100%);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+  padding: 22px;
+}
+
+.staff-table-modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.staff-table-modal__eyebrow {
+  margin: 0 0 4px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #9eb8d4;
+}
+
+.staff-table-modal__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #f4f7fb;
+}
+
+.staff-table-modal__close {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: #c8d4e3;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.staff-table-modal__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.staff-table-modal__cap,
+.staff-table-modal__session {
+  font-size: 12px;
+  color: var(--sfx-muted);
+}
+
+.staff-table-modal__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.staff-table-action {
+  width: 100%;
+  justify-content: center;
+}
+
+.staff-table-action--locked:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.staff-table-action__lock {
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+}
+
+.staff-table-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.staff-table-status--available {
+  color: #9eb8d4;
+  background: rgba(158, 184, 212, 0.1);
+}
+
+.staff-table-status--occupied {
+  color: #7dcea0;
+  background: rgba(47, 125, 79, 0.18);
+}
+
+.staff-table-status--cleaning {
+  color: #e0b56a;
+  background: rgba(183, 121, 31, 0.18);
+}
+
+.staff-table-status--reserved {
+  color: #8eb8e8;
+  background: rgba(58, 110, 165, 0.16);
+}
+
+.staff-table-status--muted {
+  color: var(--sfx-muted);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Today's Reservations queue */
+.staff-reservation-tab {
+  position: relative;
+  z-index: 1;
+}
+
+.staff-reservation-tab-content {
+  position: relative;
+}
+
+.staff-reservation-kpis {
+  margin-bottom: 4px;
+}
+
+.staff-reservations-toolbar--stacked {
+  position: relative;
+  z-index: 99;
+}
+
+.staff-reservations-toolbar__date-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sfx-muted);
+  white-space: nowrap;
+}
+
+.staff-reservations-card__subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+
+.staff-reservations-card__banner {
+  margin: 0 20px 16px;
+}
+
+.staff-reservations-card.sfx-card--overflow-visible,
+.staff-reservations-card.sfx-card--overflow-visible .sfx-card__head,
+.staff-reservations-card.sfx-card--overflow-visible .staff-reservations-toolbar,
+.staff-reservations-card.sfx-card--overflow-visible .sfx-card__body {
+  overflow: visible;
+}
+
+.staff-reservations-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 0 20px 16px;
+  border-bottom: 1px solid var(--sfx-border-soft);
+  background: #ffffff;
+  position: relative;
+  z-index: 99;
+}
+
+.staff-reservations-toolbar__search {
+  flex: 1 1 260px;
+  min-width: 220px;
+  max-width: 420px;
+}
+
+.staff-reservations-toolbar__filters {
+  flex: 1 1 320px;
+  justify-content: flex-end;
+}
+
+.staff-reservations-toolbar__date {
+  flex-shrink: 0;
+  margin-left: auto;
+  position: relative;
+  z-index: 99;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.staff-reservations-toolbar__date.is-open {
+  z-index: 1000;
+}
+
+.staff-reservations-date-trigger {
+  background: var(--sfx-gold-soft);
+  color: var(--sfx-gold);
+  border-radius: 10px;
+}
+
+.staff-reservations-table__datetime {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.staff-reservations-table .sfx-rowacts {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.staff-reservations-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.staff-reservations-filter__hint {
+  font-size: 10.5px;
+  font-weight: 500;
+  opacity: 0.72;
+}
+
+.staff-reservations-table__id-cell {
+  text-align: center;
+  width: 108px;
+}
+
+.staff-reservations-table thead .staff-reservations-table__id-cell {
+  text-align: center;
+}
+
+.staff-reservations-table__booking-id {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--sfx-text);
+  letter-spacing: 0.04em;
+}
+
+.staff-reservations-table__name {
+  font-weight: 600;
+  color: var(--sfx-text);
+}
+
+.staff-reservations-action-muted {
+  font-size: 12px;
+  color: var(--sfx-muted);
+}
+
+.staff-reservations-shift {
+  padding: 16px;
+  border: 1px solid var(--sfx-border-soft);
+  border-radius: var(--sfx-radius-sm);
+  background: #ffffff;
+}
+
+.staff-reservations-shifts--manager .staff-reservations-shift .sfx-table-wrap {
+  margin-top: 4px;
+}
+
+.staff-reservations-table.sfx-table thead th,
+.staff-reservations-table.sfx-table tbody td {
+  padding: 12px;
+  border-bottom: 1px solid var(--sfx-border-soft);
+  vertical-align: middle;
+}
+
+.staff-reservations-table.sfx-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.staff-reservations-table__datetime,
+.staff-reservations-table__datetime-cell {
+  text-align: left;
+}
+
+.staff-reservations-table__status-cell,
+.staff-reservations-table tbody td.staff-reservations-table__status-cell {
+  text-align: center;
+}
+
+.staff-reservations-table thead .staff-reservations-table__status-cell {
+  text-align: center;
+}
+
+.staff-reservations-shifts {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.staff-reservations-shift__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+}
+
+.staff-reservations-shift__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sfx-text);
+}
+
+.staff-reservations-shift__meta {
+  font-size: 12px;
+  color: var(--sfx-muted);
+}
+
+.staff-reservations-shift-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  margin: 0 20px 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--sfx-gold) 35%, transparent);
+  background: color-mix(in srgb, var(--sfx-gold) 8%, var(--sfx-surface));
+  font-size: 13px;
+  color: var(--sfx-text);
+}
+
+.staff-reservations-shift-banner strong {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.staff-reservations-shifts--manager {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+@media (min-width: 1200px) {
+  .staff-reservations-shifts--manager {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+.staff-reservation-checkin__meta {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+  color: #c8d4e3;
+}
+
+.staff-reservation-checkin__field {
+  margin-bottom: 12px;
+}
+
+.staff-reservation-checkin__select {
+  width: 100%;
+  color: #0f1419;
+}
+
+.staff-reservation-checkin__hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+/* Reservation check-in — light theme (matches .sfx-card staff portal) */
+.staff-table-modal--light .staff-table-modal__backdrop {
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.staff-table-modal--light .staff-table-modal__panel {
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgba(31, 26, 23, 0.04),
+    0 20px 48px rgba(31, 26, 23, 0.12);
+}
+
+.staff-table-modal--light .staff-table-modal__eyebrow {
+  color: #9f8655;
+}
+
+.staff-table-modal--light .staff-table-modal__title {
+  color: #333333;
+}
+
+.staff-table-modal--light .staff-table-modal__close {
+  border-color: #e5e7eb;
+  background: #f9fafb;
+  color: #4b5563;
+}
+
+.staff-table-modal--light .staff-table-modal__close:hover {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+.staff-table-modal--light .staff-reservation-checkin__meta {
+  color: #4b5563;
+}
+
+.staff-table-modal--light .staff-reservation-checkin__field > span {
+  color: #4b5563;
+}
+
+.staff-table-modal--light .staff-reservation-checkin__select,
+.staff-table-modal--light .sfx-select {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #1f2937;
+}
+
+.staff-table-modal--light .staff-reservation-checkin__select:focus,
+.staff-table-modal--light .sfx-select:focus {
+  border-color: #9f8655;
+  box-shadow: 0 0 0 3px rgba(159, 134, 85, 0.15);
+}
+
+.staff-table-modal--light .staff-reservation-checkin__hint {
+  color: #6b7280;
+}
+
+.staff-table-modal--light .staff-table-status--available {
+  color: #2f7d4f;
+  background: rgba(47, 125, 79, 0.1);
+}
+
+.staff-table-modal--light .staff-table-status--reserved {
+  color: #3a6ea5;
+  background: rgba(58, 110, 165, 0.1);
+}
+
+.staff-table-modal--light .sfx-btn--ghost {
+  background: #ffffff;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.staff-table-modal--light .sfx-btn--ghost:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+/* Guest briefing card — reservation check-in */
+.staff-table-modal--briefing .staff-table-modal__panel {
+  width: min(100%, 520px);
+  padding: 24px;
+}
+
+.staff-checkin-brief__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.staff-checkin-brief__eyebrow {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #9f8655;
+}
+
+.staff-checkin-brief__guest {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #333333;
+  letter-spacing: -0.02em;
+}
+
+.staff-checkin-brief__booking-id {
+  margin: 6px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #6b7280;
+  letter-spacing: 0.03em;
+}
+
+.staff-checkin-brief__contact {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.staff-checkin-brief__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
+  margin-bottom: 18px;
+}
+
+.staff-checkin-brief__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.staff-checkin-brief__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.staff-checkin-brief__value {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+  line-height: 1.4;
+}
+
+.staff-checkin-brief__requirements {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.staff-checkin-brief__requirements-title {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #374151;
+}
+
+.staff-checkin-brief__requirements-list {
+  margin: 0;
+}
+
+.staff-checkin-brief__requirements-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid #e5e7eb;
+}
+
+.staff-checkin-brief__requirements-row:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.staff-checkin-brief__requirements-row dt {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.staff-checkin-brief__requirements-row dd {
+  margin: 0;
+  font-size: 14px;
+  color: #1f2937;
+  line-height: 1.45;
+}
+
+.staff-checkin-brief__notes {
+  margin: 0;
+  font-size: 14px;
+  color: #1f2937;
+  line-height: 1.5;
+}
+
+.staff-checkin-brief__change-link {
+  display: inline-flex;
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.staff-checkin-brief__change-link:hover:not(:disabled) {
+  color: #9f8655;
+}
+
+.staff-checkin-brief__picker {
+  margin-bottom: 16px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px dashed #d1d5db;
+  background: #fafafa;
+}
+
+.staff-checkin-brief__picker-dismiss {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: #9f8655;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.staff-checkin-brief__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.staff-checkin-brief__actions-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.staff-checkin-brief__confirm {
+  flex: 1;
+  min-height: 52px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.staff-checkin-brief__reject {
+  flex-shrink: 0;
+  min-height: 52px;
+  padding-inline: 16px;
+  border: 1px solid #fecaca;
+  background: #ffffff;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.staff-checkin-brief__reject:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #f87171;
+  color: #991b1b;
+}
+
+.staff-checkin-brief__reject:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 520px) {
+  .staff-checkin-brief__actions-row {
+    flex-direction: column;
+  }
+
+  .staff-checkin-brief__reject {
+    width: 100%;
+    white-space: normal;
+  }
+
+  .staff-checkin-brief__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .staff-checkin-brief__requirements-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

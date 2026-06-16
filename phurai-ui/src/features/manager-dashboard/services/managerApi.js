@@ -8,6 +8,7 @@
    ============================================================ */
 
 import { request, profileRequestHeaders, createApiError } from "@/core/api/httpClient.js";
+import { asArray } from "@/utils/asArray.js";
 import {
   KPI_CARDS,
   REVENUE_SERIES,
@@ -75,24 +76,126 @@ export async function fetchRevenueSeries() {
   return res;
 }
 
-export function fetchReservations() {
-  return managerGet("/staff/reservations/today", RESERVATIONS);
+export function sortReservationsChronologically(rows) {
+  return [...asArray(rows)].sort(
+    (a, b) =>
+      new Date(a?.reservation_start_at || 0).getTime() -
+      new Date(b?.reservation_start_at || 0).getTime()
+  );
+}
+
+function mergeAndSortReservations(apiRows, mockRows) {
+  const byId = new Map();
+  [...asArray(apiRows), ...asArray(mockRows)].forEach((row) => {
+    if (!row) return;
+    byId.set(String(row.reservation_id), row);
+  });
+  return sortReservationsChronologically([...byId.values()]);
+}
+
+export async function fetchPendingReservations(userId) {
+  try {
+    const res = await managerAuthRequest("/manager/reservations/pending", { method: "GET" }, userId);
+    if (res?.success) {
+      return { source: "api", data: sortReservationsChronologically(res.reservations ?? []) };
+    }
+  } catch {
+    /* fall through */
+  }
+  return mock(RESERVATIONS.filter(r => r.reservation_status === 'Pending'));
+}
+
+export async function fetchAllReservations(userId) {
+  try {
+    const res = await managerAuthRequest("/manager/reservations/all", { method: "GET" }, userId);
+    if (res?.success) {
+      return { source: "api", data: sortReservationsChronologically(res.reservations ?? []) };
+    }
+  } catch {
+    /* fall through */
+  }
+  return mock(RESERVATIONS);
+}
+
+export async function confirmReservation(reservationId, tableIds, userId) {
+  const res = await managerAuthRequest(
+    `/manager/reservations/${reservationId}/confirm`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ table_ids: tableIds }),
+    },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not confirm reservation.");
+  }
+  return res.data;
 }
 
 export function fetchTables() {
-  return managerGet("/staff/tables/status", TABLES);
+  return managerGet("/staff/tables/status", TABLES).then((res) => ({
+    ...res,
+    data: asArray(res.data),
+  }));
 }
 
 export function fetchDishes() {
-  return managerGet("/staff/dishes", DISHES);
+  return managerGet("/staff/dishes", DISHES).then((res) => ({
+    ...res,
+    data: asArray(res.data),
+  }));
 }
 
 export function fetchBestSellers() {
-  return managerGet("/staff/best-selling", BEST_SELLERS);
+  return managerGet("/staff/best-selling", BEST_SELLERS).then((res) => ({
+    ...res,
+    data: asArray(res.data),
+  }));
 }
 
-export function fetchOrders() {
-  return managerGet("/staff/orders/active", ORDERS);
+function inferKitchenStatus(items) {
+  const list = asArray(items);
+  if (!list.length) return "queued";
+  const statuses = list.map((item) =>
+    String(item.item_status ?? "").trim().toLowerCase()
+  );
+  if (statuses.every((s) => s === "served" || s === "done")) return "done";
+  if (statuses.some((s) => s === "ready")) return "ready";
+  if (statuses.some((s) => s === "cooking" || s === "preparing")) return "cooking";
+  return "queued";
+}
+
+function mapActiveTablesToOrders(payload) {
+  return asArray(payload?.tables)
+    .filter((row) => row?.order_id != null)
+    .map((row) => {
+      const items = asArray(row.items);
+      const total = items.reduce(
+        (sum, item) =>
+          sum + (Number(item.unit_price) || 0) * (Number(item.quantity) || 0),
+        0
+      );
+      return {
+        order_id: row.order_id,
+        order_number: `#${row.order_id}`,
+        table_label: row.table_number ?? row.area_name ?? "—",
+        items_count: items.length,
+        total,
+        status: "in_progress",
+        kitchen_status: inferKitchenStatus(items),
+      };
+    });
+}
+
+export async function fetchOrders() {
+  const res = await managerGet("/staff/orders/active", ORDERS);
+  if (res.source === "api") {
+    const data = Array.isArray(res.data)
+      ? res.data
+      : mapActiveTablesToOrders(res.data);
+    return { source: res.source, data };
+  }
+  return { ...res, data: asArray(res.data) };
 }
 
 export function fetchKitchen() {
@@ -112,7 +215,10 @@ export async function fetchManager() {
 }
 
 export function fetchPromotions() {
-  return managerGet("/staff/promotions", PROMOTIONS);
+  return managerGet("/staff/promotions", PROMOTIONS).then((res) => ({
+    ...res,
+    data: asArray(res.data),
+  }));
 }
 
 export async function fetchReservationStats() {
@@ -128,11 +234,11 @@ export async function fetchReservationStats() {
 export async function fetchTableUtilization() {
   const res = await fetchOverview();
   if (res.source === "api" && res.data?.tableUtilization) {
-    return { source: "api", data: res.data.tableUtilization };
+    return { source: "api", data: asArray(res.data.tableUtilization) };
   }
   return res.source === "mock"
     ? mock(TABLE_UTILIZATION)
-    : mock(res.data?.tableUtilization ?? TABLE_UTILIZATION);
+    : mock(asArray(res.data?.tableUtilization).length ? res.data.tableUtilization : TABLE_UTILIZATION);
 }
 
 /* ---- Shift scheduling (/api/manager/*) --------------------------- */
@@ -208,6 +314,40 @@ export async function updateScheduleAttendance(scheduleId, attendance_status, us
   );
   if (!res?.success) {
     throw createApiError(res?.message || "Could not update attendance status.");
+  }
+  return res.data;
+}
+
+/* ---- JSON staff work-shift assignments (/api/manager/shift-mapping) */
+
+export async function fetchStaffShiftMapping(userId) {
+  try {
+    const res = await managerAuthRequest(
+      "/manager/shift-mapping",
+      { method: "GET" },
+      userId
+    );
+    if (res?.success && res.data && typeof res.data === "object" && !Array.isArray(res.data)) {
+      return { source: "api", data: res.data };
+    }
+  } catch {
+    /* fall through */
+  }
+  return { source: "mock", data: {} };
+}
+
+export async function updateStaffShift(staffId, shiftName, userId) {
+  const res = await managerAuthRequest(
+    `/manager/shift-mapping/${staffId}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shift: shiftName }),
+    },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not update staff shift.");
   }
   return res.data;
 }
@@ -299,9 +439,6 @@ export function savePromotion() {
   return Promise.resolve(NOT_CONNECTED);
 }
 export function deletePromotion() {
-  return Promise.resolve(NOT_CONNECTED);
-}
-export function updateReservationStatus() {
   return Promise.resolve(NOT_CONNECTED);
 }
 export function exportReport() {

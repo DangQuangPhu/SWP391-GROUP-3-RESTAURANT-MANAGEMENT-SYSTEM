@@ -6,6 +6,7 @@ import DashboardDateRangePicker from "../shared/DashboardDateRangePicker.jsx";
 import Icon from "../ManagerIcons.jsx";
 import { Card } from "../ManagerUI.jsx";
 import { formatVND } from "@/utils/formatCurrency.js";
+import { asArray } from "@/utils/asArray.js";
 import {
   KPI_CARDS,
   DASHBOARD_TODAY,
@@ -66,7 +67,7 @@ function OverviewSection({ kpis: baseKpisProp, reservations, role, onNavigate })
   );
 
   const chartTotal = useMemo(
-    () => chartSeries.reduce((sum, point) => sum + (point.revenue ?? 0), 0),
+    () => asArray(chartSeries).reduce((sum, point) => sum + (point.revenue ?? 0), 0),
     [chartSeries]
   );
 
@@ -102,20 +103,12 @@ function OverviewSection({ kpis: baseKpisProp, reservations, role, onNavigate })
     setActivePresetId(preset.id);
   }, []);
 
-  useEffect(() => {
-    if (!pickerOpen) return undefined;
-
-    const onPointerDown = (event) => {
-      if (pickerAnchorRef.current?.contains(event.target)) return;
-      setPickerOpen(false);
-    };
-
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [pickerOpen]);
+  // The DatePicker now uses a Portal with its own backdrop for outside clicks.
 
   const visibleKpis =
-    role === "manager" ? rangeKpis : rangeKpis.filter((k) => k.id !== "revenue");
+    role === "manager"
+      ? asArray(rangeKpis)
+      : asArray(rangeKpis).filter((k) => k.id !== "revenue");
 
   return (
     <div className="sfx-stack">
@@ -137,7 +130,10 @@ function OverviewSection({ kpis: baseKpisProp, reservations, role, onNavigate })
                   </p>
                 </div>
                 <div className="sfx-chart__actions">
-                  <div className="sfx-chart__picker-anchor" ref={pickerAnchorRef}>
+                  <div
+                    className={`sfx-chart__picker-anchor${pickerOpen ? " is-open" : ""}`}
+                    ref={pickerAnchorRef}
+                  >
                     <button
                       type="button"
                       className="sfx-kpi__icon sfx-kpi__icon--trigger"

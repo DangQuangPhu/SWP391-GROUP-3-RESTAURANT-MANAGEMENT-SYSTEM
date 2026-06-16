@@ -9,6 +9,8 @@ import {
   KITCHEN_VIEW_AREA_NAME,
   resolveKitchenViewCounterCapacity,
 } from "../utils/kitchenViewBooking.js";
+import { notifyStaffNewCustomerAction } from "../services/notificationService.js";
+import { getIO } from "../socket.js";
 
 const router = express.Router();
 
@@ -190,10 +192,28 @@ async function expireOldHolds() {
     if (toExpire.length > 0) {
       const placeholders = toExpire.map(() => "?").join(",");
 
+      // 1) Release tables assigned to the expired reservations
+      await pool.query(
+        `
+        UPDATE dbo.RestaurantTables
+        SET table_status = N'Available',
+            updated_at = SYSDATETIME()
+        WHERE table_id IN (
+            SELECT table_id
+            FROM dbo.ReservationTables
+            WHERE reservation_id IN (${placeholders})
+        )
+        `,
+        toExpire
+      );
+
+      // 2) Update reservation status to Cancelled to comply with CHECK constraint
       await pool.query(
         `
         UPDATE dbo.Reservations
-        SET reservation_status = N'Expired',
+        SET reservation_status = N'Cancelled',
+            cancel_reason = N'Hold expired',
+            cancelled_at = SYSDATETIME(),
             updated_at = SYSDATETIME()
         WHERE reservation_id IN (${placeholders})
         `,
@@ -743,6 +763,14 @@ router.post("/", resolveUserId, async (req, res) => {
            VALUES (?, ?);`,
           [reservationId, tableId]
         );
+
+        await connection.query(
+          `UPDATE dbo.RestaurantTables
+           SET table_status = N'Reserved',
+               updated_at = SYSDATETIME()
+           WHERE table_id = ?;`,
+          [tableId]
+        );
       }
 
       if (Array.isArray(preorderItems) && preorderItems.length > 0) {
@@ -772,6 +800,34 @@ router.post("/", resolveUserId, async (req, res) => {
         }
       }
 
+      const guestName = String(contact_name || "").trim() || "Guest";
+      const startLabel = `${String(slotStart.getHours()).padStart(2, "0")}:${String(
+        slotStart.getMinutes()
+      ).padStart(2, "0")}`;
+
+      // Audit log
+      await connection.query(
+        `INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, old_value_json, new_value_json, ip_address, created_at)
+         VALUES (?, N'RESERVATION_CREATED', N'Reservations', ?, ?, ?, ?, SYSDATETIME())`,
+        [
+          customerId || null,
+          reservationId,
+          null,
+          JSON.stringify({ reservation_status: "Pending", guest_count: guestCount }),
+          req.ip
+        ]
+      );
+
+      // Notification for manager (user_id = 2 per PRD)
+      await connection.query(
+        `INSERT INTO dbo.Notifications (user_id, notification_type, title, message_body, is_read, sent_at)
+         VALUES (?, N'System', N'New Reservation Request', ?, 0, SYSDATETIME())`,
+        [
+          2, // Manager
+          `New reservation from ${guestName} for ${guestCount} guests on ${formatLocalIso(slotStart)} at ${startLabel}`
+        ]
+      );
+
       await connection.commit();
       connection.release();
 
@@ -796,6 +852,25 @@ router.post("/", resolveUserId, async (req, res) => {
               capacity: r.capacity,
             };
           });
+
+      const tableLabel =
+        tableSummaries
+          .map((t) => t.display_label || t.table_number)
+          .filter(Boolean)
+          .join(", ") || "—";
+          
+      const io = getIO();
+      if (io) {
+        io.to("room:manager").emit("reservation:new", {
+          reservation_id: reservationId,
+          customer_name: guestName,
+          customer_phone: contact_phone,
+          reservation_start_at: formatLocalIso(slotStart),
+          guest_count: guestCount,
+          preferred_area: kitchenViewBooking ? KITCHEN_VIEW_AREA_NAME : (preferred_area_id ? preferred_area_id : "General"),
+          special_request: finalSpecialRequest
+        });
+      }
 
       return res.status(201).json({
         success: true,
