@@ -46,6 +46,7 @@ import {
 } from '../controllers/promotionsController.js';
 import { approveQrSession } from '../controllers/qrSessionController.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { validateReservationUpdate } from '../middleware/validateReservation.js';
 
 const router = express.Router();
 
@@ -79,7 +80,7 @@ router.get('/reservations/:id/history', requireManagerOrAdmin, getReservationHis
 router.patch('/reservations/:id/confirm', requireManagerOrAdmin, confirmReservation);
 router.patch('/reservations/:id/reject', requireManagerOrAdmin, rejectReservation);
 router.patch('/reservations/:id/cancel', requireManagerOrAdmin, cancelReservation);
-router.patch('/reservations/:id', requireManagerOrAdmin, updateReservation);
+router.patch('/reservations/:id', requireManagerOrAdmin, validateReservationUpdate, updateReservation);
 router.post('/reservations/:id/resolve-edit', requireManagerOrAdmin, resolveEditRequest);
 router.post('/reservations/seed-test', requireManagerOrAdmin, seedTestReservations);
 router.delete('/reservations/clear-test', requireManagerOrAdmin, clearTestReservations);

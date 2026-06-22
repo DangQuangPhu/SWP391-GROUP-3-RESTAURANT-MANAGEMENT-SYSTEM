@@ -57,3 +57,12 @@ export const requireStaffOrKitchen = requireRole(2, 3);
 export const requireManager  = requireRole(4);
 export const requireAdmin    = requireRole(5);
 export const requireAny      = requireRole(1, 2, 3, 4, 5);
+
+export const verifyAdmin = (req, res, next) => {
+  const role = req.user?.role_id;
+  if (role === 5) {
+    next();
+  } else {
+    return res.status(403).json({ success: false, message: 'Forbidden: Requires Admin role' });
+  }
+};

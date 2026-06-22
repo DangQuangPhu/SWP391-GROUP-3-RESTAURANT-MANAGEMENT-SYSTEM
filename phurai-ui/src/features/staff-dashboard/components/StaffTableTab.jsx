@@ -63,7 +63,7 @@ function getTableStatusSlug(table) {
 
 function isManagerUser(user) {
   const roleId = Number(user?.roleId ?? user?.role_id);
-  return roleId === 4;
+  return roleId === 4 || roleId === 5;
 }
 
 function sameTableId(left, right) {

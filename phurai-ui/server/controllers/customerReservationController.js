@@ -1,6 +1,7 @@
 import { getRawPool } from "../db.js";
 import sql from "mssql";
 import { RESERVATION_STATUS } from "../../src/shared/reservationStatus.js";
+import { getIO } from "../socket.js";
 
 export const createPreSaveReservation = async (req, res) => {
   try {
@@ -48,10 +49,10 @@ export const createPreSaveReservation = async (req, res) => {
       console.log(`[DEBUG TRACE 2 - PreSave] Finished Preorder Items loop. Final items_total from preorder: ${items_total}`);
     }
 
-    // 2. Validate Promo Code via shared service
+    // 2. Validate Promo Code via voucher service
     if (promo_code) {
-       const { checkPromoValidity } = await import("./promotionsController.js");
-       const result = await checkPromoValidity(promo_code, items_total);
+       const { checkVoucherValidity } = await import("./vouchersController.js");
+       const result = await checkVoucherValidity(promo_code, items_total);
        
        if (!result.isValid) {
          return res.status(400).json({ success: false, message: result.message });
@@ -59,10 +60,10 @@ export const createPreSaveReservation = async (req, res) => {
        
        const promo = result.promo;
        const value = parseFloat(promo.discount_value);
-       if (promo.discount_type === 'PERCENT') {
+       if (promo.discount_type === 'Percent') {
          discount_amount = items_total * (value / 100);
-         if (promo.max_discount_amount && discount_amount > parseFloat(promo.max_discount_amount)) {
-           discount_amount = parseFloat(promo.max_discount_amount);
+         if (promo.max_discount && discount_amount > parseFloat(promo.max_discount)) {
+           discount_amount = parseFloat(promo.max_discount);
          }
        } else {
          discount_amount = value;
@@ -77,16 +78,18 @@ export const createPreSaveReservation = async (req, res) => {
     const BASE_TABLE_DEPOSIT = 10000;
 
     // 3. Define the exact money the customer MUST pay upfront via QR right now
-    // Total Advance Payment = Base Table Deposit + Pre-order Total
-    const totalAdvancePaymentRequired = BASE_TABLE_DEPOSIT + preorderItemsTotal;
+    // Total Advance Payment = Base Table Deposit + Pre-order Total - Discount
+    const totalAdvancePaymentRequired = BASE_TABLE_DEPOSIT + preorderItemsTotal - discount_amount;
 
     // 4. Map correctly to the Database Columns defined in the Master SQL script:
     // - deposit_amount: The actual upfront money collected today to secure the booking.
     // - final_total: The food subtotal value for accounting references.
-    const deposit_amount = totalAdvancePaymentRequired;
+    const deposit_amount = totalAdvancePaymentRequired > 0 ? totalAdvancePaymentRequired : 0;
     final_total = preorderItemsTotal;
 
-    console.log(`[DEBUG TRACE 3 - PreSave] items_total: ${items_total}, deposit_amount: ${deposit_amount}, final_total (sent to QR): ${final_total}`);
+    const totalAmount = preorderItemsTotal;
+    const baseDeposit = BASE_TABLE_DEPOSIT;
+    console.log(`[AUTOMATION CHECK] Preorder: ${totalAmount} | Deposit: ${baseDeposit} | QR Target: ${deposit_amount}`);
     // 4. Generate Order Code (e.g. PHURAI123456)
     const order_code = `PHURAI${Math.floor(100000 + Math.random() * 900000)}`;
 
@@ -182,7 +185,44 @@ export const createPreSaveReservation = async (req, res) => {
           `);
       }
 
+      const safeValueJson = JSON.stringify({
+        reservation_id,
+        reservation_status: RESERVATION_STATUS.PENDING_PAYMENT,
+        order_code,
+        deposit_amount,
+        final_total
+      });
+
+      await transaction.request()
+        .input('userId', sql.Int, customer_id || null)
+        .input('actionName', sql.VarChar(100), 'CUSTOMER_INITIATED_RESERVATION')
+        .input('targetTable', sql.VarChar(128), 'Reservations')
+        .input('targetId', sql.Int, reservation_id)
+        .input('newValue', sql.NVarChar(sql.MAX), safeValueJson)
+        .query(`
+          INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, created_at)
+          VALUES (@userId, @actionName, @targetTable, @targetId, @newValue, SYSDATETIME())
+        `);
+
       await transaction.commit();
+
+    // Emit real-time notification
+    try {
+      const io = getIO();
+      if (io) {
+        io.emit("NEW_RESERVATION_REQUEST", {
+          reservation_id,
+          reservation_status: RESERVATION_STATUS.PENDING_PAYMENT,
+          order_code,
+          contact_name,
+          guest_count,
+          reservation_start_at,
+          customer_id
+        });
+      }
+    } catch (socketErr) {
+      console.warn("Socket emit failed for NEW_RESERVATION_REQUEST", socketErr);
+    }
 
     // 6. Formulate VietQR payload URL
     // Standard template based on the user's previously mentioned VietQR format:
@@ -208,6 +248,74 @@ export const createPreSaveReservation = async (req, res) => {
   } catch (error) {
     console.error("Error creating pre-save reservation:", error);
     res.status(500).json({ success: false, message: "Failed to process reservation payment setup" });
+  }
+};
+
+export const applyPromoCodeToReservation = async (req, res) => {
+  try {
+    const reservationId = parseInt(req.params.id, 10);
+    const { promo_code } = req.body;
+    
+    if (isNaN(reservationId) || reservationId <= 0 || !promo_code) {
+      return res.status(400).json({ success: false, message: "Invalid input" });
+    }
+
+    const pool = await getRawPool();
+    const resResult = await pool.request()
+      .input('resId', sql.Int, reservationId)
+      .query(`
+        SELECT reservation_status, final_total, deposit_amount, applied_promo_code 
+        FROM dbo.Reservations 
+        WHERE reservation_id = @resId
+      `);
+
+    if (resResult.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: "Reservation not found" });
+    }
+
+    const reservation = resResult.recordset[0];
+    if (reservation.reservation_status !== RESERVATION_STATUS.PENDING_PAYMENT) {
+      return res.status(400).json({ success: false, message: "Can only apply promo to Pending Payment reservations" });
+    }
+
+    if (reservation.applied_promo_code) {
+      return res.status(400).json({ success: false, message: "A promo code has already been applied" });
+    }
+
+    const { checkVoucherValidity } = await import("./vouchersController.js");
+    // final_total is the preorder subtotal
+    const result = await checkVoucherValidity(promo_code, reservation.final_total);
+
+    if (!result.isValid) {
+      return res.status(400).json({ success: false, message: result.message });
+    }
+
+    const BASE_TABLE_DEPOSIT = 10000;
+    const preorderItemsTotal = Number(reservation.final_total);
+    const discount_amount = result.discount_amount;
+    const totalAdvancePaymentRequired = BASE_TABLE_DEPOSIT + preorderItemsTotal - discount_amount;
+    const new_deposit_amount = totalAdvancePaymentRequired > 0 ? totalAdvancePaymentRequired : 0;
+
+    await pool.request()
+      .input('resId', sql.Int, reservationId)
+      .input('promo', sql.VarChar(50), promo_code)
+      .input('newDeposit', sql.Decimal(12,2), new_deposit_amount)
+      .query(`
+        UPDATE dbo.Reservations 
+        SET applied_promo_code = @promo, deposit_amount = @newDeposit
+        WHERE reservation_id = @resId
+      `);
+
+    return res.json({
+      success: true,
+      discount_amount,
+      new_deposit_amount,
+      promotion_name: result.promo.promotion_name
+    });
+
+  } catch (error) {
+    console.error("Error applying promo to reservation:", error);
+    res.status(500).json({ success: false, message: "Failed to apply promo code" });
   }
 };
 

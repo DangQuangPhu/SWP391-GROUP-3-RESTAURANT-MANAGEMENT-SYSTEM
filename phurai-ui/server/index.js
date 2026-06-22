@@ -14,6 +14,7 @@ import managerRoutes from "./routes/manager.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import notificationRoutes from "./routes/notifications.js";
 import promotionRoutes from "./routes/promotions.js";
+import voucherRoutes from "./routes/vouchers.js";
 import publicRoutes from "./routes/public.js";
 import { runOtpLifecycleCleanup } from "./utils/otpService.js";
 import { isSmtpConfigured } from "./email.js";
@@ -77,6 +78,7 @@ app.use("/api/manager/menu", menuRoutes);
 app.use("/api/customer", customerRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/promotions", promotionRoutes);
+app.use("/api/vouchers", voucherRoutes);
 app.use("/api/public", publicRoutes);
 
 import paymentRoutes from "./routes/paymentRoutes.js";

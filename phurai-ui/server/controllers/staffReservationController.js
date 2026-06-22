@@ -649,3 +649,100 @@ export const sendCookingQueue = async (req, res) => {
   }
 };
 
+// ──────────────────────────────────────────────────────────────────────────────
+// PATCH /api/staff/reservations/:id/check-in
+// ──────────────────────────────────────────────────────────────────────────────
+export const staffCheckIn = async (req, res) => {
+  const staffUserId = req.userId;
+  const reservationId = parseInt(req.params.id, 10);
+
+  if (isNaN(reservationId)) {
+    return res.status(400).json({ success: false, message: 'Invalid reservation ID' });
+  }
+
+  try {
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // Ensure reservation exists and is ready for check-in
+      const [resRows] = await connection.query(
+        `SELECT reservation_status, table_ids = STUFF((SELECT ',' + CAST(table_id AS VARCHAR) FROM dbo.ReservationTables WHERE reservation_id = r.reservation_id FOR XML PATH('')), 1, 1, '')
+         FROM dbo.Reservations r
+         WHERE r.reservation_id = ? WITH (UPDLOCK, HOLDLOCK)`,
+        [reservationId]
+      );
+
+      if (resRows.length === 0) {
+        await connection.rollback();
+        connection.release();
+        return res.status(404).json({ success: false, message: 'Reservation not found' });
+      }
+
+      const reservation = resRows[0];
+
+      if (!reservation.table_ids) {
+        await connection.rollback();
+        connection.release();
+        return res.status(400).json({ success: false, message: 'Reservation has no assigned tables. Cannot check-in.' });
+      }
+
+      const allowedFrom = [RESERVATION_STATUS.CONFIRMED, RESERVATION_STATUS.AWAIT_CHECK_IN, RESERVATION_STATUS.RESERVED];
+      if (!allowedFrom.includes(reservation.reservation_status)) {
+        await connection.rollback();
+        connection.release();
+        return res.status(400).json({ success: false, message: `Cannot check-in from status: ${reservation.reservation_status}` });
+      }
+
+      const tableIdList = reservation.table_ids.split(',').map(Number);
+
+      // Update reservation status to Check-in
+      await connection.query(
+        `UPDATE dbo.Reservations 
+         SET reservation_status = ?, checked_in_at = SYSDATETIME(), updated_at = SYSDATETIME()
+         WHERE reservation_id = ?`,
+        [RESERVATION_STATUS.CHECK_IN, reservationId]
+      );
+
+      // Update mapped tables to Occupied
+      const placeholders = tableIdList.map(() => '?').join(',');
+      await connection.query(
+        `UPDATE dbo.RestaurantTables
+         SET table_status = 'Occupied', updated_at = SYSDATETIME()
+         WHERE table_id IN (${placeholders})`,
+        [...tableIdList]
+      );
+
+      // Insert into AuditLogs
+      const safeValueJson = JSON.stringify({ reservation_status: RESERVATION_STATUS.CHECK_IN });
+      await connection.query(
+        `INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, created_at)
+         VALUES (?, 'STAFF_MANUAL_CHECKIN', 'Reservations', ?, ?, SYSDATETIME())`,
+        [staffUserId, reservationId, safeValueJson]
+      );
+
+      await connection.commit();
+
+      const io = getIO();
+      if (io) {
+        io.emit('RESERVATION_STATUS_CHANGED', { id: reservationId, status: RESERVATION_STATUS.CHECK_IN });
+        tableIdList.forEach(tId => {
+          io.emit('TABLE_STATUS_CHANGED', { tableId: tId, newStatus: 'Occupied' });
+        });
+      }
+
+      connection.release();
+      res.json({ success: true, message: 'Successfully checked in.' });
+
+    } catch (txError) {
+      await connection.rollback();
+      connection.release();
+      throw txError;
+    }
+  } catch (error) {
+    console.error('[staffReservationController] staffCheckIn error:', error);
+    res.status(500).json({ success: false, message: 'Failed to check in reservation' });
+  }
+};
+
+

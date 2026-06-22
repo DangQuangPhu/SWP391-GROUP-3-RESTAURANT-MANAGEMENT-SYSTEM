@@ -19,19 +19,32 @@ import { submitEditRequest, submitCancelRequest } from "../services/reservationR
 import {
   createPreSaveReservation,
   cancelPendingPayment,
+  applyPromoCodeToReservation,
 } from "../controllers/customerReservationController.js";
+import { validateReservationCreate, validateReservationUpdate } from "../middleware/validateReservation.js";
+import { getReservationTimeline } from "../utils/timelineLogger.js";
 
 const router = express.Router();
 
 /* ------------------------------------------------------------------ */
 /* POST /api/reservations/pre-save                                     */
 /* ------------------------------------------------------------------ */
-router.post("/pre-save", resolveUserId, createPreSaveReservation);
+router.post("/pre-save", resolveUserId, validateReservationCreate, createPreSaveReservation);
 
 /* ------------------------------------------------------------------ */
 /* PATCH /api/reservations/:id/abort-payment                            */
 /* ------------------------------------------------------------------ */
 router.patch("/:id/abort-payment", resolveUserId, cancelPendingPayment);
+
+/* ------------------------------------------------------------------ */
+/* GET /api/reservations/:id/timeline                                   */
+/* ------------------------------------------------------------------ */
+router.get("/:id/timeline", resolveUserId, getReservationTimeline);
+
+/* ------------------------------------------------------------------ */
+/* PATCH /api/reservations/:id/apply-promo                            */
+/* ------------------------------------------------------------------ */
+router.patch("/:id/apply-promo", resolveUserId, applyPromoCodeToReservation);
 
 /* ------------------------------------------------------------------ */
 /* Display mapping (presentation only — DB keeps real area/table data) */
@@ -475,7 +488,7 @@ router.get("/status", async (req, res) => {
 /* POST /api/reservations                                              */
 /* ------------------------------------------------------------------ */
 
-router.post("/", resolveUserId, async (req, res) => {
+router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
   const {
     reservation_start_at,
     reservation_end_at,
@@ -1105,7 +1118,7 @@ router.post("/", resolveUserId, async (req, res) => {
       const preorderItemsTotal = totalAmount || 0;
 
       // 2. Define the Base Table Deposit
-      const BASE_TABLE_DEPOSIT = 100000;
+      const BASE_TABLE_DEPOSIT = 10000;
 
       // 3. Define the exact money the customer MUST pay upfront via QR right now
       // Total Advance Payment = Base Table Deposit + Pre-order Total
@@ -1114,7 +1127,8 @@ router.post("/", resolveUserId, async (req, res) => {
       const deposit_amount = totalAdvancePaymentRequired;
       const final_total = preorderItemsTotal;
 
-      console.log(`[DEBUG TRACE 3] POST /api/reservations - totalAmount: ${totalAmount}, BASE_TABLE_DEPOSIT: ${BASE_TABLE_DEPOSIT}, deposit_amount (sent to QR): ${deposit_amount}`);
+      const baseDeposit = BASE_TABLE_DEPOSIT;
+      console.log(`[AUTOMATION CHECK] Preorder: ${totalAmount} | Deposit: ${baseDeposit} | QR Target: ${deposit_amount}`);
       
       const order_code = `RES${reservationId}`;
 
@@ -1587,7 +1601,7 @@ router.post("/:id/preorder", resolveUserId, requireUserId, async (req, res) => {
 /* POST /api/reservations/:id/request-edit  (Flow B)                  */
 /* ------------------------------------------------------------------ */
 
-router.post("/:id/request-edit", resolveUserId, async (req, res) => {
+router.post("/:id/request-edit", resolveUserId, validateReservationUpdate, async (req, res) => {
   const reservationId = Number(req.params.id);
   if (!Number.isFinite(reservationId) || reservationId <= 0) {
     return res.status(400).json({ success: false, message: "Invalid reservation ID." });

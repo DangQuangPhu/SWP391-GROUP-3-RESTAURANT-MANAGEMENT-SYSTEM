@@ -18,6 +18,7 @@ let poolPromise;
 function getPool() {
   if (!poolPromise) {
     poolPromise = sql.connect(config).then(async (pool) => {
+      /* Try/catch auto-patch DB block disabled as DB is the Single Source of Truth (Phase 3.1)
       try {
         // Auto-patch migration: clean up legacy statuses
         await pool.request().query(`
@@ -42,6 +43,7 @@ function getPool() {
       } catch (err) {
         console.error("Auto constraint patch failed (safe to ignore if already applied):", err.message);
       }
+      */
       return pool;
     });
   }

@@ -35,7 +35,9 @@ import ScrollToTop from "@/components/common/ScrollToTop.jsx";
 import { StaffDashboardPage as StaffDashboard, isStaffPortalUser } from "@/features/staff-dashboard";
 import AdminLayout from '@/features/admin-dashboard/layout/AdminLayout';
 import AdminDashboardPage from '@/features/admin-dashboard/pages/AdminDashboardPage';
-import AdminAccountsPage from '@/features/admin-dashboard/pages/AdminAccountsPage';
+import AdminAccountsPage from '@/pages/admin/Accounts';
+import AdminAuditLogsPage from '@/pages/admin/AuditLogs';
+import AdminSystemSettingsPage from '@/pages/admin/SystemSettings';
 import NotFound from "@/pages/NotFound";
 import LandingPage from "@/pages/public/LandingPage";
 import QrScanPage from "@/pages/public/QrScanPage.jsx";
@@ -57,6 +59,14 @@ import {
   mapApiUserToFrontend,
   saveAuthUser,
 } from "@/api";
+
+const PlaceholderPage = ({ title }) => (
+  <div style={{ padding: "2rem", textAlign: "center", width: "100%", color: "#6b7280" }}>
+    <h2 style={{ fontSize: "1.5rem", fontWeight: "600", marginBottom: "0.5rem", color: "#111827" }}>{title}</h2>
+    <p>This module is currently under development.</p>
+  </div>
+);
+
 
 const PAGE_PATHS = {
   home: "/",
@@ -88,14 +98,24 @@ function normalizeAuthUser(user) {
   };
 }
 
-function isManagerUser(user) {
+function isAdminUser(user) {
   if (!user) return false;
   const roleId = Number(user.roleId ?? user.role_id);
-  if (roleId === 4 || roleId === 5) return true;
+  if (roleId === 5) return true;
   const role = String(user.roleName ?? user.role_name ?? user.role ?? "")
     .trim()
     .toLowerCase();
-  return role === "manager" || role === "admin";
+  return role === "admin";
+}
+
+function isManagerUser(user) {
+  if (!user) return false;
+  const roleId = Number(user.roleId ?? user.role_id);
+  if (roleId === 4) return true;
+  const role = String(user.roleName ?? user.role_name ?? user.role ?? "")
+    .trim()
+    .toLowerCase();
+  return role === "manager";
 }
 
 function normalizePathname(path) {
@@ -248,13 +268,16 @@ function App() {
     }
   }, [pathname, navigate]);
 
-  /* Managers/Admins belong on /manager — never on /staff (waiter/kitchen portal). */
+  /* Admins belong on /admin, Managers on /manager — never on /staff. */
   useEffect(() => {
     if (!isAuthenticated || !currentUser) return;
-    if (!isManagerUser(currentUser)) return;
     const onStaffRoute = pathname === "/staff" || pathname.startsWith("/staff/");
     if (onStaffRoute) {
-      navigateToPath("/manager/dashboard");
+      if (isAdminUser(currentUser)) {
+        navigateToPath("/admin");
+      } else if (isManagerUser(currentUser)) {
+        navigateToPath("/manager/dashboard");
+      }
     }
   }, [isAuthenticated, currentUser, pathname, navigateToPath]);
 
@@ -271,7 +294,9 @@ function App() {
         setIsAuthenticated(true);
         setCurrentUser(pendingAuthUser);
         saveAuthUser(pendingAuthUser, Boolean(localStorage.getItem("phurai_auth_user")));
-        if (isManagerUser(pendingAuthUser)) {
+        if (isAdminUser(pendingAuthUser)) {
+          navigateToPath("/admin");
+        } else if (isManagerUser(pendingAuthUser)) {
           navigateToPath("/manager/dashboard");
         } else if (isStaffPortalUser(pendingAuthUser)) {
           navigateToPath("/staff");
@@ -495,7 +520,22 @@ function App() {
           />
           <Route path="/admin" element={<AdminLayout currentUser={currentUser} />}>
             <Route index element={<AdminDashboardPage />} />
+            
+            {/* Accounts Group */}
             <Route path="accounts" element={<AdminAccountsPage />} />
+            <Route path="roles" element={<PlaceholderPage title="Roles & Permissions" />} />
+            <Route path="audit-logs" element={<AdminAuditLogsPage />} />
+            
+            {/* Analytics Group */}
+            <Route path="analytics/reservations" element={<PlaceholderPage title="Reservations Analytics" />} />
+            <Route path="analytics/revenue" element={<PlaceholderPage title="Revenue Analytics" />} />
+            <Route path="analytics/orders" element={<PlaceholderPage title="Orders Analytics" />} />
+            <Route path="analytics/reviews" element={<PlaceholderPage title="Customer Reviews" />} />
+            <Route path="analytics/staff-performance" element={<PlaceholderPage title="Staff Performance" />} />
+            
+            {/* Settings Group */}
+            <Route path="settings/restaurant" element={<PlaceholderPage title="Restaurant Info" />} />
+            <Route path="settings/system" element={<AdminSystemSettingsPage />} />
           </Route>
           <Route path="/manager" element={<Navigate to="/manager/dashboard" replace />} />
           <Route

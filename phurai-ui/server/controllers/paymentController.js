@@ -63,7 +63,7 @@ export const handleSepayWebhook = async (req, res) => {
 
         const resResult = await transaction.request()
           .input('orderCode', sql.VarChar(50), actualOrderCode)
-          .query('SELECT reservation_id, reservation_status, final_total, deposit_amount, preorder_json, customer_id, order_code FROM dbo.Reservations WHERE order_code = @orderCode');
+          .query('SELECT reservation_id, reservation_status, final_total, deposit_amount, preorder_json, customer_id, order_code, applied_promo_code FROM dbo.Reservations WHERE order_code = @orderCode');
 
         if (resResult.recordset.length === 0) {
           await transaction.rollback();
@@ -128,7 +128,7 @@ export const handleSepayWebhook = async (req, res) => {
         }
 
         // b. Insert into dbo.Payments
-        await transaction.request()
+        const paymentResult = await transaction.request()
           .input('resId', sql.Int, reservation.reservation_id)
           .input('paymentMethodId', sql.TinyInt, 3) // 3 = Bank Transfer
           .input('amountPaid', sql.Decimal(12, 2), transferAmount)
@@ -137,10 +137,43 @@ export const handleSepayWebhook = async (req, res) => {
           .query(`
             INSERT INTO dbo.Payments (
               reservation_id, payment_method_id, amount_paid, payment_status, transaction_ref, paid_at, created_at, updated_at
-            ) VALUES (
+            )
+            OUTPUT inserted.payment_id 
+            VALUES (
               @resId, @paymentMethodId, @amountPaid, @paymentStatus, @transactionRef, SYSDATETIME(), SYSDATETIME(), SYSDATETIME()
             )
           `);
+        
+        const paymentId = paymentResult.recordset[0].payment_id;
+
+        // b2. Atomic Voucher Redemption
+        if (reservation.applied_promo_code) {
+           const voucherResult = await transaction.request()
+             .input('voucherCode', sql.NVarChar(40), reservation.applied_promo_code)
+             .query('SELECT voucher_id FROM dbo.Vouchers WHERE voucher_code = @voucherCode');
+             
+           if (voucherResult.recordset.length > 0) {
+              const voucherId = voucherResult.recordset[0].voucher_id;
+              const baseDeposit = 10000;
+              const calculatedDiscount = Math.max(0, baseDeposit + Number(reservation.final_total) - Number(reservation.deposit_amount));
+              
+              // Increment usage
+              await transaction.request()
+                .input('vId', sql.Int, voucherId)
+                .query('UPDATE dbo.Vouchers SET times_used = times_used + 1 WHERE voucher_id = @vId');
+              
+              // Insert redemption record
+              await transaction.request()
+                .input('vId', sql.Int, voucherId)
+                .input('pId', sql.Int, paymentId)
+                .input('cId', sql.Int, reservation.customer_id || null)
+                .input('discount', sql.Decimal(12, 2), calculatedDiscount)
+                .query(`
+                  INSERT INTO dbo.VoucherRedemptions (voucher_id, payment_id, customer_id, discount_amount, redeemed_at)
+                  VALUES (@vId, @pId, @cId, @discount, SYSDATETIME())
+                `);
+           }
+        }
 
         // c. Update existing Orders with order_type = 'Preorder' to Paid (if any created from route)
         await transaction.request()
@@ -155,7 +188,7 @@ export const handleSepayWebhook = async (req, res) => {
 
         // d. Insert into dbo.AuditLogs
         await transaction.request()
-          .input('actionName', sql.VarChar, 'Complete Paid - Created by: Customer (SePay)')
+          .input('actionName', sql.VarChar, 'AUTOMATED_PAYMENT_SUCCESS')
           .input('targetTable', sql.VarChar, 'Reservations')
           .input('targetId', sql.Int, reservation.reservation_id)
           .input('newValue', sql.VarChar, JSON.stringify({ reservation_status: RESERVATION_STATUS.AWAIT_CHECK_IN, transactionRef: referenceCode }))
@@ -172,6 +205,10 @@ export const handleSepayWebhook = async (req, res) => {
              orderCode: reservation.order_code,
              status: 'Await Check-in', 
              flashCompletePaid: true 
+          });
+          io.emit('RESERVATION_STATUS_CHANGED', {
+             id: reservation.reservation_id,
+             status: RESERVATION_STATUS.AWAIT_CHECK_IN
           });
         }
 

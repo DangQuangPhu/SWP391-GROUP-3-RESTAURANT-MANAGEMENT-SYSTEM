@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { apiPost, apiPatch, apiGet } from "@/core/api/httpClient";
 import { useSocket } from "@/core/socket/SocketContext.jsx";
 import { motion, AnimatePresence } from "framer-motion";
@@ -47,6 +48,14 @@ function CopyableField({ label, copyValue, children }) {
 export default function ReservationPaymentPanel({ reservation, amount, orderCode, qrUrl, onSuccess, onCancel }) {
   const [phase, setPhase] = useState("pending"); // pending | processing | success | expired
   const [secondsLeft, setSecondsLeft] = useState(15 * 60); // 15 mins
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [promoCodeInput, setPromoCodeInput] = useState("");
+  const [appliedDiscount, setAppliedDiscount] = useState(0);
+  const [promoErrorMessage, setPromoErrorMessage] = useState("");
+  const [isValidating, setIsValidating] = useState(false);
+  const [validPromoName, setValidPromoName] = useState("");
+  const navigate = useNavigate();
+  const Maps = navigate;
   const { socket } = useSocket();
   const phaseRef = useRef(phase);
 
@@ -70,12 +79,9 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
     if (!socket || !reservation?.reservation_id || phaseRef.current !== "pending") return;
 
     const handlePaymentSuccess = (payload) => {
-      if (payload.reservationId === reservation.reservation_id && (payload.status === 'Reserved' || payload.status === 'Await Check-in' || payload.status === 'Complete Paid')) {
-        setPhase("processing");
-        setTimeout(() => {
-          setPhase("success");
-          setTimeout(() => onSuccess(), 3000);
-        }, 1500); // 1.5s processing animation
+      if (payload.reservationId === reservation.reservation_id && 
+         (payload.status === 'Paid' || payload.status === 'Complete Paid' || payload.status === 'Reserved' || payload.status === 'Await Check-in')) {
+        setPaymentSuccess(true);
       }
     };
 
@@ -83,7 +89,7 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
     return () => {
       socket.off("RESERVATION_PAYMENT_SUCCESS", handlePaymentSuccess);
     };
-  }, [socket, reservation?.reservation_id, onSuccess]);
+  }, [socket, reservation?.reservation_id]);
 
   // Polling fallback
   useEffect(() => {
@@ -92,14 +98,8 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
     const intervalId = setInterval(async () => {
       try {
         const res = await apiGet(`/payments/reservations/${reservation.reservation_id}/status`);
-        if (res?.data?.status && res.data.status !== 'Pending Payment' && res.data.status !== 'Pending') {
-          setPhase("processing");
-          setTimeout(() => {
-            if (phaseRef.current !== "success") {
-              setPhase("success");
-              setTimeout(() => onSuccess(), 3000);
-            }
-          }, 1500);
+        if (res?.data?.status && (res.data.status === 'Paid' || res.data.status === 'Complete Paid' || res.data.status === 'Reserved' || res.data.status === 'Await Check-in')) {
+          setPaymentSuccess(true);
           clearInterval(intervalId);
         }
       } catch (err) {
@@ -108,7 +108,17 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
     }, 3000);
 
     return () => clearInterval(intervalId);
-  }, [reservation?.reservation_id, onSuccess]);
+  }, [reservation?.reservation_id]);
+
+  // Redirection timer
+  useEffect(() => {
+    if (paymentSuccess) {
+      const timer = setTimeout(() => {
+        Maps('/');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [paymentSuccess]);
 
   // Handle "I have paid" button (Customer UX)
   const handleIHavePaid = () => {
@@ -129,14 +139,54 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
     onCancel();
   };
 
-  const [displayAmount] = useState(() => {
+  const [baseAmount] = useState(() => {
     if (amount && !isNaN(amount)) return Number(amount);
     const randomAmounts = [5000, 10000, 15000, 20000];
     return randomAmounts[Math.floor(Math.random() * randomAmounts.length)];
   });
 
+  const displayAmount = Math.max(0, baseAmount - appliedDiscount);
+
+  const handleApplyPromo = async () => {
+    if (!promoCodeInput.trim()) return;
+    setIsValidating(true);
+    setPromoErrorMessage("");
+    try {
+      const res = await apiPatch(`/reservations/${reservation.reservation_id}/apply-promo`, { promo_code: promoCodeInput.trim() });
+      if (res.data?.success) {
+        setAppliedDiscount(res.data.discount_amount);
+        setValidPromoName(res.data.promotion_name);
+        setPromoErrorMessage("");
+      } else {
+        setPromoErrorMessage(res.data?.message || "Invalid promo code");
+        setAppliedDiscount(0);
+        setValidPromoName("");
+      }
+    } catch (err) {
+      setPromoErrorMessage(err.response?.data?.message || "Failed to apply promo code");
+      setAppliedDiscount(0);
+      setValidPromoName("");
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
   const generatedOrderCode = orderCode || `PHURAIRESTAURANT${reservation?.reservation_id || Math.floor(1000 + Math.random() * 9000)}`;
   const finalQrUrl = qrUrl || `https://qr.sepay.vn/img?bank=TPBank&acc=00003942326&template=&showinfo=true&holder=DANG%20QUANG%20PHU&store=PHURAI%20RESTAURANT&amount=${displayAmount}&des=${encodeURIComponent(generatedOrderCode)}`;
+
+  if (paymentSuccess) {
+    return (
+      <div className="fixed inset-0 bg-white dark:bg-[#1a1a1a] flex flex-col items-center justify-center z-50 p-6 text-center">
+        <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-green-500/30 animate-bounce">
+          <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Thanh toán thành công!</h2>
+        <p className="text-lg text-gray-600 dark:text-gray-400">Hệ thống đang chuyển hướng về trang chủ...</p>
+      </div>
+    );
+  }
 
   const mins = Math.floor(secondsLeft / 60);
   const secs = secondsLeft % 60;
@@ -190,9 +240,49 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
               <CopyableField label="Description" copyValue={generatedOrderCode}>
                 <span className="font-semibold text-blue-600 dark:text-blue-400 font-mono">{generatedOrderCode}</span>
               </CopyableField>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-500 dark:text-gray-400 text-sm">Amount</span>
-                <span className="font-bold text-gray-900 dark:text-white text-lg">{formatVND(displayAmount)}</span>
+              <div className="flex justify-between items-center pb-2">
+                <span className="text-gray-500 dark:text-gray-400 text-sm">Base Amount</span>
+                <span className="font-semibold text-gray-900 dark:text-white text-md">{formatVND(baseAmount)}</span>
+              </div>
+              
+              {/* Promo Code Section */}
+              <div className="py-2 border-t border-b border-gray-200 dark:border-gray-700">
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={promoCodeInput}
+                    onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+                    placeholder="Enter Promo Code" 
+                    disabled={isValidating || appliedDiscount > 0}
+                    className="flex-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 uppercase"
+                  />
+                  {appliedDiscount > 0 ? (
+                    <button onClick={() => { setAppliedDiscount(0); setPromoCodeInput(""); setValidPromoName(""); }} className="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-2 rounded-lg text-sm font-medium transition-colors">
+                      Remove
+                    </button>
+                  ) : (
+                    <button onClick={handleApplyPromo} disabled={isValidating || !promoCodeInput.trim()} className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                      {isValidating ? "..." : "Apply"}
+                    </button>
+                  )}
+                </div>
+                {promoErrorMessage && (
+                  <p className="text-red-500 text-xs mt-2">{promoErrorMessage}</p>
+                )}
+                {appliedDiscount > 0 && (
+                  <div className="flex justify-between items-center mt-3 text-sm">
+                    <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                      {validPromoName || "Voucher Applied"}
+                    </span>
+                    <span className="font-bold text-green-600 dark:text-green-400">-{formatVND(appliedDiscount)}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-between items-center pt-2">
+                <span className="text-gray-900 dark:text-white font-medium text-base">Total Target</span>
+                <span className="font-bold text-blue-600 dark:text-blue-400 text-xl">{formatVND(displayAmount)}</span>
               </div>
             </div>
 

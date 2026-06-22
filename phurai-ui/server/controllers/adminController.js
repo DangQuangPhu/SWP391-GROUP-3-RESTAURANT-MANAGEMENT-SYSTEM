@@ -1,98 +1,82 @@
 import { getRawPool } from '../db.js';
 import sql from 'mssql';
 
-// GET /api/admin/audit-logs
-export const getAuditLogs = async (req, res) => {
+
+
+// GET /api/admin/dashboard/stats
+export const getDashboardStats = async (req, res) => {
     try {
         const pool = await getRawPool();
-        const result = await pool.request().query(`
-            SELECT 
-                al.log_id,
-                al.user_id,
-                u.full_name,
-                u.role_id,
-                al.target_id,
-                al.target_table,
-                al.action_name,
-                al.old_value_json,
-                al.new_value_json,
-                al.ip_address,
-                al.created_at
-            FROM dbo.AuditLogs al
-            LEFT JOIN dbo.UserAccounts u ON al.user_id = u.user_id
-            ORDER BY al.created_at DESC
-        `);
-        return res.json({ success: true, data: result.recordset });
-    } catch (error) {
-        console.error('[adminController] getAuditLogs error:', error);
-        return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
-    }
-};
-
-// GET /api/admin/settings
-export const getSettings = async (req, res) => {
-    try {
-        const pool = await getRawPool();
-        const result = await pool.request().query(`
-            SELECT setting_key, setting_value, description
-            FROM dbo.RestaurantSettings
-        `);
-        return res.json({ success: true, data: result.recordset });
-    } catch (error) {
-        console.error('[adminController] getSettings error:', error);
-        return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
-    }
-};
-
-// PUT /api/admin/settings
-export const updateSettings = async (req, res) => {
-    const { settings } = req.body;
-    
-    if (!settings || !Array.isArray(settings)) {
-        return res.status(400).json({ success: false, message: 'Invalid settings format. Expected array of objects.' });
-    }
-
-    let pool;
-    try {
-        pool = await getRawPool();
-    } catch (error) {
-        return res.status(500).json({ success: false, message: 'Database connection failed' });
-    }
-
-    const transaction = new sql.Transaction(pool);
-    await transaction.begin();
-
-    try {
-        for (const item of settings) {
-            if (item.setting_key && item.setting_value !== undefined) {
-                await transaction.request()
-                    .input('key', sql.NVarChar(100), item.setting_key)
-                    .input('val', sql.NVarChar(sql.MAX), String(item.setting_value))
-                    .query(`
-                        UPDATE dbo.RestaurantSettings 
-                        SET setting_value = @val, updated_at = GETDATE()
-                        WHERE setting_key = @key
-                    `);
-            }
-        }
-
-        // Audit Log for Settings Update
-        const adminId = req.user?.user_id;
-        const newValueJson = JSON.stringify({ settings_updated: settings.length });
         
-        await transaction.request()
-            .input('actorId', sql.Int, adminId)
-            .input('newValue', sql.NVarChar(sql.MAX), newValueJson)
-            .query(`
-                INSERT INTO dbo.AuditLogs (user_id, target_table, action_name, new_value_json, ip_address, created_at)
-                VALUES (@actorId, N'RestaurantSettings', N'ADMIN_UPDATE_SETTINGS', @newValue, '127.0.0.1', GETDATE())
-            `);
+        const [
+            accountsRes,
+            staffRes,
+            auditRes,
+            reservationsRes,
+            revenueRes,
+            reviewsRes
+        ] = await Promise.all([
+            pool.request().query('SELECT COUNT(*) as count FROM dbo.UserAccounts'),
+            pool.request().query("SELECT COUNT(*) as count FROM dbo.StaffProfiles WHERE employment_status = 'Active'"),
+            pool.request().query("SELECT COUNT(*) as count FROM dbo.AuditLogs WHERE CAST(created_at AS DATE) = CAST(SYSDATETIME() AS DATE)"),
+            pool.request().query("SELECT COUNT(*) as count FROM dbo.Reservations WHERE created_at >= DATEADD(day, -30, SYSDATETIME())"),
+            pool.request().query("SELECT ISNULL(SUM(amount_paid), 0) as total FROM dbo.Payments WHERE paid_at >= DATEADD(day, -30, SYSDATETIME()) AND payment_status = 'Completed'"),
+            pool.request().query("SELECT COUNT(*) as count FROM dbo.CustomerReviews WHERE overall_rating <= 3")
+        ]);
 
-        await transaction.commit();
-        return res.json({ success: true, message: 'Settings updated successfully' });
+        const stats = {
+            totalAccounts: accountsRes.recordset[0].count,
+            activeStaff: staffRes.recordset[0].count,
+            auditEntriesToday: auditRes.recordset[0].count,
+            reservations30d: reservationsRes.recordset[0].count,
+            revenue30d: revenueRes.recordset[0].total,
+            pendingRoleRequests: 2, // Mock for now or adapt if table exists
+            reviewsNeedingReply: reviewsRes.recordset[0].count,
+            staffPerformanceFlags: 1 // Mock for now or adapt if table exists
+        };
+
+        return res.json({ success: true, data: stats });
     } catch (error) {
-        await transaction.rollback();
-        console.error('[adminController] updateSettings error:', error);
+        console.error('[adminController] getDashboardStats error:', error);
+        return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    }
+};
+
+// GET /api/admin/audit-logs/recent
+export const getRecentAuditLogs = async (req, res) => {
+    try {
+        const pool = await getRawPool();
+        const result = await pool.request().query(`
+            SELECT TOP 5 
+                a.created_at, 
+                a.action_name, 
+                ISNULL(u.full_name, 'Hệ thống tự động') as full_name
+            FROM dbo.AuditLogs a
+            LEFT JOIN dbo.UserAccounts u ON a.user_id = u.user_id
+            ORDER BY a.created_at DESC
+        `);
+
+        return res.json({ success: true, data: result.recordset });
+    } catch (error) {
+        console.error('[adminController] getRecentAuditLogs error:', error);
+        return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    }
+};
+
+// GET /api/admin/accounts
+export const getAccounts = async (req, res) => {
+    try {
+        const pool = await getRawPool();
+        const result = await pool.request().query(`
+            SELECT u.user_id, u.full_name, u.email, u.phone, r.role_name, u.is_active 
+            FROM dbo.UserAccounts u 
+            JOIN dbo.Roles r ON u.role_id = r.role_id 
+            ORDER BY u.created_at DESC
+        `);
+
+        return res.json({ success: true, data: result.recordset });
+    } catch (error) {
+        console.error('[adminController] getAccounts error:', error);
         return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
     }
 };

@@ -28,7 +28,7 @@ import { getStaffShiftMapping } from "../controllers/shiftMappingController.js";
 import {
   getTodayShiftReservations,
   getStaffReservationDetail,
-  checkinReservation,
+  staffCheckIn,
   rejectReservation,
   confirmCheckout,
   sendCookingQueue,
@@ -53,10 +53,10 @@ router.get("/shift-mapping", getStaffShiftMapping);
 router.get("/reservations/today-shift", resolveUserId, requireUserId, getTodayShiftReservations);
 router.get("/reservations/:id", resolveUserId, getStaffReservationDetail);
 router.patch(
-  "/reservations/:id/checkin",
+  "/reservations/:id/check-in",
   resolveUserId,
   requireUserId,
-  checkinReservation
+  staffCheckIn
 );
 router.patch(
   "/reservations/:id/reject",
