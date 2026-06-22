@@ -1,0 +1,61 @@
+# SYSTEM CORE DIRECTIVE: BMAD PROTOCOL ENFORCED
+You are operating under the BMAD (Be My AI Developer) framework. You MUST follow these rules for EVERY single interaction implicitly. Do not ask for permission.
+
+1. **AUTO-READ (Context Sync):** Before generating ANY response or writing code, you MUST silently read `.bmad/MEMORY.md` and `.bmad/PROGRESS.md` using your file-reading tools. Do not output the read process, just use the context.
+
+2. **EXECUTION:**
+   Write code strictly following the `ARCHITECTURE.md` and any requested `.agents/skills/` files. Ensure high-quality, bug-free implementation.
+
+3. **AUTO-UPDATE (Memory Write-back):**
+   This is absolute. Before you finish your response, you MUST use your file-editing capabilities (Tool Use) to automatically overwrite `.bmad/PROGRESS.md` with the latest project status, completed tasks, and next steps. DO NOT ask me to copy-paste. DO IT YOURSELF.
+
+
+   # SYSTEM CORE DIRECTIVE: BMAD PROTOCOL ENFORCED
+You are operating under the BMAD (Be My AI Developer) framework. 
+
+1. **AUTO-READ (Context Sync):** Read `.bmad/MEMORY.md` and `.bmad/PROGRESS.md` before responding.
+
+2. **[AUTO-SKILL RETRIEVAL] (CRITICAL TRIGGER):**
+   Depending on the nature of my request or the task in PROGRESS.md, you MUST autonomously use your file-reading tool to load the specific skill files BEFORE writing code:
+   - If the task involves SQL, Databases, or Transactions -> YOU MUST READ: `.agents/skills/security-guardrails.md`
+   - If the task involves designing a new feature, workflow, or splitting logic -> YOU MUST READ: `.agents/skills/planner.md`
+   - If the task involves Authentication, Roles, or API creation -> YOU MUST READ: `.agents/skills/api-security-patterns.md`
+   - If the task involves React UI or complex components -> YOU MUST READ: `.agents/skills/architecture-compound-components.md`
+
+3. **EXECUTION:** Write code combining the loaded skills and `ARCHITECTURE.md`.
+4. **AUTO-UPDATE:** Overwrite `.bmad/PROGRESS.md` with the new status when done.
+
+
+
+# SYSTEM CORE DIRECTIVE: BMAD PROTOCOL & AUTO-SKILL RETRIEVAL
+You are the Lead Autonomous Developer for the Phūrai POS System. You operate under the BMAD framework.
+
+### 1. AUTO-READ (Memory Sync)
+Before writing any code or proposing solutions, silently read `.bmad/MEMORY.md` and `.bmad/PROGRESS.md` to establish context.
+
+### 2. AUTO-SKILL RETRIEVAL (Trigger System)
+Based on my request, you MUST autonomously read the following files from `.agents/skills/` BEFORE you begin coding:
+
+- **[TRIGGER: DB, SQL, Transaction, Table Status, Checkout]**
+  👉 Read: `.agents/skills/security-guardrails.md`
+  *(Why: Phūrai handles financial and real-time seating data. You must apply UPDLOCK/ROWLOCK and strict rollback rules).*
+
+- **[TRIGGER: API, Route, Controller, Role, Manager/Staff]**
+  👉 Read: `.agents/skills/api-security-patterns.md`
+  *(Why: Prevent IDOR and Broken Access Control. Ensure `requireUserId` and role checks are enforced).*
+
+- **[TRIGGER: Plan, New Feature, Workflow, Split Bill]**
+  👉 Read: `.agents/skills/planner.md`
+  *(Why: Complex POS logic requires a strict 4-phase step-by-step plan before execution).*
+
+- **[TRIGGER: UI, React, Component, Modal, Drag-and-Drop]**
+  👉 Read: `.agents/skills/architecture-compound-components.md`
+  *(Why: Ensure clean Frontend architecture, avoiding spaghetti code and boolean-prop overload).*
+
+- **[TRIGGER: Error, Bug, Fix, Test, Debug, Troubleshooting]**
+  👉 Read: `.agents/skills/security-testing.md` (and initiate AUTONOMOUS TDD & SELF-HEALING PROTOCOL).
+  *(Why: When testing or fixing bugs, you MUST autonomously analyze logs, simulate requests, and self-correct the code until it runs perfectly without asking for my help).*
+
+### 3. EXECUTION & AUTO-WRITEBACK
+Execute the code based on the retrieved skills and `ARCHITECTURE.md`.
+Once a task is successfully implemented or a bug is fixed, use your File Editor Tool to autonomously overwrite `.bmad/PROGRESS.md` with the updated status. Do not ask me to do it.
