@@ -125,6 +125,34 @@ export async function markAllNotificationsRead(req, res) {
     });
   } catch (error) {
     console.error("PATCH /api/notifications/read-all failed:", error);
-    return jsonError(res, "Could not mark notifications as read.");
+    return jsonError(res, "Could not mark all notifications as read.");
+  }
+}
+
+/**
+ * DELETE /api/notifications/:id
+ */
+export async function deleteNotification(req, res) {
+  const userId = req.userId;
+  const notificationId = Number(req.params.id);
+
+  if (!Number.isFinite(notificationId) || notificationId <= 0) {
+    return jsonError(res, "Invalid notification id.", 400);
+  }
+
+  try {
+    const [result] = await pool.query(
+      `DELETE FROM dbo.Notifications WHERE notification_id = ? AND user_id = ?`,
+      [notificationId, userId]
+    );
+
+    if (result.rowsAffected[0] === 0) {
+      return jsonError(res, "Notification not found.", 404);
+    }
+
+    return jsonOk(res, null);
+  } catch (error) {
+    console.error("DELETE /api/notifications/:id failed:", error);
+    return jsonError(res, "Could not delete notification.");
   }
 }

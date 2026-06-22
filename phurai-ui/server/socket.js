@@ -18,8 +18,8 @@ const RESTAURANT_STAFF_ROLE_ID = 2;
 export function initSocket(httpServer, { allowedOrigins = [] } = {}) {
   io = new Server(httpServer, {
     cors: {
-      origin: allowedOrigins.length ? allowedOrigins : true,
-      credentials: true,
+      origin: "*",
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
   });
 
@@ -34,10 +34,20 @@ export function initSocket(httpServer, { allowedOrigins = [] } = {}) {
       socket.join("room:manager");
     }
 
-    if (STAFF_ROLE_IDS.has(roleId)) {
-      socket.join("room:staff"); // general staff fallback room
+    // Kitchen Staff (role 3) → room:kitchen (dedicated KDS room)
+    if (roleId === 3) {
+      socket.join("room:kitchen");
+      socket.join("room:staff"); // also join general staff room for shared events
+    }
 
-      // If they are Restaurant Staff (role 2 in typical setup, or just any staff), query shift
+    // Restaurant Staff (role 2) → room:restaurant_staff + room:staff
+    if (roleId === 2) {
+      socket.join("room:restaurant_staff");
+      socket.join("room:staff");
+    }
+
+    // All staff with shifts → shift-specific rooms
+    if (STAFF_ROLE_IDS.has(roleId)) {
       if (Number.isFinite(userId) && userId > 0) {
         try {
           const today = new Date().toISOString().split('T')[0];

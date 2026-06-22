@@ -2,6 +2,7 @@ import {
   authHeaders,
   createApiError,
   request,
+  saveAuthToken,
 } from "@/core/api/httpClient.js";
 import { mapApiUserToFrontend } from "../utils/userMapper.js";
 
@@ -32,6 +33,9 @@ export async function loginAccount(payload) {
     }),
   });
 
+  if (data?.token) {
+    saveAuthToken(data.token);
+  }
   if (data?.user) {
     return { ...data, user: mapApiUserToFrontend(data.user) };
   }
@@ -99,6 +103,9 @@ export function googleRegisterWithAccessToken(accessToken) {
   return request("/auth/google-register", {
     method: "POST",
     body: JSON.stringify({ accessToken }),
+  }).then((data) => {
+    if (data?.token) saveAuthToken(data.token);
+    return data;
   });
 }
 
@@ -106,6 +113,9 @@ export function googleLogin(payload) {
   return request("/auth/google", {
     method: "POST",
     body: JSON.stringify(payload),
+  }).then((data) => {
+    if (data?.token) saveAuthToken(data.token);
+    return data;
   });
 }
 

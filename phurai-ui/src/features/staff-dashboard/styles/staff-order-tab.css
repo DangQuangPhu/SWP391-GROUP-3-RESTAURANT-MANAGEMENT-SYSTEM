@@ -148,10 +148,12 @@
 }
 
 @keyframes staff-order-ready-pulse {
+
   0%,
   100% {
     box-shadow: 0 0 0 0 rgba(47, 125, 79, 0.35);
   }
+
   50% {
     box-shadow: 0 0 0 6px rgba(47, 125, 79, 0);
   }

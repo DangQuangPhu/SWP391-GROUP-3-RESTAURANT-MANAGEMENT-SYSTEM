@@ -18,6 +18,13 @@ function ReservationDetailsPanel({
   onDone,
   onConfirm,
   onCancel,
+  selectedTableId,
+  onSelectTable,
+  tables,
+  tablesLoading,
+  membershipTier,
+  onNavigateLogin,
+  onNavigateRegister,
 }) {
   return (
     <div className={`rzv-details ${reviewing ? "rzv-details--review" : ""}`}>
@@ -29,6 +36,13 @@ function ReservationDetailsPanel({
           timeSlots={timeSlots}
           isAuthenticated={isAuthenticated}
           todayStr={todayStr}
+          selectedTableId={selectedTableId}
+          onSelectTable={onSelectTable}
+          tables={tables}
+          tablesLoading={tablesLoading}
+          membershipTier={membershipTier}
+          onNavigateLogin={onNavigateLogin}
+          onNavigateRegister={onNavigateRegister}
         />
       </div>
 

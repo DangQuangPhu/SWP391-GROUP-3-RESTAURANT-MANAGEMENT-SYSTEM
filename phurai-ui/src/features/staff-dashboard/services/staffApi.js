@@ -4,16 +4,14 @@ import { request, profileRequestHeaders } from "@/core/api/httpClient.js";
 import {
   KITCHEN_TICKETS,
   QUEUE_RESERVATIONS,
-  STAFF_ACTIVE_ORDER_TABLES,
   STAFF_KDS_DELAYED,
   STAFF_KDS_READY,
   STAFF_MENU_DISHES,
   STAFF_ORDERS,
   STAFF_REPORT_AUDIT,
   STAFF_REPORT_SUMMARY,
-  STAFF_TABLES,
   getMockPaymentBill,
-} from "../data/staffDashboardMockData.js";
+} from "@/shared/constants.js";
 import { asArray } from "@/utils/asArray.js";
 
 const MOCK_DELAY = 220;
@@ -200,6 +198,22 @@ async function staffPost(path, userId, body = {}) {
   return res;
 }
 
+export const createVnpayUrl = async (orderId, userId) => {
+  return request("/payments/create_vnpay_url", {
+    method: "POST",
+    headers: profileRequestHeaders(userId, {
+      "Content-Type": "application/json",
+    }),
+    body: JSON.stringify({ order_id: orderId }),
+  });
+};
+
+export const checkOrderStatus = async (orderId) => {
+  return request(`/payments/orders/${orderId}/status`, {
+    method: "GET",
+  });
+};
+
 async function staffPatch(path, userId, body = {}) {
   const res = await request(path, {
     method: "PATCH",
@@ -231,17 +245,17 @@ export function isPendingOnlineReservation(reservation) {
   const statusOk =
     statusRaw === "Pending" ||
     normalizeQueueToken(reservation?.status ?? reservation?.reservation_status) ===
-      "pending";
+    "pending";
   const sourceOk =
     sourceRaw === "Online" ||
     normalizeQueueToken(reservation?.source ?? reservation?.reservation_source) ===
-      "online";
+    "online";
 
   return statusOk && sourceOk;
 }
 
 export async function fetchReservationQueue(userId) {
-  const res = await staffGet("/staff/reservations", [], userId);
+  const res = await staffGet("/staff/reservations/today-shift", [], userId);
   const rows = Array.isArray(res.data) ? res.data : [];
   const data = rows.filter(isPendingOnlineReservation);
   return { source: res.source, data };
@@ -256,28 +270,33 @@ export function unwrapReservationList(res) {
 }
 
 /** Full today's reservation list for host check-in (all statuses). */
-export async function fetchTodayReservations(userId) {
+export async function fetchTodayReservations(userId, startDate, endDate) {
   try {
-    const res = await request("/staff/reservations", {
+    let url = `/staff/reservations/today-shift`;
+    if (startDate && endDate) {
+      url += `?startDate=${startDate}&endDate=${endDate}`;
+    } else if (startDate) {
+      url += `?startDate=${startDate}`;
+    }
+
+    const res = await request(url, {
       method: "GET",
       headers: profileRequestHeaders(userId),
     });
     if (res?.success) {
-      const apiRows = unwrapReservationList(res.reservations);
+      const apiRows = unwrapReservationList(res.reservations ?? res.data);
       return {
         source: "api",
-        data: mergeAndSortReservations(apiRows, QUEUE_RESERVATIONS),
-        current_shift: res.current_shift
+        data: sortReservationsChronologically(apiRows),
+        current_shift: res.current_shift,
       };
     }
   } catch (error) {
     console.error("Fetch error:", error);
   }
 
-  return {
-    source: "mock",
-    data: QUEUE_RESERVATIONS,
-  };
+  // No mock fallback — show empty state rather than fake data
+  return { source: "api", data: [] };
 }
 
 /** Alias for fetchTodayReservations (legacy naming). */
@@ -307,11 +326,48 @@ export async function checkInStaffReservation(reservationId, userId, { table_id 
   return res;
 }
 
-export async function rejectStaffReservation(reservationId, userId, { reason } = {}) {
+export async function confirmCheckoutReservation(reservationId, userId) {
+  const res = await staffPatch(
+    `/staff/reservations/${reservationId}/checkout-confirm`,
+    userId,
+    {}
+  );
+  if (!res?.success) {
+    throw new Error(res?.message || "Checkout confirmation failed");
+  }
+  return res;
+}
+
+export async function sendReservationToKitchenQueue(reservationId, userId) {
+  const res = await staffPost(
+    `/staff/reservations/${reservationId}/send-cooking-queue`,
+    userId,
+    {}
+  );
+  if (!res?.success) {
+    throw new Error(res?.message || "Failed to send preorder to kitchen");
+  }
+  return res;
+}
+
+export async function fetchReservationTimeline(reservationId, userId) {
+  try {
+    const res = await request(`/reservations/${reservationId}/timeline`, {
+      method: "GET",
+      headers: profileRequestHeaders(userId),
+    });
+    if (res?.success) return res.timeline ?? [];
+  } catch (e) {
+    console.error("[fetchReservationTimeline]", e?.message);
+  }
+  return [];
+}
+
+export async function rejectStaffReservation(reservationId, userId, { reason, new_status = "No Show" } = {}) {
   const res = await staffPatch(
     `/staff/reservations/${reservationId}/reject`,
     userId,
-    reason ? { reason } : {}
+    { reason: reason || "No reason provided", new_status }
   );
   if (!res?.success) {
     throw new Error(res?.message || "Reservation rejection failed");
@@ -320,7 +376,7 @@ export async function rejectStaffReservation(reservationId, userId, { reason } =
 }
 
 export async function fetchStaffTables() {
-  return staffGet("/staff/tables", STAFF_TABLES);
+  return staffGet("/staff/tables", []);
 }
 
 export async function checkInStaffTable(tableId, userId) {
@@ -331,6 +387,37 @@ export async function resetStaffTable(tableId, userId) {
   return staffPost(`/staff/tables/${tableId}/reset`, userId);
 }
 
+export async function markStaffTableClean(tableId, userId) {
+  const res = await request(`/staff/tables/${tableId}/mark-clean`, {
+    method: "PUT",
+    headers: profileRequestHeaders(userId, {
+      "Content-Type": "application/json",
+    })
+  });
+  if (!res?.success) throw new Error(res?.message || "Failed to mark table clean");
+  return res;
+}
+
+export async function mergeTablesApi(sourceId, targetId, userId) {
+  const res = await staffPost(
+    "/staff/tables/merge",
+    userId,
+    { source_table_id: sourceId, target_table_id: targetId }
+  );
+  if (!res?.success) throw new Error(res?.message || "Merge failed.");
+  return res;
+}
+
+export async function unmergeTableApi(tableId, userId) {
+  const res = await staffPost(
+    "/staff/tables/unmerge",
+    userId,
+    { table_id: tableId }
+  );
+  if (!res?.success) throw new Error(res?.message || "Unmerge failed.");
+  return res;
+}
+
 export async function fetchStaffOrders() {
   const res = await staffGet("/staff/orders/active", STAFF_ORDERS);
   const rows = Array.isArray(res.data) ? res.data : STAFF_ORDERS;
@@ -338,10 +425,9 @@ export async function fetchStaffOrders() {
   return { source: res.source, data };
 }
 
-/** Occupied tables with line-item detail for the Orders tab. */
 export async function fetchActiveStaffOrders() {
-  const res = await staffGet("/staff/orders/active", STAFF_ACTIVE_ORDER_TABLES);
-  const tables = res.data?.tables ?? STAFF_ACTIVE_ORDER_TABLES.tables ?? [];
+  const res = await staffGet("/staff/orders/active", { tables: [] });
+  const tables = res.data?.tables ?? [];
   return { source: res.source, data: Array.isArray(tables) ? tables : [] };
 }
 
@@ -381,6 +467,10 @@ export async function checkoutStaffPayment(tableId, userId, payload) {
 
 export async function voidStaffBill(tableId, userId) {
   return staffPost(`/staff/payments/${tableId}/void`, userId, {});
+}
+
+export async function splitOrderItemsApi(orderId, userId, items) {
+  return staffPost(`/staff/orders/${orderId}/split-items`, userId, { items });
 }
 
 export async function fetchKitchenQueue() {

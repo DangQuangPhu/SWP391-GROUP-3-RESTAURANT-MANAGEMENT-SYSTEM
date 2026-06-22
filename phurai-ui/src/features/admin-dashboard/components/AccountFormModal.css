@@ -1,0 +1,94 @@
+.afm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.afm-modal {
+  width: 420px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.afm-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 16px;
+}
+
+.afm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.afm-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.afm-row-2 .afm-field {
+  margin-bottom: 0;
+}
+
+.afm-field label {
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: #888;
+  text-transform: uppercase;
+}
+
+.afm-field input,
+.afm-field select {
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  font-size: 14px;
+}
+
+.afm-note {
+  font-size: 11px;
+  color: #999;
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.afm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.afm-btn-outline {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.afm-btn-primary {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  background: #20242b;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.afm-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

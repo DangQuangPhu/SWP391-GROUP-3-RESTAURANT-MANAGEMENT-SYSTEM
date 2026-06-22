@@ -1,27 +1,28 @@
 import { format, parseISO } from "date-fns";
 import { formatBookingId } from "@/utils/formatBookingId.js";
 import { normalizeQueueToken } from "../services/staffApi.js";
-import { DASHBOARD_TODAY } from "../../manager-dashboard/data/managerDashboardMockData.js";
-import { RESERVATION_STATUS_META } from "../data/staffDashboardMockData.js";
+import { DASHBOARD_TODAY } from "@/shared/constants.js";
+import { RESERVATION_STATUS_META } from "@/shared/reservationStatus.js";
 import { asArray } from "@/utils/asArray.js";
 
 export const RESERVATION_QUEUE_FILTERS = [
   { id: "all", label: "All" },
-  { id: "pending", label: "Pending" },
-  { id: "checked_in", label: "Checked In" },
-  { id: "rejected", label: "Rejected" },
+  { id: "pending request", label: "Pending Request" },
+  { id: "check-in", label: "Check-in" },
+  { id: "reject request", label: "Reject Request" },
+  { id: "reject check-in", label: "Reject Check-in" }
 ];
 
 export function getReservationStatusKey(reservation) {
   return (
-    normalizeQueueToken(reservation?.status ?? reservation?.reservation_status) ||
-    "pending"
+    normalizeQueueToken(reservation?.display_status ?? reservation?.status ?? reservation?.reservation_status) ||
+    "pending request"
   );
 }
 
 export function isRejectedReservation(reservation) {
   const status = getReservationStatusKey(reservation);
-  return status === "cancelled" || status === "no_show";
+  return status === "reject check-in" || status === "reject request";
 }
 
 export function getReservationDateIso(reservation) {
@@ -57,12 +58,7 @@ export function formatReservationTimeDisplay(reservation) {
 }
 
 export function getReservationDisplayMeta(statusKey) {
-  const meta =
-    RESERVATION_STATUS_META[statusKey] || RESERVATION_STATUS_META.pending;
-  if (statusKey === "cancelled" || statusKey === "no_show") {
-    return { ...meta, label: "Rejected" };
-  }
-  return meta;
+  return RESERVATION_STATUS_META[statusKey] || RESERVATION_STATUS_META["pending request"];
 }
 
 export function matchesReservationQueueFilter(reservation, filterId) {

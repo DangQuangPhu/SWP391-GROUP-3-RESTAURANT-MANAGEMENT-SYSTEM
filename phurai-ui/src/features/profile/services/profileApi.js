@@ -3,7 +3,7 @@ import {
   profileRequestHeaders,
   request,
 } from "@/core/api/httpClient.js";
-import { mapApiUserToFrontend } from "@/features/auth";
+import { mapApiUserToFrontend } from "@/features/auth/utils/userMapper.js";
 
 export async function getProfile(userId) {
   const data = await request(`/profile/${encodeURIComponent(userId)}`, {

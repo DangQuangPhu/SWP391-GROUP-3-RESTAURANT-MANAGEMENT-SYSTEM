@@ -1,10 +1,10 @@
 import KpiCard from "../KpiCard.jsx";
 import { Card, StatusBadge, Button } from "../ManagerUI.jsx";
 import {
-  RESERVATION_STATUS_META,
   TABLE_STATUS_META,
   ORDER_STATUS_META,
-} from "../../data/managerDashboardMockData.js";
+} from "@/shared/constants.js";
+import { RESERVATION_STATUS_META } from "@/shared/reservationStatus.js";
 
 import { asArray } from "@/utils/asArray.js";
 
@@ -38,14 +38,14 @@ function TodaySection({ kpis, reservations, tables, orders, onNavigate }) {
         >
           <ul className="sfx-timeline">
             {arriving.length ? (
-              arriving.map((r) => (
+              arriving.filter(Boolean).map((r) => (
                 <li key={r.reservation_id} className="sfx-timeline__row">
                   <span className="sfx-timeline__time">{r.start_time}</span>
                   <span className="sfx-timeline__main">
                     <strong>{r.customer_name}</strong>
                     <small>{r.party_size} guests · {r.table_label}</small>
                   </span>
-                  <StatusBadge tone={RESERVATION_STATUS_META[r.status]?.tone}>
+                  <StatusBadge tone={RESERVATION_STATUS_META[r.status]?.tone} color={RESERVATION_STATUS_META[r.status]?.color}>
                     {RESERVATION_STATUS_META[r.status]?.label}
                   </StatusBadge>
                 </li>
@@ -62,7 +62,7 @@ function TodaySection({ kpis, reservations, tables, orders, onNavigate }) {
         >
           <ul className="sfx-timeline">
             {kitchenQueue.length ? (
-              kitchenQueue.map((o) => (
+              kitchenQueue.filter(Boolean).map((o) => (
                 <li key={o.order_id} className="sfx-timeline__row">
                   <span className="sfx-timeline__time">{o.order_number}</span>
                   <span className="sfx-timeline__main">
@@ -86,12 +86,15 @@ function TodaySection({ kpis, reservations, tables, orders, onNavigate }) {
         action={<Button size="sm" variant="ghost" onClick={() => onNavigate("tables")}>Manage</Button>}
       >
         <div className="sfx-tiles">
-          {tableList.map((t) => (
-            <div key={t.table_id} className={`sfx-tile sfx-tile--${TABLE_STATUS_META[t.status]?.tone}`}>
-              <strong>{t.table_number}</strong>
-              <small>{TABLE_STATUS_META[t.status]?.label}</small>
-            </div>
-          ))}
+          {tableList.filter(Boolean).map((t) => {
+            const statusKey = String(t.table_status || t.status || "available").toLowerCase();
+            return (
+              <div key={t.table_id} className={`sfx-tile sfx-tile--${TABLE_STATUS_META[statusKey]?.tone}`}>
+                <strong>{t.table_number}</strong>
+                <small>{TABLE_STATUS_META[statusKey]?.label}</small>
+              </div>
+            );
+          })}
         </div>
       </Card>
     </div>

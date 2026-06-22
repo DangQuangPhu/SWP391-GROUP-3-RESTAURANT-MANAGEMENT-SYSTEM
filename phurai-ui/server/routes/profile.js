@@ -74,8 +74,12 @@ async function handleGetProfile(req, res) {
 
     return res.json({ success: true, user: profile });
   } catch (error) {
-    console.error("Get profile failed:", error);
-    return res.status(500).json({ success: false, message: "Could not load profile." });
+    console.error("Get profile failed. SQL Error:", error.message || error);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Internal Server Error during profile fetch.",
+      error: error.message || String(error)
+    });
   }
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ManagerModal } from "../ManagerOverlay.jsx";
 import { Button } from "../ManagerUI.jsx";
 import Icon from "../ManagerIcons.jsx";
-import { TABLE_STATUS_META } from "../../data/managerDashboardMockData.js";
+import { TABLE_STATUS_META } from "@/shared/constants.js";
 import {
   createTable,
   fetchAreas,

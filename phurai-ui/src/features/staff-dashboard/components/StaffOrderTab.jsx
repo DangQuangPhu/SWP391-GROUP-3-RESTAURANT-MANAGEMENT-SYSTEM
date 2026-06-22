@@ -13,7 +13,7 @@ import {
   updateStaffOrderItemStatus,
   voidStaffOrderItem,
 } from "../services/staffApi.js";
-import { DEMO_NOTICE } from "../data/staffDashboardMockData.js";
+import { DEMO_NOTICE } from "@/shared/constants.js";
 import { asArray } from "@/utils/asArray.js";
 import "../styles/staff-order-tab.css";
 

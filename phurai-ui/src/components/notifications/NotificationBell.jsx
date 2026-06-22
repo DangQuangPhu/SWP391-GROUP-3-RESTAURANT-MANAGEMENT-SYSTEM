@@ -7,7 +7,10 @@ import {
   markNotificationRead,
 } from "@/core/notifications/notificationApi.js";
 import { appToastSuccess } from "@/core/notifications/appToast.js";
+import { apiPatch, profileRequestHeaders } from "@/core/api/httpClient.js";
 import "./notification-bell.css";
+
+const QR_NOTIFICATION_STORAGE_KEY = "phurai_pending_qr_notifications";
 
 function formatSentAt(value) {
   if (!value) return "";
@@ -47,6 +50,92 @@ function buildDetailLines(item, payload = {}) {
   return lines;
 }
 
+function readStoredQrNotifications() {
+  try {
+    const raw = localStorage.getItem(QR_NOTIFICATION_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredQrNotifications(notifications) {
+  try {
+    const qrNotifications = notifications.filter(
+      (item) => item.notification_type === "QR_PENDING"
+    );
+    localStorage.setItem(QR_NOTIFICATION_STORAGE_KEY, JSON.stringify(qrNotifications));
+  } catch {
+    /* storage is best-effort only */
+  }
+}
+
+function getQrSessionPayload(data = {}) {
+  return data.session || data;
+}
+
+function getQrSessionId(session = {}) {
+  return (
+    session.session_id ||
+    session.qr_session_id ||
+    session.id ||
+    session.table_id ||
+    Date.now()
+  );
+}
+
+function getQrTableLabel(session = {}) {
+  return (
+    session.table_number ||
+    session.table_label ||
+    session.table_name ||
+    session.table_id ||
+    "Unknown"
+  );
+}
+
+function buildQrNotification(data = {}) {
+  const session = getQrSessionPayload(data);
+  const sessionId = getQrSessionId(session);
+  const tableLabel = getQrTableLabel(session);
+
+  return {
+    id: sessionId,
+    table_id: session.table_id || "Unknown",
+    notification_id: `qr-req-${sessionId}`,
+    title: "QR Check-in Request",
+    message_body: `Table ${tableLabel} is requesting menu access.`,
+    notification_type: "QR_PENDING",
+    is_read: false,
+    sent_at: session.sent_at || session.generated_at || new Date().toISOString(),
+    type: "QR_PENDING",
+    _live: true,
+    _payload: {
+      ...session,
+      session_id: session.session_id || session.qr_session_id || sessionId,
+      table_id: session.table_id || "Unknown",
+      type: "QR_PENDING",
+    },
+  };
+}
+
+function mergeNotifications(...groups) {
+  const seen = new Set();
+  const merged = [];
+
+  groups.flat().forEach((item) => {
+    if (!item) return;
+    const key = item.notification_id || item.id;
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(item);
+  });
+
+  return merged;
+}
+
 function NotificationBell({ user, listenForStaffEvents = false, className = "" }) {
   const { socket } = useSocket();
   const userId = Number(user?.userId ?? user?.id);
@@ -55,19 +144,24 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
 
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState([]);
-  const [unread, setUnread] = useState(0);
+  const [notifications, setNotifications] = useState(() =>
+    listenForStaffEvents ? readStoredQrNotifications() : []
+  );
   const [expandedId, setExpandedId] = useState(null);
-  const [livePayloads, setLivePayloads] = useState({});
+  const unread = notifications.filter((item) => !item.is_read).length;
 
   const loadNotifications = useCallback(async () => {
-    const token = localStorage.getItem("token");
-    if (!token || !userId) return;
+    if (!userId) return;
     setLoading(true);
     try {
       const data = await fetchNotifications(userId);
-      setItems(Array.isArray(data.items) ? data.items : []);
-      setUnread(Number(data.unread) || 0);
+      const regularNotifications = Array.isArray(data.items) ? data.items : [];
+      setNotifications((prev) =>
+        mergeNotifications(
+          prev.filter((item) => item.notification_type === "QR_PENDING"),
+          regularNotifications
+        )
+      );
     } catch {
       /* keep existing list on refresh failure */
     } finally {
@@ -75,40 +169,71 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
     }
   }, [userId]);
 
+  const loadPendingQrSessions = useCallback(() => {
+    if (!listenForStaffEvents) return;
+
+    setNotifications((prev) =>
+      mergeNotifications(readStoredQrNotifications(), prev)
+    );
+  }, [listenForStaffEvents]);
+
   useEffect(() => {
     loadNotifications();
   }, [loadNotifications]);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token || !socket || !listenForStaffEvents) return undefined;
+    loadPendingQrSessions();
+  }, [loadPendingQrSessions]);
+
+  useEffect(() => {
+    if (listenForStaffEvents) {
+      writeStoredQrNotifications(notifications);
+    }
+  }, [notifications, listenForStaffEvents]);
+
+  useEffect(() => {
+    if (!socket || !listenForStaffEvents) return undefined;
 
     const handleIncoming = (payload = {}) => {
       const message =
         payload.message || payload.title || "New customer activity received.";
       appToastSuccess(message);
-      setUnread((count) => count + 1);
-      setLivePayloads((prev) => ({
-        ...prev,
-        [`live-${Date.now()}`]: payload,
-      }));
-      setItems((prev) => [
-        {
-          notification_id: `live-${Date.now()}`,
-          title: payload.title || "New activity",
-          message_body: message,
-          notification_type: payload.actionType === "order" ? "Order Ready" : "System",
-          is_read: false,
-          sent_at: payload.sent_at || new Date().toISOString(),
-          _live: true,
-          _payload: payload,
-        },
-        ...prev,
-      ]);
+      const notificationId = `live-${Date.now()}`;
+      setNotifications((prev) =>
+        mergeNotifications(
+          [
+            {
+              notification_id: notificationId,
+              title: payload.title || "New activity",
+              message_body: message,
+              notification_type: payload.actionType === "order" ? "Order Ready" : "System",
+              is_read: false,
+              sent_at: payload.sent_at || new Date().toISOString(),
+              _live: true,
+              _payload: payload,
+            },
+          ],
+          prev
+        )
+      );
+    };
+
+    const handleQrRequest = (data = {}) => {
+      const qrNotification = buildQrNotification(data);
+      setNotifications((prev) =>
+        mergeNotifications([qrNotification], prev)
+      );
+      appToastSuccess(
+        `Table ${getQrTableLabel(qrNotification._payload)} requested QR access.`
+      );
     };
 
     socket.on("NEW_CUSTOMER_ACTION", handleIncoming);
-    return () => socket.off("NEW_CUSTOMER_ACTION", handleIncoming);
+    socket.on("NEW_QR_SESSION_PENDING", handleQrRequest);
+    return () => {
+      socket.off("NEW_CUSTOMER_ACTION", handleIncoming);
+      socket.off("NEW_QR_SESSION_PENDING", handleQrRequest);
+    };
   }, [socket, listenForStaffEvents]);
 
   useEffect(() => {
@@ -132,25 +257,51 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
     setOpen((prev) => !prev);
     if (!open) {
       loadNotifications();
+      loadPendingQrSessions();
     }
   };
 
   const handleItemClick = async (item) => {
     const id = item.notification_id;
-    setExpandedId((prev) => (prev === id ? null : id));
+    if (item.notification_type !== "QR_PENDING") {
+      setExpandedId((prev) => (prev === id ? null : id));
+    }
 
     if (item._live || item.is_read || !userId) return;
 
     try {
       await markNotificationRead(userId, id);
-      setItems((prev) =>
+      setNotifications((prev) =>
         prev.map((row) =>
           row.notification_id === id ? { ...row, is_read: true } : row
         )
       );
-      setUnread((count) => Math.max(0, count - 1));
     } catch (err) {
       toast.error(err.message || "Could not mark notification as read.");
+    }
+  };
+
+  const handleQrAction = async (item, action) => {
+    const sessionId = item._payload?.session_id || item._payload?.qr_session_id || item.id;
+    if (!sessionId) {
+      toast.error("Missing QR session ID.");
+      return;
+    }
+
+    try {
+      const requestOptions = { headers: profileRequestHeaders(userId) };
+      if (action === "approve") {
+        await apiPatch(`/staff/qr-sessions/${sessionId}/approve`, {}, requestOptions);
+        toast.success("Table approved.");
+      } else {
+        await apiPatch(`/staff/qr-sessions/${sessionId}/reject`, {}, requestOptions);
+        toast.success("Table rejected.");
+      }
+      setNotifications((prev) =>
+        prev.filter((row) => row.notification_id !== item.notification_id)
+      );
+    } catch (err) {
+      toast.error(err.message || `Failed to ${action} session.`);
     }
   };
 
@@ -158,8 +309,11 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
     if (!userId || unread === 0) return;
     try {
       await markAllNotificationsRead(userId);
-      setItems((prev) => prev.map((row) => ({ ...row, is_read: true })));
-      setUnread(0);
+      setNotifications((prev) =>
+        prev.map((row) =>
+          row.notification_type === "QR_PENDING" ? row : { ...row, is_read: true }
+        )
+      );
     } catch (err) {
       toast.error(err.message || "Could not mark all as read.");
     }
@@ -210,26 +364,87 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
           </header>
 
           <div className="notification-bell__list">
-            {loading && items.length === 0 ? (
-              <p className="notification-bell__empty">Loading notifications…</p>
+            {loading && notifications.length === 0 ? (
+              <p className="notification-bell__empty">Loading notifications...</p>
             ) : null}
-            {!loading && items.length === 0 ? (
+            {!loading && notifications.length === 0 ? (
               <p className="notification-bell__empty">No notifications yet.</p>
             ) : null}
 
-            {items.map((item) => {
-              const payload = item._payload || livePayloads[item.notification_id] || {};
+            {notifications.map((item) => {
+              const payload = item._payload || {};
               const details = buildDetailLines(item, payload);
               const expanded = expandedId === item.notification_id;
 
+              if (item.notification_type === "QR_PENDING") {
+                return (
+                  <div
+                    key={item.notification_id}
+                    className="notification-bell__item is-unread"
+                    style={{
+                      background: "#fff",
+                      borderLeft: "4px solid #16a34a",
+                      padding: "12px",
+                      cursor: "default",
+                    }}
+                  >
+                    <div className="notification-bell__item-top">
+                      <strong>{item.title}</strong>
+                      <span>{formatSentAt(item.sent_at)}</span>
+                    </div>
+                    <p style={{ margin: "8px 0", color: "#333", fontWeight: "500" }}>
+                      {item.message_body}
+                    </p>
+                    <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                      <button
+                        type="button"
+                        onClick={() => handleQrAction(item, "approve")}
+                        style={{
+                          flex: 1,
+                          padding: "6px",
+                          background: "#16a34a",
+                          color: "#fff",
+                          borderRadius: "4px",
+                          border: "none",
+                          cursor: "pointer",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleQrAction(item, "reject")}
+                        style={{
+                          flex: 1,
+                          padding: "6px",
+                          background: "#fef2f2",
+                          color: "#dc2626",
+                          borderRadius: "4px",
+                          border: "1px solid #fca5a5",
+                          cursor: "pointer",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
               return (
-                <button
+                <div
                   key={item.notification_id}
-                  type="button"
                   className={`notification-bell__item ${
                     item.is_read ? "is-read" : "is-unread"
                   } ${expanded ? "is-expanded" : ""}`}
                   onClick={() => handleItemClick(item)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleItemClick(item);
+                  }}
                 >
                   <div className="notification-bell__item-top">
                     <strong>{item.title}</strong>
@@ -243,7 +458,7 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
                       ))}
                     </ul>
                   ) : null}
-                </button>
+                </div>
               );
             })}
           </div>

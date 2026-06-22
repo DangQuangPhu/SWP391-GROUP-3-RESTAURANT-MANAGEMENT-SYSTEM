@@ -1,0 +1,127 @@
+.aap-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.aap-filters {
+  display: flex;
+  gap: 10px;
+}
+
+.aap-search {
+  width: 260px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  font-size: 13px;
+}
+
+.aap-filters select {
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  font-size: 13px;
+}
+
+.aap-btn-primary {
+  background: #20242b;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.aap-panel {
+  background: #fff;
+  border: 0.5px solid #e2e0d8;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.aap-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.aap-table th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: #888;
+  text-transform: uppercase;
+  padding: 12px 16px;
+  border-bottom: 0.5px solid #eee;
+}
+
+.aap-table td {
+  padding: 10px 16px;
+  border-bottom: 0.5px solid #f3f3f0;
+}
+
+.aap-name-cell {
+  font-weight: 500;
+}
+
+.aap-date-cell {
+  color: #999;
+}
+
+.aap-role-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f0eee6;
+  font-size: 12px;
+}
+
+.aap-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.aap-status-active {
+  background: #eaf3de;
+  color: #3b6d11;
+}
+
+.aap-status-inactive {
+  background: #f1efe8;
+  color: #5f5e5a;
+}
+
+.aap-actions-cell {
+  display: flex;
+  gap: 4px;
+  text-align: right;
+}
+
+.aap-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.aap-icon-btn:hover {
+  background: #f3f3f0;
+}
+
+.aap-empty {
+  text-align: center;
+  color: #999;
+  padding: 24px;
+}

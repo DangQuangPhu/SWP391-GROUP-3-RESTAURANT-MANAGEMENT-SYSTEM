@@ -493,10 +493,6 @@ body.profile-page-open {
   overflow: hidden;
 
   background-color: #ffffff;
-  background-image: url("../assets/profile-background/profile-background.jpg");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
 }
 
 .profile-page__back-home {

@@ -1,5 +1,6 @@
 import sql from "mssql";
 import { createDbRequest } from "../db.js";
+import crypto from "crypto";
 
 const TABLE_STATUSES = new Set([
   "Available",
@@ -28,12 +29,8 @@ function isUniqueConstraintError(error) {
   );
 }
 
-function buildQrCode(tableNumber) {
-  const slug = String(tableNumber)
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-");
-  return `qr-${slug}`;
+function buildQrCode() {
+  return crypto.randomUUID();
 }
 
 function parseTableNumberParts(tableNumber) {
@@ -102,6 +99,8 @@ function mapFilteredTableRow(row) {
     status: slugStatus(row.table_status),
     table_status: row.table_status,
     qr_code: row.static_qr_code || null,
+    merged_into_table_id: row.merged_into_table_id || null,
+    is_counter: Boolean(row.is_counter),
   };
 }
 
@@ -248,6 +247,8 @@ export async function listFilteredTables(req, res) {
          t.capacity,
          t.table_status,
          t.static_qr_code,
+         t.merged_into_table_id,
+         t.is_counter,
          a.area_name
        FROM dbo.RestaurantTables AS t
        INNER JOIN dbo.RestaurantAreas AS a ON a.area_id = t.area_id
@@ -304,30 +305,45 @@ export async function createTable(req, res) {
       return jsonError(res, `Table ${tableNumber} already exists in this area.`, 400);
     }
 
-    const staticQrCode = buildQrCode(tableNumber);
+    let maxRetries = 3;
+    let created;
+    
+    while (maxRetries > 0) {
+      try {
+        const staticQrCode = buildQrCode();
 
-    const insertRequest = await createDbRequest();
-    insertRequest.input("areaId", sql.SmallInt, areaId);
-    insertRequest.input("tableNumber", sql.NVarChar(20), tableNumber);
-    insertRequest.input("capacity", sql.TinyInt, capacity);
-    insertRequest.input("tableStatus", sql.NVarChar(20), tableStatus);
-    insertRequest.input("staticQrCode", sql.NVarChar(120), staticQrCode);
+        const insertRequest = await createDbRequest();
+        insertRequest.input("areaId", sql.SmallInt, areaId);
+        insertRequest.input("tableNumber", sql.NVarChar(20), tableNumber);
+        insertRequest.input("capacity", sql.TinyInt, capacity);
+        insertRequest.input("tableStatus", sql.NVarChar(20), tableStatus);
+        insertRequest.input("staticQrCode", sql.NVarChar(120), staticQrCode);
 
-    const insertResult = await insertRequest.query(
-      `INSERT INTO dbo.RestaurantTables
-         (area_id, table_number, capacity, table_status, static_qr_code)
-       OUTPUT
-         INSERTED.table_id,
-         INSERTED.area_id,
-         INSERTED.table_number,
-         INSERTED.capacity,
-         INSERTED.table_status,
-         INSERTED.static_qr_code
-       VALUES
-         (@areaId, @tableNumber, @capacity, @tableStatus, @staticQrCode);`
-    );
+        const insertResult = await insertRequest.query(
+          `INSERT INTO dbo.RestaurantTables
+             (area_id, table_number, capacity, table_status, static_qr_code)
+           OUTPUT
+             INSERTED.table_id,
+             INSERTED.area_id,
+             INSERTED.table_number,
+             INSERTED.capacity,
+             INSERTED.table_status,
+             INSERTED.static_qr_code
+           VALUES
+             (@areaId, @tableNumber, @capacity, @tableStatus, @staticQrCode);`
+        );
 
-    const created = insertResult.recordset[0];
+        created = insertResult.recordset[0];
+        break; // Success
+      } catch (err) {
+        if (isUniqueConstraintError(err) && String(err.message).includes("UQ_RestaurantTables_static_qr_code")) {
+          maxRetries--;
+          if (maxRetries === 0) throw err;
+        } else {
+          throw err;
+        }
+      }
+    }
 
     return res.status(201).json({
       success: true,
@@ -343,5 +359,133 @@ export async function createTable(req, res) {
     }
     console.error("POST /api/manager/tables failed:", error);
     return jsonError(res, "Could not create table.");
+  }
+}
+
+export async function updateTable(req, res) {
+  try {
+    const tableId = Number(req.params.id);
+    const tableNumber = String(req.body?.table_number ?? "").trim();
+    const areaId = Number(req.body?.area_id);
+    const capacity = Number(req.body?.capacity);
+    const tableStatus = String(req.body?.status ?? req.body?.table_status ?? "").trim();
+
+    if (!Number.isFinite(tableId) || tableId <= 0) {
+      return jsonError(res, "Invalid table id.", 400);
+    }
+    if (!tableNumber) {
+      return jsonError(res, "table_number is required.", 400);
+    }
+    if (!Number.isFinite(areaId) || areaId <= 0) {
+      return jsonError(res, "area_id is required.", 400);
+    }
+    if (!Number.isFinite(capacity) || capacity <= 0) {
+      return jsonError(res, "capacity must be greater than 0.", 400);
+    }
+    if (!TABLE_STATUSES.has(tableStatus)) {
+      return jsonError(
+        res,
+        "table_status must be one of: Available, Reserved, Occupied, Cleaning, Inactive.",
+        400
+      );
+    }
+
+    const area = await fetchActiveArea(areaId);
+    if (!area) {
+      return jsonError(res, "Area not found or inactive.", 404);
+    }
+
+    const duplicateRequest = await createDbRequest();
+    duplicateRequest.input("tableId", sql.SmallInt, tableId);
+    duplicateRequest.input("tableNumber", sql.NVarChar(20), tableNumber);
+    duplicateRequest.input("areaId", sql.SmallInt, areaId);
+    const duplicateResult = await duplicateRequest.query(
+      `SELECT TOP 1 table_id
+       FROM dbo.RestaurantTables
+       WHERE table_number = @tableNumber
+         AND area_id = @areaId
+         AND table_id != @tableId;`
+    );
+    if (duplicateResult.recordset[0]) {
+      return jsonError(res, `Table ${tableNumber} already exists in this area.`, 400);
+    }
+
+    const updateRequest = await createDbRequest();
+    updateRequest.input("tableId", sql.SmallInt, tableId);
+    updateRequest.input("areaId", sql.SmallInt, areaId);
+    updateRequest.input("tableNumber", sql.NVarChar(20), tableNumber);
+    updateRequest.input("capacity", sql.TinyInt, capacity);
+    updateRequest.input("tableStatus", sql.NVarChar(20), tableStatus);
+
+    const updateResult = await updateRequest.query(
+      `UPDATE dbo.RestaurantTables
+       SET area_id = @areaId,
+           table_number = @tableNumber,
+           capacity = @capacity,
+           table_status = @tableStatus,
+           updated_at = SYSDATETIME()
+       WHERE table_id = @tableId;`
+    );
+
+    if (updateResult.rowsAffected[0] === 0) {
+      return jsonError(res, "Table not found.", 404);
+    }
+
+    // Emit socket event to sync frontend
+    const io = req.app.get("io");
+    if (io) {
+      io.to("room:manager").to("room:staff").emit("table:sync", { action: "update", table_id: tableId });
+    }
+
+    return res.json({
+      success: true,
+      message: "Table updated successfully",
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      const tableNumber = String(req.body?.table_number ?? "").trim();
+      return jsonError(res, `Table ${tableNumber} already exists in this area.`, 400);
+    }
+    console.error("PATCH /api/manager/tables/:id failed:", error);
+    return jsonError(res, "Could not update table.");
+  }
+}
+
+export async function deleteTable(req, res) {
+  try {
+    const tableId = Number(req.params.id);
+
+    if (!Number.isFinite(tableId) || tableId <= 0) {
+      return jsonError(res, "Invalid table id.", 400);
+    }
+
+    const deleteRequest = await createDbRequest();
+    deleteRequest.input("tableId", sql.SmallInt, tableId);
+
+    const deleteResult = await deleteRequest.query(
+      `DELETE FROM dbo.RestaurantTables WHERE table_id = @tableId;`
+    );
+
+    if (deleteResult.rowsAffected[0] === 0) {
+      return jsonError(res, "Table not found.", 404);
+    }
+
+    // Emit socket event to sync frontend
+    const io = req.app.get("io");
+    if (io) {
+      io.to("room:manager").to("room:staff").emit("table:sync", { action: "delete", table_id: tableId });
+    }
+
+    return res.json({
+      success: true,
+      message: "Table deleted successfully",
+    });
+  } catch (error) {
+    const isConstraintViolation = error?.number === 547 || (error?.originalError && error.originalError.number === 547);
+    if (isConstraintViolation) {
+      return jsonError(res, "Cannot delete table because it has historical data (reservations, orders, etc.). Please mark it as Inactive instead.", 409);
+    }
+    console.error("DELETE /api/manager/tables/:id failed:", error);
+    return jsonError(res, "Could not delete table.");
   }
 }

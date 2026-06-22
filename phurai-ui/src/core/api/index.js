@@ -3,4 +3,5 @@ export {
   saveAuthUser,
   loadAuthUser,
   clearAuthUser,
+  saveAuthToken,
 } from "./httpClient.js";

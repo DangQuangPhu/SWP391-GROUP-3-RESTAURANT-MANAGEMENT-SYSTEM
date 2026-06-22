@@ -15,7 +15,7 @@ import {
   STAFF_ASSIGNABLE_ROLES,
   MANAGER_STATUS_META,
   SHIFTS,
-} from "../../data/managerDashboardMockData.js";
+} from "@/shared/constants.js";
 import { asArray } from "@/utils/asArray.js";
 import { getStaffTabFromSearch, STAFF_TAB_IDS } from "../../config/managerRoutes.js";
 import { useManagerPortal } from "../../context/ManagerPortalContext.jsx";

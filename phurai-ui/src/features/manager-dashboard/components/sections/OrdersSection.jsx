@@ -7,7 +7,7 @@ import {
   Button,
   EmptyState,
 } from "../ManagerUI.jsx";
-import { ORDER_STATUS_META } from "../../data/managerDashboardMockData.js";
+import { ORDER_STATUS_META } from "@/shared/constants.js";
 import { formatVND } from "@/utils/formatCurrency.js";
 import { getOrdersTabFromSearch, ORDER_TAB_IDS } from "../../config/managerRoutes.js";
 

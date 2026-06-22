@@ -1,7 +1,10 @@
 /* Small reusable primitives shared across manager dashboard sections. */
 import Icon from "./ManagerIcons.jsx";
 
-export function StatusBadge({ tone = "muted", children }) {
+export function StatusBadge({ tone = "muted", color, children }) {
+  if (color) {
+    return <span className={`sfx-badge ${color}`}>{children}</span>;
+  }
   return <span className={`sfx-badge sfx-badge--${tone}`}>{children}</span>;
 }
 

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiGet, apiPatch } from "@/core/api/httpClient.js";
+import { apiGet, apiPatch, request } from "@/core/api/httpClient.js";
 import { useSocket } from "@/core/socket/SocketContext.jsx";
+import { toast } from "react-toastify";
 
 export default function CustomerNotificationBell() {
   const [open, setOpen] = useState(false);
@@ -10,9 +11,10 @@ export default function CustomerNotificationBell() {
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
   const { socket } = useSocket();
+  const hasToasted = useRef(false);
 
-  const loadNotifications = () => {
-    const token = localStorage.getItem("token");
+  const loadNotifications = (showToast = false) => {
+    const token = localStorage.getItem("phurai_token") || localStorage.getItem("token");
     if (!token) return;
     
     apiGet("/notifications?limit=5")
@@ -20,16 +22,26 @@ export default function CustomerNotificationBell() {
         if (res?.success) {
           setNotifications(res.data?.items || []);
           setUnreadCount(res.data?.unread || 0);
+          
+          if (showToast && res.data?.unread > 0 && !hasToasted.current) {
+             toast.info(`You have ${res.data.unread} unread notification(s).`, { autoClose: 5000 });
+             hasToasted.current = true;
+          }
         }
       })
       .catch(() => {});
   };
 
   useEffect(() => {
-    loadNotifications();
+    loadNotifications(true);
 
-    const handleProcessed = () => {
-      loadNotifications();
+    const handleProcessed = (payload) => {
+      loadNotifications(false);
+      if (payload?.message) {
+        toast.info(payload.message, { autoClose: 5000 });
+      } else {
+        toast.info("A new notification has arrived.", { autoClose: 5000 });
+      }
     };
 
     if (socket) {
@@ -74,11 +86,33 @@ export default function CustomerNotificationBell() {
     navigate("/my-reservations");
   };
 
+  const handleDeleteNotification = async (e, notif) => {
+    e.stopPropagation();
+    try {
+      await request(`/notifications/${notif.notification_id}`, { method: "DELETE", headers: { Authorization: `Bearer ${localStorage.getItem("phurai_token") || localStorage.getItem("token")}` } });
+      setNotifications((prev) => prev.filter((n) => n.notification_id !== notif.notification_id));
+      if (!notif.is_read) {
+         setUnreadCount((c) => Math.max(0, c - 1));
+      }
+    } catch (err) {
+      console.error("Failed to delete notification", err);
+    }
+  };
+
   return (
     <div
       ref={dropdownRef}
       style={{ position: "relative", display: "flex", alignItems: "center" }}
     >
+      <style>
+        {`
+          @keyframes sfx-pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(224, 108, 108, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(224, 108, 108, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(224, 108, 108, 0); }
+          }
+        `}
+      </style>
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -124,6 +158,7 @@ export default function CustomerNotificationBell() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              animation: "sfx-pulse 2s infinite"
             }}
           >
             {unreadCount}
@@ -137,7 +172,7 @@ export default function CustomerNotificationBell() {
             position: "absolute",
             top: "calc(100% + 10px)",
             right: 0,
-            width: "300px",
+            width: "320px",
             background: "#1a1a1a",
             border: "1px solid #333",
             borderRadius: "8px",
@@ -166,17 +201,45 @@ export default function CustomerNotificationBell() {
                   style={{
                     display: "flex",
                     flexDirection: "column",
-                    padding: "8px",
+                    padding: "10px 12px",
                     borderRadius: "6px",
                     cursor: "pointer",
+                    position: "relative",
                     background: notif.is_read ? "transparent" : "rgba(159, 134, 85, 0.1)",
                     borderLeft: notif.is_read ? "2px solid transparent" : "2px solid #bf9a63",
                     transition: "background 0.2s ease",
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.05)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = notif.is_read ? "transparent" : "rgba(159, 134, 85, 0.1)")}
+                  onMouseEnter={(e) => {
+                     e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+                     const btn = e.currentTarget.querySelector(".notif-del-btn");
+                     if (btn) btn.style.opacity = "1";
+                  }}
+                  onMouseLeave={(e) => {
+                     e.currentTarget.style.background = notif.is_read ? "transparent" : "rgba(159, 134, 85, 0.1)";
+                     const btn = e.currentTarget.querySelector(".notif-del-btn");
+                     if (btn) btn.style.opacity = "0";
+                  }}
                 >
-                  <span style={{ color: "#fff", fontSize: "14px", fontWeight: notif.is_read ? "normal" : "bold" }}>
+                  <button 
+                    className="notif-del-btn"
+                    onClick={(e) => handleDeleteNotification(e, notif)}
+                    style={{
+                      position: "absolute",
+                      top: "8px",
+                      right: "8px",
+                      background: "none",
+                      border: "none",
+                      color: "#888",
+                      cursor: "pointer",
+                      opacity: 0,
+                      transition: "opacity 0.2s",
+                      padding: "4px"
+                    }}
+                    title="Delete"
+                  >
+                    ×
+                  </button>
+                  <span style={{ color: "#fff", fontSize: "14px", fontWeight: notif.is_read ? "normal" : "bold", paddingRight: "16px" }}>
                     {notif.title}
                   </span>
                   <span style={{ color: "#aaa", fontSize: "12px", marginTop: "4px" }}>

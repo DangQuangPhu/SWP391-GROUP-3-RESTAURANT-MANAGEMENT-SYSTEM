@@ -1,4 +1,5 @@
 import express from "express";
+import jwt from "jsonwebtoken";
 import pool from "../db.js";
 import { sendOtpEmail } from "../email.js";
 import { hashPassword, generateOtpCode, generateSecureToken, isPasswordStrong, verifyStoredPassword } from "../utils/password.js";
@@ -62,14 +63,28 @@ const PROFILE_SELECT = `
 
 async function sendOtpForUser({ email, purpose, userId = null }) {
   const otp = generateOtpCode();
+  // Save OTP to DB first — this must succeed regardless of email status
   const timing = await saveOtpToken({ email, purpose, otp, userId });
   const normalizedPurpose = normalizeOtpPurpose(purpose);
 
   if (isDevOtpSampleEmail(email)) {
     logDevOtp(email, normalizedPurpose, otp);
   } else {
-    await sendOtpEmail({ to: email, otp, purpose });
-    logOtpSent(email);
+    // Protocol #1: Email is non-critical — wrap in isolated try/catch.
+    // If SMTP fails, the OTP is still valid in the DB (dev: visible in console).
+    try {
+      await sendOtpEmail({ to: email, otp, purpose });
+      logOtpSent(email);
+    } catch (emailErr) {
+      console.error(
+        `[sendOtpForUser] SMTP failed for ${email} (non-fatal, OTP still valid):`,
+        String(emailErr?.message || emailErr)
+      );
+      // In dev mode, log the OTP so it's not lost
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`[DEV] OTP for ${email} (SMTP bypassed) → ${otp}`);
+      }
+    }
   }
 
   return { ...timing, otp };
@@ -145,8 +160,21 @@ router.post("/login", async (req, res) => {
       [user.user_id]
     );
 
+    const token = jwt.sign(
+      {
+        user_id: user.user_id,
+        role_id: user.role_id,
+        role_name: user.role_name,
+        full_name: user.full_name,
+        email: user.email,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
     return res.json({
       message: "Login successful.",
+      token,
       user: buildLoginUserResponse(user),
     });
   } catch (error) {
@@ -198,10 +226,12 @@ router.post("/register", async (req, res) => {
     const passwordHash = hashPassword(normalized.password);
 
     const [insertResult] = await pool.query(
-      `INSERT INTO dbo.UserAccounts
+      `DECLARE @OutputTbl TABLE (user_id INT);
+       INSERT INTO dbo.UserAccounts
         (role_id, full_name, email, phone, password_hash, avatar_url, is_active, email_verified, created_at, updated_at)
-       OUTPUT INSERTED.user_id
-       VALUES (?, ?, ?, ?, ?, NULL, 1, 0, SYSDATETIME(), SYSDATETIME())`,
+       OUTPUT INSERTED.user_id INTO @OutputTbl
+       VALUES (?, ?, ?, ?, ?, NULL, 1, 0, SYSDATETIME(), SYSDATETIME());
+       SELECT user_id FROM @OutputTbl;`,
       [roleId, fullName, normalized.email, normalized.phoneNumber, passwordHash]
     );
 
@@ -358,10 +388,12 @@ async function upsertGoogleUser(googleProfile, { requireOtp = false } = {}) {
 
   const roleId = await getCustomerRoleId();
   const [insertResult] = await pool.query(
-    `INSERT INTO dbo.UserAccounts
+    `DECLARE @OutputTbl TABLE (user_id INT);
+     INSERT INTO dbo.UserAccounts
       (role_id, full_name, email, phone, password_hash, avatar_url, is_active, email_verified, created_at, updated_at)
-     OUTPUT INSERTED.user_id
-     VALUES (?, ?, ?, NULL, ?, ?, 1, ?, SYSDATETIME(), SYSDATETIME())`,
+     OUTPUT INSERTED.user_id INTO @OutputTbl
+     VALUES (?, ?, ?, NULL, ?, ?, 1, ?, SYSDATETIME(), SYSDATETIME());
+     SELECT user_id FROM @OutputTbl;`,
     [
       roleId,
       googleProfile.fullName || getEmailPrefix(googleProfile.email),
@@ -421,7 +453,18 @@ router.post("/auth/google", async (req, res) => {
     );
 
     const profile = await getProfileForUser(row.user_id, { ensureProfile: true });
-    return res.json({ message: "Login successful.", user: profile });
+    const token = jwt.sign(
+      {
+        user_id: profile.user_id,
+        role_id: profile.role_id,
+        role_name: profile.role_name,
+        full_name: profile.full_name,
+        email: profile.email,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+    return res.json({ message: "Login successful.", token, user: profile });
   } catch (error) {
     console.error("Google login failed:", error);
     return res.status(500).json({ message: error.message || "Google login failed." });
@@ -438,11 +481,24 @@ router.post("/auth/google-register", async (req, res) => {
     const row = await upsertGoogleUser(googleProfile, { requireOtp: true });
 
     if (row.email_verified) {
+      const profile = await getProfileForUser(row.user_id, { ensureProfile: true });
+      const token = jwt.sign(
+        {
+          user_id: profile.user_id,
+          role_id: profile.role_id,
+          role_name: profile.role_name,
+          full_name: profile.full_name,
+          email: profile.email,
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+      );
       return res.json({
         message: "Account already verified.",
+        token,
         userId: row.user_id,
         email: row.email,
-        user: buildLoginUserResponse(row),
+        user: buildLoginUserResponse(profile),
       });
     }
 

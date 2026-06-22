@@ -3,7 +3,7 @@ import { ManagerModal } from "../ManagerOverlay.jsx";
 import { Toolbar, Button, EmptyState } from "../ManagerUI.jsx";
 import Icon from "../ManagerIcons.jsx";
 import { useManagerPortal } from "../../context/ManagerPortalContext.jsx";
-import { STAFF_ASSIGNABLE_ROLES } from "../../data/managerDashboardMockData.js";
+import { STAFF_ASSIGNABLE_ROLES } from "@/shared/constants.js";
 import {
   fetchShifts,
   fetchSchedules,

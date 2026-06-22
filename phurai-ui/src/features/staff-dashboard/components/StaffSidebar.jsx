@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { getNavForRole } from "../config/staffNav.js";
-import { navItemToPath, resolveActiveNavItem } from "../config/staffRoutes.js";
+import { getNavForRole, resolveActiveNavItem } from "../config/staffNav.js";
+import { navItemToPath } from "../config/staffRoutes.js";
 import Icon from "./StaffIcons.jsx";
 
 function SidebarNavItem({ item, collapsed, onCloseMobile }) {
@@ -44,7 +44,7 @@ function StaffSidebar({ role, collapsed, mobileOpen, onCloseMobile, onSignOut })
           <span className="sfx-brand__mark">P</span>
           <span className="sfx-brand__text">
             <strong>Phūrai</strong>
-            <small>Staff Portal</small>
+            <small>{role === "kitchen_staff" ? "Kitchen Portal" : "Staff Portal"}</small>
           </span>
         </div>
 

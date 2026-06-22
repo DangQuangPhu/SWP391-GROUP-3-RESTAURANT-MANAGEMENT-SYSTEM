@@ -1,22 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "react-toastify";
+import reservationImg from "@/assets/images/reservation/Reservation.jpg";
 import "../styles/reservation.css";
 import ReservationHero from "../components/ReservationHero.jsx";
-import ReservationDetailsPanel from "../components/ReservationDetailsPanel.jsx";
-import TableBoard from "../components/choose-table/TableBoard.jsx";
 import ReservationSummary from "../components/ReservationSummary.jsx";
 import ReservationSuccessPanel from "../components/ReservationSuccessPanel.jsx";
+import ReservationPaymentPanel from "../components/ReservationPaymentPanel.jsx";
+import ReservationDetails from "../components/ReservationDetails.jsx";
 import {
-  AREA_PREFERENCES,
   DINING_PURPOSES,
   buildTimeSlots,
   KITCHEN_VIEW_AREA_NAME,
-  KITCHEN_VIEW_COUNTER_CAPACITY,
 } from "../data/floorPlanConfig.js";
 import {
   getReservationSettings,
   getAvailability,
-  createReservation,
 } from "../services/reservationApi.js";
+import { createPreSaveReservation } from "../services/reservationPreSaveApi.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[+]?[\d\s().-]{7,}$/;
@@ -30,6 +32,7 @@ function todayString() {
 const INITIAL_FORM = {
   date: "",
   time: "",
+  endTime: "",
   guestCount: 2,
   holdDurationMinutes: 30,
   diningPurpose: "casual",
@@ -39,13 +42,16 @@ const INITIAL_FORM = {
   email: "",
   phone: "",
   notes: "",
+  diningPurposeNote: "",
 };
 
 const STEPS = [
   { id: "details", label: "Details" },
-  { id: "tables", label: "Table" },
+  { id: "summary", label: "Summary" },
+  { id: "payment", label: "Payment" },
   { id: "success", label: "Confirmed" },
 ];
+
 
 function ReservationPage({
   isAuthenticated = false,
@@ -53,7 +59,29 @@ function ReservationPage({
   onNavigate,
   onRequireAuth,
 }) {
+  const navigate = useNavigate();
   const membershipTier = currentUser?.membershipTier || "Bronze";
+
+  const pageVariants = useMemo(() => ({
+    initial: (direction) => ({
+      x: direction > 0 ? 50 : -50,
+      opacity: 0,
+      position: "absolute",
+      width: "100%",
+    }),
+    animate: {
+      x: 0,
+      opacity: 1,
+      position: "relative",
+    },
+    exit: (direction) => ({
+      x: direction < 0 ? 50 : -50,
+      opacity: 0,
+      position: "absolute",
+      width: "100%",
+    })
+  }), []);
+
   const [settings, setSettings] = useState(null);
   const [form, setForm] = useState(INITIAL_FORM);
   const [tables, setTables] = useState([]);
@@ -63,10 +91,27 @@ function ReservationPage({
   const [error, setError] = useState("");
   const [successReservation, setSuccessReservation] = useState(null);
 
+  const [preorderItems, setPreorderItems] = useState({});
+  const [preorderTotal, setPreorderTotal] = useState(0);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoDiscount, setPromoDiscount] = useState(null);
+
+  const { step: urlStep } = useParams();
+
   // --- guided step machine ---
-  const [step, setStep] = useState("details"); // details | tables | success
+  const [step, setStep] = useState(urlStep || "details"); // details | summary | payment | success
+  const [prevStep, setPrevStep] = useState(urlStep || "details");
   const [detailsReviewing, setDetailsReviewing] = useState(false);
-  const [exiting, setExiting] = useState(false);
+  const [isPaymentSuccess, setIsPaymentSuccess] = useState(false);
+
+  useEffect(() => {
+    if (urlStep && urlStep !== step) {
+      setPrevStep(step);
+      setStep(urlStep);
+    } else if (!urlStep && step !== "details") {
+      navigate('/reservations/details', { replace: true });
+    }
+  }, [urlStep, step, navigate]);
 
   const bookingRef = useRef(null);
   const tablesRef = useRef(null);
@@ -97,35 +142,15 @@ function ReservationPage({
     };
   }, []);
 
-  /* Auto-fill contact details from profile for logged-in users. */
-  useEffect(() => {
-    if (isAuthenticated && currentUser) {
-      setForm((prev) => ({
-        ...prev,
-        fullName: prev.fullName || currentUser.fullName || "",
-        email: prev.email || currentUser.email || "",
-        phone: prev.phone || currentUser.phone || currentUser.phoneNumber || "",
-      }));
-    }
-  }, [isAuthenticated, currentUser]);
+  const getStepIndex = useCallback((s) => STEPS.findIndex(x => x.id === s), []);
+  const activeStepIndex = getStepIndex(step);
+  const direction = activeStepIndex > getStepIndex(prevStep) ? 1 : -1;
 
-  const timeSlots = useMemo(() => {
-    if (!settings) return [];
-    const duration = form.holdDurationMinutes || 60;
-    let slots = buildTimeSlots(settings.open_time, settings.close_time, duration);
-    if (form.date === todayString()) {
-      const now = new Date();
-      slots = slots.filter((slot) => {
-        const [y, m, d] = form.date.split("-").map(Number);
-        const [hh, mm] = slot.value.split(":").map(Number);
-        const slotTime = new Date(y, m - 1, d, hh, mm);
-        return slotTime > now;
-      });
-    }
-    return slots;
-  }, [settings, form.date, form.holdDurationMinutes]);
-
-  const isKitchenView = form.selectedArea === KITCHEN_VIEW_AREA_NAME;
+  const transitionTo = useCallback((nextStep) => {
+    setPrevStep(step);
+    setStep(nextStep);
+    navigate(`/reservations/${nextStep}`);
+  }, [step, navigate]);
 
   /* Fetch availability whenever the key selection changes (debounced). */
   useEffect(() => {
@@ -168,305 +193,289 @@ function ReservationPage({
       active = false;
       clearTimeout(handle);
     };
-  }, [form.date, form.time, form.guestCount, form.diningPurpose, form.holdDurationMinutes]);
+  }, [form.date, form.time, form.holdDurationMinutes, form.guestCount, form.diningPurpose]);
 
-  const selectedTables = useMemo(
-    () => tables.filter((t) => t.table_id === selectedTableId),
-    [tables, selectedTableId]
-  );
+  const selectedTables = useMemo(() => {
+    if (!selectedTableId) return [];
+    return tables.filter((t) => t.table_id === selectedTableId || t.merged_into_table_id === selectedTableId);
+  }, [tables, selectedTableId]);
 
-  const handleSelectTable = useCallback((tableId) => {
-    setError("");
-    setSelectedTableId(tableId);
-  }, []);
+  const isKitchenView = useMemo(() => {
+    if (!selectedTables.length) return false;
+    const prefix = String(selectedTables[0].display_label || selectedTables[0].area_name || "").trim().toLowerCase();
+    return prefix.includes("kitchen");
+  }, [selectedTables]);
 
-  const totalCapacity = useMemo(
-    () => selectedTables.reduce((sum, t) => sum + Number(t.capacity), 0),
-    [selectedTables]
-  );
-
-  /* --- validation --- */
-  const missing = useMemo(() => {
-    const out = [];
-    if (!form.date) out.push("date");
-    if (!form.time) out.push("time");
-    if (!form.guestCount || form.guestCount < 1) out.push("guests");
-    if (!form.fullName.trim()) out.push("full name");
-    if (!EMAIL_RE.test(form.email.trim())) out.push("a valid email");
-    if (!PHONE_RE.test(form.phone.trim())) out.push("a valid phone");
-    return out;
-  }, [form]);
-
-  const detailsValid = missing.length === 0;
+  const totalCapacity = useMemo(() => selectedTables.reduce((sum, t) => sum + Number(t.capacity), 0), [selectedTables]);
 
   const canSubmit = useMemo(() => {
-    if (!detailsValid) return false;
-    if (!selectedTableId) return false;
+    if (!form.date || !form.time || !form.guestCount || !form.fullName || !form.email || !form.phone || !selectedTableId) return false;
     if (totalCapacity < form.guestCount) return false;
     return true;
-  }, [
-    detailsValid,
-    isKitchenView,
-    form.guestCount,
-    form.preferredAreaId,
-    selectedTableId,
-    totalCapacity,
-  ]);
+  }, [form, selectedTableId, totalCapacity]);
 
-  const summaryVisible = step === "tables" && selectedTableId !== null;
-
-  const scrollToBooking = () => {
-    bookingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  /* --- step transitions --- */
-  const transitionTo = useCallback((next, mid) => {
-    setExiting(true);
-    setTimeout(() => {
-      mid?.();
-      setStep(next);
-      setExiting(false);
-      requestAnimationFrame(() => {
-        bookingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    }, 360);
-  }, []);
-
-  const handleDone = () => setDetailsReviewing(true);
-  const handleCancelReview = () => setDetailsReviewing(false);
-  const handleConfirmDetails = () => {
-    if (form.date === todayString() && form.time) {
-      const now = new Date();
-      const [y, m, d] = form.date.split("-").map(Number);
-      const [hh, mm] = form.time.split(":").map(Number);
-      const slotTime = new Date(y, m - 1, d, hh, mm);
-      if (slotTime <= now) {
-        alert("The selected time has already passed. Please choose another time.");
-        return;
-      }
-    }
-    transitionTo("tables");
-  };
-  const handleEditDetails = () => transitionTo("details", () => setDetailsReviewing(false));
-
-  const buildSpecialRequest = () => {
-    const purpose = DINING_PURPOSES.find((p) => p.id === form.diningPurpose);
-    const parts = [`[Dining Purpose: ${purpose?.label || "Casual Dinner"}]`];
-    if (!isAuthenticated) {
-      parts.push(`[Guest Name: ${form.fullName.trim()}]`);
-      parts.push(`[Guest Email: ${form.email.trim()}]`);
-      parts.push(`[Guest Phone: ${form.phone.trim()}]`);
-    }
-    parts.push(`[Hold: ${form.holdDurationMinutes}m]`);
-    if (form.notes && form.notes.trim()) {
-      parts.push(`[Notes: ${form.notes.trim()}]`);
-    }
-    return parts.join("\n").slice(0, 1000);
-  };
+  const handleEditDetails = useCallback(() => {
+    transitionTo("details");
+  }, [transitionTo]);
 
   const handleSubmit = async () => {
-    if (!canSubmit || submitting) return;
-    if (!selectedTableId) {
-      setError("Please select a table before continuing.");
-      return;
-    }
-    setError("");
+    if (!canSubmit) return;
     setSubmitting(true);
-
-    const preferredAreaId = isKitchenView
-      ? form.preferredAreaId
-      : selectedTables[0]?.area_id || null;
-    const payload = {
-      date: form.date,
-      time: form.time,
-      durationMinutes: form.holdDurationMinutes,
-      holdDurationMinutes: form.holdDurationMinutes,
-      guest_count: form.guestCount,
-      preferred_area_id: preferredAreaId,
-      table_ids: selectedTableId ? [selectedTableId] : [],
-      dining_purpose: DINING_PURPOSES.find((p) => p.id === form.diningPurpose)?.label,
-      contact_name: form.fullName.trim(),
-      contact_email: form.email.trim(),
-      contact_phone: form.phone.trim(),
-      special_request: buildSpecialRequest(),
-    };
-
+    setError("");
     try {
-      const userId = isAuthenticated ? currentUser?.userId ?? currentUser?.id : null;
-      const res = await createReservation(payload, userId);
-      if (res?.reservation) {
-        try {
-          const existing = JSON.parse(localStorage.getItem('customer_reservations')) || [];
-          existing.push({
-            id: `#${String(res.reservation.reservation_id).padStart(6, '0')}`,
-            date: form.date,
-            time: form.time,
-            status: "Pending",
-            timestamp: new Date().toISOString()
-          });
-          localStorage.setItem('customer_reservations', JSON.stringify(existing));
-          window.dispatchEvent(new Event('reservation_added'));
-        } catch (e) {
-          // ignore localStorage errors
-        }
+      // API payload construction matching backend contract
+      const payload = {
+        customer_id: currentUser?.id || null,
+        guest_count: form.guestCount,
+        reservation_start_at: `${form.date}T${form.time}:00`,
+        durationMinutes: form.holdDurationMinutes || 30,
+        reservation_end_at: form.endTime ? `${form.date}T${form.endTime}:00` : undefined,
+        special_request: form.diningPurposeNote
+          ? `[Dining Purpose: ${form.diningPurpose}] [Notes: ${form.diningPurposeNote}]`
+          : `[Dining Purpose: ${form.diningPurpose}]`,
+        table_ids: selectedTables.map((t) => t.table_id),
+        contact_name: form.fullName,
+        contact_phone: form.phone,
+        contact_email: form.email,
+        preorder_items: Object.values(preorderItems).map(item => ({
+          dish_id: item.dish_id,
+          quantity: item.quantity,
+          customization_requests: item.note || ""
+        })),
+        promo_code: promoCode
+      };
 
-        setSuccessReservation(res.reservation);
-        setStep("success");
-        window.scrollTo({ top: 0, behavior: "smooth" });
+      const res = await createPreSaveReservation(payload);
+
+      if (res?.success) {
+        setSuccessReservation(res);
+        transitionTo("payment");
       } else {
-        setError("Could not create reservation. Please try again.");
+        throw new Error("Failed to create reservation");
       }
     } catch (err) {
-      if (err?.code === "TABLE_UNAVAILABLE" || err?.code === "SEATS_UNAVAILABLE") {
-        setError(err.message);
-        setSelectedTableId(null);
-        getAvailability({
-          date: form.date,
-          time: form.time,
-          durationMinutes: form.holdDurationMinutes,
-          guestCount: form.guestCount,
-          areaType: null,
-        })
-          .then((r) => setTables(r?.tables || []))
-          .catch(() => { });
-      } else {
-        setError(err?.message || "Could not create reservation. Please try again.");
-      }
+      setError(err.response?.data?.error || err.response?.data?.message || err.message || "An error occurred");
+      toast.error(err.response?.data?.error || err.response?.data?.message || err.message || "Failed to submit reservation.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const activeStepIndex = STEPS.findIndex((s) => s.id === step);
-
-  /* ---------- SUCCESS ---------- */
-  if (step === "success" && successReservation) {
-    return (
-      <main className="rzv-page">
-        <section className="rzv-booking rzv-booking--success">
-          <div className="rzv-step rzv-step--enter">
-            <ReservationSuccessPanel
-              reservation={successReservation}
-              onReturnHome={() => onNavigate?.("home")}
-              onViewReservation={() => onNavigate?.("myReservations")}
-            />
-          </div>
-        </section>
-      </main>
-    );
-  }
+  const handlePaymentSuccess = useCallback(() => {
+    setIsPaymentSuccess(true);
+    setTimeout(() => {
+      navigate("/");
+      toast.success("Reservation confirmed successfully!");
+    }, 700);
+  }, [navigate]);
 
   return (
-    <main className="rzv-page">
-      <ReservationHero onReserveClick={scrollToBooking} />
+    <div className={`rd-page ${step === 'summary' ? 'rd-page--bg-summary' : ''}`}>
+      <button className="rd-home-btn" onClick={() => navigate("/")} aria-label="Go to Home">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+          <polyline points="9 22 9 12 15 12 15 22"></polyline>
+        </svg>
+      </button>
 
-      <section className="rzv-booking" ref={bookingRef} id="rzv-book">
-        <div className="rzv-booking__head">
-          <span className="rzv-booking__kicker">Reserve a Table</span>
-          <h2 className="rzv-booking__title rzv-serif">Choose your moment</h2>
-          <p className="rzv-booking__lead">
-            Complete your details, choose your table on our interactive floor plan, then review and
-            confirm. Availability updates live.
-          </p>
+      <div className={`rd-split ${step !== 'details' ? 'rd-split--centered' : ''}`}>
+        <AnimatePresence>
+          {step === "details" && (
+            <motion.div
+              className="rd-image-col"
+              exit={{ opacity: 0, width: 0 }}
+              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <img src={reservationImg} alt="" className="rd-image" />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          {/* Step progress */}
-          <ol className="rzv-steps" aria-label="Reservation progress">
-            {STEPS.map((s, i) => (
-              <li
-                key={s.id}
-                className={`rzv-steps__item ${i === activeStepIndex
-                    ? "rzv-steps__item--active"
-                    : i < activeStepIndex
-                      ? "rzv-steps__item--done"
-                      : ""
-                  }`}
+        <motion.div
+          className={`rd-content-col ${step !== 'details' ? 'rd-content-col--centered' : ''}`}
+          layout
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <motion.p layout className="rd-eyebrow">RESERVE A TABLE</motion.p>
+          <motion.h1 layout className="rd-title">CHOOSE YOUR MOMENT</motion.h1>
+          {step === "details" && (
+            <motion.p layout className="rd-subtitle">
+              Complete your details, choose your table on our interactive floor plan,
+              then review and confirm. Availability updates live.
+            </motion.p>
+          )}
+
+          <motion.div layout className="rd-stepper">
+            {STEPS.map((stepObj, i) => {
+              const label = stepObj.label;
+              const isActive = i <= activeStepIndex;
+              return (
+                <div className="rd-step" key={label}>
+                  <div className={`rd-step-circle ${isActive ? 'rd-step-circle-active' : ''}`}>
+                    {i + 1}
+                  </div>
+                  <span className={isActive ? 'rd-step-label-active' : 'rd-step-label'}>{label}</span>
+                  {i < STEPS.length - 1 && <div className="rd-step-line" />}
+                </div>
+              );
+            })}
+          </motion.div>
+
+          <AnimatePresence mode="wait" custom={direction}>
+            {step === "details" && (
+              <motion.div
+                key="details"
+                custom={direction}
+                variants={pageVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
               >
-                <span className="rzv-steps__dot">{i < activeStepIndex ? "✓" : i + 1}</span>
-                <span className="rzv-steps__label">{s.label}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
+                <ReservationDetails
+                  initialForm={{
+                    date: form.date,
+                    startTime: form.time,
+                    diningArea: form.selectedArea || 'Standard dining (choose a table)',
+                    selectedTable: selectedTableId,
+                    guests: form.guestCount,
+                    duration: form.holdDurationMinutes ? `${form.holdDurationMinutes} minutes` : '30 minutes',
+                    endTime: form.endTime,
+                    diningPurpose: DINING_PURPOSES.find(p => p.id === form.diningPurpose)?.label || 'Casual Dinner',
+                    diningPurposeNote: form.diningPurposeNote,
+                    fullName: form.fullName,
+                    email: form.email,
+                    phone: form.phone,
+                  }}
+                  tables={tables}
+                  selectedTableId={selectedTableId}
+                  onSelectTable={setSelectedTableId}
+                  tablesLoading={loadingAvailability}
+                  membershipTier={membershipTier}
+                  isAuthenticated={isAuthenticated}
+                  onUpdateForm={(name, value) => {
+                    if (name === 'date') setField('date', value);
+                    if (name === 'startTime') setField('time', value);
+                    if (name === 'guests') setField('guestCount', value);
+                    if (name === 'duration') setField('holdDurationMinutes', parseInt(value) || 30);
+                    if (name === 'diningPurpose') setField('diningPurpose', value);
+                  }}
+                  onGoHome={() => navigate("/")}
+                  onContinue={(localForm) => {
+                    setField("date", localForm.date);
+                    setField("time", localForm.startTime);
+                    setField("endTime", localForm.endTime);
+                    setField("guestCount", localForm.guests);
+                    setField("holdDurationMinutes", parseInt(localForm.duration) || 30);
+                    setField("diningPurpose", localForm.diningPurpose);
+                    setField("diningPurposeNote", localForm.diningPurposeNote);
+                    setField("selectedArea", localForm.diningArea);
+                    setField("fullName", localForm.fullName);
+                    setField("email", localForm.email);
+                    setField("phone", localForm.phone);
 
-        {/* STEP 1 — Reservation Details */}
-        {step === "details" ? (
-          <div className={`rzv-step rzv-step--narrow ${exiting ? "rzv-step--exit" : "rzv-step--enter"}`}>
-            <ReservationDetailsPanel
-              form={form}
-              setField={setField}
-              settings={settings}
-              timeSlots={timeSlots}
-              isAuthenticated={isAuthenticated}
-              todayStr={todayString()}
-              detailsValid={detailsValid}
-              reviewing={detailsReviewing}
-              missing={missing}
-              onDone={handleDone}
-              onConfirm={handleConfirmDetails}
-              onCancel={handleCancelReview}
-            />
-          </div>
-        ) : null}
+                    transitionTo("summary");
+                  }}
+                />
+              </motion.div>
+            )}
 
-        {/* STEP 2 + 3 — Choose Table + Summary */}
-        {step === "tables" ? (
-          <div
-            ref={tablesRef}
-            className={`rzv-step ${exiting ? "rzv-step--exit" : "rzv-step--enter"}`}
-          >
-            <div className="rzv-tablestep">
-              <div className="rzv-tablestep__bar">
-                <button type="button" className="rzv-backlink" onClick={handleEditDetails}>
-                  ← Back to details
-                </button>
-                <span className="rzv-tablestep__recap">
-                  {form.guestCount} guests ·{" "}
-                  {form.date ? new Date(`${form.date}T00:00:00`).toLocaleDateString(undefined, {
-                    day: "numeric",
-                    month: "short",
-                  }) : "—"}{" "}
-                  · {form.time || "—"}
-                </span>
-              </div>
+            {step === "summary" && (
+              <motion.div
+                key="summary"
+                custom={direction}
+                variants={pageVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                className="rzv-step rzv-step--enter"
+              >
+                <div className="rzv-tablestep">
+                  <div className="rzv-tablestep__bar">
+                    <button type="button" className="rzv-backlink" onClick={handleEditDetails}>
+                      ← Back to details
+                    </button>
+                    <span className="rzv-tablestep__recap">
+                      {form.guestCount} guests ·{" "}
+                      {form.date ? new Date(`${form.date}T00:00:00`).toLocaleDateString(undefined, {
+                        day: "numeric",
+                        month: "short",
+                      }) : "—"}{" "}
+                      · {form.time || "—"}
+                    </span>
+                  </div>
+                  <div className="rzv-reveal">
+                    <ReservationSummary
+                      form={form}
+                      setField={setField}
+                      selectedTables={selectedTables}
+                      isKitchenView={isKitchenView}
+                      error={error}
+                      submitting={submitting}
+                      canSubmit={canSubmit}
+                      onSubmit={handleSubmit}
+                      onEditDetails={handleEditDetails}
+                      preorderItems={preorderItems}
+                      setPreorderItems={setPreorderItems}
+                      preorderTotal={preorderTotal}
+                      setPreorderTotal={setPreorderTotal}
+                      promoCode={promoCode}
+                      setPromoCode={setPromoCode}
+                      promoDiscount={promoDiscount}
+                      setPromoDiscount={setPromoDiscount}
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
 
-              <TableBoard
-                tables={tables}
-                selectedTableId={selectedTableId}
-                onSelectTable={handleSelectTable}
-                loading={loadingAvailability}
-                guestCount={form.guestCount}
-                membershipTier={membershipTier}
-                isAuthenticated={isAuthenticated}
-                onNavigateLogin={() => onNavigate("login")}
-                onNavigateRegister={onRequireAuth}
-              />
-
-              {summaryVisible ? (
-                <div className="rzv-reveal">
-                  <ReservationSummary
-                    form={form}
-                    setField={setField}
-                    selectedTables={selectedTables}
-                    isKitchenView={isKitchenView}
-                    error={error}
-                    submitting={submitting}
-                    canSubmit={canSubmit}
-                    onSubmit={handleSubmit}
-                    onEditDetails={handleEditDetails}
+            {step === "payment" && successReservation && (
+              <motion.div
+                key="payment"
+                custom={direction}
+                variants={pageVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                className="rzv-step rzv-step--enter"
+              >
+                <div className={`w-full transition-all duration-500 ease-in-out ${isPaymentSuccess ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
+                  <ReservationPaymentPanel
+                    reservation={successReservation}
+                    amount={successReservation.final_total}
+                    orderCode={successReservation.order_code}
+                    qrUrl={successReservation.vietqr_url}
+                    onSuccess={handlePaymentSuccess}
+                    onCancel={() => navigate("/")}
                   />
                 </div>
-              ) : (
-                <p className="rzv-tablestep__prompt">
-                  {isKitchenView
-                    ? "Review your counter seat booking below and confirm."
-                    : "Select an available table on the plan to review and confirm your reservation."}
-                </p>
-              )}
-            </div>
-          </div>
-        ) : null}
-      </section>
-    </main>
+              </motion.div>
+            )}
+
+            {step === "success" && successReservation && (
+              <motion.div
+                key="success"
+                custom={direction}
+                variants={pageVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                className="rzv-step rzv-step--enter w-full"
+              >
+                <ReservationSuccessPanel
+                  reservation={successReservation}
+                  onReturnHome={() => navigate("/")}
+                  onViewReservation={() => navigate("/my-reservations")}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </div>
+    </div>
   );
 }
 

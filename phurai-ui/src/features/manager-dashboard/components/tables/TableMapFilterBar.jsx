@@ -1,5 +1,5 @@
 import { SearchField } from "../ManagerUI.jsx";
-import { TABLE_STATUS_META } from "../../data/managerDashboardMockData.js";
+import { TABLE_STATUS_META } from "@/shared/constants.js";
 import { STATUS_KEYS } from "./tableConstants.js";
 
 function TableMapFilterBar({
@@ -37,26 +37,29 @@ function TableMapFilterBar({
         </select>
       </label>
 
-      <div className="sfx-filterbar__statuses">
-        <span className="sfx-filterbar__label">Status</span>
-        <div className="sfx-chips">
-          {STATUS_KEYS.map((slug) => {
-            const active = selectedStatuses.includes(slug);
-            return (
-              <button
-                key={slug}
-                type="button"
-                className={`sfx-chip ${active ? "is-active" : "sfx-chip--outline"}`}
-                aria-pressed={active}
-                onClick={() => onToggleStatus(slug)}
-              >
-                <i className={`sfx-dot sfx-dot--${TABLE_STATUS_META[slug].tone}`} />
-                {TABLE_STATUS_META[slug].label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <label className="sfx-field sfx-filterbar__area">
+        <span>Status</span>
+        <select
+          className="sfx-select"
+          value={selectedStatuses[0] || ""}
+          onChange={(e) => {
+            const val = e.target.value;
+            if (val === "") {
+               // clear selected statuses
+               onToggleStatus("clear"); 
+            } else {
+               onToggleStatus(val);
+            }
+          }}
+        >
+          <option value="">All Statuses</option>
+          {STATUS_KEYS.map((slug) => (
+            <option key={slug} value={slug}>
+              {TABLE_STATUS_META[slug].label}
+            </option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 }

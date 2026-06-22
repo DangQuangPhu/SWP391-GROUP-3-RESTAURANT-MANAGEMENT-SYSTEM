@@ -22,12 +22,13 @@ const PATHS = {
   chart: "M4 19V5M4 19h16M8 17V11M12 17V7M16 17v-4",
 };
 
-function Icon({ name, size = 18, strokeWidth = 1.7, className = "" }) {
+function Icon({ name, size = 18, strokeWidth = 1.7, className = "", style }) {
   const d = PATHS[name];
   if (!d) return null;
   return (
     <svg
       className={className}
+      style={style}
       width={size}
       height={size}
       viewBox="0 0 24 24"

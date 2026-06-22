@@ -1,5 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre&family=Hanken+Grotesk:ital,wght@0,400;0,600;0,700;0,900;1,400&family=Imperial+Script&family=Inter:ital,wght@0,400;0,500;0,600;1,400&family=Libre+Caslon+Text:ital@0;1&family=Montserrat:wght@600;800&family=Paytone+One&family=Pragati+Narrow&family=Roboto+Flex:wght@400;500;700&display=swap');
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 *,
 *::before,
 *::after {

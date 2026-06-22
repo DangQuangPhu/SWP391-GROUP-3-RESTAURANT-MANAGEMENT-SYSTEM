@@ -10,7 +10,8 @@ import {
   fetchKdsReadyQueue,
   updateStaffOrderItemStatus,
 } from "../services/staffApi.js";
-import { DEMO_NOTICE } from "../data/staffDashboardMockData.js";
+import { useSocket } from "@/core/socket/SocketContext.jsx";
+import { DEMO_NOTICE } from "@/shared/constants.js";
 import "../styles/staff-kds-tab.css";
 
 const POLL_MS = 12000;
@@ -72,6 +73,7 @@ function DelayedCard({ item }) {
 }
 
 function StaffKdsTab({ user, toast, onRefresh, refreshing }) {
+  const { socket } = useSocket();
   const [readyItems, setReadyItems] = useState([]);
   const [delayedItems, setDelayedItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -110,6 +112,29 @@ function StaffKdsTab({ user, toast, onRefresh, refreshing }) {
     return () => clearInterval(timer);
   }, [loadQueues]);
 
+  useEffect(() => {
+    if (!socket) return undefined;
+
+    const handleNewKitchenOrder = (payload = {}) => {
+      const count = Number(payload.item_count) || payload.items?.length || 1;
+      toast?.(`New kitchen order received (${count} item${count === 1 ? "" : "s"})`, "info");
+      loadQueues(true);
+      onRefresh?.();
+    };
+
+    socket.on("NEW_KITCHEN_ORDER", handleNewKitchenOrder);
+    socket.on("NEW_KITCHEN_TICKET", handleNewKitchenOrder);
+    socket.on("kitchen:new_preorder", handleNewKitchenOrder);
+    socket.on("kitchen:new_ticket", handleNewKitchenOrder);
+
+    return () => {
+      socket.off("NEW_KITCHEN_ORDER", handleNewKitchenOrder);
+      socket.off("NEW_KITCHEN_TICKET", handleNewKitchenOrder);
+      socket.off("kitchen:new_preorder", handleNewKitchenOrder);
+      socket.off("kitchen:new_ticket", handleNewKitchenOrder);
+    };
+  }, [socket, loadQueues, toast, onRefresh]);
+
   const handleServe = async (item) => {
     if (!userId) {
       toast?.("Sign in to update items", "error");
@@ -146,7 +171,7 @@ function StaffKdsTab({ user, toast, onRefresh, refreshing }) {
     <div className="staff-kds-tab">
       <SectionHead
         title="Alerts & KDS"
-        subtitle="Track ready items and long-wait alerts — auto-refreshes every 12 seconds"
+        subtitle="Track ready items and the active kitchen queue — auto-refreshes every 12 seconds"
         actions={
           <Button
             variant="ghost"
@@ -204,7 +229,7 @@ function StaffKdsTab({ user, toast, onRefresh, refreshing }) {
 
           <section className="staff-kds-panel staff-kds-panel--delayed">
             <header className="staff-kds-panel__head staff-kds-panel__head--alert">
-              <h3>Long-wait alerts</h3>
+              <h3>Active Kitchen Queue</h3>
               <span className="staff-kds-panel__count staff-kds-panel__count--alert">
                 {delayedItems.length}
               </span>
@@ -217,8 +242,8 @@ function StaffKdsTab({ user, toast, onRefresh, refreshing }) {
               ) : (
                 <EmptyState
                   icon="spark"
-                  title="No alerts"
-                  hint="Pending or cooking items over 15 minutes appear here"
+                  title="Queue empty"
+                  hint="Pending or cooking items appear here"
                 />
               )}
             </div>

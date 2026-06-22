@@ -60,9 +60,21 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
   const cartFabRef = useRef(null);
   const pendingCategoryRef = useRef(null);
   const isTransitioningRef = useRef(false);
+  const [apiDishes, setApiDishes] = useState([]);
+
+  useEffect(() => {
+    fetch('/api/menu')
+      .then(r => r.json())
+      .then(res => {
+        if (res.success && Array.isArray(res.data)) {
+          setApiDishes(res.data);
+        }
+      })
+      .catch(err => console.error('Failed to fetch menu:', err));
+  }, []);
 
   const { addItem, isDrawerOpen } = useMenuCart();
-  const canAddToCart = isMenuCustomer(isAuthenticated, currentUser);
+  const canAddToCart = isMenuCustomer(isAuthenticated, currentUser) || hasActiveSession;
 
   const allDishes = useMemo(
     () =>
@@ -83,13 +95,35 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
   }, [selectedCategory, activeCategory]);
 
   const baseDishes = useMemo(() => {
-    if (selectedCategory === 'all') return allDishes;
-    return activeCategory?.items.map((item) => ({
-      ...item,
-      categoryId: activeCategory.id,
-      categoryName: activeCategory.name,
-    })) ?? [];
-  }, [selectedCategory, allDishes, activeCategory]);
+    let items = [];
+    if (selectedCategory === 'all') {
+      items = allDishes;
+    } else {
+      items = activeCategory?.items.map((item) => ({
+        ...item,
+        categoryId: activeCategory.id,
+        categoryName: activeCategory.name,
+      })) ?? [];
+    }
+
+    // Merge API data
+    if (apiDishes.length > 0) {
+      return items.map(item => {
+        const liveDish = apiDishes.find(d => d.name === item.name);
+        if (liveDish) {
+          return {
+            ...item,
+            dish_id: liveDish.dish_id,
+            price: liveDish.price,
+            description: liveDish.description || item.description,
+            is_available: liveDish.is_available
+          };
+        }
+        return item;
+      });
+    }
+    return items;
+  }, [selectedCategory, allDishes, activeCategory, apiDishes]);
 
   const visibleDishes = useMemo(() => {
     const filtered = filterDishes(baseDishes, searchTerm);
@@ -127,6 +161,7 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
     (dish) => {
       addItem({
         id: dish.id,
+        dish_id: dish.dish_id,
         name: dish.name,
         price: dish.price,
         image: dish.image,

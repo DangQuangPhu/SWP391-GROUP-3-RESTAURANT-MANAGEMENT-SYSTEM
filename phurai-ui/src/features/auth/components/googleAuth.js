@@ -114,11 +114,16 @@ export async function signInWithGoogle() {
     const data = await googleLogin({ accessToken });
     return { type: "login", user: data.user };
   } catch (error) {
+    // Account doesn't exist yet — auto-register
     if (error.code === "ACCOUNT_NOT_FOUND") {
       const regData = await googleRegisterWithAccessToken(accessToken);
+      if (regData.token) {
+        return { type: "login", user: regData.user };
+      }
       return { type: "register", ...regData };
     }
-    if (error.code === "EMAIL_NOT_VERIFIED") {
+    // Account exists but email not verified — route to OTP step
+    if (error.code === "EMAIL_NOT_VERIFIED" || error.status === 403) {
       return {
         type: "otp",
         requiresOtp: true,

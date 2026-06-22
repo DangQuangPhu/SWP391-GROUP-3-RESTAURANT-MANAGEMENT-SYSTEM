@@ -1,4 +1,4 @@
-import { homeIcons } from '@/features/home';
+import { homeIcons } from '@/features/home/data/homeAssets.js';
 
 function TestimonialCard({ quote, name, role, title, avatarSrc }) {
   return (

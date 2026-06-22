@@ -8,15 +8,25 @@ import "./config.js";
 import authRoutes from "./routes/auth.js";
 import profileRoutes from "./routes/profile.js";
 import reservationRoutes from "./routes/reservations.js";
+import reservationPaymentRoutes from "./routes/reservation-payments.routes.js";
 import staffRoutes from "./routes/staff.js";
-import managerRoutes from "./routes/manager.js";
+import managerRoutes from "./routes/manager.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
 import notificationRoutes from "./routes/notifications.js";
+import promotionRoutes from "./routes/promotions.js";
+import publicRoutes from "./routes/public.js";
 import { runOtpLifecycleCleanup } from "./utils/otpService.js";
 import { isSmtpConfigured } from "./email.js";
 import dishRoutes from "./routes/dishes.js";
+import menuRoutes from "./routes/menu.routes.js";
 import customerRoutes from "./routes/customer.js";
+import kitchenRoutes from "./routes/kitchen.routes.js";
+import ordersRoutes from "./routes/orders.routes.js";
 import { initSocket } from "./socket.js";
-
+import { runReservationReminders } from "./services/reminderService.js";
+import { runAutoSeed } from "./utils/autoSeeder.js";
+import { sweepNoShows } from "./services/noShowSweeper.js";
+import { startCronJobs } from "./services/cronService.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -27,7 +37,19 @@ const allowedOrigins = (process.env.APP_URL || "http://localhost:5173,http://loc
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-app.use(cors({ origin: allowedOrigins }));
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization", "X-User-Id"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+}));
+// Preflight for all routes (Express 5 requires named wildcard)
+app.options("/{*path}", cors({
+  origin: allowedOrigins,
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization", "X-User-Id"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+}));
 app.use((_req, res, next) => {
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
   next();
@@ -43,11 +65,22 @@ app.use("/api", authRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/reservations", reservationRoutes);
+app.use("/api/reservations", reservationPaymentRoutes);
 app.use("/api/staff", staffRoutes);
 app.use("/api/manager", managerRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/kitchen", kitchenRoutes);
+app.use("/api/orders", ordersRoutes);
 app.use("/api/dishes", dishRoutes);
+app.use("/api/menu", menuRoutes);
+app.use("/api/manager/menu", menuRoutes);
 app.use("/api/customer", customerRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/promotions", promotionRoutes);
+app.use("/api/public", publicRoutes);
+
+import paymentRoutes from "./routes/paymentRoutes.js";
+app.use("/api/payments", paymentRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
@@ -70,17 +103,48 @@ runOtpLifecycleCleanup().catch((err) => {
 });
 
 const OTP_CLEANUP_INTERVAL_MS = 60 * 1000;
+
+// Run auto seed on startup
+runAutoSeed();
+startCronJobs();
 setInterval(() => {
   runOtpLifecycleCleanup().catch((err) => {
     console.warn("OTP lifecycle cleanup:", err.message);
   });
 }, OTP_CLEANUP_INTERVAL_MS);
 
+const REMINDER_INTERVAL_MS = 15 * 60 * 1000; // 15 mins
+setInterval(() => {
+  runReservationReminders().catch((err) => {
+    console.warn("Reservation reminder cron:", err.message);
+  });
+}, REMINDER_INTERVAL_MS);
+
+const NO_SHOW_INTERVAL_MS = 60 * 1000; // 1 min
+setInterval(() => {
+  sweepNoShows().catch((err) => {
+    console.warn("No show sweeper cron:", err.message);
+  });
+}, NO_SHOW_INTERVAL_MS);
+
 const server = http.createServer(app);
-initSocket(server, { allowedOrigins });
+const io = initSocket(server, { allowedOrigins });
+app.set("io", io);
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`\n❌  Port ${port} is already in use.`);
+    console.error(`   Run this command to free it, then restart:\n`);
+    console.error(`   kill -9 $(lsof -ti :${port}) && npm run dev:full\n`);
+    process.exit(1);
+  } else {
+    throw err;
+  }
+});
 
 server.listen(port, () => {
   console.log(`Backend server listening on http://localhost:${port}`);
   console.log("SMTP configured:", isSmtpConfigured());
   console.log("Socket.IO enabled");
 });
+

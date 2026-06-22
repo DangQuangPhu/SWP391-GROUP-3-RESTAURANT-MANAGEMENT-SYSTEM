@@ -8,6 +8,9 @@ import {
   notifyCustomerStaffAction,
   notifyStaffNewCustomerAction,
 } from "../services/notificationService.js";
+import { getIO } from "../socket.js";
+import { updateReservationStatus } from "../services/reservationStateService.js";
+import { RESERVATION_STATUS } from "../../src/shared/reservationStatus.js";
 
 function jsonOk(res, data, status = 200) {
   return res.status(status).json({ success: true, data });
@@ -72,9 +75,9 @@ function mapTodayReservationRow(row, tablesByReservation, preordersByReservation
     table_number: primary?.table_number ?? null,
     table_label: assigned.map((t) => t.table_number).join(", ") || "—",
     assigned_tables: assigned,
-    status: slugStatus(row.reservation_status),
+    status: row.reservation_status,
     reservation_status: row.reservation_status,
-    source: slugStatus(row.reservation_source),
+    source: row.reservation_source,
     special_request: specialRequest,
     duration_minutes: durationMinutes,
     hold_duration_minutes: holdDurationMinutes,
@@ -90,8 +93,10 @@ function mapTableRow(row) {
     area_name: row.area_name,
     capacity: row.capacity,
     table_status: row.table_status,
-    status: slugStatus(row.table_status),
+    status: row.table_status,
     qr_code: row.static_qr_code || null,
+    merged_into_table_id: row.merged_into_table_id ?? null,
+    is_counter: Boolean(row.is_counter),
     active_session_id: row.active_session_id ?? null,
   };
 }
@@ -119,6 +124,8 @@ export async function listStaffTables(_req, res) {
          t.capacity,
          t.table_status,
          t.static_qr_code,
+         t.merged_into_table_id,
+         t.is_counter,
          a.area_name,
          (
            SELECT TOP 1 qs.qr_session_id
@@ -165,7 +172,7 @@ export async function listTodayReservations(req, res) {
 
       const account = accountRows[0];
       if (account && !isPrivilegedReservationViewer(account.role_id)) {
-        const shiftId = resolveWorkShiftForStaff({
+        const shiftId = await resolveWorkShiftForStaff({
           userId: String(account.user_id),
         });
         const hourClause = buildReservationShiftHourClause(shiftId);
@@ -196,10 +203,13 @@ export async function listTodayReservations(req, res) {
        LEFT JOIN dbo.UserAccounts AS ua ON r.customer_id = ua.user_id
        LEFT JOIN dbo.CustomerProfiles AS cp ON cp.user_id = ua.user_id
        LEFT JOIN dbo.RestaurantAreas AS a ON r.preferred_area_id = a.area_id
-       WHERE r.reservation_status IN (
-         N'Pending',
+         N'Pending Request',
+         N'Pending Payment',
+         N'Reserved',
          N'Confirmed',
-         N'Checked In',
+         N'Seated',
+         N'Cleaning',
+         N'Check-out',
          N'Completed',
          N'No Show'
        )
@@ -314,7 +324,9 @@ export async function checkInReservation(req, res) {
       return jsonError(res, "Reservation not found.", 404);
     }
 
-    if (!["Pending", "Confirmed"].includes(reservation.reservation_status)) {
+    // Replaced manual check with state machine validation in updateReservationStatus later,
+    // but doing a quick preview check here:
+    if (!["Pending Request", "Pending Payment", "Paid", "Confirmed", "Reserved", "Pending"].includes(reservation.reservation_status)) {
       await connection.rollback();
       return jsonError(
         res,
@@ -391,14 +403,14 @@ export async function checkInReservation(req, res) {
       [tableId, reservationId, reservation.customer_id, token, staffId]
     );
 
-    await connection.query(
-      `UPDATE dbo.Reservations
-       SET reservation_status = N'Checked In',
-           checked_in_at = SYSDATETIME(),
-           updated_at = SYSDATETIME()
-       WHERE reservation_id = ?;`,
-      [reservationId]
-    );
+    await updateReservationStatus({
+      connection,
+      reservationId,
+      toStatus: RESERVATION_STATUS.SEATED,
+      staffId,
+      auditAction: "STAFF_CHECK_IN_RESERVATION",
+      extraUpdates: ", checked_in_at = SYSDATETIME()"
+    });
 
     await connection.query(
       `UPDATE dbo.RestaurantTables
@@ -466,7 +478,7 @@ export async function checkInReservation(req, res) {
         table_number: table.table_number,
         area_name: table.area_name,
         table_status: "Occupied",
-        reservation_status: "Checked In",
+        reservation_status: RESERVATION_STATUS.SEATED,
         session_id: session.session_id,
         token: session.token,
         session_status: session.session_status,
@@ -518,7 +530,7 @@ export async function rejectReservation(req, res) {
       return jsonError(res, "Reservation not found.", 404);
     }
 
-    if (!["Pending", "Confirmed"].includes(reservation.reservation_status)) {
+    if (!["Pending Request", "Pending Payment", "Paid", "Confirmed", "Reserved", "Pending"].includes(reservation.reservation_status)) {
       await connection.rollback();
       return jsonError(
         res,
@@ -537,13 +549,19 @@ export async function rejectReservation(req, res) {
       [reservationId]
     );
 
+    await updateReservationStatus({
+      connection,
+      reservationId,
+      toStatus: RESERVATION_STATUS.CANCELLED,
+      staffId,
+      auditAction: "STAFF_REJECT_CHECK_IN", // or STAFF_REJECT_REQUEST
+      extraUpdates: `, cancelled_at = SYSDATETIME()`
+    });
+
     await connection.query(
       `UPDATE dbo.Reservations
-       SET reservation_status = N'Cancelled',
-           cancelled_at = SYSDATETIME(),
-           cancel_reason = ?,
-           updated_at = SYSDATETIME()
-       WHERE reservation_id = ?;`,
+       SET cancel_reason = ?
+       WHERE reservation_id = ?`,
       [reason, reservationId]
     );
 
@@ -560,30 +578,6 @@ export async function rejectReservation(req, res) {
         );
         freedTableIds.push(row.table_id);
       }
-    }
-
-    if (staffId) {
-      const oldJson = JSON.stringify({
-        reservation_status: reservation.reservation_status,
-      });
-      const newJson = JSON.stringify({
-        reservation_status: "Cancelled",
-        cancel_reason: reason,
-        freed_table_ids: freedTableIds,
-      });
-
-      await connection.query(
-        `INSERT INTO dbo.AuditLogs
-           (user_id, action_name, target_table, target_id, old_value_json, new_value_json, ip_address)
-         VALUES (?, N'REJECT_RESERVATION', N'Reservations', ?, ?, ?, ?);`,
-        [
-          staffId,
-          reservationId,
-          oldJson,
-          newJson,
-          req.ip || req.socket?.remoteAddress || null,
-        ]
-      );
     }
 
     await connection.commit();
@@ -604,7 +598,7 @@ export async function rejectReservation(req, res) {
 
     return jsonOk(res, {
       reservation_id: reservationId,
-      reservation_status: "Cancelled",
+      reservation_status: RESERVATION_STATUS.CANCELLED,
       freed_table_ids: freedTableIds,
       message: "Reservation rejected and cancelled.",
     });
@@ -653,9 +647,9 @@ export async function checkInTable(req, res) {
       return jsonError(res, "Table not found.", 404);
     }
 
-    if (table.table_status !== "Available") {
+    if (!["Available", "Reserved"].includes(table.table_status)) {
       await connection.rollback();
-      return jsonError(res, "Only available tables can be checked in.", 409);
+      return jsonError(res, "Only available or reserved tables can be checked in.", 409);
     }
 
     const [activeSessionRows] = await connection.query(
@@ -770,18 +764,51 @@ export async function resetTable(req, res) {
 
     await connection.query(
       `UPDATE dbo.RestaurantTables
-       SET table_status = N'Available',
+       SET table_status = N'Cleaning',
            updated_at = SYSDATETIME()
        WHERE table_id = ?;`,
       [tableId]
     );
+
+    // Get affected reservations
+    const [affectedRes] = await connection.query(
+      `SELECT r.reservation_id, r.reservation_status 
+       FROM dbo.Reservations r
+       JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
+       WHERE rt.table_id = ? AND r.reservation_status IN (N'Seated', N'Cleaning', N'Check-out');`,
+      [tableId]
+    );
+
+    for (const row of affectedRes) {
+      let currentStatus = row.reservation_status;
+      
+      // Step through the state machine correctly
+      if (currentStatus === RESERVATION_STATUS.SEATED) {
+        await updateReservationStatus({ connection, reservationId: row.reservation_id, toStatus: RESERVATION_STATUS.CLEANING });
+        currentStatus = RESERVATION_STATUS.CLEANING;
+      }
+      if (currentStatus === RESERVATION_STATUS.CLEANING) {
+        await updateReservationStatus({ connection, reservationId: row.reservation_id, toStatus: RESERVATION_STATUS.CHECK_OUT });
+        currentStatus = RESERVATION_STATUS.CHECK_OUT;
+      }
+      if (currentStatus === RESERVATION_STATUS.CHECK_OUT) {
+        await updateReservationStatus({
+          connection,
+          reservationId: row.reservation_id,
+          toStatus: RESERVATION_STATUS.COMPLETED,
+          staffId: null,
+          auditAction: null,
+          extraUpdates: ", reservation_end_at = SYSDATETIME()"
+        });
+      }
+    }
 
     await connection.commit();
 
     return jsonOk(res, {
       table_id: tableId,
       table_number: table.table_number,
-      table_status: "Available",
+      table_status: "Cleaning",
     });
   } catch (error) {
     await connection.rollback();
@@ -789,6 +816,46 @@ export async function resetTable(req, res) {
     return jsonError(res, "Could not reset table.");
   } finally {
     connection.release();
+  }
+}
+
+/**
+ * PUT /api/staff/tables/:tableId/mark-clean
+ * Transitions a table from Cleaning to Available and emits a socket update.
+ */
+export async function markTableClean(req, res) {
+  const tableId = Number(req.params.tableId);
+
+  if (!Number.isFinite(tableId) || tableId <= 0) {
+    return jsonError(res, "Invalid table id.", 400);
+  }
+
+  try {
+    const [result] = await pool.query(
+      `UPDATE dbo.RestaurantTables
+       SET table_status = N'Available',
+           updated_at = SYSDATETIME()
+       WHERE table_id = ? AND table_status = N'Cleaning';`,
+      [tableId]
+    );
+
+    if (result.rowsAffected === 0) {
+      return jsonError(res, "Table not found or not in Cleaning state.", 404);
+    }
+
+    // Emit socket event to update clients
+    const io = req.app.get("io");
+    if (io) {
+      io.to("room:manager").to("room:staff").emit("table:status_updated", {
+        table_id: tableId,
+        table_status: "Available"
+      });
+    }
+
+    return jsonOk(res, { table_id: tableId, table_status: "Available" });
+  } catch (error) {
+    console.error("PUT /api/staff/tables/:tableId/mark-clean failed:", error);
+    return jsonError(res, "Could not mark table as clean.");
   }
 }
 
@@ -896,12 +963,14 @@ async function findOrCreateActiveOrder(executor, tableId, staffId) {
   const qrSessionId = sessionRows[0]?.qr_session_id ?? null;
 
   const [insertRows] = await executor.query(
-    `INSERT INTO dbo.Orders
+    `DECLARE @OutputTbl TABLE (order_id INT);
+     INSERT INTO dbo.Orders
        (table_id, created_by_staff_id, qr_session_id, order_type, order_status,
         subtotal, discount_amount, service_charge, total_amount)
-     OUTPUT INSERTED.order_id
+     OUTPUT INSERTED.order_id INTO @OutputTbl
      VALUES
-       (?, ?, ?, N'Dine In', N'Open', 0, 0, 0, 0);`,
+       (?, ?, ?, N'Dine In', N'Open', 0, 0, 0, 0);
+     SELECT order_id FROM @OutputTbl;`,
     [tableId, staffId, qrSessionId]
   );
 
@@ -1051,20 +1120,32 @@ export async function addOrderItem(req, res) {
 
     const unitPrice = Number(dish.price);
 
+    // Snapshot combined table names
+    const [snapshotRows] = await connection.query(
+      `SELECT t2.table_number
+       FROM dbo.RestaurantTables t1
+       JOIN dbo.RestaurantTables t2 ON t2.merged_into_table_id = t1.table_id OR t2.table_id = t1.table_id
+       WHERE t1.table_id = (SELECT COALESCE(merged_into_table_id, table_id) FROM dbo.RestaurantTables WHERE table_id = ?)
+       ORDER BY t2.table_number ASC`,
+      [tableId]
+    );
+    const combinedNames = snapshotRows.map(r => r.table_number).join(' | ');
+
     const [itemRows] = await connection.query(
       `INSERT INTO dbo.OrderItems
-         (order_id, dish_id, quantity, unit_price, notes, item_status)
+         (order_id, dish_id, quantity, unit_price, notes, snapshot_table_name, item_status)
        OUTPUT
          INSERTED.order_item_id,
          INSERTED.order_id,
          INSERTED.dish_id,
          INSERTED.quantity,
          INSERTED.notes,
+         INSERTED.snapshot_table_name,
          INSERTED.unit_price,
          INSERTED.item_status
        VALUES
-         (?, ?, ?, ?, ?, N'Pending');`,
-      [orderId, dishId, quantity, unitPrice, notes]
+         (?, ?, ?, ?, ?, ?, N'Pending');`,
+      [orderId, dishId, quantity, unitPrice, notes, combinedNames]
     );
 
     const createdItem = itemRows[0];
@@ -1806,12 +1887,14 @@ export async function checkoutTablePayment(req, res) {
     await syncOrderBillTotals(connection, order.order_id, totals);
 
     const [paymentRows] = await connection.query(
-      `INSERT INTO dbo.Payments
+      `DECLARE @OutputTbl TABLE (payment_id INT);
+       INSERT INTO dbo.Payments
          (order_id, payment_method_id, amount_paid, change_given, payment_status,
           transaction_ref, processed_by_staff_id, paid_at)
-       OUTPUT INSERTED.payment_id
+       OUTPUT INSERTED.payment_id INTO @OutputTbl
        VALUES
-         (?, ?, ?, ?, N'Completed', ?, ?, SYSDATETIME());`,
+         (?, ?, ?, ?, N'Completed', ?, ?, SYSDATETIME());
+       SELECT payment_id FROM @OutputTbl;`,
       [
         order.order_id,
         paymentMethodId,
@@ -1877,6 +1960,56 @@ export async function checkoutTablePayment(req, res) {
     );
 
     await connection.commit();
+
+    // ── Auto-checkout: if this table had an Occupied reservation, mark it CheckedOut ──
+    // Fire-and-forget after commit — does not affect payment success
+    const paymentIdForCheckout = paymentRows[0]?.payment_id ?? null;
+    pool.getConnection().then(async (checkoutConn) => {
+      try {
+        await checkoutConn.beginTransaction();
+        const [occupiedRows] = await checkoutConn.query(
+          `SELECT TOP 1 r.reservation_id, r.reservation_status
+           FROM dbo.Reservations r
+           INNER JOIN dbo.ReservationTables rt ON rt.reservation_id = r.reservation_id
+           WHERE rt.table_id = ? AND r.reservation_status IN (N'Seated', N'Cleaning')`,
+          [tableId]
+        );
+        if (occupiedRows.length > 0) {
+          const resId = occupiedRows[0].reservation_id;
+          let currentStatus = occupiedRows[0].reservation_status;
+
+          // Step through strict transitions
+          if (currentStatus === RESERVATION_STATUS.SEATED) {
+            await updateReservationStatus({ connection: checkoutConn, reservationId: resId, toStatus: RESERVATION_STATUS.CLEANING });
+            currentStatus = RESERVATION_STATUS.CLEANING;
+          }
+          if (currentStatus === RESERVATION_STATUS.CLEANING) {
+            await updateReservationStatus({
+              connection: checkoutConn,
+              reservationId: resId,
+              toStatus: RESERVATION_STATUS.CHECK_OUT,
+              staffId,
+              auditAction: "STAFF_CHECKOUT_RESERVATION",
+              extraUpdates: ", checked_out_at = SYSDATETIME()"
+            });
+          }
+
+          await checkoutConn.commit();
+          const io = getIO();
+          if (io) {
+            io.to('room:staff').emit('reservation:checkout_ready', { reservation_id: resId });
+            io.to('room:manager').emit('reservation:status_changed', { reservation_id: resId, new_status: RESERVATION_STATUS.CHECK_OUT });
+          }
+        } else {
+          await checkoutConn.rollback();
+        }
+      } catch (autoErr) {
+        await checkoutConn.rollback();
+        console.error('[auto-checkout] failed:', autoErr?.message);
+      } finally {
+        checkoutConn.release();
+      }
+    }).catch(e => console.error('[auto-checkout] connection error:', e?.message));
 
     return jsonOk(
       res,
@@ -2066,7 +2199,6 @@ export async function getKdsDelayedItems(_req, res) {
        INNER JOIN dbo.Dishes AS d ON d.dish_id = oi.dish_id
        WHERE oi.item_status IN (N'Pending', N'Sent To Kitchen', N'Preparing')
          AND o.order_status NOT IN (N'Cancelled', N'Paid')
-         AND DATEDIFF(MINUTE, oi.created_at, SYSDATETIME()) > 15
        ORDER BY wait_minutes DESC, t.table_number ASC, d.dish_name ASC;`
     );
 

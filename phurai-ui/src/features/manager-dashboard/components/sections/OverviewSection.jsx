@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { isSameDay } from "date-fns";
 import KpiCard from "../KpiCard.jsx";
 import RevenueChart from "../RevenueChart.jsx";
@@ -9,7 +9,6 @@ import { formatVND } from "@/utils/formatCurrency.js";
 import { asArray } from "@/utils/asArray.js";
 import {
   KPI_CARDS,
-  DASHBOARD_TODAY,
   deriveKpisForRange,
   expandReservationsForDemo,
   filterDailyRevenue,
@@ -18,7 +17,7 @@ import {
   getDateRangePresets,
   getDefaultDateRange,
   prepareChartSeries,
-} from "../../data/managerDashboardMockData.js";
+} from "@/shared/constants.js";
 
 const QUICK_ACTIONS = [
   { label: "Add Dish", icon: "dish", view: "menu", action: "add" },
@@ -28,8 +27,11 @@ const QUICK_ACTIONS = [
 ];
 
 function OverviewSection({ kpis: baseKpisProp, reservations, role, onNavigate }) {
-  const [dateRange, setDateRange] = useState(() => getDefaultDateRange());
-  const [draftRange, setDraftRange] = useState(() => getDefaultDateRange());
+  // Always use real today
+  const today = useMemo(() => new Date(), []);
+
+  const [dateRange, setDateRange] = useState(() => getDefaultDateRange(today));
+  const [draftRange, setDraftRange] = useState(() => getDefaultDateRange(today));
   const [activePresetId, setActivePresetId] = useState("last30");
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerAnchorRef = useRef(null);
@@ -40,13 +42,13 @@ function OverviewSection({ kpis: baseKpisProp, reservations, role, onNavigate })
   );
 
   const dailyRevenueSeries = useMemo(
-    () => generateTwoYearDailyRevenue(DASHBOARD_TODAY),
-    []
+    () => generateTwoYearDailyRevenue(today),
+    [today]
   );
 
   const demoReservations = useMemo(
-    () => expandReservationsForDemo(reservations, DASHBOARD_TODAY),
-    [reservations]
+    () => expandReservationsForDemo(reservations, today),
+    [reservations, today]
   );
 
   const filteredDailyRevenue = useMemo(
@@ -88,22 +90,25 @@ function OverviewSection({ kpis: baseKpisProp, reservations, role, onNavigate })
     const next = { startDate, endDate, key: "selection" };
     setDateRange(next);
 
-    const presets = getDateRangePresets(DASHBOARD_TODAY);
-    const matched = presets.find(
-      (preset) =>
-        isSameDay(preset.range.startDate, next.startDate) &&
-        isSameDay(preset.range.endDate, next.endDate)
-    );
+    const presets = getDateRangePresets(today);
+    const matched = presets.find((preset) => {
+      if (!preset.range.startDate && !next.startDate) return true;
+      if (!preset.range.startDate || !next.startDate) return false;
+      return isSameDay(preset.range.startDate, next.startDate) && isSameDay(preset.range.endDate, next.endDate);
+    });
     setActivePresetId(matched?.id ?? "custom");
     setPickerOpen(false);
-  }, []);
+  }, [today]);
 
   const handlePresetSelect = useCallback((preset) => {
-    setDraftRange(preset.range);
+    // Apply preset immediately
+    const range = preset.range || { startDate: preset.startDate, endDate: preset.endDate, key: "selection" };
+    setDraftRange(range);
     setActivePresetId(preset.id);
+    // Also immediately apply to chart
+    setDateRange(range);
+    setPickerOpen(false);
   }, []);
-
-  // The DatePicker now uses a Portal with its own backdrop for outside clicks.
 
   const visibleKpis =
     role === "manager"
@@ -133,6 +138,7 @@ function OverviewSection({ kpis: baseKpisProp, reservations, role, onNavigate })
                   <div
                     className={`sfx-chart__picker-anchor${pickerOpen ? " is-open" : ""}`}
                     ref={pickerAnchorRef}
+                    style={{ position: "relative" }}
                   >
                     <button
                       type="button"
@@ -143,9 +149,15 @@ function OverviewSection({ kpis: baseKpisProp, reservations, role, onNavigate })
                     >
                       <Icon name="calendar" size={18} />
                     </button>
-                    {pickerOpen ? (
-                      <div className="sfx-dp-popover-shell">
+                    {pickerOpen && (
+                      <div style={{
+                        position: "absolute",
+                        right: 0,
+                        top: "calc(100% + 8px)",
+                        zIndex: 1000,
+                      }}>
                         <DashboardDateRangePicker
+                          inline={true}
                           draftRange={draftRange}
                           activePresetId={activePresetId}
                           onDraftChange={(selection) => {
@@ -157,7 +169,7 @@ function OverviewSection({ kpis: baseKpisProp, reservations, role, onNavigate })
                           onCancel={closePicker}
                         />
                       </div>
-                    ) : null}
+                    )}
                   </div>
                 </div>
               </div>

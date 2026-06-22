@@ -11,10 +11,12 @@ import {
   EmptyState,
   NotConnectedNote,
 } from "../ManagerUI.jsx";
-import { DISH_CATEGORIES } from "../../data/managerDashboardMockData.js";
+import { DISH_CATEGORIES } from "@/shared/constants.js";
 import { asArray } from "@/utils/asArray.js";
 import { formatVND } from "@/utils/formatCurrency.js";
 import { getMenuTabFromSearch } from "../../config/managerRoutes.js";
+import { addDish, updateDish, deleteDish } from "../../services/managerApi.js";
+import { loadAuthUser } from "@/core/api/httpClient.js";
 
 const EMPTY = {
   dish_name: "",
@@ -22,8 +24,11 @@ const EMPTY = {
   price: 0,
   is_available: true,
   is_recommended: false,
+  is_preorderable: true,
   spicy_level: 0,
   prep_minutes: 10,
+  description: "",
+  image_url: "",
 };
 
 function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, toast, dishSource }) {
@@ -39,6 +44,8 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
   const [editing, setEditing] = useState(null);
   const [isNew, setIsNew] = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const currentUser = loadAuthUser();
   const isManager = role === "manager";
 
   const selectTab = (nextTab) => {
@@ -65,26 +72,55 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
     });
   }, [dishList, search, cat]);
 
-  const save = () => {
+  const save = async () => {
     if (!editing.dish_name.trim()) {
       toast("Dish name is required", "error");
       return;
     }
-    const clean = { ...editing, price: Number(editing.price) || 0, prep_minutes: Number(editing.prep_minutes) || 0 };
-    if (isNew) {
-      setDishes((prev) => [...prev, { ...clean, dish_id: Date.now() }]);
-      toast("Dish added to this view (not persisted — API not connected)", "info");
-    } else {
-      setDishes((prev) => prev.map((d) => (d.dish_id === clean.dish_id ? clean : d)));
-      toast("Dish updated locally (API not connected)", "info");
+    const clean = {
+      name: editing.dish_name,
+      category: editing.category_name,
+      price: Number(editing.price) || 0,
+      prep_time_minutes: Number(editing.prep_minutes) || 0,
+      spicy_level: Number(editing.spicy_level) || 0,
+      is_available: editing.is_available,
+      is_recommended: editing.is_recommended,
+      is_preorderable: editing.is_preorderable,
+      description: editing.description || "",
+      image_url: editing.image_url || "",
+    };
+
+    try {
+      setSubmitting(true);
+      if (isNew) {
+        const res = await addDish(clean, currentUser?.user_id);
+        setDishes((prev) => [...prev, { ...editing, dish_id: res.dish_id, prep_minutes: clean.prep_time_minutes }]);
+        toast("Dish added successfully", "success");
+      } else {
+        await updateDish(editing.dish_id, clean, currentUser?.user_id);
+        setDishes((prev) => prev.map((d) => (d.dish_id === editing.dish_id ? { ...d, ...editing, prep_minutes: clean.prep_time_minutes } : d)));
+        toast("Dish updated successfully", "success");
+      }
+      setEditing(null);
+    } catch (err) {
+      toast(err.message, "error");
+    } finally {
+      setSubmitting(false);
     }
-    setEditing(null);
   };
 
-  const remove = () => {
-    setDishes((prev) => prev.filter((d) => d.dish_id !== confirmDel.dish_id));
-    toast("Dish removed from view (delete API not connected)", "info");
-    setConfirmDel(null);
+  const remove = async () => {
+    try {
+      setSubmitting(true);
+      await deleteDish(confirmDel.dish_id, currentUser?.user_id);
+      setDishes((prev) => prev.filter((d) => d.dish_id !== confirmDel.dish_id));
+      toast("Dish removed successfully", "success");
+      setConfirmDel(null);
+    } catch (err) {
+      toast(err.message, "error");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const spicy = (lvl) => (lvl > 0 ? "🌶".repeat(lvl) : "—");
@@ -104,133 +140,133 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
       />
 
       <ContentPanel compact>
-      <div className="sfx-tabs" role="tablist" aria-label="Menu views">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "list"}
-          className={`sfx-tab ${tab === "list" ? "is-active" : ""}`}
-          onClick={() => selectTab("list")}
-        >
-          Dish List
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "best"}
-          className={`sfx-tab ${tab === "best" ? "is-active" : ""}`}
-          onClick={() => selectTab("best")}
-        >
-          Best-selling
-        </button>
-      </div>
+        <div className="sfx-tabs" role="tablist" aria-label="Menu views">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "list"}
+            className={`sfx-tab ${tab === "list" ? "is-active" : ""}`}
+            onClick={() => selectTab("list")}
+          >
+            Dish List
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "best"}
+            className={`sfx-tab ${tab === "best" ? "is-active" : ""}`}
+            onClick={() => selectTab("best")}
+          >
+            Best-selling
+          </button>
+        </div>
 
-      {tab === "list" ? (
-        <>
-          <Toolbar>
-            <SearchField value={search} onChange={setSearch} placeholder="Search dishes…" />
-            <select className="sfx-select" value={cat} onChange={(e) => setCat(e.target.value)}>
-              <option value="all">All categories</option>
-              {DISH_CATEGORIES.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </Toolbar>
+        {tab === "list" ? (
+          <>
+            <Toolbar>
+              <SearchField value={search} onChange={setSearch} placeholder="Search dishes…" />
+              <select className="sfx-select" value={cat} onChange={(e) => setCat(e.target.value)}>
+                <option value="all">All categories</option>
+                {DISH_CATEGORIES.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </Toolbar>
 
-          <div className="sfx-card sfx-card--flush">
-            <div className="sfx-table-wrap">
-              <table className="sfx-table sfx-table--hover">
-                <thead>
-                  <tr>
-                    <th>Dish</th>
-                    <th>Category</th>
-                    <th>Price</th>
-                    <th>Spicy</th>
-                    <th>Prep</th>
-                    <th>Status</th>
-                    {isManager ? <th className="sfx-table__right">Actions</th> : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((d) => (
-                    <tr key={d.dish_id}>
-                      <td>
-                        <div className="sfx-dishcell">
-                          <span className="sfx-thumb">{d.dish_name[0]}</span>
-                          <span>
-                            <strong>{d.dish_name}</strong>
-                            {d.is_recommended ? <small className="sfx-tag-gold">Recommended</small> : null}
-                          </span>
-                        </div>
-                      </td>
-                      <td>{d.category_name}</td>
-                      <td>{formatVND(d.price)}</td>
-                      <td>{spicy(d.spicy_level)}</td>
-                      <td>{d.prep_minutes}m</td>
-                      <td>
-                        <StatusBadge tone={d.is_available ? "green" : "muted"}>
-                          {d.is_available ? "Available" : "Unavailable"}
-                        </StatusBadge>
-                      </td>
-                      {isManager ? (
-                        <td className="sfx-table__right">
-                          <div className="sfx-rowacts">
-                            <Button size="sm" variant="ghost" icon="edit" onClick={() => { setEditing({ ...d }); setIsNew(false); }}>
-                              Edit
-                            </Button>
-                            <Button size="sm" variant="ghost" icon="trash" onClick={() => setConfirmDel(d)} />
+            <div className="sfx-card sfx-card--flush">
+              <div className="sfx-table-wrap">
+                <table className="sfx-table sfx-table--hover">
+                  <thead>
+                    <tr>
+                      <th>Dish</th>
+                      <th>Category</th>
+                      <th>Price</th>
+                      <th>Spicy</th>
+                      <th>Prep</th>
+                      <th>Status</th>
+                      {isManager ? <th className="sfx-table__right">Actions</th> : null}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((d) => (
+                      <tr key={d.dish_id}>
+                        <td>
+                          <div className="sfx-dishcell">
+                            <span className="sfx-thumb">{d.dish_name[0]}</span>
+                            <span>
+                              <strong>{d.dish_name}</strong>
+                              {d.is_recommended ? <small className="sfx-tag-gold">Recommended</small> : null}
+                            </span>
                           </div>
                         </td>
-                      ) : null}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {filtered.length === 0 ? <EmptyState title="No dishes found" /> : null}
-          </div>
-        </>
-      ) : (
-        <div className="sfx-card">
-          <header className="sfx-card__head">
-            <h3 className="sfx-card__title">Best-selling Dishes</h3>
-            <span className="sfx-muted">Ranked by revenue · sample</span>
-          </header>
-          <div className="sfx-card__body">
-            <div className="sfx-table-wrap">
-              <table className="sfx-table">
-                <thead>
-                  <tr>
-                    <th>Rank</th>
-                    <th>Dish</th>
-                    <th>Qty sold</th>
-                    <th>Revenue</th>
-                    <th>Share</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bestSellerList.map((d) => {
-                    const max = Math.max(...bestSellerList.map((b) => b.revenue));
-                    return (
-                      <tr key={d.rank}>
-                        <td><span className="sfx-rank__no">{d.rank}</span></td>
-                        <td><strong>{d.dish_name}</strong></td>
-                        <td>{d.qty_sold}</td>
-                        <td>{formatVND(d.revenue)}</td>
-                        <td className="sfx-bar-cell">
-                          <span className="sfx-bar">
-                            <span className="sfx-bar__fill" style={{ width: `${(d.revenue / max) * 100}%` }} />
-                          </span>
+                        <td>{d.category_name}</td>
+                        <td>{formatVND(d.price)}</td>
+                        <td>{spicy(d.spicy_level)}</td>
+                        <td>{d.prep_minutes}m</td>
+                        <td>
+                          <StatusBadge tone={d.is_available ? "green" : "muted"}>
+                            {d.is_available ? "Available" : "Unavailable"}
+                          </StatusBadge>
                         </td>
+                        {isManager ? (
+                          <td className="sfx-table__right">
+                            <div className="sfx-rowacts">
+                              <Button size="sm" variant="ghost" icon="edit" onClick={() => { setEditing({ ...d }); setIsNew(false); }}>
+                                Edit
+                              </Button>
+                              <Button size="sm" variant="ghost" icon="trash" onClick={() => setConfirmDel(d)} />
+                            </div>
+                          </td>
+                        ) : null}
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {filtered.length === 0 ? <EmptyState title="No dishes found" /> : null}
+            </div>
+          </>
+        ) : (
+          <div className="sfx-card">
+            <header className="sfx-card__head">
+              <h3 className="sfx-card__title">Best-selling Dishes</h3>
+              <span className="sfx-muted">Ranked by revenue · sample</span>
+            </header>
+            <div className="sfx-card__body">
+              <div className="sfx-table-wrap">
+                <table className="sfx-table">
+                  <thead>
+                    <tr>
+                      <th>Rank</th>
+                      <th>Dish</th>
+                      <th>Qty sold</th>
+                      <th>Revenue</th>
+                      <th>Share</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bestSellerList.map((d) => {
+                      const max = Math.max(...bestSellerList.map((b) => b.revenue));
+                      return (
+                        <tr key={d.rank}>
+                          <td><span className="sfx-rank__no">{d.rank}</span></td>
+                          <td><strong>{d.dish_name}</strong></td>
+                          <td>{d.qty_sold}</td>
+                          <td>{formatVND(d.revenue)}</td>
+                          <td className="sfx--cell">
+                            <span className="sfx-">
+                              <span className="sfx-__fill" style={{ width: `${(d.revenue / max) * 100}%` }} />
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       </ContentPanel>
 
@@ -246,8 +282,8 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
               </Button>
             ) : <span />}
             <div className="sfx-modal__footacts">
-              <Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
-              <Button variant="gold" onClick={save}>{isNew ? "Add dish" : "Save changes"}</Button>
+              <Button variant="ghost" onClick={() => setEditing(null)} disabled={submitting}>Cancel</Button>
+              <Button variant="gold" onClick={save} disabled={submitting}>{isNew ? "Add dish" : "Save changes"}</Button>
             </div>
           </>
         }
@@ -280,6 +316,27 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
                 <input type="number" min="0" value={editing.prep_minutes} onChange={(e) => setEditing({ ...editing, prep_minutes: e.target.value })} />
               </label>
             </div>
+            <div className="sfx-form__row">
+              <label className="sfx-field sfx-field--full">
+                <span>Description</span>
+                <textarea
+                  value={editing.description || ""}
+                  onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                  placeholder="A short description of the dish..."
+                  rows="2"
+                />
+              </label>
+            </div>
+            <div className="sfx-form__row">
+              <label className="sfx-field sfx-field--full">
+                <span>Image URL</span>
+                <input
+                  value={editing.image_url || ""}
+                  onChange={(e) => setEditing({ ...editing, image_url: e.target.value })}
+                  placeholder="https://example.com/image.jpg"
+                />
+              </label>
+            </div>
             <div className="sfx-toggles">
               <label className="sfx-toggle">
                 <input type="checkbox" checked={editing.is_available} onChange={(e) => setEditing({ ...editing, is_available: e.target.checked })} />
@@ -289,8 +346,11 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
                 <input type="checkbox" checked={editing.is_recommended} onChange={(e) => setEditing({ ...editing, is_recommended: e.target.checked })} />
                 <span>Recommended</span>
               </label>
+              <label className="sfx-toggle">
+                <input type="checkbox" checked={editing.is_preorderable} onChange={(e) => setEditing({ ...editing, is_preorderable: e.target.checked })} />
+                <span>Allow Pre-order</span>
+              </label>
             </div>
-            <NotConnectedNote>Dish write/delete API not connected — changes stay in this view.</NotConnectedNote>
           </div>
         ) : null}
       </ManagerModal>
@@ -302,8 +362,8 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
         onClose={() => setConfirmDel(null)}
         footer={
           <div className="sfx-modal__footacts">
-            <Button variant="ghost" onClick={() => setConfirmDel(null)}>Keep</Button>
-            <Button variant="danger" icon="trash" onClick={remove}>Delete</Button>
+            <Button variant="ghost" onClick={() => setConfirmDel(null)} disabled={submitting}>Keep</Button>
+            <Button variant="danger" icon="trash" onClick={remove} disabled={submitting}>Delete</Button>
           </div>
         }
       >

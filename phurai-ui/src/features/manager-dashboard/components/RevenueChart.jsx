@@ -31,18 +31,29 @@ function ChartTooltip({ active, payload }) {
 }
 
 function RevenueChart({ data = [], dateRange, rangeLabel, showHeader = true }) {
-  const chartData = useMemo(
-    () =>
-      (Array.isArray(data) ? data : []).map((point) => ({
-        ...point,
-        revenue: point.revenue ?? point.value ?? 0,
-      })),
-    [data]
-  );
+  const chartData = useMemo(() => {
+    let parsed = (Array.isArray(data) ? data : []).map((point) => ({
+      ...point,
+      label: point.label || point.name || point.date || "",
+      revenue: point.revenue ?? point.value ?? 0,
+    }));
+
+    // Recharts AreaChart doesn't draw anything with a single data point.
+    // Pad it so it renders as a flat line for the day.
+    if (parsed.length === 1) {
+      parsed = [
+        { ...parsed[0], label: "" },
+        parsed[0],
+        { ...parsed[0], label: " " },
+      ];
+    }
+
+    return parsed;
+  }, [data]);
 
   const totalRevenue = useMemo(
-    () => chartData.reduce((sum, point) => sum + (point.revenue ?? 0), 0),
-    [chartData]
+    () => (Array.isArray(data) ? data : []).reduce((sum, point) => sum + (point.revenue ?? point.value ?? 0), 0),
+    [data]
   );
 
   return (

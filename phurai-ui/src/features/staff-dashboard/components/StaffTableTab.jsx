@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   SectionHead,
   SearchField,
@@ -13,12 +13,12 @@ import {
   checkInStaffReservation,
   rejectStaffReservation,
   resetStaffTable,
+  markStaffTableClean,
+  mergeTablesApi,
+  unmergeTableApi,
 } from "../services/staffApi.js";
 import { formatBookingId } from "@/utils/formatBookingId.js";
-import {
-  DEMO_NOTICE,
-} from "../data/staffDashboardMockData.js";
-import { TABLE_STATUS_META } from "../../manager-dashboard/data/managerDashboardMockData.js";
+import { DEMO_NOTICE, TABLE_STATUS_META } from "@/shared/constants.js";
 import "../styles/staff-table-tab.css";
 
 const FILTER_STATUS_SLUGS = ["available", "reserved", "occupied", "cleaning"];
@@ -74,7 +74,6 @@ function sameTableId(left, right) {
   return String(left) === String(right);
 }
 
-/** Primary assigned table from API row (table_id, assigned_tables[], legacy fields). */
 function getAssignedTableId(reservation) {
   if (!reservation) return null;
 
@@ -195,16 +194,330 @@ function getTablesForReservationCheckIn(tables, reservation) {
     }));
 }
 
-function ReservationCheckInModal({
-  reservation,
-  tables,
-  onClose,
-  onConfirm,
-  onReject,
-  busy,
-}) {
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="staff-table-action__lock">
+      <path
+        d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/* =========================================================================
+   COMPOUND COMPONENTS ARCHITECTURE
+   ========================================================================= */
+
+const TableManagementContext = createContext(null);
+
+function useTableManagement() {
+  const ctx = useContext(TableManagementContext);
+  if (!ctx) throw new Error("useTableManagement must be used within TableManagementProvider");
+  return ctx;
+}
+
+function TableManagementProvider({ children, value }) {
+  return (
+    <TableManagementContext.Provider value={value}>
+      {children}
+    </TableManagementContext.Provider>
+  );
+}
+
+function TableManagementHeader() {
+  const { state, actions } = useTableManagement();
+  const { tables, areas, dataSource, refreshing } = state;
+  const { handleRefreshAll } = actions;
+
+  return (
+    <div className="staff-card staff-table-intro">
+      <SectionHead
+        title="Table Management"
+        subtitle={`${tables.length} tables across ${areas.length} areas`}
+        actions={
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="refresh"
+            onClick={handleRefreshAll}
+            disabled={refreshing}
+          >
+            Refresh
+          </Button>
+        }
+      />
+      {dataSource === "mock" ? (
+        <NotConnectedNote>{DEMO_NOTICE}</NotConnectedNote>
+      ) : null}
+    </div>
+  );
+}
+
+function TableManagementToolbar() {
+  const { state, actions } = useTableManagement();
+  const { searchTerm, selectedArea, selectedStatuses, areas } = state;
+  const { setSearchTerm, setSelectedArea, toggleStatusFilter } = actions;
+
+  return (
+    <div className="staff-card staff-card--compact">
+      <div className="sfx-filterbar sfx-filterbar--horizontal">
+        <SearchField
+          value={searchTerm}
+          onChange={setSearchTerm}
+          placeholder="Search table number..."
+        />
+
+        <label className="sfx-field sfx-filterbar__area">
+          <span>Area</span>
+          <select
+            className="sfx-select"
+            value={selectedArea}
+            onChange={(e) => setSelectedArea(e.target.value)}
+          >
+            <option value="">All Areas</option>
+            {areas.map((area) => (
+              <option key={area} value={area}>
+                {area}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="sfx-filterbar__statuses">
+          <span className="sfx-filterbar__label">Status</span>
+          <div className="sfx-chips">
+            {FILTER_STATUS_SLUGS.map((slug) => {
+              const active = selectedStatuses.includes(slug);
+              const meta = TABLE_STATUS_META[slug];
+              return (
+                <button
+                  key={slug}
+                  type="button"
+                  className={`sfx-chip ${active ? "is-active" : "sfx-chip--outline"}`}
+                  aria-pressed={active}
+                  onClick={() => toggleStatusFilter(slug)}
+                >
+                  <i className={`sfx-dot sfx-dot--${meta.tone}`} />
+                  {meta.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TableManagementFloorMap() {
+  const { state, actions } = useTableManagement();
+  const { groupedEntries, refreshing, isJiggling } = state;
+  const {
+    handlePointerDown,
+    handlePointerUpOrLeave,
+    handleDragStart,
+    handleDrop,
+    setSelectedTable,
+    handleUnmerge,
+  } = actions;
+
+  return (
+    <div className={`sfx-tablemap-wrap${refreshing ? " is-loading" : ""}`}>
+      {!refreshing && groupedEntries.length === 0 ? (
+        <div className="sfx-card">
+          <div className="sfx-card__body">
+            <p className="sfx-muted">No tables match the current filters.</p>
+          </div>
+        </div>
+      ) : null}
+
+      {groupedEntries.map(([areaName, list]) => (
+        <div key={areaName} className="sfx-card">
+          <header className="sfx-card__head">
+            <h3 className="sfx-card__title">{areaName}</h3>
+            <span className="sfx-muted">{list.length} tables</span>
+          </header>
+          <div className="sfx-card__body">
+            <div className="sfx-tablemap">
+              {list.map((table) => {
+                const slug = getTableStatusSlug(table);
+                const meta = TABLE_STATUS_META[slug] || TABLE_STATUS_META.available;
+                const displayNum = table.combined_names.join(" | ");
+                const canMerge = isJiggling && !table.is_counter;
+
+                return (
+                  <article
+                    key={table.table_id}
+                    draggable={canMerge}
+                    onPointerDown={(e) => handlePointerDown(e, table)}
+                    onPointerUp={handlePointerUpOrLeave}
+                    onPointerLeave={handlePointerUpOrLeave}
+                    onDragStart={(e) => handleDragStart(e, table)}
+                    onDragOver={(e) => {
+                      if (canMerge) e.preventDefault();
+                    }}
+                    onDrop={(e) => handleDrop(e, table)}
+                    className={`sfx-mtile sfx-mtile--${meta.tone} ${canMerge ? "is-jiggling" : ""}`}
+                  >
+                    <span className="sfx-mtile__no">{displayNum}</span>
+                    <span className="sfx-mtile__cap">{table.combined_capacity} seats</span>
+                    <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
+                    <div
+                      className="sfx-tabletile__actions"
+                      style={{
+                        marginTop: "8px",
+                        display: "flex",
+                        gap: "4px",
+                        flexWrap: "wrap",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {!isJiggling ? (
+                        meta.slug === "cleaning" ? (
+                          <Button size="sm" variant="soft" onClick={(e) => { e.stopPropagation(); actions.handleMarkClean(table); }}>
+                            Đã dọn xong (Mark as Available)
+                          </Button>
+                        ) : (
+                          <Button size="sm" onClick={() => setSelectedTable(table)}>
+                            Manage
+                          </Button>
+                        )
+                      ) : null}
+                      {table.child_ids?.length > 0 && !isJiggling ? (
+                        <Button
+                          size="sm"
+                          variant="soft"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUnmerge(table.table_id);
+                          }}
+                        >
+                          Separate
+                        </Button>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TableManagementTableModal() {
+  const { state, actions } = useTableManagement();
+  const { selectedTable: table, user, actionBusy: busy } = state;
+  const { setSelectedTable, handleCheckIn, handleReset } = actions;
+
+  if (!table) return null;
+
+  const status = normalizeTableStatus(table);
+  const meta = STATUS_META[status] || STATUS_META.Available;
+  const manager = isManagerUser(user);
+  const onClose = () => setSelectedTable(null);
+
+  const showCheckIn = status === "Available" || status === "Reserved";
+  const showCheckOut = status === "Occupied" || status === "Cleaning";
+
+  return (
+    <div
+      className="staff-table-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="staff-table-modal-title"
+    >
+      <button
+        type="button"
+        className="staff-table-modal__backdrop"
+        aria-label="Close table actions"
+        onClick={onClose}
+      />
+      <div className="staff-table-modal__panel">
+        <header className="staff-table-modal__head">
+          <div>
+            <p className="staff-table-modal__eyebrow">{table.area_name}</p>
+            <h2 id="staff-table-modal-title" className="staff-table-modal__title">
+              Table {table.table_number}
+            </h2>
+          </div>
+          <button
+            type="button"
+            className="staff-table-modal__close"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <Icon name="close" size={18} />
+          </button>
+        </header>
+
+        <div className="staff-table-modal__meta">
+          <span className={`staff-table-status staff-table-status--${meta.tone}`}>
+            {meta.label}
+          </span>
+          <span className="staff-table-modal__cap">{table.capacity} seats</span>
+          {table.active_session_id ? (
+            <span className="staff-table-modal__session">
+              Session #{table.active_session_id}
+            </span>
+          ) : null}
+        </div>
+
+        <div className="staff-table-modal__actions">
+          {showCheckIn ? (
+            <button
+              type="button"
+              className="sfx-btn sfx-btn--gold sfx-btn--md staff-table-action"
+              onClick={() => handleCheckIn(table)}
+              disabled={busy}
+            >
+              Check-in
+            </button>
+          ) : null}
+
+          {showCheckOut ? (
+            <button
+              type="button"
+              className="sfx-btn sfx-btn--ghost sfx-btn--md staff-table-action"
+              onClick={() => handleReset(table)}
+              disabled={busy}
+            >
+              Check-out
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            className="sfx-btn sfx-btn--ghost sfx-btn--md staff-table-action staff-table-action--locked"
+            disabled={!manager}
+            title={manager ? "Move table (coming soon)" : "Manager role required"}
+          >
+            {!manager ? <LockIcon /> : null}
+            Move Table
+          </button>
+        </div>
+        <p style={{ marginTop: "16px", fontSize: "12px", color: "var(--sfx-muted)", textAlign: "center" }}>
+          Tip: Long-press any table card to drag and merge it.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function TableManagementReservationModal() {
+  const { state, actions } = useTableManagement();
+  const { checkInReservation: reservation, tables, actionBusy: busy } = state;
+  const { setCheckInReservation, handleConfirmReservationCheckIn, handleRejectReservation } = actions;
+
   const [selectedTableId, setSelectedTableId] = useState("");
   const [showTablePicker, setShowTablePicker] = useState(false);
+
+  const onClose = () => setCheckInReservation(null);
 
   const briefing = useMemo(
     () => (reservation ? buildReservationBriefing(reservation) : null),
@@ -363,7 +676,7 @@ function ReservationCheckInModal({
             <button
               type="button"
               className="sfx-btn sfx-btn--gold sfx-btn--md staff-checkin-brief__confirm"
-              onClick={() => onConfirm(Number(selectedTableId))}
+              onClick={() => handleConfirmReservationCheckIn(Number(selectedTableId))}
               disabled={busy || !selectedTableId}
             >
               CONFIRM CHECK-IN
@@ -371,7 +684,7 @@ function ReservationCheckInModal({
             <button
               type="button"
               className="sfx-btn sfx-btn--md staff-checkin-brief__reject"
-              onClick={onReject}
+              onClick={handleRejectReservation}
               disabled={busy}
             >
               Reject Booking
@@ -384,135 +697,6 @@ function ReservationCheckInModal({
             disabled={busy}
           >
             Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="staff-table-action__lock">
-      <path
-        d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function TableActionModal({
-  table,
-  user,
-  onClose,
-  onCheckIn,
-  onReset,
-  busy,
-}) {
-  if (!table) return null;
-
-  const status = normalizeTableStatus(table);
-  const meta = STATUS_META[status] || STATUS_META.Available;
-  const manager = isManagerUser(user);
-
-  const showCheckIn = status === "Available";
-  const showReset = status === "Occupied" || status === "Cleaning";
-
-  return (
-    <div
-      className="staff-table-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="staff-table-modal-title"
-    >
-      <button
-        type="button"
-        className="staff-table-modal__backdrop"
-        aria-label="Close table actions"
-        onClick={onClose}
-      />
-      <div className="staff-table-modal__panel">
-        <header className="staff-table-modal__head">
-          <div>
-            <p className="staff-table-modal__eyebrow">{table.area_name}</p>
-            <h2 id="staff-table-modal-title" className="staff-table-modal__title">
-              Table {table.table_number}
-            </h2>
-          </div>
-          <button
-            type="button"
-            className="staff-table-modal__close"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <Icon name="close" size={18} />
-          </button>
-        </header>
-
-        <div className="staff-table-modal__meta">
-          <span className={`staff-table-status staff-table-status--${meta.tone}`}>
-            {meta.label}
-          </span>
-          <span className="staff-table-modal__cap">{table.capacity} seats</span>
-          {table.active_session_id ? (
-            <span className="staff-table-modal__session">
-              Session #{table.active_session_id}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="staff-table-modal__actions">
-          {showCheckIn ? (
-            <button
-              type="button"
-              className="sfx-btn sfx-btn--gold sfx-btn--md staff-table-action"
-              onClick={() => onCheckIn(table)}
-              disabled={busy}
-            >
-              Check-in
-            </button>
-          ) : null}
-
-          {showReset ? (
-            <button
-              type="button"
-              className="sfx-btn sfx-btn--ghost sfx-btn--md staff-table-action"
-              onClick={() => onReset(table)}
-              disabled={busy}
-            >
-              Reset Table
-            </button>
-          ) : null}
-
-          <button
-            type="button"
-            className="sfx-btn sfx-btn--ghost sfx-btn--md staff-table-action staff-table-action--locked"
-            disabled={!manager}
-            title={
-              manager
-                ? "Move table (coming soon)"
-                : "Manager role required"
-            }
-          >
-            {!manager ? <LockIcon /> : null}
-            Move Table
-          </button>
-
-          <button
-            type="button"
-            className="sfx-btn sfx-btn--ghost sfx-btn--md staff-table-action staff-table-action--locked"
-            disabled={!manager}
-            title={
-              manager
-                ? "Merge tables (coming soon)"
-                : "Manager role required"
-            }
-          >
-            {!manager ? <LockIcon /> : null}
-            Merge Tables
           </button>
         </div>
       </div>
@@ -536,6 +720,9 @@ function StaffTableTab({
   const [checkInReservation, setCheckInReservation] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
 
+  const [isJiggling, setIsJiggling] = useState(false);
+  const pressTimer = useRef(null);
+
   const handleRefreshAll = useCallback(() => {
     onRefresh?.();
   }, [onRefresh]);
@@ -545,11 +732,37 @@ function StaffTableTab({
     return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [tables]);
 
+  const groupedTables = useMemo(() => {
+    const sorted = [...tables].sort((a, b) => {
+      const cmp = (a.area_name || "").localeCompare(b.area_name || "");
+      if (cmp !== 0) return cmp;
+      return String(a.table_number).localeCompare(String(b.table_number), undefined, { numeric: true });
+    });
+
+    const parentMap = new Map();
+    sorted.forEach((t) => {
+      if (!t.merged_into_table_id) {
+        parentMap.set(t.table_id, { ...t, combined_names: [t.table_number], combined_capacity: t.capacity, child_ids: [] });
+      }
+    });
+
+    sorted.forEach((t) => {
+      if (t.merged_into_table_id && parentMap.has(t.merged_into_table_id)) {
+        const parent = parentMap.get(t.merged_into_table_id);
+        parent.combined_names.push(t.table_number);
+        parent.combined_capacity += t.capacity;
+        parent.child_ids.push(t.table_id);
+      }
+    });
+
+    return Array.from(parentMap.values());
+  }, [tables]);
+
   const filteredTables = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
 
-    return tables.filter((table) => {
-      if (query && !String(table.table_number ?? "").toLowerCase().includes(query)) {
+    return groupedTables.filter((table) => {
+      if (query && !table.combined_names.some(n => String(n).toLowerCase().includes(query))) {
         return false;
       }
 
@@ -564,7 +777,7 @@ function StaffTableTab({
 
       return true;
     });
-  }, [tables, searchTerm, selectedArea, selectedStatuses]);
+  }, [groupedTables, searchTerm, selectedArea, selectedStatuses]);
 
   const groupedEntries = useMemo(() => {
     const map = {};
@@ -597,6 +810,53 @@ function StaffTableTab({
     [setTables]
   );
 
+  const handlePointerDown = (e, t) => {
+    if (t.is_counter) return;
+    pressTimer.current = window.setTimeout(() => {
+      setIsJiggling(true);
+    }, 500);
+  };
+
+  const handlePointerUpOrLeave = () => {
+    if (pressTimer.current) window.clearTimeout(pressTimer.current);
+  };
+
+  const handleDragStart = (e, t) => {
+    if (!isJiggling || t.is_counter) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.setData("application/json", JSON.stringify({ id: t.table_id, area_id: t.area_id }));
+  };
+
+  const handleDrop = async (e, targetTable) => {
+    e.preventDefault();
+    setIsJiggling(false);
+    if (targetTable.is_counter) return;
+
+    try {
+      const data = JSON.parse(e.dataTransfer.getData("application/json"));
+      if (data.id === targetTable.table_id || data.area_id !== targetTable.area_id) return;
+      const userId = Number(user?.userId ?? user?.id);
+      await mergeTablesApi(data.id, targetTable.table_id, userId);
+      toast("Tables merged successfully", "success");
+      handleRefreshAll();
+    } catch (err) {
+      toast(err.message || "Merge failed", "error");
+    }
+  };
+
+  const handleUnmerge = async (tableId) => {
+    try {
+      const userId = Number(user?.userId ?? user?.id);
+      await unmergeTableApi(tableId, userId);
+      toast("Tables separated", "success");
+      handleRefreshAll();
+    } catch (err) {
+      toast(err.message || "Failed to separate tables", "error");
+    }
+  };
+
   const handleCheckIn = useCallback(
     async (table) => {
       const userId = Number(user?.userId ?? user?.id);
@@ -628,15 +888,36 @@ function StaffTableTab({
       try {
         await resetStaffTable(table.table_id, userId);
         updateTableInState(table.table_id, {
-          table_status: "Available",
-          status: "available",
+          table_status: "Cleaning",
+          status: "cleaning",
           active_session_id: null,
         });
-        toast(`Table ${table.table_number} reset to Available`, "success");
+        toast(`Table ${table.table_number} checked out and set to Cleaning`, "success");
         setSelectedTable(null);
         handleRefreshAll();
       } catch (err) {
         toast(err.message || "Reset failed", "error");
+      } finally {
+        setActionBusy(false);
+      }
+    },
+    [user, updateTableInState, toast, handleRefreshAll]
+  );
+
+  const handleMarkClean = useCallback(
+    async (table) => {
+      const userId = Number(user?.userId ?? user?.id);
+      setActionBusy(true);
+      try {
+        await markStaffTableClean(table.table_id, userId);
+        updateTableInState(table.table_id, {
+          table_status: "Available",
+          status: "available",
+        });
+        toast(`Table ${table.table_number} is now Available`, "success");
+        handleRefreshAll();
+      } catch (err) {
+        toast(err.message || "Failed to mark clean", "error");
       } finally {
         setActionBusy(false);
       }
@@ -743,137 +1024,61 @@ function StaffTableTab({
     );
   }
 
+  const contextValue = {
+    state: {
+      tables,
+      dataSource,
+      user,
+      refreshing,
+      searchTerm,
+      selectedArea,
+      selectedStatuses,
+      selectedTable,
+      checkInReservation,
+      actionBusy,
+      isJiggling,
+      areas,
+      groupedEntries,
+    },
+    actions: {
+      setSearchTerm,
+      setSelectedArea,
+      setSelectedStatuses,
+      setSelectedTable,
+      setCheckInReservation,
+      handleRefreshAll,
+      toggleStatusFilter,
+      handlePointerDown,
+      handlePointerUpOrLeave,
+      handleDragStart,
+      handleDrop,
+      handleUnmerge,
+      handleCheckIn,
+      handleReset,
+      handleMarkClean,
+      handleConfirmReservationCheckIn,
+      handleRejectReservation,
+    },
+  };
+
   return (
-    <div className="sfx-stack">
-      <div className="staff-card staff-table-intro">
-        <SectionHead
-          title="Table Management"
-          subtitle={`${tables.length} tables across ${areas.length} areas`}
-          actions={
-            <Button
-              variant="ghost"
-              size="sm"
-              icon="refresh"
-              onClick={handleRefreshAll}
-              disabled={refreshing}
-            >
-              Refresh
-            </Button>
-          }
-        />
-
-        {dataSource === "mock" ? (
-          <NotConnectedNote>{DEMO_NOTICE}</NotConnectedNote>
-        ) : null}
+    <TableManagementProvider value={contextValue}>
+      <div className="sfx-stack">
+        <TableManagementHeader />
+        <TableManagementToolbar />
+        <TableManagementFloorMap />
+        <TableManagementTableModal />
+        <TableManagementReservationModal />
       </div>
-
-      <div className="staff-card staff-card--compact">
-        <div className="sfx-filterbar sfx-filterbar--horizontal">
-          <SearchField
-            value={searchTerm}
-            onChange={setSearchTerm}
-            placeholder="Search table number..."
-          />
-
-          <label className="sfx-field sfx-filterbar__area">
-            <span>Area</span>
-            <select
-              className="sfx-select"
-              value={selectedArea}
-              onChange={(e) => setSelectedArea(e.target.value)}
-            >
-              <option value="">All Areas</option>
-              {areas.map((area) => (
-                <option key={area} value={area}>
-                  {area}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="sfx-filterbar__statuses">
-            <span className="sfx-filterbar__label">Status</span>
-            <div className="sfx-chips">
-              {FILTER_STATUS_SLUGS.map((slug) => {
-                const active = selectedStatuses.includes(slug);
-                const meta = TABLE_STATUS_META[slug];
-                return (
-                  <button
-                    key={slug}
-                    type="button"
-                    className={`sfx-chip ${active ? "is-active" : "sfx-chip--outline"}`}
-                    aria-pressed={active}
-                    onClick={() => toggleStatusFilter(slug)}
-                  >
-                    <i className={`sfx-dot sfx-dot--${meta.tone}`} />
-                    {meta.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className={`sfx-tablemap-wrap${refreshing ? " is-loading" : ""}`}>
-        {!refreshing && groupedEntries.length === 0 ? (
-          <div className="sfx-card">
-            <div className="sfx-card__body">
-              <p className="sfx-muted">No tables match the current filters.</p>
-            </div>
-          </div>
-        ) : null}
-
-        {groupedEntries.map(([areaName, list]) => (
-          <div key={areaName} className="sfx-card">
-            <header className="sfx-card__head">
-              <h3 className="sfx-card__title">{areaName}</h3>
-              <span className="sfx-muted">{list.length} tables</span>
-            </header>
-            <div className="sfx-card__body">
-              <div className="sfx-tablemap">
-                {list.map((table) => {
-                  const slug = getTableStatusSlug(table);
-                  const meta = TABLE_STATUS_META[slug] || TABLE_STATUS_META.available;
-
-                  return (
-                    <button
-                      key={table.table_id}
-                      type="button"
-                      className={`sfx-mtile sfx-mtile--${meta.tone}`}
-                      onClick={() => setSelectedTable(table)}
-                    >
-                      <span className="sfx-mtile__no">{table.table_number}</span>
-                      <span className="sfx-mtile__cap">{table.capacity} seats</span>
-                      <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <TableActionModal
-        table={selectedTable}
-        user={user}
-        onClose={() => setSelectedTable(null)}
-        onCheckIn={handleCheckIn}
-        onReset={handleReset}
-        busy={actionBusy}
-      />
-
-      <ReservationCheckInModal
-        reservation={checkInReservation}
-        tables={tables}
-        onClose={() => setCheckInReservation(null)}
-        onConfirm={handleConfirmReservationCheckIn}
-        onReject={handleRejectReservation}
-        busy={actionBusy}
-      />
-    </div>
+    </TableManagementProvider>
   );
 }
+
+StaffTableTab.Provider = TableManagementProvider;
+StaffTableTab.Header = TableManagementHeader;
+StaffTableTab.Toolbar = TableManagementToolbar;
+StaffTableTab.FloorMap = TableManagementFloorMap;
+StaffTableTab.TableModal = TableManagementTableModal;
+StaffTableTab.ReservationModal = TableManagementReservationModal;
 
 export default StaffTableTab;

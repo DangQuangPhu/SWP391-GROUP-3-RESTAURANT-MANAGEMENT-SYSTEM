@@ -1,4 +1,6 @@
 import { profileRequestHeaders, request } from "@/core/api/httpClient.js";
+// Force Vite HMR Cache Bust: 2026-06-22
+
 
 /**
  * GET /api/customer/qr-sessions/active
@@ -20,6 +22,15 @@ export async function validateQrSession(tableId, sessionId) {
     session_id: String(sessionId),
   });
   return request(`/customer/qr-sessions/validate?${params.toString()}`, {
+    method: "GET",
+  });
+}
+
+/**
+ * GET /api/customer/qr-sessions/scan/:qr_code
+ */
+export async function scanStaticQrCode(qrCode) {
+  return request(`/customer/qr-sessions/scan/${qrCode}`, {
     method: "GET",
   });
 }

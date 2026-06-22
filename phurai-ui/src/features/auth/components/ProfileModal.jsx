@@ -6,10 +6,16 @@ import {
   uploadProfileAvatar,
   updateSystemAvatar,
   updateGoogleAvatar,
+} from "@/features/profile/services/profileApi.js";
+import {
   changePassword,
   forgotPasswordRequestOtp,
-} from "@/api";
-import { SYSTEM_AVATARS, getAvatarSrc, normalizeStoredAvatarUrl } from "@/features/profile";
+} from "../services/authApi.js";
+import {
+  SYSTEM_AVATARS,
+  getAvatarSrc,
+  normalizeStoredAvatarUrl,
+} from "@/features/profile/utils/avatarUtils.js";
 import UserAvatar from "./UserAvatar";
 import SystemAvatarOption from "./SystemAvatarOption";
 import ResetPasswordForm from "./ResetPasswordForm";

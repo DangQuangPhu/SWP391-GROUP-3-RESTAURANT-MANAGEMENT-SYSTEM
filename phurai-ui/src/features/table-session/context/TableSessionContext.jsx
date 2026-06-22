@@ -119,10 +119,13 @@ export function TableSessionProvider({
   );
 
   useEffect(() => {
-    if (!userId || !isCustomer) {
-      return;
-    }
-    refreshActiveSession();
+    if (!userId || !isCustomer) return;
+    
+    // Defer execution to avoid synchronous setState in effect
+    const timer = setTimeout(() => {
+      refreshActiveSession();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [userId, isCustomer, refreshActiveSession]);
 
   const value = useMemo(

@@ -14,7 +14,7 @@ function normalizeStatus(table) {
     if (lowerAvail === "inactive") return "INACTIVE";
     return "RESERVED"; // default for not bookable
   }
-  
+
   // if bookable
   const dbStatus = (table.table_status || "").toLowerCase();
   if (dbStatus === "available") return "AVAILABLE";
@@ -24,11 +24,11 @@ function normalizeStatus(table) {
   if (dbStatus === "inactive") return "INACTIVE";
   return "AVAILABLE"; // fallback
 }
-export default function TableBoard({ 
-  tables = [], 
-  selectedTableId = null, 
-  onSelectTable, 
-  loading, 
+export default function TableBoard({
+  tables = [],
+  selectedTableId = null,
+  onSelectTable,
+  loading,
   guestCount = 2,
   membershipTier = "Bronze",
   isAuthenticated = false,
@@ -39,8 +39,36 @@ export default function TableBoard({
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [modalRequiredTier, setModalRequiredTier] = useState("Gold");
 
+  const groupedTables = useMemo(() => {
+    const parentMap = new Map();
+    tables.forEach((t) => {
+      if (!t.merged_into_table_id) {
+        parentMap.set(t.table_id, { ...t, combined_names: [t.table_number], combined_capacity: t.capacity, child_ids: [] });
+      }
+    });
+
+    tables.forEach((t) => {
+      if (t.merged_into_table_id && parentMap.has(t.merged_into_table_id)) {
+        const parent = parentMap.get(t.merged_into_table_id);
+        parent.combined_names.push(t.table_number);
+        parent.combined_capacity += t.capacity;
+        parent.child_ids.push(t.table_id);
+      }
+    });
+
+    const finalGrouped = [];
+    parentMap.forEach((parent) => {
+      finalGrouped.push({
+        ...parent,
+        display_label: parent.combined_names.join(" | "),
+        capacity: parent.combined_capacity,
+      });
+    });
+    return finalGrouped;
+  }, [tables]);
+
   const filteredTables = useMemo(() => {
-    let result = tables.filter((t) => {
+    let result = groupedTables.filter((t) => {
       if (activeFilter === "all") return true;
       const area = (t.area_name || "").toLowerCase();
       if (activeFilter === "window") return area.includes("window") || area.includes("bar");
@@ -61,10 +89,10 @@ export default function TableBoard({
       return rankB - rankA; // Higher rank requirements first, actually wait: the user requested specific priority. Let's just do capacity for now.
     });
     return result;
-  }, [tables, activeFilter]);
+  }, [groupedTables, activeFilter]);
   const selectedTableData = useMemo(() => {
-    return tables.find(t => t.table_id === selectedTableId);
-  }, [tables, selectedTableId]);
+    return groupedTables.find(t => t.table_id === selectedTableId);
+  }, [groupedTables, selectedTableId]);
 
   const handleCardClick = (table) => {
     const isLocked = !canAccessArea(membershipTier, table.area_name);
@@ -79,7 +107,7 @@ export default function TableBoard({
   return (
     <div className="tb-board">
       <div className="tb-board__header">
-        <h3 className="tb-board__title">Choose your table</h3>
+
         <p className="tb-board__hint">
           Filter by area and select an available table.
         </p>
@@ -146,7 +174,7 @@ export default function TableBoard({
         </div>
       )}
 
-      <UpgradeMembershipModal 
+      <UpgradeMembershipModal
         isOpen={upgradeModalOpen}
         onClose={() => setUpgradeModalOpen(false)}
         requiredTier={modalRequiredTier}

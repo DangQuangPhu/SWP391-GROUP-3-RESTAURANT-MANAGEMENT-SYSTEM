@@ -9,7 +9,7 @@ function greeting() {
   return "Good evening";
 }
 
-const ROLE_LABEL = { manager: "Manager", manager: "Manager", admin: "Admin" };
+const ROLE_LABEL = { manager: "Manager", staff: "Staff", admin: "Admin" };
 
 function ManagerHeader({
   title,
@@ -68,7 +68,6 @@ function ManagerHeader({
           />
         </label>
 
-        <LiveClock variant="header" />
 
         <NotificationBell user={user} listenForStaffEvents />
 

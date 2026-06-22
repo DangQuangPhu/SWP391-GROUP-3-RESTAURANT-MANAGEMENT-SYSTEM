@@ -11,7 +11,6 @@ import {
   NotConnectedNote,
 } from "../ManagerUI.jsx";
 import {
-  RESERVATION_STATUS_META,
   DASHBOARD_TODAY,
   deriveKpisForRange,
   filterDailyRevenue,
@@ -19,7 +18,8 @@ import {
   generateTwoYearDailyRevenue,
   getDefaultDateRange,
   prepareChartSeries,
-} from "../../data/managerDashboardMockData.js";
+} from "@/shared/constants.js";
+import { RESERVATION_STATUS_META } from "@/shared/reservationStatus.js";
 import { asArray } from "@/utils/asArray.js";
 import { formatVND } from "@/utils/formatCurrency.js";
 import { getReportsTabFromSearch, REPORT_TAB_IDS } from "../../config/managerRoutes.js";
@@ -143,7 +143,7 @@ function ReportsSection({
                 </tr>
               </thead>
               <tbody>
-                {reservationList.map((r) => (
+                {reservationList.filter(Boolean).map((r) => (
                   <tr key={r.reservation_id}>
                     <td className="sfx-mono">#{r.reservation_id}</td>
                     <td>{r.customer_name}</td>
@@ -154,7 +154,7 @@ function ReportsSection({
                     <td>{r.party_size}</td>
                     <td>{r.table_label}</td>
                     <td>
-                      <StatusBadge tone={RESERVATION_STATUS_META[r.status]?.tone}>
+                      <StatusBadge tone={RESERVATION_STATUS_META[r.status]?.tone} color={RESERVATION_STATUS_META[r.status]?.color}>
                         {RESERVATION_STATUS_META[r.status]?.label}
                       </StatusBadge>
                     </td>

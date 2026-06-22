@@ -2,8 +2,8 @@ import { useCallback, useMemo } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
 import StaffLayout from "../components/StaffLayout.jsx";
-import { VIEW_SUBTITLE } from "../config/staffNav.js";
-import { getStaffSegment, resolveActiveNavItem } from "../config/staffRoutes.js";
+import { VIEW_SUBTITLE, resolveActiveNavItem } from "../config/staffNav.js";
+import { getStaffSegment } from "../config/staffRoutes.js";
 import { useStaffPortal } from "../context/StaffPortalContext.jsx";
 
 const REFRESH_LABELS = {

@@ -35,7 +35,7 @@ function PreorderModal({ open, initialItems = [], onClose, onApply }) {
     setStatus("loading");
     console.log("Loading preorder dishes...");
 
-    fetch("http://localhost:5001/api/dishes/preorder")
+    fetch(`${import.meta.env.VITE_API_BASE_URL || "/api"}/dishes/preorder`)
       .then((res) => {
         if (!res.ok) throw new Error("Network response was not ok");
         return res.json();

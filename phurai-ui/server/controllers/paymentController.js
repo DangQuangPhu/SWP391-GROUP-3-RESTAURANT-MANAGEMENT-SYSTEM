@@ -1,0 +1,347 @@
+import sql from 'mssql';
+import { getRawPool } from '../db.js';
+import { getIO } from '../socket.js';
+import { sendReservationInvoiceEmail } from '../email.js';
+import { RESERVATION_STATUS } from '../../src/shared/reservationStatus.js';
+
+
+/**
+ * Handles incoming webhooks from SePay
+ * Endpoint: POST /sepay-webhook (via paymentRoutes)
+ */
+export const handleSepayWebhook = async (req, res) => {
+  try {
+    // 1. Security Authentication: Validate Authorization header
+    const authHeader = req.headers.authorization;
+    const expectedKey = process.env.SEPAY_API_KEY || 'Apikey Phurai_Secret_Token_2026';
+
+    if (!authHeader || authHeader !== expectedKey) {
+      console.warn('[SePay Webhook] Unauthorized access attempt.');
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    // 2. Payload Processing
+    const { transferAmount, content, referenceCode, transferType } = req.body;
+
+    // Ignore if not an inward transaction
+    if (transferType !== 'in') {
+      return res.status(200).json({ success: true, message: 'Ignored non-inward transaction' });
+    }
+
+    if (!content) {
+      return res.status(200).json({ success: true, message: 'Webhook received, but no content provided' });
+    }
+
+    // Extract Order or Reservation ID. Examples: "ORD1234", "DH1234", "RES123", "PHURAI123456".
+    let match = content.match(/(PHURAI|RES|DH|ORD)(\d+)/i);
+    if (!match) {
+      // Fallback to simple number match if no prefix, assuming it's an order
+      const numMatch = content.match(/\d+/);
+      if (!numMatch) {
+        console.warn(`[SePay Webhook] No order ID found in content: ${content}`);
+        return res.status(200).json({ success: true, message: 'Webhook received, but no valid code found' });
+      }
+      match = ['DH' + numMatch[0], 'DH', numMatch[0]];
+    }
+
+    const prefix = match[1].toUpperCase();
+    const targetId = parseInt(match[2], 10);
+
+    const pool = await getRawPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+    if (prefix === 'PHURAI' || prefix === 'RES') {
+        // --- RESERVATION PAYMENT LOGIC ---
+        // Look up using order_code instead of reservation_id since we generated a unique PHURAIxxxxxx code.
+        const actualOrderCode = content.match(/(PHURAI|RES)\d+/i)?.[0]?.toUpperCase();
+        if (!actualOrderCode) {
+           await transaction.rollback();
+           return res.status(200).json({ success: true, message: 'Webhook received, but no valid order code found' });
+        }
+
+        const resResult = await transaction.request()
+          .input('orderCode', sql.VarChar(50), actualOrderCode)
+          .query('SELECT reservation_id, reservation_status, final_total, deposit_amount, preorder_json, customer_id, order_code FROM dbo.Reservations WHERE order_code = @orderCode');
+
+        if (resResult.recordset.length === 0) {
+          await transaction.rollback();
+          console.warn(`[SePay Webhook] Reservation with code ${actualOrderCode} not found`);
+          return res.status(200).json({ success: true, message: 'Webhook received, but reservation not found' });
+        }
+
+        const reservation = resResult.recordset[0];
+        if (reservation.reservation_status === RESERVATION_STATUS.AWAIT_CHECK_IN || reservation.reservation_status === RESERVATION_STATUS.COMPLETE_PAID) {
+          await transaction.rollback();
+          return res.status(200).json({ success: true, message: 'Webhook received, reservation is already Paid/Awaiting Check-in' });
+        }
+
+        // Validate Amount
+        if (parseFloat(transferAmount) < parseFloat(reservation.deposit_amount)) {
+           await transaction.rollback();
+           console.warn(`[SePay Webhook] Insufficient funds transferred for ${actualOrderCode}. Expected: ${reservation.deposit_amount}, Received: ${transferAmount}`);
+           return res.status(200).json({ success: true, message: 'Insufficient funds received' });
+        }
+
+        // a. Update reservation to 'Await Check-in'
+        await transaction.request()
+          .input('resId', sql.Int, reservation.reservation_id)
+          .input('resStatus', sql.VarChar, 'Await Check-in')
+          .query(`
+            UPDATE dbo.Reservations 
+            SET reservation_status = @resStatus, 
+                updated_at = SYSDATETIME()
+            WHERE reservation_id = @resId
+          `);
+
+        // a2. Update table status to 'Reserved'
+        const tableUpdateResult = await transaction.request()
+          .input('resId', sql.Int, reservation.reservation_id)
+          .input('tableStatus', sql.VarChar, 'Reserved')
+          .query(`
+            UPDATE dbo.RestaurantTables
+            SET table_status = @tableStatus, updated_at = SYSDATETIME()
+            WHERE table_id IN (
+              SELECT table_id FROM dbo.ReservationTables WHERE reservation_id = @resId
+            ) AND table_status = 'Available'
+          `);
+
+        if (tableUpdateResult.rowsAffected[0] === 0) {
+          await transaction.request()
+            .input('actionName', sql.VarChar, 'SYSTEM_TABLE_STATUS_CONFLICT')
+            .input('targetTable', sql.VarChar, 'Reservations')
+            .input('targetId', sql.Int, reservation.reservation_id)
+            .input('newValue', sql.VarChar, JSON.stringify({ error: 'Table no longer Available when payment arrived' }))
+            .query(`
+              INSERT INTO dbo.AuditLogs (action_name, target_table, target_id, new_value_json, created_at)
+              VALUES (@actionName, @targetTable, @targetId, @newValue, SYSDATETIME())
+            `);
+          
+          const io = getIO();
+          if (io) {
+            io.to('room:manager').emit('table:status_conflict', { 
+               reservationId: reservation.reservation_id, 
+               orderCode: reservation.order_code 
+            });
+          }
+        }
+
+        // b. Insert into dbo.Payments
+        await transaction.request()
+          .input('resId', sql.Int, reservation.reservation_id)
+          .input('paymentMethodId', sql.TinyInt, 3) // 3 = Bank Transfer
+          .input('amountPaid', sql.Decimal(12, 2), transferAmount)
+          .input('paymentStatus', sql.VarChar, 'Completed')
+          .input('transactionRef', sql.VarChar, referenceCode)
+          .query(`
+            INSERT INTO dbo.Payments (
+              reservation_id, payment_method_id, amount_paid, payment_status, transaction_ref, paid_at, created_at, updated_at
+            ) VALUES (
+              @resId, @paymentMethodId, @amountPaid, @paymentStatus, @transactionRef, SYSDATETIME(), SYSDATETIME(), SYSDATETIME()
+            )
+          `);
+
+        // c. Update existing Orders with order_type = 'Preorder' to Paid (if any created from route)
+        await transaction.request()
+          .input('resId', sql.Int, reservation.reservation_id)
+          .query(`
+            UPDATE dbo.Orders 
+            SET order_status = 'Paid', 
+                amount_paid = total_amount, 
+                updated_at = SYSDATETIME()
+            WHERE reservation_id = @resId AND order_type = 'Preorder' AND order_status = 'Open'
+          `);
+
+        // d. Insert into dbo.AuditLogs
+        await transaction.request()
+          .input('actionName', sql.VarChar, 'Complete Paid - Created by: Customer (SePay)')
+          .input('targetTable', sql.VarChar, 'Reservations')
+          .input('targetId', sql.Int, reservation.reservation_id)
+          .input('newValue', sql.VarChar, JSON.stringify({ reservation_status: RESERVATION_STATUS.AWAIT_CHECK_IN, transactionRef: referenceCode }))
+          .query(`
+            INSERT INTO dbo.AuditLogs (action_name, target_table, target_id, new_value_json, created_at)
+            VALUES (@actionName, @targetTable, @targetId, @newValue, SYSDATETIME())
+          `);
+
+        // Emit socket event for Staff UI illusion
+        const io = getIO();
+        if (io) {
+          io.emit('RESERVATION_PAYMENT_SUCCESS', { 
+             reservationId: reservation.reservation_id, 
+             orderCode: reservation.order_code,
+             status: 'Await Check-in', 
+             flashCompletePaid: true 
+          });
+        }
+
+        await transaction.commit();
+        console.log(`[SePay Webhook] Reservation ${actualOrderCode} payment successful. Ref: ${referenceCode}`);
+
+        // e. Send invoice email outside transaction (fire-and-forget)
+        try {
+          const rawPool = await getRawPool();
+          const emailQuery = await rawPool.request()
+            .input('resId', sql.Int, reservation.reservation_id)
+            .query('SELECT contact_email, contact_name, reservation_start_at, guest_count, deposit_amount, final_total FROM dbo.Reservations WHERE reservation_id = @resId');
+            
+          const resInfo = emailQuery.recordset[0];
+          if (resInfo && resInfo.contact_email) {
+             let finalPreorderItems = [];
+             const poQuery = await rawPool.request()
+               .input('resId', sql.Int, reservation.reservation_id)
+               .query('SELECT pi.quantity, pi.unit_price, d.dish_name FROM dbo.PreorderItems pi JOIN dbo.Dishes d ON pi.dish_id = d.dish_id WHERE pi.reservation_id = @resId');
+             finalPreorderItems = poQuery.recordset.map(r => ({
+               name: r.dish_name,
+               qty: r.quantity,
+               price: r.unit_price
+             }));
+
+             await sendReservationInvoiceEmail({
+               to: resInfo.contact_email,
+               reservation: {
+                 reservation_id: reservation.reservation_id,
+                 contact_name: resInfo.contact_name,
+                 date: resInfo.reservation_start_at ? resInfo.reservation_start_at.toLocaleDateString("vi-VN") : '',
+                 time: resInfo.reservation_start_at ? `${String(resInfo.reservation_start_at.getHours()).padStart(2, '0')}:${String(resInfo.reservation_start_at.getMinutes()).padStart(2, '0')}` : '',
+                 guest_count: resInfo.guest_count,
+                 deposit_amount: resInfo.deposit_amount,
+                 final_total: resInfo.final_total
+               },
+               preorderItems: finalPreorderItems,
+               totalAmount: transferAmount
+             });
+          }
+        } catch (emailErr) {
+          console.error('[SePay Webhook] Failed to send invoice email:', emailErr);
+        }
+
+      } else {
+        // --- ORDER PAYMENT LOGIC (DH) ---
+        const orderId = targetId;
+        const orderResult = await transaction.request()
+          .input('orderId', sql.Int, orderId)
+          .query('SELECT order_id, order_status, total_amount, amount_paid, table_id, qr_session_id FROM dbo.Orders WHERE order_id = @orderId');
+
+        if (orderResult.recordset.length === 0) {
+          await transaction.rollback();
+          console.warn(`[SePay Webhook] Order ${orderId} not found`);
+          return res.status(200).json({ success: true, message: 'Webhook received, but order not found' });
+        }
+
+        const order = orderResult.recordset[0];
+        
+        if (order.order_status === 'Paid') {
+          await transaction.rollback();
+          return res.status(200).json({ success: true, message: 'Webhook received, order is already Paid' });
+        }
+
+        const receivedAmount = Number(transferAmount) || 0;
+        const outstandingAmount = Math.max(
+          0,
+          Number(order.total_amount || 0) - Number(order.amount_paid || 0)
+        );
+
+        if (receivedAmount + 0.009 < outstandingAmount) {
+          await transaction.rollback();
+          console.warn(`[SePay Webhook] Insufficient funds transferred for order ${orderId}. Expected: ${outstandingAmount}, Received: ${transferAmount}`);
+          return res.status(200).json({ success: true, message: 'Insufficient funds received' });
+        }
+
+        // Update the order status and amount paid
+        await transaction.request()
+          .input('orderId', sql.Int, orderId)
+          .input('orderStatus', sql.VarChar, 'Paid')
+          .input('amountPaid', sql.Decimal(12, 2), transferAmount)
+          .query(`
+            UPDATE dbo.Orders 
+            SET order_status = @orderStatus, 
+                amount_paid = amount_paid + @amountPaid, 
+                updated_at = SYSDATETIME()
+            WHERE order_id = @orderId
+          `);
+
+        // Update table status to Cleaning
+        await transaction.request()
+          .input('tableId', sql.SmallInt, order.table_id)
+          .input('tableStatus', sql.VarChar, 'Cleaning')
+          .query(`
+            UPDATE dbo.RestaurantTables
+            SET table_status = @tableStatus, updated_at = SYSDATETIME()
+            WHERE table_id = @tableId
+          `);
+
+        if (order.qr_session_id) {
+          await transaction.request()
+            .input('sessionId', sql.Int, order.qr_session_id)
+            .query(`
+              UPDATE dbo.QROrderSessions
+              SET session_status = N'Closed',
+                  closed_at = SYSDATETIME(),
+                  expires_at = SYSDATETIME()
+              WHERE qr_session_id = @sessionId
+            `);
+        }
+
+        // Record the payment
+        await transaction.request()
+          .input('orderId', sql.Int, orderId)
+          .input('paymentMethodId', sql.TinyInt, 3) 
+          .input('amountPaid', sql.Decimal(12, 2), transferAmount)
+          .input('paymentStatus', sql.VarChar, 'Completed')
+          .input('transactionRef', sql.VarChar, referenceCode)
+          .query(`
+            INSERT INTO dbo.Payments (
+              order_id, payment_method_id, amount_paid, payment_status, transaction_ref, paid_at, created_at, updated_at
+            ) VALUES (
+              @orderId, @paymentMethodId, @amountPaid, @paymentStatus, @transactionRef, SYSDATETIME(), SYSDATETIME(), SYSDATETIME()
+            )
+          `);
+
+        // Audit Log
+        await transaction.request()
+          .input('actionName', sql.VarChar, 'SePay Webhook Payment')
+          .input('targetTable', sql.VarChar, 'Orders')
+          .input('targetId', sql.Int, orderId)
+          .input('newValue', sql.VarChar, JSON.stringify({ order_status: 'Paid', transactionRef: referenceCode }))
+          .query(`
+            INSERT INTO dbo.AuditLogs (action_name, target_table, target_id, new_value_json, created_at)
+            VALUES (@actionName, @targetTable, @targetId, @newValue, SYSDATETIME())
+          `);
+
+        await transaction.commit();
+        console.log(`[SePay Webhook] Order ${orderId} marked as Paid successfully. Ref: ${referenceCode}`);
+
+        const io = getIO();
+        if (io) {
+          const payload = {
+            orderId,
+            order_id: orderId,
+            status: 'Paid',
+            table_id: order.table_id,
+            session_id: order.qr_session_id ?? null,
+            amount_paid: receivedAmount,
+          };
+          io.emit('PAYMENT_STATUS_CHANGED', payload);
+          io.emit('QR_SESSION_PAYMENT_COMPLETED', payload);
+          if (order.qr_session_id) {
+            io.to(`session_${order.qr_session_id}`).emit('PAYMENT_STATUS_CHANGED', payload);
+            io.to(`session_${order.qr_session_id}`).emit('QR_SESSION_PAYMENT_COMPLETED', payload);
+          }
+        }
+      }
+
+      // 4. Response
+      return res.status(200).json({ success: true, message: 'Webhook received and processed' });
+
+    } catch (dbError) {
+      await transaction.rollback();
+      throw dbError;
+    }
+
+  } catch (error) {
+    console.error('[SePay Webhook] Error processing webhook:', error);
+    // Important: return 500 so SePay will retry
+    return res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+};

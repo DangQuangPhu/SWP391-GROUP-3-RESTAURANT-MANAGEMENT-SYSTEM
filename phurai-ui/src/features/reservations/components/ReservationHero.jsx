@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import heroImage from "@/assets/images/hero.jpg";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -81,7 +82,7 @@ function ReservationHero({ onReserveClick }) {
         <img
           ref={maskRef}
           className="rzv-hero__mask-img"
-          src="/src/assets/images/hero.jpg"
+          src={heroImage}
           alt="Phūrai dining atmosphere"
           loading="eager"
         />

@@ -23,7 +23,8 @@ import combo2 from '@/assets/images/menu/Combo2.jpg';
 import combo4 from '@/assets/images/menu/Combo4.jpg';
 import combo6 from '@/assets/images/menu/Combo6.jpg';
 import combo8 from '@/assets/images/menu/Combo8.jpg';
-import scanImage from '@/assets/images/menu/scan.jpg';
+import combo10 from '@/assets/images/menu/Combo10.jpg';
+import scanImage from '@/assets/images/menu/Scan.jpg';
 import wine from '@/assets/images/menu/Ruouvang1.jpg';
 import wine2 from '@/assets/images/menu/Ruouvang2.jpg';
 import wine3 from '@/assets/images/menu/Ruouvang3.jpg';
@@ -49,6 +50,7 @@ export const menuComboImages = {
   combo4,
   combo6,
   combo8,
+  combo10,
 };
 
 export const menuImages = {
@@ -56,6 +58,7 @@ export const menuImages = {
   combo4,
   combo6,
   combo8,
+  combo10,
   scanImage,
   omakaseExperience: combo8,
   signatureTasting: combo6,
@@ -84,4 +87,37 @@ export const menuImages = {
   wine2: wine2,
   wine3: wine3,
   orangejuice: orangejuice,
+};
+
+export const imagePathMap = {
+  '/menu/menu-hero.jpg': menuHero,
+  '/menu/yellowtail-jalapeno.jpg': menuYellowtailJalapeno,
+  '/menu/toro-tartare.jpg': menuToroTartare,
+  '/menu/fluke-sashimi.jpg': menuFlukeSashimi,
+  '/menu/new-style-sashimi.jpg': menuNewStyleSashimi,
+  '/menu/salmon-new-style.jpg': menuSalmonNewStyle,
+  '/menu/seafood-udon.jpg': menuSeafoodUdon,
+  '/menu/wagyu-fried-rice.jpg': menuWagyuFriedRice,
+  '/menu/lobster-fried-rice.jpg': menuLobsterFriedRice,
+  '/menu/black-cod-miso.jpg': menuBlackCodMiso,
+  '/menu/rock-shrimp-tempura.jpg': menuRockShrimpTempura,
+  '/menu/lobster-wasabi-pepper.jpg': menuLobsterWasabiPepper,
+  '/menu/grilled-salmon.jpg': menuGrilledSalmon,
+  '/menu/japanese-a5-wagyu.jpg': menuJapaneseA5Wagyu,
+  '/menu/grilled-lamb-chops.jpg': menuGrilledLambChops,
+  '/menu/bento-chocolate-cake.jpg': menuBentoChocolateCake,
+  '/menu/miso-cappuccino.jpg': menuMisoCappuccino,
+  '/menu/hokusetsu-junmai.jpg': menuHokusetsuJunmai,
+  '/menu/lychee-martini.jpg': menuLycheeMartini,
+  '/menu/menu-footer-bg.png': menuFooterBg,
+  '/menu/Combo2.jpg': combo2,
+  '/menu/Combo4.jpg': combo4,
+  '/menu/Combo6.jpg': combo6,
+  '/menu/Combo8.jpg': combo8,
+  '/menu/Combo10.jpg': combo10,
+  '/menu/Scan.jpg': scanImage,
+  '/menu/Ruouvang1.jpg': wine,
+  '/menu/Ruouvang2.jpg': wine2,
+  '/menu/Ruouvang3.jpg': wine3,
+  '/menu/Nuoccam.jpg': orangejuice,
 };

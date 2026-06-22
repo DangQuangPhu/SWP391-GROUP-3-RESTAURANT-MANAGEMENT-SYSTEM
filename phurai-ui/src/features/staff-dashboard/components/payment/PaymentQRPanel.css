@@ -1,0 +1,300 @@
+.payment-qr-container {
+  --bg-color: #ffffff;
+  --border-color: #e5e7eb;
+  --text-main: #111827;
+  --text-muted: #6b7280;
+  --primary: #2563eb;
+  --success: #10b981;
+  --success-bg: #ecfdf5;
+  --expired-bg: #fef2f2;
+  --expired-text: #dc2626;
+
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px;
+  border-radius: 16px;
+  background: var(--bg-color);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-family: 'Inter', system-ui, sans-serif;
+  position: relative;
+}
+
+/* Layout */
+.payment-qr-layout {
+  display: flex;
+  gap: 40px;
+  align-items: stretch;
+}
+
+.payment-left-col,
+.payment-right-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.payment-left-col {
+  align-items: center;
+  justify-content: center;
+  border-right: 1px dashed var(--border-color);
+  padding-right: 40px;
+}
+
+.payment-right-col {
+  justify-content: center;
+}
+
+/* Left Column - QR */
+.qr-wrapper {
+  background: #fff;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  margin-bottom: 16px;
+  transition: filter 0.3s ease;
+}
+
+.qr-blurred {
+  filter: blur(8px) grayscale(80%);
+}
+
+.qr-img {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  border-radius: 8px;
+}
+
+.qr-caption {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* Right Column - Timer & Bank Info */
+.timer-wrapper {
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.timer-label {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.timer-value {
+  font-size: 18px;
+  color: var(--expired-text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1px;
+}
+
+.bank-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bank-owner {
+  font-size: 18px;
+  font-weight: 800;
+  text-transform: uppercase;
+  margin: 0 0 8px 0;
+  letter-spacing: 0.5px;
+  color: var(--primary);
+}
+
+.bank-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+  position: relative;
+}
+
+.bank-info-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.bank-info-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bank-info-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.bank-info-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.btn-copy {
+  background: none;
+  border: none;
+  padding: 8px;
+  margin-right: -8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+}
+
+.btn-copy:hover {
+  background: #f3f4f6;
+  color: var(--text-main);
+}
+
+.btn-copy:active {
+  transform: scale(0.95);
+}
+
+.icon-copied {
+  color: var(--success);
+}
+
+.toast-copied {
+  position: absolute;
+  right: -8px;
+  top: -30px;
+  background: #1f2937;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.copy-spacer {
+  width: 36px; /* Space to perfectly align with the copy buttons below */
+}
+
+/* Success Screen */
+.payment-success-screen {
+  background: var(--success-bg);
+  border-radius: 12px;
+  padding: 64px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.success-icon {
+  color: var(--success);
+  margin-bottom: 24px;
+}
+
+.success-heading {
+  font-size: 24px;
+  font-weight: 700;
+  color: #065f46;
+  margin: 0 0 12px 0;
+}
+
+.success-text {
+  font-size: 15px;
+  color: #047857;
+  margin: 0;
+}
+
+/* Expired Overlay */
+.payment-expired-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(2px);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.expired-content {
+  background: var(--expired-bg);
+  padding: 32px 40px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+  border: 1px solid #fecaca;
+}
+
+.expired-heading {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--expired-text);
+  margin: 0 0 8px 0;
+}
+
+.expired-text {
+  font-size: 15px;
+  color: #991b1b;
+  margin: 0 0 24px 0;
+}
+
+.btn-generate {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-generate:hover {
+  background: #1d4ed8;
+}
+
+.btn-generate:active {
+  transform: scale(0.98);
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .payment-qr-layout {
+    flex-direction: column;
+    gap: 32px;
+  }
+  
+  .payment-left-col {
+    border-right: none;
+    border-bottom: 1px dashed var(--border-color);
+    padding-right: 0;
+    padding-bottom: 32px;
+  }
+}

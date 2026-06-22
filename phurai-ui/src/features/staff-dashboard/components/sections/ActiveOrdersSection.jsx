@@ -6,7 +6,7 @@ import {
   EmptyState,
   NotConnectedNote,
 } from "../StaffUI.jsx";
-import { DEMO_NOTICE, ORDER_STATUS_META } from "../../data/staffDashboardMockData.js";
+import { DEMO_NOTICE, ORDER_STATUS_META } from "@/shared/constants.js";
 import { formatVND } from "@/utils/formatCurrency.js";
 import { asArray } from "@/utils/asArray.js";
 

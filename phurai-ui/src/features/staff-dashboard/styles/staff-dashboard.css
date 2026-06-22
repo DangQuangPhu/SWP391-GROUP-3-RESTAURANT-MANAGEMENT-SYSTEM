@@ -101,3 +101,66 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Keyframe animations for reservation actions ── */
+@keyframes sfx-fadein {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes sfx-drawer-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Green flash → fade when a row is actioned (check-in / reject) */
+@keyframes sfx-row-checkedin {
+  0% {
+    background-color: rgba(34, 197, 94, 0.18);
+  }
+
+  60% {
+    background-color: rgba(34, 197, 94, 0.08);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+.sfx-table__row--just-actioned {
+  animation: sfx-row-checkedin 1.2s ease-out forwards;
+}
+
+/* Red flash for reject/no-show actions */
+@keyframes sfx-row-rejected {
+  0% {
+    background-color: rgba(239, 68, 68, 0.18);
+  }
+
+  60% {
+    background-color: rgba(239, 68, 68, 0.06);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+.sfx-table__row--just-rejected {
+  animation: sfx-row-rejected 1.2s ease-out forwards;
+}

@@ -7,19 +7,27 @@ import { getPreorderMenu, savePreorder } from "../services/reservationApi.js";
  * Lets the guest attach dishes to an upcoming reservation. Prices are
  * always re-validated on the backend; the UI only previews totals.
  */
-function PreorderPanel({ reservation, userId, onSaved }) {
+function PreorderPanel({ reservation, userId, onSaved, value, onChange }) {
   const [menu, setMenu] = useState([]);
   const [menuStatus, setMenuStatus] = useState("idle"); // idle | loading | ready | error
   // quantities keyed by dish_id
   const [quantities, setQuantities] = useState(() => {
+    if (value) return value;
     const initial = {};
-    (reservation.preorders || []).forEach((p) => {
+    (reservation?.preorders || []).forEach((p) => {
       initial[p.dish_id] = p.quantity;
     });
     return initial;
   });
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null); // { type, text }
+
+  // Sync internal state with external value if provided
+  useEffect(() => {
+    if (value) {
+      setQuantities(value);
+    }
+  }, [value]);
 
   useEffect(() => {
     let active = true;
@@ -68,13 +76,22 @@ function PreorderPanel({ reservation, userId, onSaved }) {
 
   const setQty = (dishId, next) => {
     setFeedback(null);
-    setQuantities((prev) => {
-      const value = Math.max(0, Math.min(20, next));
-      const copy = { ...prev };
-      if (value <= 0) delete copy[dishId];
-      else copy[dishId] = value;
-      return copy;
-    });
+    const value = Math.max(0, Math.min(20, next));
+    const copy = { ...quantities };
+    if (value <= 0) delete copy[dishId];
+    else copy[dishId] = value;
+    
+    setQuantities(copy);
+    if (onChange) {
+      onChange(copy, totalForNext(copy)); // Pass updated quantities and total up
+    }
+  };
+
+  const totalForNext = (newQuantities) => {
+    return Object.entries(newQuantities).reduce((sum, [dishId, qty]) => {
+      const price = priceById.get(Number(dishId)) || 0;
+      return sum + price * qty;
+    }, 0);
   };
 
   const handleSave = async () => {
@@ -177,14 +194,16 @@ function PreorderPanel({ reservation, userId, onSaved }) {
           <span>{selectedCount} item{selectedCount === 1 ? "" : "s"}</span>
           <strong>{formatVND(total)}</strong>
         </div>
-        <button
-          type="button"
-          className="rzv-btn rzv-btn--solid rzv-preorder__save"
-          onClick={handleSave}
-          disabled={saving || menuStatus !== "ready"}
-        >
-          {saving ? "Saving…" : "Save Pre-order"}
-        </button>
+        {reservation && (
+          <button
+            type="button"
+            className="rzv-btn rzv-btn--solid rzv-preorder__save"
+            onClick={handleSave}
+            disabled={saving || menuStatus !== "ready"}
+          >
+            {saving ? "Saving…" : "Save Pre-order"}
+          </button>
+        )}
       </div>
     </div>
   );

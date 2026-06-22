@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = "http://localhost:5001/api";
+const DEFAULT_API_BASE_URL = "/api";
 
 function normalizeApiBaseUrl(value) {
   const trimmed = String(value || DEFAULT_API_BASE_URL).trim().replace(/\/+$/, "");
@@ -18,6 +18,14 @@ export function saveAuthUser(user, remember = false) {
   storage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
 }
 
+export function saveAuthToken(token, remember = false) {
+  if (!token) return;
+  const storage = remember ? localStorage : sessionStorage;
+  const other = remember ? sessionStorage : localStorage;
+  other.removeItem("phurai_token");
+  storage.setItem("phurai_token", token);
+}
+
 export function loadAuthUser() {
   const raw =
     localStorage.getItem(AUTH_STORAGE_KEY) || sessionStorage.getItem(AUTH_STORAGE_KEY);
@@ -32,6 +40,8 @@ export function loadAuthUser() {
 export function clearAuthUser() {
   localStorage.removeItem(AUTH_STORAGE_KEY);
   sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  localStorage.removeItem("phurai_token");
+  sessionStorage.removeItem("phurai_token");
 }
 
 export function createApiError(message, { status, code, data } = {}) {
@@ -164,3 +174,16 @@ export async function apiGet(path, options = {}) {
 export async function apiPatch(path, body, options = {}) {
   return request(path, { ...options, method: "PATCH", body: body ? JSON.stringify(body) : undefined, headers: { ...authHeaders(), ...(options.headers || {}) } });
 }
+
+export async function apiPost(path, body, options = {}) {
+  return request(path, { ...options, method: "POST", body: body ? JSON.stringify(body) : undefined, headers: { ...authHeaders(), ...(options.headers || {}) } });
+}
+
+export async function apiPut(path, body, options = {}) {
+  return request(path, { ...options, method: "PUT", body: body ? JSON.stringify(body) : undefined, headers: { ...authHeaders(), ...(options.headers || {}) } });
+}
+
+export async function apiDelete(path, options = {}) {
+  return request(path, { ...options, method: "DELETE", headers: { ...authHeaders(), ...(options.headers || {}) } });
+}
+

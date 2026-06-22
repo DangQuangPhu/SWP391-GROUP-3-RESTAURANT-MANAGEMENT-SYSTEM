@@ -1,16 +1,9 @@
-import { FLAT_NAV } from "./staffNav.js";
+
+import { STAFF_ROLE, STAFF_ROLE_LABEL } from "./staffRoles.js";
 
 export const STAFF_BASE = "/staff";
 
-export const STAFF_ROLE = {
-  RESTAURANT: "restaurant_staff",
-  KITCHEN: "kitchen_staff",
-};
-
-export const STAFF_ROLE_LABEL = {
-  [STAFF_ROLE.RESTAURANT]: "Restaurant Staff",
-  [STAFF_ROLE.KITCHEN]: "Kitchen Staff",
-};
+export { STAFF_ROLE, STAFF_ROLE_LABEL };
 
 const ROLE_ID_MAP = {
   2: STAFF_ROLE.RESTAURANT,
@@ -23,17 +16,19 @@ const ROLE_NAME_MAP = {
 };
 
 export const STAFF_DEFAULT_PATH = {
-  [STAFF_ROLE.RESTAURANT]: `${STAFF_BASE}/tables`,
-  [STAFF_ROLE.KITCHEN]: `${STAFF_BASE}/kds`,
+  [STAFF_ROLE.RESTAURANT]: `${STAFF_BASE}/reservations`,
+  [STAFF_ROLE.KITCHEN]:    `${STAFF_BASE}/kds`,
 };
 
+// Role 2 = Restaurant Staff: all floor ops, NOT kds
+// Role 3 = Kitchen Staff: ONLY kds
 const SEGMENT_ROLE_ACCESS = {
-  orders: [STAFF_ROLE.RESTAURANT, STAFF_ROLE.KITCHEN],
-  tables: [STAFF_ROLE.RESTAURANT, STAFF_ROLE.KITCHEN],
-  reservations: [STAFF_ROLE.RESTAURANT, STAFF_ROLE.KITCHEN],
-  kds: [STAFF_ROLE.RESTAURANT, STAFF_ROLE.KITCHEN],
-  payments: [STAFF_ROLE.RESTAURANT, STAFF_ROLE.KITCHEN],
-  shifts: [STAFF_ROLE.RESTAURANT, STAFF_ROLE.KITCHEN],
+  reservations: [STAFF_ROLE.RESTAURANT],
+  tables:       [STAFF_ROLE.RESTAURANT],
+  orders:       [STAFF_ROLE.RESTAURANT],
+  payments:     [STAFF_ROLE.RESTAURANT],
+  shifts:       [STAFF_ROLE.RESTAURANT],
+  kds:          [STAFF_ROLE.KITCHEN],
 };
 
 export function resolveStaffRole(user) {
@@ -80,12 +75,7 @@ export function canAccessStaffSegment(role, segment) {
   return Array.isArray(allowed) && allowed.includes(role);
 }
 
-export function resolveActiveNavItem(pathname) {
-  const segment = getStaffSegment(pathname);
-  if (!segment) return null;
 
-  return FLAT_NAV.find((item) => item.segment === segment) || null;
-}
 
 export function navItemToPath(item) {
   return `${STAFF_BASE}/${item.segment}`;

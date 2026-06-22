@@ -3,10 +3,10 @@ export default function TableStatusCard({ table, status, isSelected, onClick, is
   const { table_id, table_number, display_label, capacity, area_name } = table;
   let label = display_label || table_number;
   let areaLabel = area_name || "Standard";
-  
+
   const isClickable = status === "AVAILABLE" && isSuitable;
   // If locked, it can still be "clickable" in terms of opening the modal, but the parent handles that. We just need to add a visually locked style.
-  
+
   let statusClass = "";
   if (isSelected) {
     statusClass = "tb-card--selected";
@@ -64,7 +64,7 @@ export default function TableStatusCard({ table, status, isSelected, onClick, is
           <path d="M12 6v12"></path>
         </svg>
       </div>
-      <div className="tb-card__id">
+      <div className="tb-card__id" style={label.length > 7 ? { fontSize: "0.95rem" } : undefined}>
         {label}
         {isLocked && status === "AVAILABLE" && (
           <span style={{ marginLeft: "6px", display: "inline-flex", alignItems: "center", justifyContent: "center", background: "var(--rzv-gold, #d4af37)", color: "#000", borderRadius: "50%", width: "16px", height: "16px" }}>

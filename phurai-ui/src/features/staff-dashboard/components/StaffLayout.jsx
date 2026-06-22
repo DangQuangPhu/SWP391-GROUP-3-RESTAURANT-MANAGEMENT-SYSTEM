@@ -1,7 +1,7 @@
 import { useState } from "react";
 import StaffSidebar from "./StaffSidebar.jsx";
 import StaffHeader from "./StaffHeader.jsx";
-import Icon from "./StaffIcons.jsx";
+import { useStaffStore } from "../store/staffStore.js";
 
 function StaffLayout({
   role,
@@ -12,13 +12,15 @@ function StaffLayout({
   onSearch,
   onRefresh,
   refreshing,
-  refreshLabel = "Refresh",
+  refreshLabel,
   onSignOut,
-  toasts,
   children,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const closeMobile = () => setMobileOpen(false);
+  const loading = useStaffStore(state => state.loading);
 
   return (
     <div className={`sfx-shell sfx-shell--staff ${collapsed ? "sfx-shell--collapsed" : ""}`}>
@@ -26,7 +28,7 @@ function StaffLayout({
         role={role}
         collapsed={collapsed}
         mobileOpen={mobileOpen}
-        onCloseMobile={() => setMobileOpen(false)}
+        onCloseMobile={closeMobile}
         onSignOut={onSignOut}
       />
 
@@ -44,16 +46,16 @@ function StaffLayout({
           refreshing={refreshing}
           refreshLabel={refreshLabel}
         />
-        <main className="sfx-canvas">{children}</main>
-      </div>
-
-      <div className="sfx-toasts" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} className={`sfx-toast sfx-toast--${t.tone}`}>
-            <Icon name={t.tone === "error" ? "close" : "check"} size={15} />
-            <span>{t.message}</span>
+        <main className="sfx-canvas">
+          {loading && (
+            <div className="sfx-loading-overlay" style={{ position: 'absolute', inset: 0, zIndex: 10, background: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+              <span className="text-sm font-medium">Loading data...</span>
+            </div>
+          )}
+          <div style={loading ? { opacity: 0.5, pointerEvents: 'none' } : {}}>
+            {children}
           </div>
-        ))}
+        </main>
       </div>
     </div>
   );

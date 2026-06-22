@@ -52,6 +52,7 @@ function cartReducer(state, action) {
         ...state,
         {
           id: dish.id,
+          dish_id: dish.dish_id || dish.id,
           name: dish.name,
           price: dish.price,
           image: dish.image,

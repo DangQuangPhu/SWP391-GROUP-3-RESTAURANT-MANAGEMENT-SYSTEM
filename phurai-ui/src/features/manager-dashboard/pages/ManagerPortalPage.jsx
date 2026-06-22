@@ -3,9 +3,10 @@ import { Navigate, Route, Routes, useOutletContext } from "react-router-dom";
 import "../styles/manager-dashboard.css";
 
 import NotFound from "@/pages/NotFound.jsx";
-import { KPI_CARDS } from "../data/managerDashboardMockData.js";
+import { KPI_CARDS } from "@/shared/constants.js";
 import { ManagerPortalContext, useManagerPortal } from "../context/ManagerPortalContext.jsx";
 import ManagerPortalLayout from "./ManagerPortalLayout.jsx";
+import { loadAuthUser } from "@/core/api/httpClient.js";
 
 import OverviewSection from "../components/sections/OverviewSection.jsx";
 import TodaySection from "../components/sections/TodaySection.jsx";
@@ -88,7 +89,7 @@ function TodayRoute() {
 }
 
 function ReservationsRoute() {
-  const { loading, data, setList, toast } = useSectionContext();
+  const { loading, data, setList, toast, refreshReservations } = useSectionContext();
   if (loading) return <LoadingState />;
   return (
     <ReservationsSection
@@ -97,6 +98,7 @@ function ReservationsRoute() {
       tables={data.tables}
       setTables={setList("tables")}
       toast={toast}
+      onRefresh={refreshReservations}
     />
   );
 }
@@ -186,13 +188,14 @@ function ReportsRoute() {
 
 function ManagerPortalPage({
   isAuthenticated,
-  currentUser,
+  currentUser: propCurrentUser,
   onSignOut,
   onNavigate,
 }) {
   const { socket } = useSocket();
-  const role = resolveRole(currentUser?.roleName);
-  const hasAccess = isAuthenticated && Boolean(role);
+  const currentUser = propCurrentUser || loadAuthUser();
+  const role = resolveRole(currentUser?.roleName || currentUser?.role_name);
+  const hasAccess = (isAuthenticated || !!currentUser) && Boolean(role);
 
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -245,6 +248,16 @@ function ManagerPortalPage({
       }),
     []
   );
+
+  const refreshReservations = useCallback(async () => {
+    if (!hasAccess) return;
+    try {
+      const res = await fetchAllReservations(currentUser?.user_id);
+      setData(prev => ({ ...prev, reservations: Array.isArray(res?.data) ? res.data : [] }));
+    } catch (err) {
+      console.error("Failed to refresh reservations:", err);
+    }
+  }, [hasAccess, currentUser?.user_id]);
 
   useEffect(() => {
     if (!hasAccess) return undefined;
@@ -310,10 +323,48 @@ function ManagerPortalPage({
   /* 2. Real-time Socket Notification */
   useEffect(() => {
     if (!hasAccess || !socket) return;
-    
-    const handleNewReservation = (data) => {
-      toast(`New booking request from ${data.customer_name}`, "info");
-      window.dispatchEvent(new Event("phurai_manager_refresh"));
+
+    const handleNewReservation = (payload) => {
+      // ── Normalise raw socket payload → canonical ReservationRow shape ──────
+      // The DB stores everything in special_request as a tagged string, e.g.:
+      //   "[Dining Purpose: Birthday] [Hold: 30m]"
+      // We parse the occasion out and keep the rest as notes.
+      const rawSpecial = payload.special_request || "";
+      const occasionMatch = rawSpecial.match(/\[Dining Purpose:\s*([^\]]+)\]/i);
+      const occasion = occasionMatch ? occasionMatch[1].trim() : (payload.occasion || "—");
+
+      // Derive reservation_date and start_time from reservation_start_at if not
+      // already present (real-time payloads include them; history rows may not).
+      const rawIso = payload.reservation_start_at || "";
+      const reservation_date = payload.reservation_date || rawIso.slice(0, 10) || null;
+      const start_time = payload.start_time || rawIso.slice(11, 16) || "—";
+
+      const normalizedReservation = {
+        ...payload,
+        reservation_date,
+        start_time,
+        occasion,
+        // Keep raw notes separate from the occasion so the detail drawer can
+        // still display the full special_request text.
+        notes: rawSpecial,
+        // Ensure both aliases for guest count are present.
+        guest_count: payload.guest_count ?? payload.party_size,
+        party_size: payload.party_size ?? payload.guest_count,
+        // Canonical phone and email fields.
+        customer_phone: payload.customer_phone || payload.phone || null,
+        email: payload.customer_email || payload.email || null,
+        // Guarantee both status fields are present and correctly cased so the
+        // table row badge and the detail drawer footer buttons always render.
+        // ReservationsSection checks: (r.status || r.reservation_status || "").toLowerCase()
+        reservation_status: payload.reservation_status || "Pending",
+        status: payload.status || payload.reservation_status || "pending",
+      };
+
+      toast(
+        `🔔 New Reservation: ${normalizedReservation.customer_name} booked for ${normalizedReservation.party_size} guests at ${normalizedReservation.start_time} on ${normalizedReservation.reservation_date}`,
+        "info"
+      );
+      setList("reservations")((prev) => [normalizedReservation, ...prev]);
     };
 
     const handleCheckedIn = (data) => {
@@ -325,24 +376,105 @@ function ManagerPortalPage({
       toast(`Reservation #${data.reservation_id} marked as ${data.new_status} by staff`, "info");
       window.dispatchEvent(new Event("phurai_manager_refresh"));
     };
-    
+
+    const handleStatusChanged = (data) => {
+      const newStatus = data.new_status || data.status;
+      toast(`Reservation #${data.reservation_id} status changed to ${newStatus}`, "info");
+      setData(prev => {
+        const reservations = prev.reservations.map(r => {
+          if (r?.reservation_id === data.reservation_id) {
+            return { ...r, status: newStatus, reservation_status: newStatus };
+          }
+          return r;
+        });
+        return { ...prev, reservations };
+      });
+    };
+
+    const handlePaymentSuccess = (payload) => {
+      // payload may be { reservationId, flashCompletePaid } or { reservation_id, flashCompletePaid }
+      const resId = payload.reservation_id || payload.reservationId;
+      if (payload.flashCompletePaid) {
+        setData(prev => {
+          const reservations = prev.reservations.map(r => {
+            if (r?.reservation_id === resId) {
+              const originalStatus = r.reservation_status || r.status || 'Await Check-in';
+              // Mutate temporarily to Complete Paid
+              r = { ...r, status: 'Complete Paid', reservation_status: 'Complete Paid', _isFlashing: true };
+              
+              setTimeout(() => {
+                setData(currentData => {
+                  const currReservations = currentData.reservations.map(cr => {
+                    if (cr?.reservation_id === resId && cr._isFlashing) {
+                      return { ...cr, status: originalStatus, reservation_status: originalStatus, _isFlashing: false };
+                    }
+                    return cr;
+                  });
+                  return { ...currentData, reservations: currReservations };
+                });
+              }, 10000);
+            }
+            return r;
+          });
+          return { ...prev, reservations };
+        });
+        toast(`Payment verified for booking #${resId}`, "success");
+      } else {
+        // Fallback for older code if it passes status
+        setData(prev => {
+          const reservations = prev.reservations.map(r => {
+            if (r?.reservation_id === resId) {
+              return { ...r, status: payload.status, reservation_status: payload.status };
+            }
+            return r;
+          });
+          return { ...prev, reservations };
+        });
+        toast(`Payment for Reservation #${resId} succeeded.`, "success");
+      }
+    };
+
     socket.on("reservation:new", handleNewReservation);
     socket.on("reservation:checked_in", handleCheckedIn);
     socket.on("reservation:rejected", handleRejected);
+    socket.on("reservation:status_changed", handleStatusChanged);
+    socket.on("reservation:status_updated", handleStatusChanged);
+    socket.on("RESERVATION_STATUS_CHANGED", handleStatusChanged);
+    socket.on("RESERVATION_PAYMENT_SUCCESS", handlePaymentSuccess);
+
+    const handleTableMerged = (data) => {
+      toast(`[Table Update] ${data.child_table_number} was merged into ${data.parent_table_number} by ${data.staff_name}`, "info");
+      window.dispatchEvent(new Event("phurai_manager_refresh"));
+    };
+    const handleTableSync = (data) => {
+      window.dispatchEvent(new Event("phurai_manager_refresh"));
+    };
+
+    socket.on("table:merged", handleTableMerged);
+    socket.on("table:sync", handleTableSync);
 
     return () => {
       socket.off("reservation:new", handleNewReservation);
       socket.off("reservation:checked_in", handleCheckedIn);
       socket.off("reservation:rejected", handleRejected);
+      socket.off("reservation:status_changed", handleStatusChanged);
+      socket.off("reservation:status_updated", handleStatusChanged);
+      socket.off("RESERVATION_STATUS_CHANGED", handleStatusChanged);
+      socket.off("RESERVATION_PAYMENT_SUCCESS", handlePaymentSuccess);
+      socket.off("table:merged", handleTableMerged);
+      socket.off("table:sync", handleTableSync);
     };
   }, [hasAccess, toast, socket]);
 
   // Listen to refresh events
   useEffect(() => {
     const handleRefresh = () => {
-      // Reload reservations
+      // Reload reservations and tables
       fetchAllReservations(currentUser?.user_id).then(res => {
-         setList("reservations")(res.data);
+        setList("reservations")(res.data);
+      });
+      fetchTables().then(res => {
+        setList("tables")(asArray(res.data));
       });
     };
     window.addEventListener("phurai_manager_refresh", handleRefresh);

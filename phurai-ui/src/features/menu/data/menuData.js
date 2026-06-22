@@ -1,4 +1,4 @@
-import { menuImages } from './menuAssets';
+import { menuImages } from './menuAssets.js';
 
 
 export const menuCategories = [
@@ -236,7 +236,7 @@ export const menuCategories = [
         tag: "Chef's Set",
         courses: 2,
         name: 'CHEF\'S SET — 2 COURSES',
-        price: 590000,
+        price: 890000,
         description:
           'An intimate introduction to Phūrai with two chef-selected courses.',
         image: menuImages.combo2,
@@ -252,7 +252,7 @@ export const menuCategories = [
         tag: "Chef's Set",
         courses: 4,
         name: 'CHEF\'S SET — 4 COURSES',
-        price: 790000,
+        price: 1490000,
         description:
           'A balanced four-course progression through seasonal ingredients.',
         image: menuImages.combo4,
@@ -269,7 +269,7 @@ export const menuCategories = [
         tag: "Chef's Set",
         courses: 6,
         name: 'CHEF\'S SET — 6 COURSES',
-        price: 1290000,
+        price: 2190000,
         description:
           'A celebratory six-course journey featuring seafood, grill, and signature pairings.',
         image: menuImages.combo6,
@@ -285,7 +285,7 @@ export const menuCategories = [
         tag: "Chef's Set",
         courses: 8,
         name: 'CHEF\'S SET — 8 COURSES',
-        price: 1890000,
+        price: 2890000,
         description:
           'A grand tasting feast crafted for sharing, pairing, and premium dining moments.',
         image: menuImages.combo8,

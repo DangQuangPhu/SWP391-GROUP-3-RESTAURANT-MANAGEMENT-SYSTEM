@@ -10,9 +10,12 @@ import {
 import {
   listAreas,
   createTable,
+  updateTable,
+  deleteTable,
   getNextTableNumber,
   listFilteredTables,
 } from "../controllers/tableController.js";
+import { mergeTables, unmergeTable, getTableTimeline } from "../controllers/tableMergeController.js";
 import {
   getStaffShiftMapping,
   putStaffShiftMapping,
@@ -20,15 +23,35 @@ import {
 import {
   getPendingReservations,
   getAllReservations,
+  getReservationDetails,
   confirmReservation,
-  getReservationHistory,
   rejectReservation,
-  cancelReservation
+  cancelReservation,
+  updateReservation,
+  getReservationHistory,
+  seedTestReservations,
+  clearTestReservations,
+  resolveEditRequest,
 } from "../controllers/managerReservationController.js";
+import {
+  getAllPromotions,
+  createPromotion,
+  togglePromotionStatus,
+  deletePromotion,
+} from "../controllers/promotionsController.js";
+import {
+  resolveCancelRequest,
+} from "../services/resolveRequestService.js";
 
 const router = express.Router();
 
 router.use(resolveUserId, requireUserId, requireManager);
+
+// Promotions
+router.get("/promotions", getAllPromotions);
+router.post("/promotions", createPromotion);
+router.patch("/promotions/:id/toggle", togglePromotionStatus);
+router.delete("/promotions/:id", deletePromotion);
 
 router.get("/shifts", listShifts);
 router.get("/shift-mapping", getStaffShiftMapping);
@@ -42,13 +65,55 @@ router.get("/areas", listAreas);
 router.get("/next-table-number", getNextTableNumber);
 router.get("/tables-filtered", listFilteredTables);
 router.post("/tables", createTable);
+router.patch("/tables/:id", updateTable);
+router.delete("/tables/:id", deleteTable);
+router.post("/tables/merge", mergeTables);
+router.post("/tables/unmerge", unmergeTable);
+router.get("/tables/:tableId/timeline", getTableTimeline);
 
 // Reservations
 router.get("/reservations/pending", getPendingReservations);
 router.get("/reservations/all", getAllReservations);
+router.post("/reservations/seed-test", seedTestReservations);  // Must be BEFORE /:id
+router.delete("/reservations/clear-test", clearTestReservations);
+router.get("/reservations/:id", getReservationDetails);
+router.get("/reservations/:id/history", getReservationHistory);
 router.patch("/reservations/:id/confirm", confirmReservation);
 router.patch("/reservations/:id/reject", rejectReservation);
 router.patch("/reservations/:id/cancel", cancelReservation);
-router.get("/reservations/:id/history", getReservationHistory);
+
+// Flow C — resolve pending edit request (Path B from Audit)
+router.post("/reservations/:id/resolve-edit", resolveEditRequest);
+
+router.patch("/reservations/:id/resolve-cancel", async (req, res) => {
+  const reservationId = Number(req.params.id);
+  if (!Number.isFinite(reservationId) || reservationId <= 0) {
+    return res.status(400).json({ success: false, message: "Invalid reservation ID." });
+  }
+  const managerId = Number(req.userId);
+  const { decision } = req.body || {};
+  if (!decision) {
+    return res.status(400).json({
+      success: false,
+      message: "Body must include 'decision': 'process' or 'reject'.",
+    });
+  }
+  try {
+    const result = await resolveCancelRequest(reservationId, managerId, decision, req.ip);
+    if (!result.success) {
+      const statusMap = {
+        NOT_FOUND: 404, FORBIDDEN: 403,
+        NO_PENDING_CANCEL_REQUEST: 409, INVALID_DECISION: 400,
+      };
+      return res.status(statusMap[result.code] || 400).json(result);
+    }
+    return res.json(result);
+  } catch (err) {
+    console.error("[PATCH /reservations/:id/resolve-cancel]", err);
+    return res.status(500).json({ success: false, message: "Internal server error." });
+  }
+});
+
+router.patch("/reservations/:id", updateReservation);
 
 export default router;

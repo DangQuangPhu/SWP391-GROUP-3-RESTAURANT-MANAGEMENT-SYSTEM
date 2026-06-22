@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import gsap from "gsap";
 
 const CrownIcon = () => (
@@ -158,15 +159,18 @@ export default function UpgradeMembershipModal({
     primaryCtaText = `Upgrade to ${requiredTier}`;
   }
 
-  return (
+  return createPortal(
     <div
       ref={overlayRef}
       style={{
         position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(26, 21, 18, 0.25)",
-        backdropFilter: "blur(3px)",
-        zIndex: 9999,
+        top: 0, left: 0, right: 0, bottom: 0,
+        width: "100vw",
+        height: "100vh",
+        backgroundColor: "rgba(0, 0, 0, 0.6)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        zIndex: 9999999,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -443,6 +447,7 @@ export default function UpgradeMembershipModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,17 +1,4 @@
-import {
-  differenceInCalendarDays,
-  eachWeekOfInterval,
-  endOfDay,
-  endOfWeek,
-  format,
-  isSameDay,
-  isWithinInterval,
-  parseISO,
-  startOfDay,
-  startOfMonth,
-  startOfYear,
-  subDays,
-} from "date-fns";
+// DELETED
 
 /* ============================================================
    Phūrai — Manager/Manager Dashboard mock fallback data
@@ -135,278 +122,20 @@ export const REVENUE_SERIES = {
   ],
 };
 
-/* ---- Today's reservations (dbo.Reservations + ReservationTables) ---- */
-export const RESERVATIONS = [
-  {
-    reservation_id: 8801,
-    customer_name: "Linh Tran",
-    email: "linh.tran@example.com",
-    phone: "0905 112 233",
-    reservation_date: "2026-06-11",
-    start_time: "18:00",
-    party_size: 4,
-    area_name: "Window Area",
-    table_label: "W-12",
-    status: "confirmed",
-    occasion: "Birthday",
-    special_request: "Window seat, candle for cake",
-    preorder: [
-      { dish_name: "Wagyu Sukiyaki", qty: 2 },
-      { dish_name: "Yellowtail Jalapeño", qty: 1 },
-    ],
-  },
-  {
-    reservation_id: 8802,
-    customer_name: "Daniel Pham",
-    email: "daniel.pham@example.com",
-    phone: "0912 884 551",
-    reservation_date: "2026-06-11",
-    start_time: "18:30",
-    party_size: 2,
-    area_name: "Wine Bar",
-    table_label: "B-03",
-    status: "checked_in",
-    occasion: "Date night",
-    special_request: "",
-    preorder: [],
-  },
-  {
-    reservation_id: 8803,
-    customer_name: "Mai Nguyen",
-    email: "mai.nguyen@example.com",
-    phone: "0938 220 117",
-    reservation_date: "2026-06-11",
-    start_time: "19:00",
-    party_size: 6,
-    area_name: "VIP Lounge",
-    table_label: "V-01",
-    status: "pending",
-    occasion: "Business dinner",
-    special_request: "Quiet corner, invoice required",
-    preorder: [{ dish_name: "Omakase Set", qty: 6 }],
-  },
-  {
-    reservation_id: 8804,
-    customer_name: "Sophie Le",
-    email: "sophie.le@example.com",
-    phone: "0977 553 991",
-    reservation_date: "2026-06-11",
-    start_time: "19:30",
-    party_size: 3,
-    area_name: "Main Dining",
-    table_label: "M-08",
-    status: "confirmed",
-    occasion: "Anniversary",
-    special_request: "Allergic to shellfish",
-    preorder: [],
-  },
-  {
-    reservation_id: 8805,
-    customer_name: "Khoa Vu",
-    email: "khoa.vu@example.com",
-    phone: "0902 110 778",
-    reservation_date: "2026-06-11",
-    start_time: "20:00",
-    party_size: 2,
-    area_name: "Rooftop Terrace",
-    table_label: "R-05",
-    status: "completed",
-    occasion: "Casual",
-    special_request: "",
-    preorder: [],
-  },
-  {
-    reservation_id: 8806,
-    customer_name: "Anh Bui",
-    email: "anh.bui@example.com",
-    phone: "0967 442 305",
-    reservation_date: "2026-06-11",
-    start_time: "20:30",
-    party_size: 5,
-    area_name: "Private Room",
-    table_label: "P-02",
-    status: "cancelled",
-    occasion: "Family",
-    special_request: "High chair x1",
-    preorder: [],
-  },
-  {
-    reservation_id: 8807,
-    customer_name: "Grace Hoang",
-    email: "grace.hoang@example.com",
-    phone: "0918 765 003",
-    reservation_date: "2026-06-11",
-    start_time: "21:00",
-    party_size: 2,
-    area_name: "Balcony",
-    table_label: "G-04",
-    status: "no_show",
-    occasion: "Casual",
-    special_request: "",
-    preorder: [],
-  },
-  {
-    reservation_id: 8808,
-    customer_name: "James Wong",
-    email: "james.wong@example.com",
-    phone: "0908 331 220",
-    reservation_date: "2026-06-11",
-    start_time: "17:30",
-    party_size: 4,
-    area_name: "Main Dining",
-    table_label: "M-04",
-    status: "checked_in",
-    occasion: "Business dinner",
-    special_request: "Vegetarian options",
-    preorder: [{ dish_name: "Truffle Udon", qty: 2 }],
-  },
-  {
-    reservation_id: 8809,
-    customer_name: "Thu Ha",
-    email: "thu.ha@example.com",
-    phone: "0933 882 114",
-    reservation_date: "2026-06-11",
-    start_time: "18:15",
-    party_size: 8,
-    area_name: "Private Room",
-    table_label: "P-01",
-    status: "confirmed",
-    occasion: "Corporate",
-    special_request: "Projector setup",
-    preorder: [{ dish_name: "Omakase Set", qty: 8 }],
-  },
-  {
-    reservation_id: 8810,
-    customer_name: "Peter Chen",
-    email: "peter.chen@example.com",
-    phone: "0911 445 667",
-    reservation_date: "2026-06-11",
-    start_time: "19:15",
-    party_size: 2,
-    area_name: "Wine Bar",
-    table_label: "B-06",
-    status: "checked_in",
-    occasion: "Date night",
-    special_request: "Champagne on arrival",
-    preorder: [],
-  },
-  {
-    reservation_id: 8811,
-    customer_name: "Ngoc Tran",
-    email: "ngoc.tran@example.com",
-    phone: "0976 220 889",
-    reservation_date: "2026-06-11",
-    start_time: "19:45",
-    party_size: 3,
-    area_name: "Rooftop Terrace",
-    table_label: "R-07",
-    status: "confirmed",
-    occasion: "Birthday",
-    special_request: "Birthday dessert plate",
-    preorder: [{ dish_name: "Matcha Tiramisu", qty: 3 }],
-  },
-  {
-    reservation_id: 8812,
-    customer_name: "David Kim",
-    email: "david.kim@example.com",
-    phone: "0904 778 332",
-    reservation_date: "2026-06-11",
-    start_time: "20:15",
-    party_size: 6,
-    area_name: "VIP Lounge",
-    table_label: "V-02",
-    status: "pending",
-    occasion: "Celebration",
-    special_request: "",
-    preorder: [{ dish_name: "Wagyu Sukiyaki", qty: 4 }],
-  },
-  {
-    reservation_id: 8813,
-    customer_name: "Huyen Le",
-    email: "huyen.le@example.com",
-    phone: "0988 112 445",
-    reservation_date: "2026-06-11",
-    start_time: "20:45",
-    party_size: 2,
-    area_name: "Window Area",
-    table_label: "W-16",
-    status: "confirmed",
-    occasion: "Anniversary",
-    special_request: "Rose petals on table",
-    preorder: [],
-  },
-  {
-    reservation_id: 8814,
-    customer_name: "Michael Vo",
-    email: "michael.vo@example.com",
-    phone: "0922 556 778",
-    reservation_date: "2026-06-11",
-    start_time: "21:15",
-    party_size: 5,
-    area_name: "Main Dining",
-    table_label: "M-09",
-    status: "confirmed",
-    occasion: "Family",
-    special_request: "Kids menu x2",
-    preorder: [{ dish_name: "Spicy Miso Ramen", qty: 3 }],
-  },
-  {
-    reservation_id: 8815,
-    customer_name: "Yen Pham",
-    email: "yen.pham@example.com",
-    phone: "0944 990 221",
-    reservation_date: "2026-06-11",
-    start_time: "21:30",
-    party_size: 4,
-    area_name: "Balcony",
-    table_label: "G-08",
-    status: "pending",
-    occasion: "Casual",
-    special_request: "",
-    preorder: [],
-  },
-];
+/* ---- Reservations mock data (40 entries, spread across recent days) ---- */
+function daysAgo(n) {
+  const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10);
+}
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function daysFromNow(n) {
+  const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10);
+}
 
-export const RESERVATION_STATUS_META = {
-  pending: { label: "Pending", tone: "amber" },
-  confirmed: { label: "Confirmed", tone: "blue" },
-  checked_in: { label: "Checked In", tone: "green" },
-  completed: { label: "Completed", tone: "muted" },
-  cancelled: { label: "Cancelled", tone: "red" },
-  no_show: { label: "No Show", tone: "red" },
-};
+export const RESERVATIONS = SHARED_MOCK_RESERVATIONS;
 
-/* ---- Tables (dbo.RestaurantTables + RestaurantAreas) ---- */
-export const TABLES = [
-  { table_id: 1, table_number: "M-01", area_name: "Main Dining", capacity: 2, status: "available" },
-  { table_id: 2, table_number: "M-02", area_name: "Main Dining", capacity: 4, status: "occupied" },
-  { table_id: 3, table_number: "M-03", area_name: "Main Dining", capacity: 4, status: "reserved" },
-  { table_id: 4, table_number: "M-04", area_name: "Main Dining", capacity: 4, status: "occupied" },
-  { table_id: 5, table_number: "M-05", area_name: "Main Dining", capacity: 2, status: "available" },
-  { table_id: 6, table_number: "M-06", area_name: "Main Dining", capacity: 6, status: "occupied" },
-  { table_id: 7, table_number: "M-08", area_name: "Main Dining", capacity: 4, status: "reserved" },
-  { table_id: 8, table_number: "M-09", area_name: "Main Dining", capacity: 4, status: "occupied" },
-  { table_id: 9, table_number: "M-10", area_name: "Main Dining", capacity: 2, status: "occupied" },
-  { table_id: 10, table_number: "W-10", area_name: "Window Area", capacity: 2, status: "available" },
-  { table_id: 11, table_number: "W-12", area_name: "Window Area", capacity: 4, status: "occupied" },
-  { table_id: 12, table_number: "W-14", area_name: "Window Area", capacity: 2, status: "occupied" },
-  { table_id: 13, table_number: "W-16", area_name: "Window Area", capacity: 4, status: "occupied" },
-  { table_id: 14, table_number: "B-03", area_name: "Wine Bar", capacity: 2, status: "occupied" },
-  { table_id: 15, table_number: "B-05", area_name: "Wine Bar", capacity: 2, status: "cleaning" },
-  { table_id: 16, table_number: "B-06", area_name: "Wine Bar", capacity: 2, status: "occupied" },
-  { table_id: 17, table_number: "B-08", area_name: "Wine Bar", capacity: 4, status: "occupied" },
-  { table_id: 18, table_number: "V-01", area_name: "VIP Lounge", capacity: 8, status: "occupied" },
-  { table_id: 19, table_number: "V-02", area_name: "VIP Lounge", capacity: 6, status: "reserved" },
-  { table_id: 20, table_number: "P-01", area_name: "Private Room", capacity: 10, status: "occupied" },
-  { table_id: 21, table_number: "P-02", area_name: "Private Room", capacity: 10, status: "reserved" },
-  { table_id: 22, table_number: "R-05", area_name: "Rooftop Terrace", capacity: 4, status: "occupied" },
-  { table_id: 23, table_number: "R-06", area_name: "Rooftop Terrace", capacity: 4, status: "occupied" },
-  { table_id: 24, table_number: "R-07", area_name: "Rooftop Terrace", capacity: 4, status: "occupied" },
-  { table_id: 25, table_number: "G-04", area_name: "Balcony", capacity: 2, status: "occupied" },
-  { table_id: 26, table_number: "G-06", area_name: "Balcony", capacity: 2, status: "available" },
-  { table_id: 27, table_number: "G-08", area_name: "Balcony", capacity: 4, status: "occupied" },
-  { table_id: 28, table_number: "G-10", area_name: "Balcony", capacity: 2, status: "cleaning" },
-];
+// RESERVATION_STATUS_META is now exported from src/shared/reservationStatus.js
+
+
 
 export const TABLE_STATUS_META = {
   available: { label: "Available", tone: "green" },
@@ -428,29 +157,34 @@ export const AREAS = [
 ];
 
 /* ---- Dishes (dbo.Dishes + MenuCategories) ---- */
-export const DISHES = [
-  { dish_id: 1, dish_name: "Wagyu Sukiyaki", category_name: "Signature", price: 890000, is_available: true, is_recommended: true, spicy_level: 1, prep_minutes: 18 },
-  { dish_id: 2, dish_name: "Yellowtail Jalapeño", category_name: "Starters", price: 320000, is_available: true, is_recommended: true, spicy_level: 2, prep_minutes: 10 },
-  { dish_id: 3, dish_name: "Omakase Set", category_name: "Signature", price: 1450000, is_available: true, is_recommended: true, spicy_level: 0, prep_minutes: 35 },
-  { dish_id: 4, dish_name: "Truffle Udon", category_name: "Mains", price: 420000, is_available: true, is_recommended: false, spicy_level: 0, prep_minutes: 14 },
-  { dish_id: 5, dish_name: "Spicy Miso Ramen", category_name: "Mains", price: 280000, is_available: true, is_recommended: false, spicy_level: 3, prep_minutes: 12 },
-  { dish_id: 6, dish_name: "Matcha Tiramisu", category_name: "Desserts", price: 165000, is_available: true, is_recommended: false, spicy_level: 0, prep_minutes: 8 },
-  { dish_id: 7, dish_name: "Yuzu Sorbet", category_name: "Desserts", price: 120000, is_available: false, is_recommended: false, spicy_level: 0, prep_minutes: 5 },
-  { dish_id: 8, dish_name: "Hokkaido Scallop", category_name: "Starters", price: 380000, is_available: true, is_recommended: true, spicy_level: 0, prep_minutes: 11 },
-];
+export const DISH_CATEGORIES = menuCategories.map((cat) => cat.name);
 
-export const DISH_CATEGORIES = ["Signature", "Starters", "Mains", "Desserts", "Drinks"];
+export const DISHES = flattenMenuDishes(menuCategories).map((item, index) => ({
+  dish_id: item.id || `mock-${index}`,
+  dish_name: item.name,
+  category_name: item.categoryName,
+  price: item.price,
+  is_available: true,
+  is_recommended: item.recommended || false,
+  spicy_level: item.spicy || 0,
+  prep_minutes: 15,
+  description: item.description,
+  image_url: "",
+}));
 
 /* ---- Best-selling dishes (revenue ranking) ---- */
-export const BEST_SELLERS = [
-  { rank: 1, dish_name: "Wagyu Sukiyaki", qty_sold: 124, revenue: 110360000 },
-  { rank: 2, dish_name: "Omakase Set", qty_sold: 89, revenue: 129050000 },
-  { rank: 3, dish_name: "Truffle Udon", qty_sold: 98, revenue: 41160000 },
-  { rank: 4, dish_name: "Yellowtail Jalapeño", qty_sold: 86, revenue: 27520000 },
-  { rank: 5, dish_name: "Hokkaido Scallop", qty_sold: 72, revenue: 27360000 },
-  { rank: 6, dish_name: "Spicy Miso Ramen", qty_sold: 68, revenue: 19040000 },
-  { rank: 7, dish_name: "Matcha Tiramisu", qty_sold: 54, revenue: 8910000 },
-];
+export const BEST_SELLERS = (() => {
+  const allDishes = flattenMenuDishes(menuCategories);
+  const selected = allDishes.slice(0, 7);
+  const mockRevenues = [110360000, 129050000, 41160000, 27520000, 27360000, 19040000, 8910000];
+  const mockSold = [124, 89, 98, 86, 72, 68, 54];
+  return selected.map((item, index) => ({
+    rank: index + 1,
+    dish_name: item.name,
+    qty_sold: mockSold[index],
+    revenue: mockRevenues[index],
+  }));
+})();
 
 /* ---- Active orders (dbo.Orders + OrderItems + KitchenTickets) ---- */
 export const ORDERS = [
@@ -477,12 +211,28 @@ export const ORDER_STATUS_META = {
   done: { label: "Done", tone: "muted" },
 };
 
-/* ---- Staff roster mock (dbo.UserAccounts + dbo.Roles) — subordinates only ---- */
+/* ---- Staff roster mock — 20 staff members (dbo.UserAccounts + dbo.Roles) ---- */
 export const MANAGER = [
   { manager_id: 2, full_name: "Tuan Le", role_name: "Restaurant Staff", phone: "0902 345 678", email: "tuan.le@phurai.com", status: "active", shift: "Evening" },
   { manager_id: 3, full_name: "Minh Vo", role_name: "Kitchen Staff", phone: "0903 456 789", email: "minh.vo@phurai.com", status: "active", shift: "Evening" },
   { manager_id: 4, full_name: "Lan Pham", role_name: "Restaurant Staff", phone: "0904 567 890", email: "lan.pham@phurai.com", status: "on_leave", shift: "Morning" },
   { manager_id: 5, full_name: "Bao Nguyen", role_name: "Kitchen Staff", phone: "0905 678 901", email: "bao.nguyen@phurai.com", status: "inactive", shift: "Night" },
+  { manager_id: 6, full_name: "Hoa Tran", role_name: "Restaurant Staff", phone: "0906 789 012", email: "hoa.tran@phurai.com", status: "active", shift: "Morning" },
+  { manager_id: 7, full_name: "Duc Hoang", role_name: "Kitchen Staff", phone: "0907 890 123", email: "duc.hoang@phurai.com", status: "active", shift: "Evening" },
+  { manager_id: 8, full_name: "Thuy Dang", role_name: "Restaurant Staff", phone: "0908 901 234", email: "thuy.dang@phurai.com", status: "active", shift: "Evening" },
+  { manager_id: 9, full_name: "Nam Bui", role_name: "Kitchen Staff", phone: "0909 012 345", email: "nam.bui@phurai.com", status: "active", shift: "Night" },
+  { manager_id: 10, full_name: "Linh Do", role_name: "Restaurant Staff", phone: "0910 123 456", email: "linh.do@phurai.com", status: "on_leave", shift: "Morning" },
+  { manager_id: 11, full_name: "Hung Nguyen", role_name: "Kitchen Staff", phone: "0911 234 567", email: "hung.nguyen@phurai.com", status: "active", shift: "Evening" },
+  { manager_id: 12, full_name: "Mai Le", role_name: "Restaurant Staff", phone: "0912 345 678", email: "mai.le@phurai.com", status: "active", shift: "Morning" },
+  { manager_id: 13, full_name: "Quan Pham", role_name: "Kitchen Staff", phone: "0913 456 789", email: "quan.pham@phurai.com", status: "active", shift: "Night" },
+  { manager_id: 14, full_name: "Thu Vo", role_name: "Restaurant Staff", phone: "0914 567 890", email: "thu.vo@phurai.com", status: "inactive", shift: "Evening" },
+  { manager_id: 15, full_name: "An Tran", role_name: "Kitchen Staff", phone: "0915 678 901", email: "an.tran@phurai.com", status: "active", shift: "Morning" },
+  { manager_id: 16, full_name: "Kim Hoang", role_name: "Restaurant Staff", phone: "0916 789 012", email: "kim.hoang@phurai.com", status: "active", shift: "Evening" },
+  { manager_id: 17, full_name: "Cuong Dang", role_name: "Kitchen Staff", phone: "0917 890 123", email: "cuong.dang@phurai.com", status: "active", shift: "Night" },
+  { manager_id: 18, full_name: "Phuong Bui", role_name: "Restaurant Staff", phone: "0918 901 234", email: "phuong.bui@phurai.com", status: "on_leave", shift: "Morning" },
+  { manager_id: 19, full_name: "Long Nguyen", role_name: "Kitchen Staff", phone: "0919 012 345", email: "long.nguyen@phurai.com", status: "active", shift: "Evening" },
+  { manager_id: 20, full_name: "Ngan Le", role_name: "Restaurant Staff", phone: "0920 123 456", email: "ngan.le@phurai.com", status: "active", shift: "Morning" },
+  { manager_id: 21, full_name: "Khang Pham", role_name: "Kitchen Staff", phone: "0921 234 567", email: "khang.pham@phurai.com", status: "active", shift: "Evening" },
 ];
 
 /** Roles a Manager may view and manage on /manager (UC-M05). */
@@ -541,8 +291,8 @@ export const TABLE_UTILIZATION = [
    Daily revenue time-series helpers (2-year mock trend)
    ============================================================ */
 
-/** Fixed "today" anchor for demo data (June 2026). */
-export const DASHBOARD_TODAY = new Date(2026, 5, 13);
+/** Real-time today anchor — always the current day. */
+export const DASHBOARD_TODAY = new Date();
 
 function pseudoRandom(seed) {
   const x = Math.sin(seed * 12.9898) * 43758.5453;
@@ -648,38 +398,67 @@ export function getDateRangePresets(today = DASHBOARD_TODAY) {
   const end = endOfDay(today);
   return [
     {
+      id: "all",
+      label: "All Dates",
+      range: { startDate: null, endDate: null, key: "selection" },
+      startDate: null,
+      endDate: null,
+    },
+    {
       id: "today",
       label: "Today",
       range: { startDate: startOfDay(today), endDate: end, key: "selection" },
+      startDate: startOfDay(today),
+      endDate: end,
     },
     {
       id: "last7",
       label: "Last 7 days",
       range: { startDate: startOfDay(subDays(today, 6)), endDate: end, key: "selection" },
+      startDate: startOfDay(subDays(today, 6)),
+      endDate: end,
     },
     {
       id: "last30",
       label: "Last 30 days",
       range: { startDate: startOfDay(subDays(today, 29)), endDate: end, key: "selection" },
+      startDate: startOfDay(subDays(today, 29)),
+      endDate: end,
     },
     {
       id: "mtd",
       label: "Month to date",
       range: { startDate: startOfMonth(today), endDate: end, key: "selection" },
+      startDate: startOfMonth(today),
+      endDate: end,
     },
     {
       id: "ytd",
       label: "Year to date",
       range: { startDate: startOfYear(today), endDate: end, key: "selection" },
+      startDate: startOfYear(today),
+      endDate: end,
     },
     {
-      id: "all",
+      id: "next7",
+      label: "Next 7 days",
+      range: { startDate: startOfDay(today), endDate: endOfDay(addDays(today, 6)), key: "selection" },
+      startDate: startOfDay(today),
+      endDate: endOfDay(addDays(today, 6)),
+    },
+    {
+      id: "next30",
+      label: "Next 30 days",
+      range: { startDate: startOfDay(today), endDate: endOfDay(addDays(today, 29)), key: "selection" },
+      startDate: startOfDay(today),
+      endDate: endOfDay(addDays(today, 29)),
+    },
+    {
+      id: "all_time",
       label: "All time",
-      range: {
-        startDate: startOfDay(subDays(today, 729)),
-        endDate: end,
-        key: "selection",
-      },
+      range: { startDate: null, endDate: null, key: "selection" },
+      startDate: null,
+      endDate: null,
     },
   ];
 }
@@ -766,7 +545,7 @@ export function expandReservationsForDemo(reservations, today = DASHBOARD_TODAY)
         ...template,
         reservation_id: template.reservation_id + week * 100 + index,
         reservation_date: date,
-        status: week % 2 === 0 ? "completed" : "confirmed",
+        status: week % 2 === 0 ? "complete paid" : "await check-in",
       });
     });
   }

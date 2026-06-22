@@ -5,6 +5,7 @@ import {
   listStaffTables,
   checkInTable,
   resetTable,
+  markTableClean,
   getActiveOccupiedOrders,
   addOrderItem,
   updateOrderItemStatus,
@@ -25,16 +26,32 @@ import {
 } from "../controllers/staffController.js";
 import { getStaffShiftMapping } from "../controllers/shiftMappingController.js";
 import {
-  getStaffReservations,
+  getTodayShiftReservations,
+  getStaffReservationDetail,
   checkinReservation,
   rejectReservation,
+  confirmCheckout,
+  sendCookingQueue,
 } from "../controllers/staffReservationController.js";
+import {
+  mergeTables,
+  unmergeTable,
+  getTableTimeline,
+  verifyClearTable,
+} from "../controllers/tableMergeController.js";
+import { splitOrderItems } from "../controllers/staffOrderController.js";
+import { approveQrSession, rejectQrSession } from "../controllers/qrSessionController.js";
 
 const router = express.Router();
 
+router.patch("/qr-sessions/:id/approve", resolveUserId, requireUserId, approveQrSession);
+router.patch("/qr-sessions/:id/reject", resolveUserId, requireUserId, rejectQrSession);
+
 router.get("/tables", listStaffTables);
 router.get("/shift-mapping", getStaffShiftMapping);
-router.get("/reservations", resolveUserId, getStaffReservations);
+// Shift-scoped view: only today's reservations within the staff member's scheduled shift
+router.get("/reservations/today-shift", resolveUserId, requireUserId, getTodayShiftReservations);
+router.get("/reservations/:id", resolveUserId, getStaffReservationDetail);
 router.patch(
   "/reservations/:id/checkin",
   resolveUserId,
@@ -47,13 +64,31 @@ router.patch(
   requireUserId,
   rejectReservation
 );
-router.post("/tables/:tableId/check-in", resolveUserId, checkInTable);
-router.post("/tables/:tableId/reset", resolveUserId, resetTable);
+router.patch(
+  "/reservations/:id/checkout-confirm",
+  resolveUserId,
+  requireUserId,
+  confirmCheckout
+);
+router.post(
+  "/reservations/:reservationId/send-cooking-queue",
+  resolveUserId,
+  requireUserId,
+  sendCookingQueue
+);
+router.post("/tables/:tableId/check-in", resolveUserId, requireUserId, checkInTable);
+router.post("/tables/:tableId/reset", resolveUserId, requireUserId, resetTable);
+router.put("/tables/:tableId/mark-clean", resolveUserId, requireUserId, markTableClean);
+router.post("/tables/merge", resolveUserId, requireUserId, mergeTables);
+router.post("/tables/unmerge", resolveUserId, requireUserId, unmergeTable);
+router.get("/tables/:tableId/timeline", resolveUserId, getTableTimeline);
+router.post("/tables/:tableId/verify-clear", resolveUserId, requireUserId, verifyClearTable);
 
 router.get("/orders/active", getActiveOccupiedOrders);
 router.post("/orders/:tableId/items", resolveUserId, addOrderItem);
 router.patch("/orders/items/:itemId/status", resolveUserId, updateOrderItemStatus);
 router.patch("/orders/items/:itemId/void", resolveUserId, voidOrderItem);
+router.post("/orders/:orderId/split-items", resolveUserId, requireUserId, splitOrderItems);
 router.get("/dishes/menu", listStaffMenuDishes);
 
 router.post("/shifts/check-in", resolveUserId, requireUserId, shiftCheckIn);
@@ -403,6 +438,8 @@ router.get("/tables/status", async (_req, res) => {
          t.capacity,
          t.table_status,
          t.static_qr_code,
+         t.merged_into_table_id,
+         t.is_counter,
          a.area_name
        FROM dbo.RestaurantTables t
        JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id
@@ -417,6 +454,8 @@ router.get("/tables/status", async (_req, res) => {
       capacity: row.capacity,
       status: slugStatus(row.table_status),
       qr_code: row.static_qr_code || null,
+      merged_into_table_id: row.merged_into_table_id || null,
+      is_counter: Boolean(row.is_counter),
     }));
 
     return jsonOk(res, tables);

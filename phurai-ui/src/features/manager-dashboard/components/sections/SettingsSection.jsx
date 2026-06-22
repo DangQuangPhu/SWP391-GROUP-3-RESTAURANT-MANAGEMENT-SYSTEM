@@ -1,6 +1,6 @@
 import { SectionHead, Card, Button, NotConnectedNote } from "../ManagerUI.jsx";
 
-const ROLE_LABEL = { manager: "Manager", manager: "Manager", admin: "Admin" };
+const ROLE_LABEL = { manager: "Manager", staff: "Staff", admin: "Admin" };
 
 function SettingsSection({ user, role, onSignOut, toast }) {
   return (

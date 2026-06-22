@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, isSameDay } from "date-fns";
 import { ManagerDrawer } from "../ManagerOverlay.jsx";
+import DashboardDateRangePicker from "../shared/DashboardDateRangePicker.jsx";
+import Icon from "../ManagerIcons.jsx";
 import {
   SectionHead,
   ContentPanel,
@@ -10,24 +12,79 @@ import {
   StatusBadge,
   Button,
   EmptyState,
-  NotConnectedNote,
 } from "../ManagerUI.jsx";
-import { RESERVATION_STATUS_META, AREAS } from "../../data/managerDashboardMockData.js";
+import { RESERVATION_STATUS_META, RESERVATION_STATUS, FILTER_GROUPS } from "@/shared/reservationStatus.js";
 import { getReservationsFilterFromSearch } from "../../config/managerRoutes.js";
-import { confirmReservation } from "../../services/managerApi.js";
+import {
+  confirmReservation, rejectReservation, cancelReservation, getReservationDetails, updateReservation, getReservationHistory, resolveEditRequest,
+  seedTestReservations,
+  clearTestReservations
+} from "../../services/managerApi.js";
 import { useManagerPortal } from "../../context/ManagerPortalContext.jsx";
+import ReservationStatusBadge from "@/components/shared/ReservationStatusBadge.jsx";
+import EmptyVal from "@/components/shared/EmptyVal.jsx";
 
-const GLOBAL_RES_KEY = "phurai_global_reservations";
+/**
+ * Parse the encoded special_request string.
+ * Format: [Dining Purpose: X]\n[Hold: Ym]\n[Notes: user text]\n[Guest Name: ...]...
+ * Returns { diningPurpose, holdMinutes, notes, guestName, guestEmail, guestPhone }.
+ */
+function parseSpecialRequest(raw) {
+  const str = String(raw || "").trim();
+  const extract = (tag) => {
+    const re = new RegExp(`\\[${tag}:\\s*(.+?)\\]`, "i");
+    const m = str.match(re);
+    return m ? m[1].trim() : null;
+  };
+  
+  let diningPurpose = extract("Dining Purpose");
+  let notesTag = extract("Notes");
+  
+  // Legacy fallback: [Casual Dinner] or [Casual Dinner Notes...
+  if (!diningPurpose) {
+    const mLegacy = str.match(/^\[([^\]]+)(?:\]|$)/);
+    if (mLegacy && !mLegacy[1].includes(':')) {
+      diningPurpose = mLegacy[1].trim();
+    }
+  }
 
-const FILTER_TABS = [
-  { id: "all", label: "All Reservations" },
-  { id: "pending", label: "Pending Approval" },
-  { id: "confirmed", label: "Confirmed" },
-];
+  const holdRaw = extract("Hold");
+  const holdMinutes = holdRaw ? parseInt(holdRaw, 10) || null : null;
+  
+  // Strip all known tags to get remaining "clean" text
+  const cleaned = str
+    .replace(/\[Dining Purpose:[^\]]*\]/gi, "")
+    .replace(/\[Hold:[^\]]*\]/gi, "")
+    .replace(/\[Notes:[^\]]*\]/gi, "")
+    .replace(/\[Guest Name:[^\]]*\]/gi, "")
+    .replace(/\[Guest Email:[^\]]*\]/gi, "")
+    .replace(/\[Guest Phone:[^\]]*\]/gi, "")
+    // Strip legacy tag if matched
+    .trim()
+    .replace(/^\[[^\]]+(?:\]|$)\s*/, (match) => {
+      // Only strip if it doesn't contain a colon (legacy format)
+      return match.includes(':') ? match : "";
+    })
+    .replace(/\n+/g, "\n")
+    .trim();
+    
+  // Prefer the explicit [Notes: ...] tag, fall back to remaining cleaned text
+  const notes = notesTag || cleaned || null;
+  console.log("[parseSpecialRequest] raw=", JSON.stringify(raw), " => ", JSON.stringify({ diningPurpose, holdMinutes, notes }));
+  return { diningPurpose, holdMinutes, notes };
+}
+
+
 
 function formatReservationDateTime(reservation) {
-  const timeStr = reservation?.start_time || "—";
-  const dateRaw = reservation?.reservation_date;
+  // Prefer the pre-split fields (socket payload or enriched API row).
+  // Fall back to parsing the raw ISO timestamp that the DB always returns.
+  const rawIso = reservation?.reservation_start_at;
+  const dateRaw = reservation?.reservation_date ||
+    (rawIso ? String(rawIso).slice(0, 10) : null);
+  const timeStr = reservation?.start_time ||
+    (rawIso ? String(rawIso).slice(11, 16) : "—");
+
   if (!dateRaw) return timeStr;
   try {
     const day = parseISO(String(dateRaw).includes("T") ? dateRaw : `${dateRaw}T12:00:00`);
@@ -46,20 +103,69 @@ function formatReservationDateTime(reservation) {
  * 
  * This component handles the Manager's approval responsibilities ONLY.
  */
-function ReservationsSection({ reservations, setReservations, tables = [], setTables, toast }) {
+function ReservationsSection({ reservations, setReservations, setTables, toast }) {
   const { user } = useManagerPortal();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [area, setArea] = useState("all");
   const [active, setActive] = useState(null);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editConfirmPending, setEditConfirmPending] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [resolveConfirmPending, setResolveConfirmPending] = useState(null);
+  const [editRejectReason, setEditRejectReason] = useState("");
+  const [resolving, setResolving] = useState(false);
+  const [cancelModal, setCancelModal] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+  const [addingTest, setAddingTest] = useState(false);
+  const [deletingTest, setDeletingTest] = useState(false);
 
   /* ── Assign Table drawer state ── */
-  const [assignTarget, setAssignTarget] = useState(null);
-  const [selectedTable, setSelectedTable] = useState("");
+  const confirmingRef = useRef(new Set()); // guard against double-submit
 
-  const reservationList = Array.isArray(reservations) ? reservations : [];
-  const tableList = Array.isArray(tables) ? tables : [];
+  /* ── Date Picker State ── */
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [draftRange, setDraftRange] = useState(() => {
+    return { startDate: null, endDate: null, key: "selection" };
+  });
+  const [appliedRange, setAppliedRange] = useState(() => {
+    return { startDate: null, endDate: null };
+  });
+  const [activePresetId, setActivePresetId] = useState("all");
+
+  const closePicker = useCallback(() => setPickerOpen(false), []);
+  const openPicker = useCallback(() => {
+    setDraftRange({ startDate: appliedRange.startDate, endDate: appliedRange.endDate, key: "selection" });
+    setPickerOpen(true);
+  }, [appliedRange]);
+
+  const handleApplyDate = useCallback((sel) => {
+    setAppliedRange({ startDate: sel.startDate, endDate: sel.endDate });
+    closePicker();
+  }, [closePicker]);
+
+  const handlePresetSelect = useCallback((preset) => {
+    const range = preset.range || { startDate: preset.startDate, endDate: preset.endDate, key: "selection" };
+    setActivePresetId(preset.id);
+    setDraftRange(range);
+    setAppliedRange({ startDate: range.startDate, endDate: range.endDate });
+    closePicker();
+  }, [closePicker]);
+
+  const selectedDateLabel = useMemo(() => {
+    if (!appliedRange.startDate) return "All Dates";
+    const { startDate, endDate } = appliedRange;
+    if (isSameDay(startDate, endDate)) return format(startDate, "dd/MM/yyyy");
+    return `${format(startDate, "dd/MM")} – ${format(endDate, "dd/MM/yyyy")}`;
+  }, [appliedRange]);
+
+
+  const reservationList = useMemo(() => Array.isArray(reservations) ? reservations : [], [reservations]);
 
   /* ── URL filter sync ── */
   const urlFilter = useMemo(
@@ -67,25 +173,20 @@ function ReservationsSection({ reservations, setReservations, tables = [], setTa
     [searchParams]
   );
 
-  const selectFilterTab = (nextFilter) => {
-    if (nextFilter === "all") {
-      setSearchParams({}, { replace: true });
-      setStatusFilter("all");
-      return;
-    }
-    setSearchParams({ filter: nextFilter }, { replace: true });
-    setStatusFilter(nextFilter);
-  };
-
   useEffect(() => {
-    if (urlFilter === "pending") setStatusFilter("pending");
-    else if (urlFilter === "confirmed") setStatusFilter("confirmed");
-    else if (urlFilter === "arriving") setStatusFilter("pending");
+    let newStatus = "all";
+    if (urlFilter === "pending payment" || urlFilter === "pending request" || urlFilter === "pending") newStatus = "Pending";
+    else if (urlFilter === "await check-in" || urlFilter === "confirmed" || urlFilter === "reserved") newStatus = "Upcoming";
+    else if (urlFilter === "arriving" || urlFilter === "check-in") newStatus = "In Progress";
+    else if (urlFilter === "completed") newStatus = "Completed";
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStatusFilter(newStatus);
   }, [urlFilter]);
 
-  /* ── Filtered list ── */
+  /* ── Filtered list (date range) ── */
   const filtered = useMemo(() => {
-    return reservationList.filter((r) => {
+    const base = reservationList.filter((r) => {
       const kw = search.trim().toLowerCase();
       const matchKw =
         !kw ||
@@ -93,502 +194,1270 @@ function ReservationsSection({ reservations, setReservations, tables = [], setTa
         r.table_label?.toLowerCase().includes(kw) ||
         String(r.customer_phone || r.phone || "").includes(kw) ||
         String(r.reservation_id || "").includes(kw);
-      const statusMatchVal = (r.status || r.reservation_status || "").toLowerCase();
-      const matchStatus =
-        statusFilter === "all" || statusMatchVal === statusFilter.toLowerCase();
-      const matchArea = area === "all" || r.area_name === area;
-      return matchKw && matchStatus && matchArea;
+      const statusMatchVal = (r.status || r.reservation_status || "").trim();
+      let matchStatus = false;
+      if (statusFilter === "all") {
+        matchStatus = true;
+      } else if (FILTER_GROUPS[statusFilter]) {
+        matchStatus = FILTER_GROUPS[statusFilter].includes(statusMatchVal);
+      } else {
+        matchStatus = statusMatchVal.toLowerCase() === statusFilter.toLowerCase();
+      }
+
+      let matchDate = true;
+      const sd = appliedRange?.startDate;
+      const ed = appliedRange?.endDate;
+      if (sd && ed && sd !== "all" && sd !== "All Dates" && String(sd).trim() !== "") {
+        try {
+          const rawIso = r.reservation_start_at;
+          if (rawIso) {
+            const dt = new Date(rawIso);
+            const localDateStr = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+            const day = new Date(`${localDateStr}T12:00:00`);
+            const start = new Date(sd); start.setHours(0, 0, 0, 0);
+            const end = new Date(ed); end.setHours(23, 59, 59, 999);
+            matchDate = day >= start && day <= end;
+          }
+        } catch { matchDate = true; }
+      }
+
+      return matchKw && matchStatus && matchDate;
     });
-  }, [reservationList, search, statusFilter, area]);
+
+    const MANAGER_STATUS_ORDER = {
+      [RESERVATION_STATUS.PENDING_REQUEST]: 1,
+      [RESERVATION_STATUS.PENDING_PAYMENT]: 2,
+      [RESERVATION_STATUS.RESERVED]: 3,
+      [RESERVATION_STATUS.CONFIRMED]: 4,
+      [RESERVATION_STATUS.SEATED]: 5,
+      [RESERVATION_STATUS.CLEANING]: 6,
+      [RESERVATION_STATUS.CHECK_OUT]: 7,
+      [RESERVATION_STATUS.COMPLETED]: 8,
+    };
+
+    return base.sort((a, b) => {
+      const statusA = (a.display_status || a.reservation_status || a.status || "").toLowerCase();
+      const statusB = (b.display_status || b.reservation_status || b.status || "").toLowerCase();
+      const orderA = MANAGER_STATUS_ORDER[statusA] || 99;
+      const orderB = MANAGER_STATUS_ORDER[statusB] || 99;
+      if (orderA !== orderB) return orderA - orderB;
+      return (b.reservation_id || 0) - (a.reservation_id || 0);
+    });
+  }, [reservationList, search, statusFilter, appliedRange]);
 
   /* ── KPI counts ── */
   const pendingCount = useMemo(
-    () => reservationList.filter((r) => (r.status || r.reservation_status || "").toLowerCase() === "pending").length,
+    () => reservationList.filter((r) => {
+      const s = (r.status || r.reservation_status || "").toLowerCase();
+      return s === "pending payment" || s === "pending request" || s === "pending";
+    }).length,
     [reservationList]
   );
   const confirmedCount = useMemo(
-    () => reservationList.filter((r) => (r.status || r.reservation_status || "").toLowerCase() === "confirmed").length,
+    () => reservationList.filter((r) => {
+      const s = (r.status || r.reservation_status || "").toLowerCase();
+      return s === "confirmed" || s === "reserved" || s === "paid" || s === "await check-in";
+    }).length,
     [reservationList]
   );
-
-  /* ── Available tables for assignment (only Available tables) ── */
-  const availableTables = useMemo(() => {
-    if (!assignTarget) return [];
-    return tableList.filter(
-      (t) =>
-        (t.status === "available" || t.table_status === "Available") &&
-        t.capacity >= (assignTarget.party_size || 1)
-    );
-  }, [assignTarget, tableList]);
+  const seatedCount = useMemo(
+    () => reservationList.filter((r) => {
+      const s = (r.status || r.reservation_status || "").toLowerCase();
+      return s === "seated" || s === "cleaning" || s === "check-in" || s === "occupied" || s === "check-out";
+    }).length,
+    [reservationList]
+  );
+  const checkOutCount = useMemo(
+    () => reservationList.filter((r) => {
+      const s = (r.status || r.reservation_status || "").toLowerCase();
+      return s === "completed" || s === "complete paid";
+    }).length,
+    [reservationList]
+  );
+  const todayCount = useMemo(() => {
+    const today = new Date();
+    return reservationList.filter((r) => {
+      const rawIso = r.reservation_start_at;
+      const dateRaw = r.reservation_date || (rawIso ? String(rawIso).slice(0, 10) : null);
+      if (!dateRaw) return false;
+      const rDate = new Date(dateRaw.includes("T") ? dateRaw : `${dateRaw}T12:00:00`);
+      return rDate.getDate() === today.getDate() && rDate.getMonth() === today.getMonth() && rDate.getFullYear() === today.getFullYear();
+    }).length;
+  }, [reservationList]);
 
   /* ════════════════════════════════════════════════════════════
      STATE MACHINE HANDLERS (Manager-Only Actions)
      ════════════════════════════════════════════════════════════ */
 
-  /**
-   * handleConfirmAndAssign — Pending → Confirmed
-   * Also sets the assigned table to "Reserved".
-   */
-  const handleConfirmAndAssign = useCallback(async () => {
-    if (!assignTarget) return;
-    if (!selectedTable) {
-      toast("Please select a table before confirming.", "error");
+  const handleViewDetails = useCallback(async (row) => {
+    const fetchId = parseInt(row?.reservation_id || row?.id, 10);
+    if (!fetchId || isNaN(fetchId)) {
+      console.warn("[handleViewDetails] No valid reservation ID on row:", row);
       return;
     }
+    setActive(row);
+    setDetailsLoading(true);
+    setHistoryLoading(true);
+    try {
+      const full = await getReservationDetails(fetchId, user?.userId || user?.user_id);
+      setActive(full);
+      setIsEditing(false);
+      setEditForm({
+        customer_name: full.customer_name || "",
+        customer_phone: full.customer_phone || full.phone || "",
+        customer_email: full.customer_email || full.email || "",
+        party_size: full.party_size || full.guest_count || 1,
+        table_id: full.table_id || "",
+        occasion: full.occasion || "",
+        promotions: full.promotions || "",
+        notes: parseSpecialRequest(full.special_request || full.notes || "").notes || "",
+        status: (full.status || full.reservation_status || "").toLowerCase(),
+        edit_reason: "",
+        reservation_start_at: full.reservation_start_at ? new Date(new Date(full.reservation_start_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
+        duration: full.reservation_start_at && full.reservation_end_at ? Math.round((new Date(full.reservation_end_at) - new Date(full.reservation_start_at)) / 60000) : (parseSpecialRequest(full.special_request || full.notes || "").holdMins || 60)
+      });
+      const hist = await getReservationHistory(fetchId, user?.userId || user?.user_id);
+      setHistory(hist || []);
+    } catch {
+      setIsEditing(false);
+      setEditForm({
+        customer_name: row.customer_name || "",
+        customer_phone: row.customer_phone || row.phone || "",
+        customer_email: row.customer_email || row.email || "",
+        party_size: row.party_size || row.guest_count || 1,
+        table_id: row.table_id || "",
+        occasion: row.occasion || "",
+        promotions: row.promotions || "",
+        notes: parseSpecialRequest(row.special_request || row.notes || "").notes || "",
+        status: (row.status || row.reservation_status || "").toLowerCase(),
+        edit_reason: "",
+        reservation_start_at: row.reservation_start_at ? new Date(new Date(row.reservation_start_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
+        duration: row.reservation_start_at && row.reservation_end_at ? Math.round((new Date(row.reservation_end_at) - new Date(row.reservation_start_at)) / 60000) : (parseSpecialRequest(row.special_request || row.notes || "").holdMins || 60)
+      });
+      setHistory([]);
+    } finally {
+      setDetailsLoading(false);
+      setHistoryLoading(false);
+    }
+  }, [user]);
 
-    const table = tableList.find((t) => String(t.table_id) === selectedTable);
+  const handleConfirm = useCallback(async (reservationToConfirm) => {
+    const resId = reservationToConfirm.reservation_id || reservationToConfirm.id;
+
+    // Guard: prevent double-firing if already in-flight for this booking
+    if (confirmingRef.current.has(resId)) return;
+    confirmingRef.current.add(resId);
 
     try {
-      await confirmReservation(assignTarget.reservation_id, [parseInt(selectedTable, 10)], user?.user_id);
-      
-      // 1. Update local state
+      await confirmReservation(resId, [], user?.userId || user?.user_id);
+
       setReservations((prev) =>
         prev.map((r) =>
-          r.reservation_id === assignTarget.reservation_id
-            ? {
-                ...r,
-                status: "confirmed",
-                reservation_status: "Confirmed",
-                table_id: table?.table_id,
-                table_label: table?.table_number || selectedTable,
-                area_name: table?.area_name || r.area_name,
-              }
+          r?.reservation_id === resId
+            ? { ...r, status: "await check-in", reservation_status: RESERVATION_STATUS.AWAIT_CHECK_IN }
             : r
         )
       );
 
-      // 2. Table Sync: Available → Reserved
-      if (table && setTables) {
-        setTables((prev) =>
-          prev.map((t) =>
-            String(t.table_id) === String(table.table_id)
-              ? { ...t, status: "reserved", table_status: "Reserved" }
-              : t
+      toast(`Booking #${resId} confirmed successfully.`, "success");
+    } catch (err) {
+      // 409 = reservation was already confirmed (e.g. duplicate click) — treat as soft success
+      if (err.status === 409 || (err.message || "").includes("already")) {
+        setReservations((prev) =>
+          prev.map((r) =>
+            r?.reservation_id === resId
+              ? { ...r, status: "await check-in", reservation_status: RESERVATION_STATUS.AWAIT_CHECK_IN }
+              : r
           )
         );
+        toast(`Booking #${resId} confirmed.`, "success");
+      } else {
+        toast(err.message || "Failed to confirm reservation.", "error");
+      }
+    } finally {
+      confirmingRef.current.delete(resId);
+    }
+  }, [setReservations, toast, user]);
+
+  const handleReject = useCallback(
+    async (reservation, skipConfirm = false) => {
+      const rejectId = reservation.reservation_id || reservation.id;
+      const status = (reservation.status || reservation.reservation_status || "").toLowerCase();
+
+      // Double-confirmation: route through pendingAction modal unless bypassed
+      if (!skipConfirm) {
+        setPendingAction({ type: 'reject', reservation: { ...reservation, reservation_id: rejectId } });
+        return;
       }
 
-      toast(
-        `Booking #${assignTarget.reservation_id} confirmed → Table ${table?.table_number || selectedTable} reserved.`,
-        "success"
-      );
-      setAssignTarget(null);
-      setSelectedTable("");
-    } catch (err) {
-      toast(err.message || "Failed to confirm reservation.", "error");
-    }
-  }, [assignTarget, selectedTable, tableList, setReservations, setTables, toast, user]);
+      try {
+        if (status === "await check-in") {
+          await cancelReservation(rejectId, "Cancelled by manager", user?.userId || user?.user_id);
+        } else {
+          await rejectReservation(rejectId, "Rejected by manager", user?.userId || user?.user_id);
+        }
 
-  /**
-   * handleReject — Pending/Confirmed → Rejected
-   * Releases assigned table back to Available if one was set.
-   */
-  const handleReject = useCallback(
-    (reservation) => {
-      if (!window.confirm(`Reject booking #${reservation.reservation_id} from ${reservation.customer_name}?`)) return;
-
-      // 1. Update reservation status
-      let updatedList;
-      setReservations((prev) => {
-        updatedList = prev.map((r) =>
-          r.reservation_id === reservation.reservation_id
-            ? { ...r, status: "cancelled", reservation_status: "Rejected" }
-            : r
+        setReservations((prev) =>
+          prev.map((r) =>
+            r.reservation_id === rejectId || r.id === rejectId
+              ? { ...r, status: "cancelled", reservation_status: status === "await check-in" ? RESERVATION_STATUS.REJECT_CHECK_IN : RESERVATION_STATUS.REJECT_REQUEST }
+              : r
+          )
         );
-        return updatedList;
-      });
 
-      // 2. Release assigned table if any
-      const tableId = reservation.table_id;
-      if (tableId && setTables) {
+        const tableId = reservation.table_id;
+        if (tableId && setTables) {
+          setTables((prev) =>
+            prev.map((t) =>
+              String(t.table_id) === String(tableId)
+                ? { ...t, status: "available", table_status: "Available" }
+                : t
+            )
+          );
+        }
+
+        toast(`Booking #${reservation.reservation_id} rejected. Table released.`, "success");
+        setActive(null);
+      } catch (err) {
+        toast(err.message || "Failed to reject reservation.", "error");
+      }
+    },
+    [setReservations, setTables, toast, user]
+  );
+
+  // Flow D — Manager proactively cancel a Confirmed reservation
+  const handleCancelByManager = useCallback(async () => {
+    if (!cancelModal?.reservation) return;
+    const resId = cancelModal.reservation.reservation_id;
+    if (!cancelReason.trim() || cancelReason.trim().length < 5) {
+      toast("Please enter a cancellation reason (at least 5 characters).", "error");
+      return;
+    }
+    setCancelling(true);
+    try {
+      await cancelReservation(resId, cancelReason.trim(), user?.userId || user?.user_id);
+      setReservations((prev) =>
+        prev.map((r) =>
+          r?.reservation_id === resId || r?.id === resId
+            ? { ...r, status: "cancelled", reservation_status: RESERVATION_STATUS.REJECT_CHECK_IN }
+            : r
+        )
+      );
+      toast(`Reservation #${resId} cancelled successfully.`, "success");
+      setCancelModal(null);
+      setCancelReason("");
+      if (active?.reservation_id === resId) setActive(null);
+    } catch (err) {
+      toast(err.message || "Failed to cancel reservation.", "error");
+    } finally {
+      setCancelling(false);
+    }
+  }, [cancelModal, cancelReason, cancelReservation, setReservations, toast, user, active, setActive]);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!active) return;
+    const isRejecting = editForm.status === "reject check-in" || editForm.status === "reject request";
+    if (isRejecting && (!editForm.edit_reason || editForm.edit_reason.trim() === "")) {
+      toast("A reason is required when rejecting a reservation.", "error");
+      return;
+    }
+    const editId = active.reservation_id || active.id;
+    try {
+      const payload = {
+        contact_name: editForm.customer_name,
+        contact_phone: editForm.customer_phone,
+        contact_email: editForm.customer_email,
+        guest_count: editForm.party_size,
+        special_request: editForm.notes,
+        reservation_status: editForm.status === "reject check-in" ? RESERVATION_STATUS.REJECT_CHECK_IN : (editForm.status === "await check-in" ? RESERVATION_STATUS.AWAIT_CHECK_IN : editForm.status),
+        preferred_area_id: active.preferred_area_id,
+        reservation_start_at: new Date(editForm.reservation_start_at).toISOString(),
+        reservation_end_at: new Date(new Date(editForm.reservation_start_at).getTime() + parseInt(editForm.duration) * 60000).toISOString(),
+        table_id: editForm.table_id || null
+      };
+
+      const result = await updateReservation(editId, payload, user?.userId || user?.user_id);
+      toast("Reservation updated successfully.", "success");
+
+      // removed onRefresh call
+
+      setIsEditing(false);
+      setDetailsLoading(true);
+      try {
+        const full = await getReservationDetails(editId, user?.userId || user?.user_id);
+        setActive(full);
+      } catch (e) {
+        console.error("Failed to re-fetch active details:", e);
+      } finally {
+        setDetailsLoading(false);
+      }
+
+      if (editForm.status === "reject check-in" && active.table_id && setTables) {
         setTables((prev) =>
           prev.map((t) =>
-            String(t.table_id) === String(tableId)
+            String(t.table_id) === String(active.table_id)
               ? { ...t, status: "available", table_status: "Available" }
               : t
           )
         );
       }
+    } catch (err) {
+      toast(err.message || "Failed to update reservation.", "error");
+    }
+  }, [active, editForm, setReservations, setTables, toast, user]);
 
-      // 3. (Optional) In real app we might call a reject API endpoint here
-      toast(`Booking #${reservation.reservation_id} rejected. Table released.`, "info");
+  // Flow C — resolve an edit or cancel request
+  const handleResolveRequest = useCallback(async (decision, rejectReason) => {
+    if (!active || resolving) return;
+    const reservationId = active.reservation_id || active.id;
+    const requestType = active.request_type;
+    setResolving(true);
+    try {
+      let endpoint, method, body;
+
+      if (requestType === 'edit' || requestType === 'table_change') {
+        // New endpoint for customer edit requests
+        endpoint = `/api/manager/reservations/${reservationId}/resolve-edit`;
+        method = 'POST';
+        body = JSON.stringify({ decision, reject_reason: rejectReason || "" });
+      } else if (requestType === 'cancel') {
+        endpoint = `/api/manager/reservations/${reservationId}/resolve-cancel`;
+        method = 'PATCH';
+        body = JSON.stringify({ decision });
+      } else {
+        // Generic fallback
+        endpoint = `/api/manager/reservations/${reservationId}/resolve-request`;
+        method = 'PATCH';
+        body = JSON.stringify({ decision });
+      }
+
+      const resp = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body,
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.message || 'Request failed');
+
+      // Apply pending changes to local state if confirmed edit
+      let appliedChanges = {};
+      if (decision === 'confirm' && data.applied_changes) {
+        appliedChanges = data.applied_changes;
+      }
+
+      // Update local list
+      setReservations((prev) =>
+        prev.map((r) => {
+          if ((r?.reservation_id || r?.id) !== reservationId) return r;
+          const isCancelProcessed = requestType === 'cancel' && decision === 'process';
+          const newStatus = isCancelProcessed ? RESERVATION_STATUS.CANCELLED : (data.reservation_status || r.reservation_status || RESERVATION_STATUS.CONFIRMED);
+          return {
+            ...r,
+            has_pending_request: 0,
+            request_type: null,
+            pending_changes_json: null,
+            display_status: newStatus,
+            reservation_status: newStatus,
+            status: newStatus.toLowerCase(),
+            // Apply confirmed changes
+            ...(appliedChanges.guest_count && { guest_count: appliedChanges.guest_count }),
+            ...(appliedChanges.special_request && { special_request: appliedChanges.special_request }),
+          };
+        })
+      );
+
+      const actionLabel = requestType === 'cancel'
+        ? (decision === 'process' ? 'Cancellation processed' : 'Cancellation rejected')
+        : (decision === 'confirm' ? 'Edit request confirmed ✓' : 'Edit request declined');
+      toast(`${actionLabel} for booking #${reservationId}.`, 'success');
       setActive(null);
-    },
-    [setReservations, setTables, toast]
-  );
+      setResolveConfirmPending(null);
+    } catch (err) {
+      toast(err.message || 'Failed to resolve request.', 'error');
+    } finally {
+      setResolving(false);
+    }
+  }, [active, resolving, setReservations, toast]);
 
-  /* ── Open the Assign drawer ── */
-  const openAssignDrawer = (reservation) => {
-    setAssignTarget(reservation);
-    setSelectedTable("");
-  };
-
-  /* ════════════════════════════════════════════════════════════
-     RENDER
-     ════════════════════════════════════════════════════════════ */
+  const sortedFiltered = filtered;
 
   return (
     <div className="sfx-stack">
-      <SectionHead
-        title="Reservations"
-        subtitle={`${pendingCount} pending · ${confirmedCount} confirmed · ${reservationList.length} total`}
-      />
 
-      <ContentPanel compact>
-        {/* ── Tab bar ── */}
-        <div className="sfx-tabs" role="tablist" aria-label="Reservation views">
-          {FILTER_TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={statusFilter === t.id}
-              className={`sfx-tab ${statusFilter === t.id ? "is-active" : ""}`}
-              onClick={() => selectFilterTab(t.id)}
-            >
-              {t.label}
-              {t.id === "pending" && pendingCount > 0 ? (
-                <span
-                  style={{
-                    marginLeft: "8px",
-                    background: "#f59e0b",
-                    color: "#fff",
-                    borderRadius: "10px",
-                    padding: "2px 8px",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                  }}
-                >
-                  {pendingCount}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </div>
 
-        {/* ── Toolbar ── */}
-        <Toolbar>
-          <SearchField
-            value={search}
-            onChange={setSearch}
-            placeholder="Customer, table, phone, or booking ID…"
-          />
-          <select
-            className="sfx-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="all">All statuses</option>
-            {Object.entries(RESERVATION_STATUS_META).map(([k, m]) => (
-              <option key={k} value={k}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-          <select className="sfx-select" value={area} onChange={(e) => setArea(e.target.value)}>
-            <option value="all">All areas</option>
-            {AREAS.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
-        </Toolbar>
-
-        {/* ── Table ── */}
-        <div className="sfx-card sfx-card--flush">
-          <div className="sfx-table-wrap">
-            <table className="sfx-table sfx-table--hover">
-              <thead>
-                <tr>
-                  <th>Booking ID</th>
-                  <th>Date & Time</th>
-                  <th>Customer</th>
-                  <th>Guests</th>
-                  <th>Area / Table</th>
-                  <th>Occasion</th>
-                  <th>Status</th>
-                  <th className="sfx-table__right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r) => {
-                  const currentStatus = (r.status || r.reservation_status || "").toLowerCase();
-                  const currentStatusCased = r.reservation_status || "Pending";
-                  const meta = RESERVATION_STATUS_META[currentStatus] || RESERVATION_STATUS_META[currentStatusCased] || { label: currentStatusCased, tone: "default" };
-                  const isPending = currentStatus === "pending";
-                  const isConfirmed = currentStatus === "confirmed";
-
-                  return (
-                    <tr key={r.reservation_id}>
-                      <td className="sfx-mono" style={{ fontWeight: 600 }}>
-                        #{String(r.reservation_id).padStart(6, "0")}
-                      </td>
-                      <td className="sfx-mono">{formatReservationDateTime(r)}</td>
-                      <td>
-                        <strong>{r.customer_name}</strong>
-                        <small className="sfx-cell-sub">{r.customer_phone || r.phone || "—"}</small>
-                      </td>
-                      <td>{r.guest_count || r.party_size}</td>
-                      <td>
-                        {r.area_name}
-                        <small className="sfx-cell-sub">{r.table_label || r.assigned_tables || "Unassigned"}</small>
-                      </td>
-                      <td>{r.special_request || r.occasion || "—"}</td>
-                      <td>
-                        <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
-                      </td>
-                      <td className="sfx-table__right">
-                        <div className="sfx-rowacts">
-                          <Button size="sm" variant="ghost" icon="eye" onClick={() => setActive(r)}>
-                            View
-                          </Button>
-
-                          {/* MANAGER ACTION: Confirm & Assign (Pending only) */}
-                          {isPending && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="gold"
-                                onClick={() => openAssignDrawer(r)}
-                              >
-                                Confirm & Assign
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="danger"
-                                onClick={() => handleReject(r)}
-                              >
-                                Reject
-                              </Button>
-                            </>
-                          )}
-
-                          {/* MANAGER ACTION: Reject confirmed (edge case) */}
-                          {isConfirmed && (
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              onClick={() => handleReject(r)}
-                            >
-                              Reject
-                            </Button>
-                          )}
-
-                          {/* Checked-In / Completed / Cancelled / No-Show: no actions */}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      <div className="sfx-card sfx-card--overflow-visible staff-reservations-card" style={{ background: "#ffffff", padding: "24px", borderRadius: "14px", boxShadow: "0 6px 32px rgba(31,26,23,0.04)" }}>
+        <header className="sfx-card__head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <h3 className="sfx-card__title" style={{ color: "#1a1a1a", fontSize: 20, margin: 0 }}>Reservations</h3>
+            <p className="sfx-muted" style={{ fontSize: 13, margin: "4px 0 0" }}>
+              {`Reservations for ${selectedDateLabel}`}
+            </p>
           </div>
-          {filtered.length === 0 ? (
-            <EmptyState
-              title="No reservations match your filters"
-              hint="Try clearing the search or status filter."
-            />
-          ) : null}
-        </div>
-      </ContentPanel>
+          <span className="sfx-muted" style={{ fontSize: 13 }}>{filtered.length} reservations</span>
+        </header>
 
-      {/* ── Detail Drawer (View) ── */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 24, position: "relative", zIndex: 50, alignItems: "center" }}>
+          <div style={{ flex: "1 1 250px", minWidth: 200 }}>
+            <SearchField
+              value={search}
+              onChange={setSearch}
+              placeholder="Customer, table, phone, or reservation ID…"
+            />
+          </div>
+
+          <div style={{ flex: "0 0 auto" }}>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="sfx-input"
+              style={{
+                padding: "8px 32px 8px 12px",
+                borderRadius: "8px",
+                border: "1px solid #e2dcd0",
+                background: "#f8f5ef",
+                color: "#1a1a1a",
+                fontSize: "14px",
+                fontWeight: "500",
+                cursor: "pointer",
+                minWidth: "160px",
+                appearance: "none",
+                backgroundImage: "url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%231a1a1a%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "right 12px top 50%",
+                backgroundSize: "10px auto"
+              }}
+            >
+              <option value="all">All statuses</option>
+              {Object.keys(FILTER_GROUPS).map((groupName) => (
+                <option key={groupName} value={groupName}>
+                  {groupName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ flex: 1 }}></div>
+
+          {/* Add/Delete Mock Data buttons */}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              disabled={addingTest || deletingTest}
+              onClick={async () => {
+                setAddingTest(true);
+                try {
+                  const res = await seedTestReservations(user?.user_id);
+                  toast(res.message || `✓ 10 mock records successfully seeded into SQL Database.`, "success");
+                  // Trigger UI reload (Using event since useManagerStore isn't implemented)
+                  window.dispatchEvent(new Event("phurai_manager_refresh"));
+                } catch (e) {
+                  toast("Error: " + (e?.message || "unknown"), "error");
+                } finally {
+                  setAddingTest(false);
+                }
+              }}
+
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "7px 14px", borderRadius: 9, border: "1px dashed #c9a86c",
+                background: "rgba(201,168,108,0.08)", color: "#9f7b3a",
+                fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap"
+              }}
+            >
+              {addingTest ? "Adding…" : "＋ Add Mock Data"}
+            </button>
+            <button
+              type="button"
+              disabled={addingTest || deletingTest}
+              onClick={async () => {
+                setDeletingTest(true);
+                try {
+                  const res = await clearTestReservations(user?.user_id);
+                  toast(res.message || `✓ All mock data successfully purged from database.`, "success");
+                  // Trigger UI reload
+                  window.dispatchEvent(new Event("phurai_manager_refresh"));
+                } catch (e) {
+                  toast("Error: " + (e?.message || "unknown"), "error");
+                } finally {
+                  setDeletingTest(false);
+                }
+              }}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "7px 14px", borderRadius: 9, border: "1px dashed #ef4444",
+                background: "rgba(239,68,68,0.08)", color: "#dc2626",
+                fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap"
+              }}
+            >
+              {deletingTest ? "Deleting…" : "− Delete Mock Data"}
+            </button>
+          </div>
+
+          <div className={`staff-reservations-toolbar__date${pickerOpen ? " is-open" : ""}`} style={{ marginLeft: "auto", position: "relative" }}>
+            <span className="staff-reservations-toolbar__date-label" style={{ marginRight: 8, fontSize: 13, color: "#1a1a1a", fontWeight: 500 }}>
+              {selectedDateLabel}
+            </span>
+            <button
+              type="button"
+              className="sfx-kpi__icon sfx-kpi__icon--trigger staff-reservations-date-trigger"
+              onClick={() => (pickerOpen ? closePicker() : openPicker())}
+              aria-label="Select date"
+              aria-expanded={pickerOpen}
+              style={{ position: "relative", zIndex: 20, background: "#f8f5ef", border: "1px solid #e2dcd0", borderRadius: 8, width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#b09460" }}
+            >
+              <Icon name="calendar" size={16} style={{ pointerEvents: "none" }} />
+            </button>
+            {pickerOpen && (
+              <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", zIndex: 1000 }}>
+                <DashboardDateRangePicker
+                  inline={true}
+                  allowFuture={true}
+                  draftRange={draftRange}
+                  activePresetId={activePresetId}
+                  onDraftChange={(selection) => { setDraftRange(selection); setActivePresetId("custom"); }}
+                  onPresetSelect={handlePresetSelect}
+                  onApply={handleApplyDate}
+                  onCancel={closePicker}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="sfx-table-wrap">
+          <table className="sfx-table sfx-table--hover staff-reservations-table" style={{ background: "#ffffff" }}>
+            <thead>
+              <tr style={{ background: "#ffffff" }}>
+                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Reservation ID</th>
+                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Date</th>
+                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Customer</th>
+                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Phone</th>
+                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Email</th>
+                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Status</th>
+                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedFiltered.filter(Boolean).map((r) => {
+                const currentId = r.id || r.reservation_id;
+                // Use display_status (computed by backend CASE expression) over raw reservation_status
+                const displayStatusRaw = r.display_status || r.reservation_status || RESERVATION_STATUS.PENDING_PAYMENT;
+                const currentStatus = (r.status || r.reservation_status || "").trim().toLowerCase();
+                const meta = RESERVATION_STATUS_META[r.reservation_status || r.status || RESERVATION_STATUS.PENDING_REQUEST] || { label: currentStatus, tone: "default" };
+                const isPending = currentStatus === "pending payment" || currentStatus === "pending request" || currentStatus === "pending";
+                const isConfirmed = currentStatus === "await check-in" || currentStatus === "confirmed" || currentStatus === "reserved" || currentStatus === "paid";
+                const isRequest = currentStatus === "request";
+
+                const appTime = r.confirmed_at || r.updated_at;
+                const approvalTime = (appTime && !isNaN(new Date(appTime).getTime()))
+                  ? format(new Date(appTime), "dd/MM/yyyy HH:mm")
+                  : <EmptyVal val="" />;
+
+                return (
+                  <tr key={currentId} style={{ background: "#ffffff" }}>
+                    {/* Reservation ID — sans-serif, black */}
+                    <td style={{ fontSize: 13, fontWeight: 600, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
+                      #{String(currentId).padStart(6, "0")}
+                    </td>
+                    {/* Date — sans-serif, black */}
+                    <td style={{ fontSize: 13, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
+                      {(() => {
+                        const rawIso = r.reservation_start_at;
+                        const dateRaw = r.reservation_date || (rawIso ? String(rawIso).slice(0, 10) : null);
+                        if (!dateRaw) return <EmptyVal val="" />;
+                        try {
+                          return format(parseISO(dateRaw.includes("T") ? dateRaw : `${dateRaw}T12:00:00`), "dd/MM/yyyy");
+                        } catch { return dateRaw; }
+                      })()}
+                    </td>
+                    <td style={{ fontWeight: 500, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                        <span><EmptyVal val={r.customer_name} /></span>
+                      </div>
+                    </td>
+                    <td style={{ color: "#000", fontSize: 13, textAlign: "center", verticalAlign: "middle" }}><EmptyVal val={r.customer_phone || r.phone} /></td>
+                    <td style={{ color: "#000", fontSize: 12, wordBreak: "break-all", textAlign: "center", verticalAlign: "middle" }}><EmptyVal val={r.customer_email || r.email} /></td>
+                    <td style={{ textAlign: "center", verticalAlign: "middle" }}>
+                      <div style={{ display: "flex", justifyContent: "center" }}>
+                        <ReservationStatusBadge
+                          status={displayStatusRaw === "Request" ? "Request" : (r.reservation_status || displayStatusRaw)}
+                          size="sm"
+                          isFlashing={r._isFlashing}
+                        />
+                      </div>
+                    </td>
+                    <td style={{ textAlign: "center", verticalAlign: "middle" }}>
+                      <div className="sfx-rowacts" style={{ justifyContent: "center" }}>
+                        <Button size="sm" variant="ghost" icon="eye" onClick={() => handleViewDetails(r)}>
+                          View
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="gold"
+                          onClick={() => { handleViewDetails(r); setIsEditing(true); }}
+                        >
+                          Edit
+                        </Button>
+                        {(isConfirmed || isPending) && (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={() => { setCancelReason(""); setCancelModal({ reservation: { ...r, reservation_id: currentId } }); }}
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {filtered.length === 0 ? (
+          <EmptyState
+            title="No reservations match your filters"
+            hint="Try clearing the search or status filter."
+          />
+        ) : null}
+      </div>
       <ManagerDrawer
         open={Boolean(active)}
         title="Reservation Details"
         onClose={() => setActive(null)}
         footer={
-          active && (active.status || active.reservation_status || "").toLowerCase() === "pending" ? (
+          isEditing ? (
             <div className="sfx-drawer__acts">
-              <Button
-                variant="danger"
-                onClick={() => handleReject(active)}
-              >
-                Reject booking
-              </Button>
-              <Button
-                variant="gold"
-                onClick={() => {
-                  setActive(null);
-                  openAssignDrawer(active);
-                }}
-              >
-                Confirm & Assign Table
-              </Button>
+              <Button variant="ghost" onClick={() => setIsEditing(false)}>Cancel Edit</Button>
+              <Button variant="gold" onClick={() => setEditConfirmPending(true)}>Save Changes</Button>
             </div>
-          ) : active && (active.status || active.reservation_status || "").toLowerCase() === "confirmed" ? (
-            <div className="sfx-drawer__acts">
-              <Button variant="danger" onClick={() => handleReject(active)}>
-                Reject booking
-              </Button>
+          ) : active && active.has_pending_request ? (
+            // Flow C — pending request footer
+            <div className="sfx-drawer__acts" style={{ justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: 8 }}>
+              {active.request_type === 'cancel' ? (
+                <>
+                  <Button variant="ghost" onClick={() => setResolveConfirmPending({ type: 'cancel', decision: 'reject' })}>
+                    Reject Cancellation
+                  </Button>
+                  <Button variant="danger" onClick={() => setResolveConfirmPending({ type: 'cancel', decision: 'process' })}>
+                    Process Refund &amp; Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="danger" onClick={() => setResolveConfirmPending({ type: 'edit', decision: 'decline' })} disabled={resolving}>
+                    {resolving ? "Processing…" : "✕ Reject Request"}
+                  </Button>
+                  <Button variant="gold" onClick={() => setResolveConfirmPending({ type: 'edit', decision: 'confirm' })} disabled={resolving}>
+                    {resolving ? "Processing…" : "✓ Confirm Request"}
+                  </Button>
+                </>
+              )}
+            </div>
+          ) : active ? (
+            <div className="sfx-drawer__acts" style={{ justifyContent: "space-between", width: "100%" }}>
+              <Button variant="ghost" onClick={() => setIsEditing(true)}>Edit Details</Button>
+              <div style={{ display: "flex", gap: "8px" }}>
+                {(active.status || active.reservation_status || "").toLowerCase() === "pending payment" ? (
+                  <>
+                    <Button variant="danger" onClick={() => handleReject(active)}>Reject booking</Button>
+                    <Button variant="gold" onClick={() => { handleConfirm(active); setActive(null); }}>Confirm</Button>
+                  </>
+                ) : (active.status || active.reservation_status || "").toLowerCase() === "await check-in" ? (
+                  <Button variant="danger" onClick={() => handleReject(active)}>Reject booking</Button>
+                ) : null}
+              </div>
             </div>
           ) : null
         }
       >
         {active ? (
-          <div className="sfx-detail">
-            <div style={{ textAlign: "center", marginBottom: 24, marginTop: 8 }}>
-              <h2 style={{ fontSize: "28px", margin: "0 0 12px 0", fontWeight: 700, letterSpacing: "0.05em" }}>
-                #{String(active.reservation_id).padStart(6, "0")}
-              </h2>
-              <StatusBadge tone={RESERVATION_STATUS_META[(active.status || active.reservation_status || "").toLowerCase()]?.tone || "default"}>
-                {RESERVATION_STATUS_META[(active.status || active.reservation_status || "").toLowerCase()]?.label || active.reservation_status}
-              </StatusBadge>
+          detailsLoading ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "24px 0" }}>
+              <span className="sfx-spinner" />
+              <span style={{ color: "var(--sfx-muted)", fontSize: "13px" }}>Loading details…</span>
             </div>
+          ) : (
+            <div className="sfx-detail">
+              <div style={{ textAlign: "center", marginBottom: 24, marginTop: 8 }}>
+                <h2 style={{ fontSize: "28px", margin: "0 0 12px 0", fontWeight: 700, letterSpacing: "0.05em" }}>
+                  #{String(active.reservation_id).padStart(6, "0")}
+                </h2>
+                {active.has_pending_request ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff3cd", color: "#856404", fontSize: 12, fontWeight: 700, padding: "5px 14px", borderRadius: 24, letterSpacing: "0.07em", border: "1px solid #ffc107" }}>
+                    ⏳ PENDING EDIT REQUEST
+                  </span>
+                ) : (
+                  <StatusBadge tone={RESERVATION_STATUS_META[(active.status || active.reservation_status || "")]?.tone || "default"} color={RESERVATION_STATUS_META[(active.status || active.reservation_status || "")]?.color}>
+                    {RESERVATION_STATUS_META[(active.status || active.reservation_status || "")]?.label || active.reservation_status}
+                  </StatusBadge>
+                )}
+              </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
-                <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>Customer Name</span>
-                <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.customer_name}</strong>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
-                <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>Contact Phone</span>
-                <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.phone || "—"}</strong>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
-                <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>Email Address</span>
-                <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.email || "—"}</strong>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
-                <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>Date</span>
-                <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.reservation_date}</strong>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
-                <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>Time</span>
-                <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.start_time}</strong>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
-                <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>Guests</span>
-                <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.party_size}</strong>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
-                <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>Table</span>
-                <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.table_label || "Unassigned"}</strong>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
-                <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>Area</span>
-                <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.area_name}</strong>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
-                <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>Occasion</span>
-                <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.occasion || "—"}</strong>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
-                <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>Promotions</span>
-                <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.promotions || "None"}</strong>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
-                <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>Notes</span>
-                <strong style={{ fontWeight: "bold", fontSize: "14px", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
-                  {active.special_request || active.notes || "—"}
-                </strong>
-              </div>
-            </div>
+              {/* 2-Panel Edit Request Comparison */}
+              {active.has_pending_request && active.request_type !== 'cancel' && (() => {
+                let pendingChanges = {};
+                try { pendingChanges = JSON.parse(active.pending_changes_json || "{}"); } catch (_) { }
+                const hasChanges = Object.keys(pendingChanges).length > 0;
+                if (!hasChanges) return null;
 
-            <div className="sfx-detail__block" style={{ marginTop: 24 }}>
-              <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", marginBottom: 8, display: "block" }}>Pre-ordered items</span>
-              {active.preorder?.length ? (
-                <ul className="sfx-detail__list">
-                  {active.preorder.map((p, i) => (
-                    <li key={i}>
-                      <span>{p.dish_name}</span>
-                      <strong>×{p.qty}</strong>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>None</p>
+                const fmt = (iso) => {
+                  try { return format(new Date(iso), "dd/MM/yyyy HH:mm"); } catch { return String(iso); }
+                };
+
+                const changeFields = [
+                  { label: "Date & Time", oldVal: active.reservation_start_at ? fmt(active.reservation_start_at) : <EmptyVal val="" />, newVal: pendingChanges.reservation_start_at ? fmt(pendingChanges.reservation_start_at) : null },
+                  { label: "End Time", oldVal: active.reservation_end_at ? fmt(active.reservation_end_at) : <EmptyVal val="" />, newVal: pendingChanges.reservation_end_at ? fmt(pendingChanges.reservation_end_at) : null },
+                  { label: "Guests", oldVal: <EmptyVal val={String(active.guest_count || active.party_size || "")} />, newVal: pendingChanges.guest_count != null ? String(pendingChanges.guest_count) : null },
+                  { label: "Tables", oldVal: active.assigned_tables || active.table_label || "Unassigned", newVal: pendingChanges.table_ids ? `Table #${pendingChanges.table_ids.join(", ")}` : null },
+                  { label: "Dining Purpose", oldVal: active.dining_purpose || active.occasion || parseSpecialRequest(active.special_request).diningPurpose || "None", newVal: pendingChanges.dining_purpose || null },
+                  { label: "Notes", oldVal: parseSpecialRequest(active.special_request).notes || "None", newVal: pendingChanges.special_request ? parseSpecialRequest(pendingChanges.special_request).notes : null },
+                ].filter(f => f.newVal != null);
+
+                return (
+                  <div style={{ marginBottom: 20, border: "1px solid #ffc107", borderRadius: 12, overflow: "hidden" }}>
+                    <div style={{ background: "#fff8e1", padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid #ffc107" }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#856404" }}>📋 Customer Requested Changes</span>
+                      <span style={{ fontSize: 11, color: "#a08030", marginLeft: "auto" }}>Awaiting your decision</span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0, background: "#fffdf0" }}>
+                      {/* Current Info Panel */}
+                      <div style={{ padding: "14px 16px", borderRight: "1px solid #fde68a" }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#a08030", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Current Info</div>
+                        {changeFields.map(f => (
+                          <div key={f.label} style={{ marginBottom: 8 }}>
+                            <div style={{ fontSize: 11, color: "#9ca3af" }}>{f.label}</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>{f.oldVal}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Requested Changes Panel */}
+                      <div style={{ padding: "14px 16px", background: "#fffbeb" }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Requested Changes</div>
+                        {changeFields.map(f => (
+                          <div key={f.label} style={{ marginBottom: 8 }}>
+                            <div style={{ fontSize: 11, color: "#9ca3af" }}>{f.label}</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: f.newVal !== f.oldVal ? "#16a34a" : "#374151", display: "flex", alignItems: "center", gap: 4 }}>
+                              {f.newVal}
+                              {f.newVal !== f.oldVal && <span style={{ fontSize: 10, background: "#dcfce7", color: "#16a34a", padding: "1px 6px", borderRadius: 10 }}>Changed</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Request Time</span>
+                  <strong style={{ fontWeight: "bold", fontSize: "14px", color: "var(--sfx-gold)" }}>
+                    {active.created_time || active.created_at
+                      ? !isNaN(new Date(active.created_time || active.created_at).getTime())
+                        ? format(new Date(active.created_time || active.created_at), "dd/MM/yyyy HH:mm")
+                        : "---"
+                      : "---"}
+                  </strong>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Customer Name</span>
+                  {isEditing ? (
+                    <input className="sfx-input" value={editForm.customer_name} onChange={e => setEditForm(p => ({ ...p, customer_name: e.target.value }))} />
+                  ) : (
+                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.customer_name}</strong>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Contact Phone</span>
+                  {isEditing ? (
+                    <input className="sfx-input" value={editForm.customer_phone} onChange={e => setEditForm(p => ({ ...p, customer_phone: e.target.value }))} />
+                  ) : (
+                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}><EmptyVal val={active.customer_phone || active.phone} /></strong>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Email Address</span>
+                  {isEditing ? (
+                    <input className="sfx-input" type="email" value={editForm.customer_email} onChange={e => setEditForm(p => ({ ...p, customer_email: e.target.value }))} />
+                  ) : (
+                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}><EmptyVal val={active.customer_email || active.email} /></strong>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>Start Time</span>
+                  {isEditing ? (
+                    <input className="sfx-input" type="datetime-local" value={editForm.reservation_start_at} onChange={e => setEditForm(p => ({ ...p, reservation_start_at: e.target.value }))} />
+                  ) : (
+                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}>
+                      <EmptyVal val={active.reservation_start_at ? format(new Date(active.reservation_start_at), "HH:mm (dd/MM/yyyy)") : (active.start_time ? `${active.start_time} (${active.reservation_date})` : null)} />
+                    </strong>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>End Time</span>
+                  {isEditing ? (
+                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}>
+                      <EmptyVal val={editForm.reservation_start_at ? format(new Date(new Date(editForm.reservation_start_at).getTime() + parseInt(editForm.duration || 0) * 60000), "HH:mm (dd/MM/yyyy)") : "—"} />
+                    </strong>
+                  ) : (
+                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}>
+                      <EmptyVal val={active.reservation_end_at ? format(new Date(active.reservation_end_at), "HH:mm (dd/MM/yyyy)") : "—"} />
+                    </strong>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Guests</span>
+                  {isEditing ? (
+                    <input className="sfx-input" type="number" min="1" value={editForm.party_size} onChange={e => setEditForm(p => ({ ...p, party_size: e.target.value }))} />
+                  ) : (
+                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.party_size || active.guest_count}</strong>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Table</span>
+                  {isEditing ? (
+                    <input className="sfx-input" type="number" value={editForm.table_id} onChange={e => setEditForm(p => ({ ...p, table_id: e.target.value }))} placeholder="e.g. 1" />
+                  ) : (
+                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.assigned_tables || active.table_label || "Unassigned"}</strong>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>Area</span>
+                  <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.area_name || active.preferred_area || "Any"}</strong>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Dining Purpose</span>
+                  <strong style={{ fontWeight: "bold", fontSize: "14px" }}>
+                    {(() => {
+                      const parsed = parseSpecialRequest(active.special_request || active.notes);
+                      const dp = active.dining_purpose || active.occasion || parsed.diningPurpose;
+                      return <EmptyVal val={dp} fallback="None" />;
+                    })()}
+                  </strong>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Duration</span>
+                  {isEditing ? (
+                    <select className="sfx-select" value={editForm.duration} onChange={e => setEditForm(p => ({ ...p, duration: parseInt(e.target.value) }))}>
+                      <option value={15}>15 minutes</option>
+                      <option value={30}>30 minutes</option>
+                      <option value={45}>45 minutes</option>
+                      <option value={60}>60 minutes</option>
+                      <option value={90}>90 minutes</option>
+                      <option value={120}>120 minutes</option>
+                    </select>
+                  ) : (
+                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}>
+                      {(() => {
+                        if (active.reservation_start_at && active.reservation_end_at) {
+                          const diffMs = new Date(active.reservation_end_at) - new Date(active.reservation_start_at);
+                          const mins = Math.round(diffMs / 60000);
+                          if (mins > 0) return `${mins} minutes`;
+                        }
+                        const parsed = parseSpecialRequest(active.special_request);
+                        if (parsed.holdMins) return `${parsed.holdMins} minutes`;
+                        return <EmptyVal val="" fallback="None" />;
+                      })()}
+                    </strong>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Promotions</span>
+                  {isEditing ? (
+                    <input className="sfx-input" value={editForm.promotions} onChange={e => setEditForm(p => ({ ...p, promotions: e.target.value }))} />
+                  ) : (
+                    <EmptyVal val={active.promotions} fallback="None" />
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Status</span>
+                  {isEditing ? (
+                    <select className="sfx-select" value={editForm.status} onChange={e => setEditForm(p => ({ ...p, status: e.target.value }))}>
+                      {Object.entries(RESERVATION_STATUS_META).map(([k, m]) => (
+                        <option key={k} value={k}>{m.label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{RESERVATION_STATUS_META[(active.status || active.reservation_status || "")]?.label || active.reservation_status}</strong>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "start" }}>Notes</span>
+                  {isEditing ? (
+                    <textarea className="sfx-input" rows="3" value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} />
+                  ) : (() => {
+                    const parsed = parseSpecialRequest(active.special_request || active.notes);
+                    const cleanNote = parsed.notes;
+                    return cleanNote ? (
+                      <strong style={{ fontWeight: "bold", fontSize: "14px", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+                        {cleanNote}
+                      </strong>
+                    ) : (
+                      <EmptyVal val="" fallback="None" />
+                    );
+                  })()}
+                </div>
+                {isEditing && (
+                  <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                    <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Reason for Edit {(editForm.status === "reject check-in" || editForm.status === "reject request") && <span style={{ color: "#ef4444" }}>*</span>}</span>
+                    <input className="sfx-input" value={editForm.edit_reason || ""} onChange={e => setEditForm(p => ({ ...p, edit_reason: e.target.value }))} placeholder="Reason for changing details or rejecting" />
+                  </div>
+                )}
+              </div>
+
+              <div className="sfx-detail__block" style={{ marginTop: 24 }}>
+                <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", marginBottom: 8, display: "block" }}>Pre-ordered items</span>
+                {(() => {
+                  const preorders = active.preorders || active.preorder || [];
+                  return preorders.length ? (
+                    <ul className="sfx-detail__list">
+                      {preorders.map((p, i) => (
+                        <li key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <span>{p.dish_name || `Dish #${p.dish_id}`}</span>
+                          <strong>×{p.quantity || p.qty}</strong>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p style={{ margin: 0 }}><EmptyVal val="" fallback="None" /></p>
+                  );
+                })()}
+              </div>
+
+              {!isEditing && (
+                <div className="sfx-detail__block" style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--border-color)" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "bold", fontSize: "14px", marginBottom: 12, display: "block" }}>Reservation Timeline</span>
+                  {historyLoading ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span className="sfx-spinner" style={{ width: 14, height: 14 }} />
+                      <span style={{ fontSize: "13px", color: "var(--sfx-muted)" }}>Loading timeline...</span>
+                    </div>
+                  ) : history.length > 0 ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 0, position: "relative" }}>
+                      {history.map((hist, idx) => {
+                        const ACTION_COLOR = {
+                          RESERVATION_CREATED: "#c9a96e",
+                          CHECK_IN_RESERVATION: "#22c55e",
+                          STAFF_CHECKIN_CONFIRMED: "#22c55e",
+                          PAYMENT_CHECKOUT_AUTO: "#c2610a",
+                          STAFF_CHECKOUT_CONFIRMED: "#7c5cbf",
+                          REJECT_RESERVATION: "#ef4444",
+                          REJECT_CHECKIN: "#ef4444",
+                          MANAGER_CONFIRMED: "#3b82f6",
+                          MANAGER_RESOLVE_REQUEST: "#14b8a6",
+                          MANAGER_APPROVED_EDIT: "#14b8a6",
+                          MANAGER_DECLINE_REQUEST: "#ef4444",
+                          CANCEL_RESERVATION: "#ef4444",
+                          STAFF_SEND_COOKING_QUEUE: "#8b5cf6",
+                          "Staff Send Cooking Queue": "#8b5cf6",
+                          SEED_TEST_RESERVATION: "#c9a96e",
+                        };
+                        const ACTION_LABEL = {
+                          RESERVATION_CREATED: "Reservation Create",
+                          CHECK_IN_RESERVATION: "Confirm Check-in Create",
+                          STAFF_CHECKIN_CONFIRMED: "Confirm Check-in Create",
+                          PAYMENT_CHECKOUT_AUTO: "Complete Paid Create",
+                          STAFF_CHECKOUT_CONFIRMED: "Confirm Check-out Created",
+                          REJECT_RESERVATION: "Reject Request Check-in Create",
+                          REJECT_CHECKIN: "Reject Check-in Create",
+                          MANAGER_CONFIRMED: "Confirm Request Check-in Create",
+                          MANAGER_RESOLVE_REQUEST: "Confirm Request Check-in Create",
+                          MANAGER_APPROVED_EDIT: "Edit Approved",
+                          MANAGER_DECLINE_REQUEST: "Reject Request Check-in Create",
+                          CANCEL_RESERVATION: "Booking Cancelled",
+                          STAFF_SEND_COOKING_QUEUE: "Sent to Kitchen",
+                          "Staff Send Cooking Queue": "Sent to Kitchen",
+                          SEED_TEST_RESERVATION: "Seed Test Reservation",
+                          REJECT_CHECKOUT: "Reject Check-out Created",
+                        };
+                        const color = ACTION_COLOR[hist.action_name] || "#8a8175";
+                        const label = ACTION_LABEL[hist.action_name] || hist.label || hist.action_name;
+                        let performerName = hist.performed_by || hist.actor_name || "System";
+                        // Actor role label
+                        let actorRole = hist.role_name;
+                        if (!actorRole) {
+                          if (hist.action_name === "RESERVATION_CREATED") {
+                            actorRole = "Customer";
+                            if (performerName === "System") {
+                              performerName = active.customer_name || active.contact_name || "Unknown";
+                            }
+                          } else if (["CHECK_IN_RESERVATION", "STAFF_CHECKIN_CONFIRMED", "STAFF_CHECKOUT_CONFIRMED", "REJECT_RESERVATION", "REJECT_CHECKIN", "STAFF_SEND_COOKING_QUEUE", "Staff Send Cooking Queue"].includes(hist.action_name)) {
+                            actorRole = "Staff";
+                          } else if (["MANAGER_CONFIRMED", "MANAGER_RESOLVE_REQUEST", "MANAGER_APPROVED_EDIT", "MANAGER_DECLINE_REQUEST"].includes(hist.action_name)) {
+                            actorRole = "Manager";
+                          } else if (hist.action_name !== "PAYMENT_CHECKOUT_AUTO") {
+                            actorRole = "System";
+                          }
+                        }
+                        // Timestamp
+                        const tsStr = (hist.created_time || hist.created_at) && !isNaN(new Date(hist.created_time || hist.created_at).getTime())
+                          ? format(new Date(hist.created_time || hist.created_at), "dd/MM HH:mm")
+                          : "---";
+                        // Extract sent_to from notes if it's a kitchen queue action
+                        let destInfo = "";
+                        if (hist.action_name === "Staff Send Cooking Queue" || hist.action_name === "STAFF_SEND_COOKING_QUEUE") {
+                          if (hist.notes && hist.notes.sent_to) destInfo = ` ➔ ${hist.notes.sent_to}`;
+                        }
+
+                        return (
+                          <div key={idx} style={{ display: "flex", gap: 12, paddingBottom: 16, position: "relative" }}>
+                            {idx < history.length - 1 && (
+                              <div style={{ position: "absolute", left: 8, top: 20, bottom: 0, width: 2, background: "var(--border-color)", borderRadius: 2 }} />
+                            )}
+                            <div style={{ width: 18, height: 18, borderRadius: "50%", background: color, flexShrink: 0, marginTop: 2, boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 20%, transparent)` }} />
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-color)" }}>{label}:</span>
+                                <span style={{ fontSize: "13px", color: "var(--text-color)", whiteSpace: "nowrap" }}>{tsStr !== "---" ? tsStr.replace(" ", " ") : ""}</span>
+                              </div>
+                              {actorRole !== null && (
+                                <span style={{ fontSize: "12px", color: "var(--sfx-muted)", display: "block", marginTop: 2 }}>
+                                  By {actorRole}{hist.action_name === "RESERVATION_CREATED" ? " : " : " "}{performerName}{destInfo}
+                                </span>
+                              )}
+                              {hist.notes && (hist.notes.cancel_reason || hist.notes.reject_reason || hist.notes.reason) && (
+                                <div style={{ fontSize: "12px", color: "#ef4444", marginTop: 4 }}>
+                                  Reason: {hist.notes.cancel_reason || hist.notes.reject_reason || hist.notes.reason}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: "13px", color: "var(--sfx-muted)" }}>No timeline events yet.</p>
+                  )}
+                </div>
               )}
             </div>
-            <NotConnectedNote>
-              Status changes apply to this view only — reservation write API not connected.
-            </NotConnectedNote>
-          </div>
+          )
         ) : null}
       </ManagerDrawer>
 
-      {/* ── Assign Table Drawer (Manager confirms + assigns) ── */}
+      {/* 2-Step Confirmation Modal */}
       <ManagerDrawer
-        open={Boolean(assignTarget)}
-        title={assignTarget ? `Confirm & Assign — ${assignTarget.customer_name}` : ""}
-        onClose={() => setAssignTarget(null)}
-        footer={
-          <div className="sfx-drawer__acts">
-            <Button variant="ghost" onClick={() => setAssignTarget(null)}>
+        open={!!pendingAction}
+        onClose={() => setPendingAction(null)}
+        title={pendingAction?.type === 'confirm' ? "Confirm Reservation" : "Reject Reservation"}
+      >
+        <div className="sfx-form sfx-form--vert">
+          <p className="sfx-text-muted" style={{ marginBottom: "20px" }}>
+            Are you sure you want to {pendingAction?.type} booking #{String(pendingAction?.reservation?.reservation_id || pendingAction?.reservation?.id).padStart(6, "0")}? This will notify the customer.
+          </p>
+
+          <div className="sfx-detail">
+            <span className="sfx-detail__label">Customer Name</span>
+            <span className="sfx-detail__value">{pendingAction?.reservation?.customer_name || "---"}</span>
+
+            <span className="sfx-detail__label">Date & Time</span>
+            <span className="sfx-detail__value">{formatReservationDateTime(pendingAction?.reservation)}</span>
+
+            <span className="sfx-detail__label">Guests</span>
+            <span className="sfx-detail__value">{pendingAction?.reservation?.guest_count || pendingAction?.reservation?.party_size} people</span>
+          </div>
+
+          <div className="sfx-actions" style={{ marginTop: "32px", display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+            <Button variant="ghost" onClick={() => setPendingAction(null)}>
               Cancel
             </Button>
-            <Button variant="gold" onClick={handleConfirmAndAssign}>
-              Confirm & Assign Table
+            <Button
+              variant={pendingAction?.type === 'confirm' ? "gold" : "danger"}
+              onClick={() => {
+                if (pendingAction?.type === 'confirm') {
+                  handleConfirm(pendingAction.reservation);
+                } else {
+                  handleReject(pendingAction.reservation, true);
+                }
+                setPendingAction(null);
+                setActive(null);
+              }}
+            >
+              {pendingAction?.type === 'confirm' ? 'Yes, Confirm Booking' : 'Yes, Reject Booking'}
             </Button>
           </div>
-        }
-      >
-        {assignTarget ? (
-          <div className="sfx-assign-form" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            <div style={{ padding: "12px 16px", background: "rgba(245, 158, 11, 0.1)", borderRadius: "8px", border: "1px solid rgba(245, 158, 11, 0.2)" }}>
-              <p style={{ margin: 0, fontSize: "14px", color: "#92400e" }}>
-                <strong>Pending Approval</strong> — Review details and assign a table to confirm this booking.
-              </p>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <div>
-                <span style={{ fontSize: "12px", color: "#888", textTransform: "uppercase" }}>Guest</span>
-                <p style={{ margin: "4px 0 0", fontWeight: 600 }}>{assignTarget.customer_name}</p>
-              </div>
-              <div>
-                <span style={{ fontSize: "12px", color: "#888", textTransform: "uppercase" }}>Party Size</span>
-                <p style={{ margin: "4px 0 0", fontWeight: 600 }}>{assignTarget.party_size} guests</p>
-              </div>
-              <div>
-                <span style={{ fontSize: "12px", color: "#888", textTransform: "uppercase" }}>Date</span>
-                <p style={{ margin: "4px 0 0", fontWeight: 600 }}>{assignTarget.reservation_date}</p>
-              </div>
-              <div>
-                <span style={{ fontSize: "12px", color: "#888", textTransform: "uppercase" }}>Time</span>
-                <p style={{ margin: "4px 0 0", fontWeight: 600 }}>{assignTarget.start_time}</p>
-              </div>
-              <div>
-                <span style={{ fontSize: "12px", color: "#888", textTransform: "uppercase" }}>Preferred Area</span>
-                <p style={{ margin: "4px 0 0", fontWeight: 600 }}>{assignTarget.area_name || "Any"}</p>
-              </div>
-              <div>
-                <span style={{ fontSize: "12px", color: "#888", textTransform: "uppercase" }}>Occasion</span>
-                <p style={{ margin: "4px 0 0", fontWeight: 600 }}>{assignTarget.occasion || "—"}</p>
-              </div>
-            </div>
-            {assignTarget.special_request ? (
-              <div style={{ padding: "10px 14px", background: "rgba(59, 130, 246, 0.06)", borderRadius: "6px" }}>
-                <span style={{ fontSize: "12px", color: "#888", textTransform: "uppercase" }}>Special Request</span>
-                <p style={{ margin: "4px 0 0" }}>{assignTarget.special_request}</p>
-              </div>
-            ) : null}
-            <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <span style={{ fontWeight: 600, fontSize: "14px" }}>
-                Assign Table ({availableTables.length} available for {assignTarget.party_size}+ guests)
-              </span>
-              <select
-                className="sfx-select"
-                value={selectedTable}
-                onChange={(e) => setSelectedTable(e.target.value)}
-                style={{ padding: "10px 12px", fontSize: "14px" }}
-              >
-                <option value="">Choose an available table…</option>
-                {availableTables.map((t) => (
-                  <option key={t.table_id} value={String(t.table_id)}>
-                    {t.table_number} · {t.area_name} ({t.capacity} seats)
-                  </option>
-                ))}
-              </select>
-            </label>
-            {availableTables.length === 0 ? (
-              <p style={{ color: "#ef4444", fontSize: "13px", margin: 0 }}>
-                No available tables fit this party size. Consider releasing a reserved table first.
-              </p>
-            ) : null}
-          </div>
-        ) : null}
+        </div>
       </ManagerDrawer>
+
+      {/* Manager Edit — Double-Confirm Overlay */}
+      {editConfirmPending && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 1200,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+          onClick={() => setEditConfirmPending(false)}
+        >
+          <div
+            style={{
+              background: "var(--bg-card)", borderRadius: "14px",
+              padding: "28px 32px", maxWidth: "440px", width: "92%",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.4)",
+              animation: "sfx-drawer-in 0.22s ease",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 8px", fontSize: "17px", fontWeight: 700, color: "var(--text-color)" }}>
+              Verify Changes
+            </h3>
+            <p style={{ margin: "0 0 18px", fontSize: "13px", color: "var(--sfx-muted)", lineHeight: 1.6 }}>
+              Please confirm the following changes to Booking{" "}
+              <strong>#{String(active?.reservation_id || "").padStart(6, "0")}</strong>:
+            </p>
+            <div style={{ background: "var(--bg-card-alt)", borderRadius: 8, padding: "14px 16px", marginBottom: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+              {editForm.customer_name !== active?.customer_name && (
+                <div style={{ fontSize: "13px" }}>
+                  <span style={{ color: "var(--sfx-muted)" }}>Name: </span>
+                  <span style={{ textDecoration: "line-through", color: "var(--sfx-muted)", marginRight: 6 }}>{active?.customer_name}</span>
+                  <strong>{editForm.customer_name}</strong>
+                </div>
+              )}
+              {editForm.notes !== (active?.special_request || active?.notes || "") && (
+                <div style={{ fontSize: "13px" }}>
+                  <span style={{ color: "var(--sfx-muted)" }}>Notes: </span>
+                  <strong>{editForm.notes || "(cleared)"}</strong>
+                </div>
+              )}
+              {editForm.party_size != (active?.party_size || active?.guest_count) && (
+                <div style={{ fontSize: "13px" }}>
+                  <span style={{ color: "var(--sfx-muted)" }}>Guests: </span>
+                  <strong>{editForm.party_size}</strong>
+                </div>
+              )}
+              {editForm.status && editForm.status !== (active?.status || "").toLowerCase() && (
+                <div style={{ fontSize: "13px" }}>
+                  <span style={{ color: "var(--sfx-muted)" }}>Status: </span>
+                  <strong>{editForm.status}</strong>
+                </div>
+              )}
+              {!editForm.customer_name && !editForm.notes && !editForm.party_size && !editForm.status && (
+                <span style={{ fontSize: "13px", color: "var(--sfx-muted)" }}>All current values will be saved.</span>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <Button variant="ghost" onClick={() => setEditConfirmPending(false)}>Go Back</Button>
+              <Button
+                variant="gold"
+                onClick={async () => {
+                  setEditConfirmPending(false);
+                  await handleSaveEdit();
+                }}
+              >
+                Verify &amp; Save
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Flow C: Resolve Request double-confirmation modal ── */}
+      {resolveConfirmPending && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+          onClick={() => setResolveConfirmPending(null)}
+        >
+          <div
+            style={{
+              background: "var(--bg-card)", borderRadius: "14px",
+              padding: "28px 32px", maxWidth: "440px", width: "92%",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.4)",
+              animation: "sfx-drawer-in 0.22s ease",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: "0 0 8px", fontSize: "17px", fontWeight: 700, color: "var(--text-color)" }}>
+              {resolveConfirmPending.type === "cancel"
+                ? (resolveConfirmPending.decision === "process" ? "Process Refund & Cancel" : "Reject Cancellation")
+                : (resolveConfirmPending.decision === "confirm" ? "✓ Confirm Edit Request" : "✕ Reject Edit Request")}
+            </h3>
+            <p style={{ margin: "0 0 18px", fontSize: "13px", color: "var(--sfx-muted)", lineHeight: 1.6 }}>
+              {resolveConfirmPending.type === "cancel" && resolveConfirmPending.decision === "process"
+                ? `This will cancel booking #${String(active?.reservation_id || "").padStart(6, "0")}, release the table, and send a refund confirmation email. This cannot be undone.`
+                : resolveConfirmPending.type === "cancel" && resolveConfirmPending.decision === "reject"
+                  ? `Reject the cancellation request. Booking #${String(active?.reservation_id || "").padStart(6, "0")} stays Confirmed.`
+                  : resolveConfirmPending.decision === "confirm"
+                    ? `Apply all requested changes to booking #${String(active?.reservation_id || "").padStart(6, "0")}. A confirmation email with the comparison table will be sent to the customer.`
+                    : `Decline the edit request for booking #${String(active?.reservation_id || "").padStart(6, "0")}. The original booking remains unchanged and the customer will be notified.`}
+            </p>
+            {/* Reject reason input for edit decline */}
+            {resolveConfirmPending.type !== "cancel" && resolveConfirmPending.decision === "decline" && (
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--sfx-muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  Reason (required)
+                </label>
+                <textarea
+                  rows={2}
+                  value={editRejectReason}
+                  onChange={e => setEditRejectReason(e.target.value)}
+                  placeholder="e.g. Requested date is fully booked, table not available…"
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border-color)", fontSize: 13, resize: "vertical", background: "var(--bg-input)", color: "var(--text-color)", boxSizing: "border-box" }}
+                />
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <Button variant="ghost" onClick={() => setResolveConfirmPending(null)} disabled={resolving}>
+                Go Back
+              </Button>
+              <Button
+                variant={resolveConfirmPending.decision === "process" || resolveConfirmPending.decision === "decline" ? "danger" : "gold"}
+                disabled={resolving}
+                onClick={() => {
+                  if (resolveConfirmPending.decision === "decline" && (!editRejectReason || editRejectReason.trim() === "")) {
+                    toast("A reason is required to reject an edit request.", "error");
+                    return;
+                  }
+                  handleResolveRequest(resolveConfirmPending.decision, editRejectReason);
+                  setEditRejectReason("");
+                }}
+              >
+                {resolving ? "Processing…" : (resolveConfirmPending.decision === "confirm" ? "Confirm Changes" : resolveConfirmPending.decision === "decline" ? "Reject Request" : "Confirm")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Flow D: Manager Cancel Modal ──────────────────────────────── */}
+      {cancelModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#1a1008", border: "1px solid #c9a96e44", borderRadius: 14, padding: "32px 36px", minWidth: 420, maxWidth: 520, boxShadow: "0 16px 64px rgba(0,0,0,0.6)" }}>
+            <h3 style={{ color: "#c9a96e", margin: "0 0 6px", fontSize: 18, fontWeight: 700 }}>Cancel Reservation</h3>
+            <p style={{ color: "#a09080", fontSize: 13, margin: "0 0 20px" }}>
+              You are cancelling <strong style={{ color: "#e8dcc8" }}>Reservation #{cancelModal.reservation.reservation_id}</strong> for{" "}
+              <strong style={{ color: "#e8dcc8" }}>{cancelModal.reservation.customer_name || "Guest"}</strong>.
+              <br />This action will release the table and notify the customer by email.
+            </p>
+            <label style={{ display: "block", color: "#a09080", fontSize: 12, marginBottom: 8, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              Cancellation Reason <span style={{ color: "#e74c3c" }}>*</span>
+            </label>
+            <textarea
+              rows={4}
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="e.g. Restaurant closure, customer called to cancel, overbooking…"
+              style={{ width: "100%", background: "#0d0804", border: "1px solid #c9a96e55", borderRadius: 8, padding: "12px 14px", color: "#e8dcc8", fontSize: 14, resize: "vertical", boxSizing: "border-box", outline: "none" }}
+            />
+            <p style={{ color: "#888", fontSize: 11, margin: "6px 0 20px" }}>Minimum 5 characters. This reason will be recorded in the Audit Log.</p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <Button variant="ghost" onClick={() => { setCancelModal(null); setCancelReason(""); }} disabled={cancelling}>
+                Go Back
+              </Button>
+              <Button variant="danger" onClick={handleCancelByManager} disabled={cancelling || cancelReason.trim().length < 5}>
+                {cancelling ? "Cancelling…" : "Confirm Cancellation"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

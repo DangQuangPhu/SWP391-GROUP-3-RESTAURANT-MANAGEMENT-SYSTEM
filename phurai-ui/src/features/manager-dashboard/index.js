@@ -23,5 +23,5 @@ export { default as ReportsSection } from "./components/sections/ReportsSection.
 export { default as SettingsSection } from "./components/sections/SettingsSection.jsx";
 
 export * from "./config/managerNav.js";
-export * from "./data/managerDashboardMockData.js";
+export * from "@/shared/constants.js";
 export * from "./services/managerApi.js";

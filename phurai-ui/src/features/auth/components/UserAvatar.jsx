@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { getAvatarInitial, getAvatarSrc, resolveAvatarUrl } from "@/features/profile";
+import {
+  getAvatarInitial,
+  getAvatarSrc,
+  resolveAvatarUrl,
+} from "@/features/profile/utils/avatarUtils.js";
 
 function UserAvatar({ user, className = "", imgClassName = "", size = "md" }) {
   const [broken, setBroken] = useState(false);

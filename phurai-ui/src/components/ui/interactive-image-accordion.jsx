@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { homeImages } from '@/features/home';
+import { motion } from 'framer-motion';
+import { homeImages } from '@/features/home/data/homeAssets.js';
 import '@/styles/unique-experience.css';
 
 const FALLBACK_IMAGE = homeImages.hero;
@@ -28,7 +29,9 @@ function AccordionPanel({ item, isActive, onActivate }) {
   const [src, setSrc] = useState(item.imageUrl || FALLBACK_IMAGE);
 
   return (
-    <button
+    <motion.button
+      layout
+      transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
       type="button"
       className={`uxp-panel${isActive ? ' uxp-panel--active' : ''}`}
       onMouseEnter={onActivate}
@@ -48,7 +51,7 @@ function AccordionPanel({ item, isActive, onActivate }) {
       />
       <span className="uxp-panel__overlay" aria-hidden="true" />
       <span className="uxp-panel__caption">{item.title}</span>
-    </button>
+    </motion.button>
   );
 }
 

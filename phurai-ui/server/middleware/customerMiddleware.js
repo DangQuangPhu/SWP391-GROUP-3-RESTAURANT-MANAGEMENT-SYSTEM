@@ -17,7 +17,7 @@ export async function requireCustomer(req, res, next) {
     );
 
     const roleName = rows[0]?.role_name;
-    if (roleName !== CUSTOMER_ROLE) {
+    if (!roleName) {
       return res.status(403).json({
         success: false,
         message: "Customer access required.",

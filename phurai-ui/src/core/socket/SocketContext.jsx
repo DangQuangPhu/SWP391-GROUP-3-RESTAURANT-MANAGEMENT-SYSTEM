@@ -36,7 +36,7 @@ export function SocketProvider({ children, user = null, sessionId = null }) {
       : null;
 
   useEffect(() => {
-    if (!userId || !roleId) {
+    if ((!userId || !roleId) && !activeSessionId) {
       setSocket(null);
       setConnected(false);
       return undefined;
@@ -44,7 +44,7 @@ export function SocketProvider({ children, user = null, sessionId = null }) {
 
     const instance = io(SOCKET_URL, {
       autoConnect: true,
-      transports: ["websocket", "polling"],
+      transports: ["polling", "websocket"],
       auth: {
         userId,
         roleId,

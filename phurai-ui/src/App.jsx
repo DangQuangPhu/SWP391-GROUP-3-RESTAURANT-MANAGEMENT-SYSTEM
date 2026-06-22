@@ -33,8 +33,12 @@ import { ManagerPortalPage } from "@/features/manager-dashboard";
 import { GiftCardPage } from "@/features/gift-cards";
 import ScrollToTop from "@/components/common/ScrollToTop.jsx";
 import { StaffDashboardPage as StaffDashboard, isStaffPortalUser } from "@/features/staff-dashboard";
+import AdminLayout from '@/features/admin-dashboard/layout/AdminLayout';
+import AdminDashboardPage from '@/features/admin-dashboard/pages/AdminDashboardPage';
+import AdminAccountsPage from '@/features/admin-dashboard/pages/AdminAccountsPage';
 import NotFound from "@/pages/NotFound";
 import LandingPage from "@/pages/public/LandingPage";
+import QrScanPage from "@/pages/public/QrScanPage.jsx";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import FloatingActionButtons from "@/components/common/FloatingActionButtons";
@@ -110,7 +114,7 @@ function getPageFromPath(path) {
   if (normalized === "/take-out") return "takeout";
   if (normalized === "/catering") return "catering";
   if (normalized === "/menus") return "menus";
-  if (normalized === "/reservations") return "reservations";
+  if (normalized === "/reservations" || normalized.startsWith("/reservations/")) return "reservations";
   if (normalized === "/my-reservations") return "myReservations";
   if (normalized === "/private-events") return "privateEvents";
   if (normalized === "/careers") return "careers";
@@ -219,7 +223,14 @@ function App() {
             setCurrentUser(normalized);
             saveAuthUser(normalized, Boolean(localStorage.getItem("phurai_auth_user")));
           })
-          .catch(() => {});
+          .catch((err) => {
+            if (err?.status === 404 || err?.status === 401) {
+              console.warn("Ghost session detected, clearing auth data.");
+              clearAuthUser();
+              setIsAuthenticated(false);
+              setCurrentUser(null);
+            }
+          });
       }
     }
 
@@ -363,9 +374,11 @@ function App() {
 
   const isManagerPage = pathname === "/manager" || pathname.startsWith("/manager/");
   const isStaffPage = pathname === "/staff" || pathname.startsWith("/staff/");
+  const isAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
   const isAccountPage =
     pathname.startsWith("/profile") || pathname.startsWith("/settings");
-  const isPortalPage = isAccountPage || isManagerPage || isStaffPage;
+  const isReservationPage = pathname === "/reservations" || pathname.startsWith("/reservations/");
+  const isPortalPage = isAccountPage || isManagerPage || isStaffPage || isAdminPage || isReservationPage;
 
   return (
     <TableSessionProvider userId={customerUserId} isCustomer={isCustomerUser}>
@@ -373,187 +386,181 @@ function App() {
         currentUser={currentUser}
         isAuthenticated={isAuthenticated}
       >
-      <ScrollToTop />
-      {!isPortalPage ? (
-        <Navbar
-          activePage={activePage}
-          onNavigate={handleNavigate}
-          isAuthenticated={isAuthenticated}
-          currentUser={currentUser}
-          status={status}
-          onSaveStatus={saveStatus}
-          onClearStatus={clearStatus}
-          onOpenAuth={() => openAuthModal("login")}
-          onOpenProfile={(view = "view") => {
-            if (view === "password") {
-              openChangePassword();
-              return;
+        <ScrollToTop />
+        {!isPortalPage ? (
+          <Navbar
+            activePage={activePage}
+            onNavigate={handleNavigate}
+            isAuthenticated={isAuthenticated}
+            currentUser={currentUser}
+            status={status}
+            onSaveStatus={saveStatus}
+            onClearStatus={clearStatus}
+            onOpenAuth={() => openAuthModal("login")}
+            onOpenProfile={(view = "view") => {
+              if (view === "password") {
+                openChangePassword();
+                return;
+              }
+              handleNavigate("profile");
+            }}
+            onSignOut={handleSignOut}
+          />
+        ) : null}
+
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/landing" element={<LandingPage />} />
+          <Route path="/scan/:qr_code" element={<QrScanPage />} />
+          <Route path="/menu" element={<MenuRouteRedirect />} />
+          <Route path="/take-out" element={<TakeOut />} />
+          <Route path="/catering" element={<Catering />} />
+          <Route
+            path="/menus"
+            element={<Menu isAuthenticated={isAuthenticated} currentUser={currentUser} />}
+          />
+          <Route
+            path="/reservations/:step?"
+            element={
+              <ReservationPage
+                isAuthenticated={isAuthenticated}
+                currentUser={currentUser}
+                onNavigate={handleNavigate}
+                onRequireAuth={() => openAuthModal("register")}
+              />
             }
-            handleNavigate("profile");
-          }}
-          onSignOut={handleSignOut}
-        />
-      ) : null}
+          />
 
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/landing" element={<LandingPage />} />
-        <Route path="/menu" element={<MenuRouteRedirect />} />
-        <Route path="/take-out" element={<TakeOut />} />
-        <Route path="/catering" element={<Catering />} />
-        <Route
-          path="/menus"
-          element={<Menu isAuthenticated={isAuthenticated} currentUser={currentUser} />}
-        />
-        <Route
-          path="/reservations"
-          element={
-            <ReservationPage
-              isAuthenticated={isAuthenticated}
-              currentUser={currentUser}
-              onNavigate={handleNavigate}
-              onRequireAuth={() => openAuthModal("register")}
-            />
-          }
-        />
-        <Route
-          path="/my-reservations"
-          element={
-            <MyReservationsPage
-              isAuthenticated={isAuthenticated}
-              currentUser={currentUser}
-              onNavigate={handleNavigate}
-              onNavigateLogin={() => openAuthModal("login")}
-            />
-          }
-        />
-        <Route path="/private-events" element={<PrivateEvents onNavigate={handleNavigate} />} />
-        <Route path="/careers" element={<Careers />} />
-        <Route path="/contact-hours" element={<ContactHours />} />
-        <Route
-          path="/gift-cards"
-          element={
-            <GiftCardPage
-              isAuthenticated={isAuthenticated}
-              currentUser={currentUser}
-              onRequireAuth={() => openAuthModal("login")}
-            />
-          }
-        />
-        <Route path="/register" element={<Register />} />
-        <Route path="/verify" element={<VerifyEmail />} />
-        <Route
-          path="/profile"
-          element={
-            <ProfilePage
-              profile={profile}
-              profileLoading={profileLoading}
-              profileError={profileLoadError}
-              onRetryProfile={refetchProfile}
-              isAuthenticated={isAuthenticated}
-              initialEditMode={profileEditMode}
-              onSaveProfile={saveProfileFields}
-              onSavePhone={savePhoneNumber}
-              onSavePreferences={persistExtended}
-              onApplyAvatar={applyAvatarUpdate}
-              onOpenChangePassword={openChangePassword}
-              onPasswordReset={handlePasswordReset}
-              onNavigateLogin={() => openAuthModal("login")}
-              onNavigateHome={() => handleNavigate("home")}
-            />
-          }
-        />
-        <Route
-          path="/settings/*"
-          element={
-            <SettingsPage
-              profile={profile}
-              pathname={pathname}
-              isAuthenticated={isAuthenticated}
-              onNavigatePath={navigateToPath}
-              onNavigateLogin={() => openAuthModal("login")}
-              onNavigateHome={() => handleNavigate("home")}
-              onOpenChangePassword={openChangePassword}
-              onApplyAvatar={applyAvatarUpdate}
-            />
-          }
-        />
-        <Route path="/manager" element={<Navigate to="/manager/dashboard" replace />} />
-        <Route
-          path="/manager/*"
-          element={
-            <ManagerPortalPage
-              isAuthenticated={isAuthenticated}
-              currentUser={currentUser}
-              onSignOut={handleSignOut}
-              onNavigate={handleNavigate}
-            />
-          }
-        />
-        <Route
-          path="/staff"
-          element={
-            <StaffDashboard
-              authReady={authReady}
-              isAuthenticated={isAuthenticated}
-              currentUser={currentUser}
-              onSignOut={handleSignOut}
-              onNavigate={handleNavigate}
-            />
-          }
-        />
-        <Route
-          path="/staff/*"
-          element={
-            <StaffDashboard
-              authReady={authReady}
-              isAuthenticated={isAuthenticated}
-              currentUser={currentUser}
-              onSignOut={handleSignOut}
-              onNavigate={handleNavigate}
-            />
-          }
-        />
-        <Route
-          path="*"
-          element={
-            <NotFound
-              onNavigate={handleNavigate}
-              pathname={pathname}
-              currentUser={currentUser}
-              isAuthenticated={isAuthenticated}
-            />
-          }
-        />
-      </Routes>
+          <Route
+            path="/my-reservations"
+            element={
+              <MyReservationsPage
+                isAuthenticated={isAuthenticated}
+                currentUser={currentUser}
+                onNavigate={handleNavigate}
+                onNavigateLogin={() => openAuthModal("login")}
+              />
+            }
+          />
+          <Route path="/private-events" element={<PrivateEvents onNavigate={handleNavigate} />} />
+          <Route path="/careers" element={<Careers />} />
+          <Route path="/contact-hours" element={<ContactHours />} />
+          <Route
+            path="/gift-cards"
+            element={
+              <GiftCardPage
+                isAuthenticated={isAuthenticated}
+                currentUser={currentUser}
+                onRequireAuth={() => openAuthModal("login")}
+              />
+            }
+          />
+          <Route path="/register" element={<Register />} />
+          <Route path="/verify" element={<VerifyEmail />} />
+          <Route
+            path="/profile"
+            element={
+              <ProfilePage
+                profile={profile}
+                profileLoading={profileLoading}
+                profileError={profileLoadError}
+                onRetryProfile={refetchProfile}
+                isAuthenticated={isAuthenticated}
+                initialEditMode={profileEditMode}
+                onSaveProfile={saveProfileFields}
+                onSavePhone={savePhoneNumber}
+                onSavePreferences={persistExtended}
+                onApplyAvatar={applyAvatarUpdate}
+                onOpenChangePassword={openChangePassword}
+                onPasswordReset={handlePasswordReset}
+                onNavigateLogin={() => openAuthModal("login")}
+                onNavigateHome={() => handleNavigate("home")}
+              />
+            }
+          />
+          <Route
+            path="/settings/*"
+            element={
+              <SettingsPage
+                profile={profile}
+                pathname={pathname}
+                isAuthenticated={isAuthenticated}
+                onNavigatePath={navigateToPath}
+                onNavigateLogin={() => openAuthModal("login")}
+                onNavigateHome={() => handleNavigate("home")}
+                onOpenChangePassword={openChangePassword}
+                onApplyAvatar={applyAvatarUpdate}
+              />
+            }
+          />
+          <Route path="/admin" element={<AdminLayout currentUser={currentUser} />}>
+            <Route index element={<AdminDashboardPage />} />
+            <Route path="accounts" element={<AdminAccountsPage />} />
+          </Route>
+          <Route path="/manager" element={<Navigate to="/manager/dashboard" replace />} />
+          <Route
+            path="/manager/*"
+            element={
+              <ManagerPortalPage
+                isAuthenticated={isAuthenticated}
+                currentUser={currentUser}
+                onSignOut={handleSignOut}
+                onNavigate={handleNavigate}
+              />
+            }
+          />
+          <Route
+            path="/staff/*"
+            element={
+              <StaffDashboard
+                authReady={authReady}
+                isAuthenticated={isAuthenticated}
+                currentUser={currentUser}
+                onSignOut={handleSignOut}
+                onNavigate={handleNavigate}
+              />
+            }
+          />
+          <Route
+            path="*"
+            element={
+              <NotFound
+                onNavigate={handleNavigate}
+                pathname={pathname}
+                currentUser={currentUser}
+                isAuthenticated={isAuthenticated}
+              />
+            }
+          />
+        </Routes>
 
-      {!isPortalPage ? <Footer /> : null}
-      {!isPortalPage ? <FloatingActionButtons /> : null}
+        {!isPortalPage ? <Footer /> : null}
+        {!isPortalPage ? <FloatingActionButtons /> : null}
 
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={closeAuthModal}
-        isAuthenticated={isAuthenticated}
-        onAuthSuccess={handleAuthSuccess}
-        initialMode={authModalMode}
-        successMessage={loginSuccessMessage}
-        onClearSuccess={() => setLoginSuccessMessage("")}
-      />
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={closeAuthModal}
+          isAuthenticated={isAuthenticated}
+          onAuthSuccess={handleAuthSuccess}
+          initialMode={authModalMode}
+          successMessage={loginSuccessMessage}
+          onClearSuccess={() => setLoginSuccessMessage("")}
+        />
 
-      <AuthSuccessOverlay
-        isVisible={showWelcome}
-        user={pendingAuthUser}
-        fading={welcomeFading}
-      />
+        <AuthSuccessOverlay
+          isVisible={showWelcome}
+          user={pendingAuthUser}
+          fading={welcomeFading}
+        />
 
-      <ProfileModal
-        isOpen={showProfile}
-        onClose={() => setShowProfile(false)}
-        user={currentUser}
-        onSave={handleProfileSave}
-        initialView={profileView}
-        onPasswordReset={handlePasswordReset}
-      />
+        <ProfileModal
+          isOpen={showProfile}
+          onClose={() => setShowProfile(false)}
+          user={currentUser}
+          onSave={handleProfileSave}
+          initialView={profileView}
+          onPasswordReset={handlePasswordReset}
+        />
       </AppRealtimeShell>
     </TableSessionProvider>
   );

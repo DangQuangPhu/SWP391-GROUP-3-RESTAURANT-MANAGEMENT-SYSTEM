@@ -1,10 +1,15 @@
 export async function verifyGoogleAccessToken(accessToken) {
-  const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  let response;
+  try {
+    response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch (networkErr) {
+    throw new Error("Could not reach Google servers. Check your internet connection.");
+  }
 
   if (!response.ok) {
-    throw new Error("Invalid Google access token.");
+    throw new Error("Invalid or expired Google access token.");
   }
 
   const data = await response.json();
@@ -12,15 +17,27 @@ export async function verifyGoogleAccessToken(accessToken) {
 }
 
 export async function verifyGoogleIdToken(credential) {
-  const response = await fetch(
-    `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`
-  );
+  let response;
+  try {
+    response = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`
+    );
+  } catch (networkErr) {
+    throw new Error("Could not reach Google servers. Check your internet connection.");
+  }
 
   if (!response.ok) {
-    throw new Error("Invalid Google credential.");
+    throw new Error("Invalid or expired Google credential.");
   }
 
   const data = await response.json();
+
+  // Security: validate token audience matches our app's client ID
+  const expectedAud = process.env.GOOGLE_CLIENT_ID;
+  if (expectedAud && data.aud !== expectedAud) {
+    throw new Error("Google token audience mismatch. Token was not issued for this application.");
+  }
+
   return normalizeGoogleProfile({
     sub: data.sub,
     email: data.email,

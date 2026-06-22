@@ -1,0 +1,285 @@
+import { getRawPool } from "../db.js";
+import sql from "mssql";
+import { RESERVATION_STATUS } from "../../src/shared/reservationStatus.js";
+
+export const createPreSaveReservation = async (req, res) => {
+  try {
+    const {
+      customer_id,
+      contact_name,
+      contact_phone,
+      contact_email,
+      reservation_start_at,
+      reservation_end_at,
+      durationMinutes,
+      guest_count,
+      special_request,
+      preorder_items = [],
+      promo_code,
+      table_ids = [],
+    } = req.body;
+
+    if (!reservation_start_at || !guest_count || table_ids.length === 0) {
+      return res.status(400).json({ success: false, message: "Missing required fields or table_ids" });
+    }
+
+    const pool = await getRawPool();
+    let items_total = 0;
+    let discount_amount = 0;
+    let final_total = 0;
+    
+    // 1. Calculate items total securely from DB
+    if (preorder_items && preorder_items.length > 0) {
+      for (const item of preorder_items) {
+        if (!item.dish_id || !item.quantity || item.quantity < 1) continue;
+        const dishResult = await pool.request()
+          .input('dish_id', sql.Int, item.dish_id)
+          .query(`SELECT price FROM dbo.Dishes WHERE dish_id = @dish_id AND is_available = 1`);
+        
+        if (dishResult.recordset.length > 0) {
+          const price = parseFloat(dishResult.recordset[0].price);
+          items_total += price * item.quantity;
+          item.unit_price = price; // store explicit verified price
+          console.log(`[DEBUG TRACE 1 - PreSave] Added preorder item ${item.dish_id}, qty: ${item.quantity}, unitPrice: ${price}. Current items_total: ${items_total}`);
+        } else {
+          return res.status(400).json({ success: false, message: `Dish ID ${item.dish_id} is invalid or unavailable.` });
+        }
+      }
+      console.log(`[DEBUG TRACE 2 - PreSave] Finished Preorder Items loop. Final items_total from preorder: ${items_total}`);
+    }
+
+    // 2. Validate Promo Code via shared service
+    if (promo_code) {
+       const { checkPromoValidity } = await import("./promotionsController.js");
+       const result = await checkPromoValidity(promo_code, items_total);
+       
+       if (!result.isValid) {
+         return res.status(400).json({ success: false, message: result.message });
+       }
+       
+       const promo = result.promo;
+       const value = parseFloat(promo.discount_value);
+       if (promo.discount_type === 'PERCENT') {
+         discount_amount = items_total * (value / 100);
+         if (promo.max_discount_amount && discount_amount > parseFloat(promo.max_discount_amount)) {
+           discount_amount = parseFloat(promo.max_discount_amount);
+         }
+       } else {
+         discount_amount = value;
+       }
+    }
+
+    // 3. Deposit Amount & Final Total Calculation
+    // 1. Calculate the raw total of all pre-ordered items from the request
+    const preorderItemsTotal = items_total;
+
+    // 2. Define the Base Table Deposit (Fetch from RestaurantSettings or default to 10,000 VND)
+    const BASE_TABLE_DEPOSIT = 10000;
+
+    // 3. Define the exact money the customer MUST pay upfront via QR right now
+    // Total Advance Payment = Base Table Deposit + Pre-order Total
+    const totalAdvancePaymentRequired = BASE_TABLE_DEPOSIT + preorderItemsTotal;
+
+    // 4. Map correctly to the Database Columns defined in the Master SQL script:
+    // - deposit_amount: The actual upfront money collected today to secure the booking.
+    // - final_total: The food subtotal value for accounting references.
+    const deposit_amount = totalAdvancePaymentRequired;
+    final_total = preorderItemsTotal;
+
+    console.log(`[DEBUG TRACE 3 - PreSave] items_total: ${items_total}, deposit_amount: ${deposit_amount}, final_total (sent to QR): ${final_total}`);
+    // 4. Generate Order Code (e.g. PHURAI123456)
+    const order_code = `PHURAI${Math.floor(100000 + Math.random() * 900000)}`;
+
+    // Calculate end time
+    let computed_end_at = reservation_end_at;
+    if (!computed_end_at && durationMinutes) {
+      const start = new Date(reservation_start_at);
+      start.setMinutes(start.getMinutes() + Number(durationMinutes));
+      computed_end_at = start;
+    } else if (!computed_end_at) {
+      const start = new Date(reservation_start_at);
+      start.setMinutes(start.getMinutes() + 120);
+      computed_end_at = start;
+    }
+
+    // 5. Insert into DB with status 'Pending Payment'
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const insertResult = await transaction.request()
+        .input('order_code', sql.VarChar(50), order_code)
+        .input('customer_id', sql.Int, customer_id || null)
+        .input('contact_name', sql.NVarChar(100), contact_name || null)
+        .input('contact_phone', sql.NVarChar(20), contact_phone || null)
+        .input('contact_email', sql.NVarChar(100), contact_email || null)
+        .input('reservation_start_at', sql.DateTime2, reservation_start_at)
+        .input('reservation_end_at', sql.DateTime2, computed_end_at)
+        .input('guest_count', sql.TinyInt, guest_count)
+        .input('special_request', sql.NVarChar(1000), special_request || null)
+        .input('deposit_amount', sql.Decimal(12, 2), deposit_amount)
+        .input('final_total', sql.Decimal(12, 2), final_total)
+        .input('applied_promo_code', sql.VarChar(50), promo_code || null)
+        .input('reservation_status', sql.NVarChar(25), RESERVATION_STATUS.PENDING_PAYMENT)
+        .input('reservation_source', sql.NVarChar(20), 'Online')
+        .query(`
+          INSERT INTO dbo.Reservations (
+            order_code, customer_id, contact_name, contact_phone, contact_email,
+            reservation_start_at, reservation_end_at, guest_count, special_request,
+            deposit_amount, final_total, applied_promo_code,
+            reservation_status, reservation_source, created_at, updated_at,
+            reminder_sent, has_pending_request, edit_used_count
+          )
+          OUTPUT inserted.reservation_id
+          VALUES (
+            @order_code, @customer_id, @contact_name, @contact_phone, @contact_email,
+            @reservation_start_at, @reservation_end_at, @guest_count, @special_request,
+            @deposit_amount, @final_total, @applied_promo_code,
+            @reservation_status, @reservation_source, SYSDATETIME(), SYSDATETIME(),
+            0, 0, 0
+          )
+        `);
+
+      const reservation_id = insertResult.recordset[0].reservation_id;
+
+      // Insert into ReservationTables
+      for (const tableId of table_ids) {
+        await transaction.request()
+          .input('resId', sql.Int, reservation_id)
+          .input('tableId', sql.SmallInt, tableId)
+          .query(`
+            INSERT INTO dbo.ReservationTables (reservation_id, table_id)
+            VALUES (@resId, @tableId)
+          `);
+      }
+
+      // Insert Preorder Items and Orders
+      if (preorder_items && preorder_items.length > 0) {
+        for (const item of preorder_items) {
+          if (!item.dish_id || !item.quantity || item.quantity < 1) continue;
+          await transaction.request()
+            .input('resId', sql.Int, reservation_id)
+            .input('dishId', sql.Int, item.dish_id)
+            .input('qty', sql.SmallInt, item.quantity)
+            .input('price', sql.Decimal(12, 2), item.unit_price)
+            .input('notes', sql.NVarChar(255), item.customization_requests || null)
+            .query(`
+              INSERT INTO dbo.PreorderItems (reservation_id, dish_id, quantity, unit_price, notes, created_at)
+              VALUES (@resId, @dishId, @qty, @price, @notes, SYSDATETIME())
+            `);
+        }
+
+        const primaryTableId = table_ids.length > 0 ? table_ids[0] : null;
+        await transaction.request()
+          .input('resId', sql.Int, reservation_id)
+          .input('tableId', sql.SmallInt, primaryTableId)
+          .input('customerId', sql.Int, customer_id || null)
+          .input('subtotal', sql.Decimal(12, 2), items_total)
+          .input('totalAmount', sql.Decimal(12, 2), Math.max(0, items_total - discount_amount))
+          .query(`
+            INSERT INTO dbo.Orders (reservation_id, table_id, customer_id, order_type, order_status, subtotal, total_amount, amount_paid)
+            VALUES (@resId, @tableId, @customerId, N'Preorder', N'Open', @subtotal, @totalAmount, 0)
+          `);
+      }
+
+      await transaction.commit();
+
+    // 6. Formulate VietQR payload URL
+    // Standard template based on the user's previously mentioned VietQR format:
+    // https://qr.sepay.vn/img?bank=TPBank&acc=00003942326&amount=10000&des=RES123456&template=&showinfo=true&holder=DANG%20QUANG%20PHU&store=PHURAI%20RESTAURANT
+    const vietqr_url = `https://qr.sepay.vn/img?bank=TPBank&acc=00003942326&amount=${deposit_amount}&des=${order_code}&template=&showinfo=true&holder=DANG%20QUANG%20PHU&store=PHURAI%20RESTAURANT`;
+
+    res.status(201).json({
+      success: true,
+      reservation_id,
+      order_code,
+      items_total,
+      discount_amount,
+      deposit_amount,
+      final_total,
+      vietqr_url
+    });
+
+    } catch (transactionError) {
+      await transaction.rollback();
+      throw transactionError;
+    }
+
+  } catch (error) {
+    console.error("Error creating pre-save reservation:", error);
+    res.status(500).json({ success: false, message: "Failed to process reservation payment setup" });
+  }
+};
+
+export const cancelPendingPayment = async (req, res) => {
+  try {
+    const reservationId = parseInt(req.params.id, 10);
+    const userId = req.userId; // Provided by auth middleware
+
+    if (isNaN(reservationId) || reservationId <= 0) {
+      return res.status(400).json({ success: false, message: "Invalid reservation ID" });
+    }
+
+    const pool = await getRawPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const resResult = await transaction.request()
+        .input('resId', sql.Int, reservationId)
+        .input('customerId', sql.Int, userId || null)
+        .query(`
+          SELECT reservation_status, customer_id 
+          FROM dbo.Reservations 
+          WHERE reservation_id = @resId 
+            AND (customer_id = @customerId OR @customerId IS NULL)
+        `);
+
+      if (resResult.recordset.length === 0) {
+        await transaction.rollback();
+        return res.status(404).json({ success: false, message: "Reservation not found or unauthorized" });
+      }
+
+      const reservation = resResult.recordset[0];
+      if (reservation.reservation_status !== RESERVATION_STATUS.PENDING_PAYMENT) {
+        await transaction.rollback();
+        return res.status(400).json({ success: false, message: "Only 'Pending Payment' reservations can be aborted." });
+      }
+
+      await transaction.request()
+        .input('resId', sql.Int, reservationId)
+        .input('resStatus', sql.NVarChar(25), 'PaymentFailed')
+        .input('cancelReason', sql.NVarChar(255), 'Aborted by customer during checkout')
+        .query(`
+          UPDATE dbo.Reservations 
+          SET reservation_status = @resStatus,
+              cancel_reason = @cancelReason,
+              cancelled_at = SYSDATETIME(),
+              updated_at = SYSDATETIME()
+          WHERE reservation_id = @resId
+        `);
+
+      await transaction.request()
+        .input('actionName', sql.VarChar, 'PAYMENT_CANCELLED - Created by: Customer - Manual Abort')
+        .input('targetTable', sql.VarChar, 'Reservations')
+        .input('targetId', sql.Int, reservationId)
+        .input('newValue', sql.VarChar, JSON.stringify({ reservation_status: RESERVATION_STATUS.PAYMENT_FAILED }))
+        .query(`
+          INSERT INTO dbo.AuditLogs (action_name, target_table, target_id, new_value_json, created_at)
+          VALUES (@actionName, @targetTable, @targetId, @newValue, SYSDATETIME())
+        `);
+
+      await transaction.commit();
+      return res.json({ success: true, message: "Payment aborted successfully." });
+
+    } catch (dbError) {
+      await transaction.rollback();
+      throw dbError;
+    }
+
+  } catch (error) {
+    console.error("Error aborting payment:", error);
+    return res.status(500).json({ success: false, message: "Internal server error." });
+  }
+};
+

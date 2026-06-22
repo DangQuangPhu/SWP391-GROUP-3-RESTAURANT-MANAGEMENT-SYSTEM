@@ -61,19 +61,7 @@ function Navbar({
   const [isScrolled, setIsScrolled] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
-  const [localReservations, setLocalReservations] = useState([]);
-  const [guestDropdownOpen, setGuestDropdownOpen] = useState(false);
   const lastScrollY = useRef(0);
-
-  useEffect(() => {
-    const fetchLocal = () => {
-      const data = JSON.parse(localStorage.getItem('customer_reservations')) || [];
-      setLocalReservations(data);
-    };
-    fetchLocal();
-    window.addEventListener('reservation_added', fetchLocal);
-    return () => window.removeEventListener('reservation_added', fetchLocal);
-  }, []);
 
   const { hasActiveSession } = useTableSession();
   const isMenuCustomerUser = isMenuCustomer(isAuthenticated, currentUser);
@@ -246,74 +234,7 @@ function Navbar({
             View QR Table
           </button>
         ) : null}
-        {!isAuthenticated && localReservations.length > 0 ? (
-          <div 
-            className="phurai-navbar__guest-wrap" 
-            style={{ position: 'relative', display: 'flex', alignItems: 'center', marginLeft: '16px' }}
-            onMouseEnter={() => setGuestDropdownOpen(true)}
-            onMouseLeave={() => setGuestDropdownOpen(false)}
-          >
-            <button 
-              type="button"
-              className="phurai-navbar__avatar-btn"
-              onClick={() => setGuestDropdownOpen(!guestDropdownOpen)}
-              style={{ padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}
-            >
-              <div style={{
-                width: '36px', height: '36px', borderRadius: '50%',
-                background: '#8c764b', color: '#fff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontWeight: 'bold', fontSize: '16px'
-              }}>
-                G
-              </div>
-            </button>
-
-            <div style={{
-              position: 'absolute',
-              top: 'calc(100% + 10px)',
-              right: 0,
-              width: '280px',
-              background: '#1a1a1a',
-              border: '1px solid #333',
-              borderRadius: '8px',
-              padding: '16px',
-              transition: 'all 0.3s ease',
-              opacity: guestDropdownOpen ? 1 : 0,
-              transform: guestDropdownOpen ? 'translateY(0)' : 'translateY(-10px)',
-              pointerEvents: guestDropdownOpen ? 'auto' : 'none',
-              zIndex: 1000,
-              boxShadow: '0 10px 25px rgba(0,0,0,0.5)'
-            }}>
-              <h4 style={{ color: '#fff', margin: '0 0 12px 0', fontSize: '16px', borderBottom: '1px solid #333', paddingBottom: '8px' }}>
-                My Reservations
-              </h4>
-              {localReservations.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {localReservations.map((res, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ color: '#ccc', fontWeight: 'bold', fontSize: '14px' }}>{res.id}</span>
-                        <span style={{ color: '#888', fontSize: '12px' }}>{res.date} • {res.time}</span>
-                      </div>
-                      <span style={{ 
-                        fontSize: '12px', 
-                        padding: '2px 8px', 
-                        borderRadius: '12px', 
-                        background: res.status === 'Pending' ? 'rgba(217, 119, 6, 0.2)' : 'rgba(140, 118, 75, 0.2)',
-                        color: res.status === 'Pending' ? '#fbbf24' : '#8c764b'
-                      }}>
-                        {res.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p style={{ color: '#666', fontSize: '14px', margin: 0 }}>No recent reservations</p>
-              )}
-            </div>
-          </div>
-        ) : !isAuthenticated ? (
+        {!isAuthenticated ? (
           <button type="button" className="phurai-navbar__auth" onClick={onOpenAuth}>
             SIGN IN
           </button>

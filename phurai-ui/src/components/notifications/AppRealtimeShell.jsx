@@ -3,6 +3,7 @@ import { SocketProvider } from "@/core/socket/SocketContext.jsx";
 import { useTableSession } from "@/features/table-session";
 import { APP_TOASTER_OPTIONS } from "@/core/notifications/appToast.js";
 import CustomerNotificationListener from "@/components/notifications/CustomerNotificationListener.jsx";
+import StaffNotificationListener from "@/components/notifications/StaffNotificationListener.jsx";
 
 /**
  * Wraps the app with Socket.IO and global toast listeners.
@@ -19,6 +20,10 @@ export default function AppRealtimeShell({
     <SocketProvider user={currentUser} sessionId={session?.session_id}>
       <Toaster {...APP_TOASTER_OPTIONS} />
       <CustomerNotificationListener
+        user={currentUser}
+        isAuthenticated={isAuthenticated}
+      />
+      <StaffNotificationListener
         user={currentUser}
         isAuthenticated={isAuthenticated}
       />

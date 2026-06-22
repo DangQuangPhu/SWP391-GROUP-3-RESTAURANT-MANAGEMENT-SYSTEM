@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  UserAvatar,
-  OtpCodeInput,
   getDisplayName,
   isValidVietnamPhone,
   normalizePhone,
+} from "@/features/auth/utils/authHelpers.js";
+import {
   OTP_EXPIRES_IN_SECONDS,
   OTP_RESEND_COOLDOWN_SECONDS,
   applyOtpSentTiming,
   formatOtpExpiry,
   resolveRetryAfterSeconds,
-} from "@/features/auth";
+} from "@/features/auth/utils/otpTiming.js";
+import UserAvatar from "@/features/auth/components/UserAvatar.jsx";
+import OtpCodeInput from "@/features/auth/components/OtpCodeInput.jsx";
 import AvatarPickerModal from "../components/AvatarPickerModal.jsx";
 import AvatarPreviewModal from "../components/AvatarPreviewModal.jsx";
 import AccountBackHome from "../components/AccountBackHome.jsx";
@@ -26,7 +28,7 @@ import {
 import "@/styles/OtpCodeInput.css";
 import "@/styles/profile.css";
 
-const GENDERS = ["", "Female", "Male", "Non-binary", "Prefer not to say"];
+const GENDERS = ["", "Male", "Female", "Other"];
 const COUNTRIES = ["", "Vietnam", "United States", "United Kingdom", "Singapore", "Other"];
 const LANGUAGES = ["", "English", "Vietnamese", "French", "Other"];
 
@@ -319,7 +321,7 @@ function ProfileField({ field, value, isEditing, onChange, error }) {
 
   return (
     <div className="profile-dashboard__field">
-      <label htmlFor={`profile-${field.key}`}>{field.label}</label>
+      <label htmlFor={isEditing ? `profile-${field.key}` : undefined}>{field.label}</label>
       {isEditing ? (
         field.type === "select" ? (
           <select id={`profile-${field.key}`} value={value} onChange={onChange}>
@@ -825,7 +827,7 @@ function ProfilePage({
           />
 
           <div className="profile-dashboard__field profile-dashboard__field--bio">
-            <label htmlFor="profile-bio">Bio</label>
+            <label htmlFor={isEditing ? "profile-bio" : undefined}>Bio</label>
             {isEditing ? (
               <textarea
                 id="profile-bio"

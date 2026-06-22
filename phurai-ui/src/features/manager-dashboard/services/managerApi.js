@@ -7,13 +7,12 @@
    Every getter resolves to: { source: "api" | "mock", data }
    ============================================================ */
 
-import { request, profileRequestHeaders, createApiError } from "@/core/api/httpClient.js";
+import { request, profileRequestHeaders, createApiError, loadAuthUser } from "@/core/api/httpClient.js";
 import { asArray } from "@/utils/asArray.js";
 import {
   KPI_CARDS,
   REVENUE_SERIES,
   RESERVATIONS,
-  TABLES,
   DISHES,
   BEST_SELLERS,
   ORDERS,
@@ -22,7 +21,7 @@ import {
   PROMOTIONS,
   RESERVATION_STATS,
   TABLE_UTILIZATION,
-} from "../data/managerDashboardMockData.js";
+} from "@/shared/constants.js";
 
 const MOCK_DELAY = 220;
 
@@ -38,7 +37,7 @@ async function managerGet(path, fallback) {
     if (res?.success) {
       return { source: "api", data: res.data ?? fallback };
     }
-  } catch {
+  } catch { console.error("fetch API ERROR", arguments);
     /* fall through to mock */
   }
   return mock(fallback);
@@ -84,14 +83,6 @@ export function sortReservationsChronologically(rows) {
   );
 }
 
-function mergeAndSortReservations(apiRows, mockRows) {
-  const byId = new Map();
-  [...asArray(apiRows), ...asArray(mockRows)].forEach((row) => {
-    if (!row) return;
-    byId.set(String(row.reservation_id), row);
-  });
-  return sortReservationsChronologically([...byId.values()]);
-}
 
 export async function fetchPendingReservations(userId) {
   try {
@@ -99,7 +90,7 @@ export async function fetchPendingReservations(userId) {
     if (res?.success) {
       return { source: "api", data: sortReservationsChronologically(res.reservations ?? []) };
     }
-  } catch {
+  } catch { console.error("fetch API ERROR", arguments);
     /* fall through */
   }
   return mock(RESERVATIONS.filter(r => r.reservation_status === 'Pending'));
@@ -111,10 +102,22 @@ export async function fetchAllReservations(userId) {
     if (res?.success) {
       return { source: "api", data: sortReservationsChronologically(res.reservations ?? []) };
     }
-  } catch {
+  } catch { console.error("fetch API ERROR", arguments);
     /* fall through */
   }
   return mock(RESERVATIONS);
+}
+
+export async function getAllReservations(userId) {
+  const res = await managerAuthRequest(
+    `/manager/reservations/all`,
+    { method: "GET" },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not fetch reservations.");
+  }
+  return res.reservations;
 }
 
 export async function confirmReservation(reservationId, tableIds, userId) {
@@ -132,18 +135,160 @@ export async function confirmReservation(reservationId, tableIds, userId) {
   return res.data;
 }
 
+export async function rejectReservation(reservationId, reason, userId) {
+  const res = await managerAuthRequest(
+    `/manager/reservations/${reservationId}/reject`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ reason }),
+    },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not reject reservation.");
+  }
+  return res;
+}
+
+export async function cancelReservation(reservationId, reason, userId) {
+  const res = await managerAuthRequest(
+    `/manager/reservations/${reservationId}/cancel`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ cancel_reason: reason }),
+    },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not cancel reservation.");
+  }
+  return res;
+}
+
+export async function getReservationDetails(reservationId, userId) {
+  const res = await managerAuthRequest(
+    `/manager/reservations/${reservationId}`,
+    { method: "GET" },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not fetch reservation details.");
+  }
+  return res.data;
+}
+
+export async function getReservationHistory(reservationId, userId) {
+  const res = await managerAuthRequest(
+    `/manager/reservations/${reservationId}/history`,
+    { method: "GET" },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not fetch reservation history.");
+  }
+  return res.history;
+}
+
+export async function updateReservation(reservationId, payload, userId) {
+  const res = await managerAuthRequest(
+    `/manager/reservations/${reservationId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not update reservation.");
+  }
+  return res.data;
+}
+
+export async function resolveEditRequest(reservationId, decision, rejectReason, userId) {
+  const res = await managerAuthRequest(
+    `/manager/reservations/${reservationId}/resolve-edit`,
+    {
+      method: "POST",
+      body: JSON.stringify({ decision, reject_reason: rejectReason || "" }),
+    },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not resolve edit request.");
+  }
+  return res;
+}
+
+export async function seedTestReservations(userId) {
+  const res = await managerAuthRequest(
+    "/manager/mock-data/seed",
+    { method: "POST" },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not add test reservations.");
+  }
+  return res;
+}
+
+export async function clearTestReservations(userId) {
+  const res = await managerAuthRequest(
+    "/manager/mock-data/purge",
+    { method: "DELETE" },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not clear test reservations.");
+  }
+  return res;
+}
+
 export function fetchTables() {
-  return managerGet("/staff/tables/status", TABLES).then((res) => ({
+  return managerGet("/staff/tables/status", []).then((res) => ({
     ...res,
     data: asArray(res.data),
   }));
 }
 
 export function fetchDishes() {
-  return managerGet("/staff/dishes", DISHES).then((res) => ({
-    ...res,
-    data: asArray(res.data),
-  }));
+  return managerGet("/menu", DISHES).then((res) => {
+    const data = asArray(res.data).map(d => ({
+      ...d,
+      dish_name: d.dish_name || d.name,
+      category_name: d.category_name || d.category,
+      prep_minutes: d.prep_minutes !== undefined ? d.prep_minutes : (d.prep_time_minutes || 0)
+    }));
+    return {
+      ...res,
+      data,
+    };
+  });
+}
+
+export async function addDish(payload, userId) {
+  const res = await managerAuthRequest("/manager/menu", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  }, userId);
+  if (!res?.success) throw createApiError(res?.message || "Could not add dish");
+  return res;
+}
+
+export async function updateDish(dishId, payload, userId) {
+  const res = await managerAuthRequest(`/manager/menu/${dishId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  }, userId);
+  if (!res?.success) throw createApiError(res?.message || "Could not update dish");
+  return res;
+}
+
+export async function deleteDish(dishId, userId) {
+  const res = await managerAuthRequest(`/manager/menu/${dishId}`, {
+    method: "DELETE"
+  }, userId);
+  if (!res?.success) throw createApiError(res?.message || "Could not delete dish");
+  return res;
 }
 
 export function fetchBestSellers() {
@@ -151,6 +296,33 @@ export function fetchBestSellers() {
     ...res,
     data: asArray(res.data),
   }));
+}
+
+export async function updateTableApi(tableId, payload, userId) {
+  const res = await managerAuthRequest(
+    `/manager/tables/${tableId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not update table.");
+  }
+  return res.data;
+}
+
+export async function deleteTableApi(tableId, userId) {
+  const res = await managerAuthRequest(
+    `/manager/tables/${tableId}`,
+    { method: "DELETE" },
+    userId
+  );
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not delete table.");
+  }
+  return res;
 }
 
 function inferKitchenStatus(items) {
@@ -249,7 +421,11 @@ function resolveManagerUserId(userId) {
 }
 
 async function managerAuthRequest(path, options = {}, userId) {
-  const uid = resolveManagerUserId(userId);
+  let uid = resolveManagerUserId(userId);
+  if (!uid) {
+    const fallbackUser = loadAuthUser();
+    uid = resolveManagerUserId(fallbackUser?.user_id || fallbackUser?.id);
+  }
   if (!uid) {
     throw createApiError("Manager session required.", { status: 401 });
   }
@@ -265,7 +441,7 @@ export async function fetchShifts(userId) {
     if (res?.success) {
       return { source: "api", data: res.data ?? [] };
     }
-  } catch {
+  } catch { console.error("fetch API ERROR", arguments);
     /* fall through */
   }
   return mock([]);
@@ -282,7 +458,7 @@ export async function fetchSchedules(date, userId) {
     if (res?.success) {
       return { source: "api", data: res.data ?? [] };
     }
-  } catch {
+  } catch { console.error("fetch API ERROR", arguments);
     /* fall through */
   }
   return mock([]);
@@ -330,7 +506,7 @@ export async function fetchStaffShiftMapping(userId) {
     if (res?.success && res.data && typeof res.data === "object" && !Array.isArray(res.data)) {
       return { source: "api", data: res.data };
     }
-  } catch {
+  } catch { console.error("fetch API ERROR", arguments);
     /* fall through */
   }
   return { source: "mock", data: {} };
@@ -360,7 +536,7 @@ export async function fetchAreas(userId) {
     if (res?.success) {
       return { source: "api", data: res.data ?? [] };
     }
-  } catch {
+  } catch { console.error("fetch API ERROR", arguments);
     /* fall through */
   }
   return mock([]);
@@ -394,35 +570,66 @@ export async function fetchNextTableNumber(areaId, userId, options = {}) {
   return res.data;
 }
 
-export async function fetchFilteredTables({ search, area_id, statuses } = {}, userId) {
+export async function fetchFilteredTables(filters, userId) {
   try {
-    const qs = new URLSearchParams();
-    if (search) qs.set("search", search);
-    if (area_id) qs.set("area_id", String(area_id));
-    if (statuses) qs.set("statuses", statuses);
+    const params = new URLSearchParams();
+    if (filters.search) params.append("search", filters.search);
+    if (filters.area_id) params.append("area_id", filters.area_id);
+    if (filters.statuses) params.append("statuses", filters.statuses);
 
-    const query = qs.toString();
-    const path = query ? `/manager/tables-filtered?${query}` : "/manager/tables-filtered";
+    const path = `/manager/tables-filtered?${params.toString()}`;
     const res = await managerAuthRequest(path, { method: "GET" }, userId);
     if (res?.success) {
       return { source: "api", data: res.data ?? [] };
     }
-  } catch {
+  } catch { console.error("fetch API ERROR", arguments);
     /* fall through */
   }
-  return mock([]);
+
+  let list = [];
+  return mock(list);
+}
+
+export async function mergeTablesApi(sourceId, targetId, userId) {
+  const res = await managerAuthRequest(
+    "/manager/tables/merge",
+    {
+      method: "POST",
+      body: JSON.stringify({ source_table_id: sourceId, target_table_id: targetId }),
+    },
+    userId
+  );
+  if (!res?.success) throw createApiError(res?.message || "Merge failed.");
+  return res;
+}
+
+export async function unmergeTableApi(tableId, userId) {
+  const res = await managerAuthRequest(
+    "/manager/tables/unmerge",
+    {
+      method: "POST",
+      body: JSON.stringify({ table_id: tableId }),
+    },
+    userId
+  );
+  if (!res?.success) throw createApiError(res?.message || "Unmerge failed.");
+  return res;
+}
+
+export async function fetchTableTimelineApi(tableId, userId) {
+  const res = await managerAuthRequest(
+    `/manager/tables/${tableId}/timeline`,
+    { method: "GET" },
+    userId
+  );
+  if (!res?.success) throw createApiError(res?.message || "Fetch timeline failed.");
+  return res;
 }
 
 /* ---- Write operations (UI-ready, not yet persisted) ------------ */
 
 const NOT_CONNECTED = { connected: false };
 
-export function saveDish() {
-  return Promise.resolve(NOT_CONNECTED);
-}
-export function deleteDish() {
-  return Promise.resolve(NOT_CONNECTED);
-}
 export function saveTable() {
   return Promise.resolve(NOT_CONNECTED);
 }

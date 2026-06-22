@@ -10,14 +10,19 @@ import {
   checkoutStaffPayment,
   fetchStaffBill,
   voidStaffBill,
+  createVnpayUrl,
+  checkOrderStatus,
 } from "../services/staffApi.js";
-import { DEMO_NOTICE } from "../data/staffDashboardMockData.js";
+import { DEMO_NOTICE } from "@/shared/constants.js";
+import { SplitBillModal } from "./SplitBillModal.jsx";
+import CheckoutPayment from "./CheckoutPayment.jsx";
 import "../styles/staff-payment-tab.css";
 
 const PAYMENT_METHODS = [
   { id: 1, key: "cash", label: "Cash", sub: "Cash" },
   { id: 2, key: "qr", label: "QR Pay", sub: "VietQR / Momo" },
   { id: 3, key: "card", label: "Bank Transfer", sub: "Bank Card" },
+  { id: 4, key: "vnpay", label: "VNPAY", sub: "Sandbox" },
 ];
 
 function formatMoney(value) {
@@ -69,6 +74,7 @@ function StaffPaymentTab({
   const [amountPaid, setAmountPaid] = useState("");
   const [busyKey, setBusyKey] = useState(null);
   const [checkoutSuccess, setCheckoutSuccess] = useState(null);
+  const [isSplitItemModalOpen, setIsSplitItemModalOpen] = useState(false);
 
   const userId = user?.userId ?? user?.user_id ?? user?.id;
   const manager = isManagerUser(user);
@@ -402,38 +408,52 @@ function StaffPaymentTab({
                     ))}
                   </div>
 
-                  <div className="staff-pay-amount">
-                    <label htmlFor="staff-amount-paid">
-                      {paymentMethodId === 1 ? "Cash received" : "Amount paid"}
-                    </label>
-                    <input
-                      id="staff-amount-paid"
-                      type="number"
-                      min={0}
-                      step={1000}
-                      value={amountPaid}
-                      onChange={(e) => setAmountPaid(e.target.value)}
+                  {paymentMethodId === 2 ? (
+                    <CheckoutPayment
+                      orderId={bill.order_id}
+                      amount={bill.total_amount}
+                      onPollStatus={(orderId) => checkOrderStatus(orderId).then(res => res.data)}
+                      onSuccess={() => {
+                        toast("Payment successful!", "success");
+                        handleCheckout(); 
+                      }}
                     />
-                    {paymentMethodId === 1 && changeDue > 0 ? (
-                      <p className="staff-pay-change">
-                        Change due: {formatMoney(changeDue)}
-                      </p>
-                    ) : null}
-                  </div>
+                  ) : (
+                    <div className="staff-pay-amount">
+                      <label htmlFor="staff-amount-paid">
+                        {paymentMethodId === 1 ? "Cash received" : "Amount paid"}
+                      </label>
+                      <input
+                        id="staff-amount-paid"
+                        type="number"
+                        min={0}
+                        step={1000}
+                        value={amountPaid}
+                        onChange={(e) => setAmountPaid(e.target.value)}
+                      />
+                      {paymentMethodId === 1 && changeDue > 0 ? (
+                        <p className="staff-pay-change">
+                          Change due: {formatMoney(changeDue)}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
 
                   <div className="staff-payment-actions">
-                    <Button
-                      variant="primary"
-                      icon="card"
-                      disabled={
-                        !bill.order_id ||
-                        !(bill.items || []).length ||
-                        busyKey === "checkout"
-                      }
-                      onClick={handleCheckout}
-                    >
-                      {busyKey === "checkout" ? "Processing…" : "Complete Payment"}
-                    </Button>
+                    {paymentMethodId !== 4 && (
+                      <Button
+                        variant="primary"
+                        icon="card"
+                        disabled={
+                          !bill.order_id ||
+                          !(bill.items || []).length ||
+                          busyKey === "checkout"
+                        }
+                        onClick={handleCheckout}
+                      >
+                        {busyKey === "checkout" ? "Processing…" : "Complete Payment"}
+                      </Button>
+                    )}
 
                     {manager ? (
                       <Button
@@ -447,12 +467,38 @@ function StaffPaymentTab({
                       </Button>
                     ) : null}
                   </div>
+
+                  <div className="staff-payment-actions" style={{ marginTop: '1rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem' }}>
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => setIsSplitItemModalOpen(true)}
+                      disabled={!bill.order_id || (bill.items || []).length === 0}
+                    >
+                      Split by Item
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => toast("Split by Amount UI will be implemented next.", "info")}
+                      disabled={!bill.order_id}
+                    >
+                      Split by Amount (Even)
+                    </Button>
+                  </div>
                 </section>
               </div>
             )}
           </div>
         </div>
       )}
+
+      <SplitBillModal 
+        isOpen={isSplitItemModalOpen}
+        onClose={() => setIsSplitItemModalOpen(false)}
+        bill={bill}
+        userId={userId}
+        toast={toast}
+        onSplitSuccess={() => loadBill(Number(selectedTableId))}
+      />
     </div>
   );
 }

@@ -106,8 +106,12 @@ function MenuCard({
 
   return (
     <article
-      className="menu-card menu-grid__card menu-reveal menu-reveal-item"
-      style={{ animationDelay: `${index * 45}ms`, '--reveal-index': index }}
+      className={`menu-card menu-grid__card menu-reveal menu-reveal-item ${(dish.is_available === false || dish.is_available === 0) ? 'menu-card--unavailable' : ''}`}
+      style={{
+        animationDelay: `${index * 45}ms`,
+        '--reveal-index': index,
+        ...((dish.is_available === false || dish.is_available === 0) ? { opacity: 0.5, pointerEvents: 'none' } : {})
+      }}
     >
       <div className="menu-card__imageArea">
         <button
@@ -119,6 +123,7 @@ function MenuCard({
           <div
             ref={imageWrapRef}
             className="menu-card__imageWrap menu-grid__media"
+            style={(dish.is_available === false || dish.is_available === 0) ? { filter: 'grayscale(100%) opacity(70%)' } : {}}
           >
             <img
               src={imageSrc}
@@ -131,7 +136,7 @@ function MenuCard({
             />
           </div>
         </button>
-        {canAddToCart ? (
+        {canAddToCart && dish.is_available !== false && dish.is_available !== 0 ? (
           <MenuAddButton
             onClick={handleAdd}
             label={`Add ${dish.name} to cart`}
@@ -154,7 +159,25 @@ function MenuCard({
             &nbsp;
           </p>
         )}
-        <p className="menu-card__price menu-grid__price">{formatVND(dish.price)}</p>
+        <p className="menu-card__price menu-grid__price">
+          {formatVND(dish.price)}
+          {(dish.is_available === false || dish.is_available === 0) && (
+            <span style={{
+              display: 'inline-block',
+              marginLeft: '12px',
+              backgroundColor: '#fee2e2',
+              color: '#dc2626',
+              padding: '4px 12px',
+              borderRadius: '9999px',
+              fontFamily: "'Hanken Grotesk', system-ui, sans-serif",
+              fontSize: '12px',
+              fontWeight: '700',
+              verticalAlign: 'middle'
+            }}>
+              Out of Dish
+            </span>
+          )}
+        </p>
       </div>
     </article>
   );
@@ -186,8 +209,12 @@ function SetMenuCard({
 
   return (
     <article
-      className={`menu-set-card menu-reveal menu-reveal-item${setCard.alt ? ' menu-set-card--alt' : ''}`}
-      style={{ animationDelay: `${index * 60}ms`, '--reveal-index': index }}
+      className={`menu-set-card menu-reveal menu-reveal-item${setCard.alt ? ' menu-set-card--alt' : ''} ${(dish.is_available === false || dish.is_available === 0) ? 'menu-card--unavailable' : ''}`}
+      style={{
+        animationDelay: `${index * 60}ms`,
+        '--reveal-index': index,
+        ...((dish.is_available === false || dish.is_available === 0) ? { opacity: 0.5, pointerEvents: 'none' } : {})
+      }}
     >
       <div className="menu-set-card__imageArea">
         <button
@@ -196,7 +223,11 @@ function SetMenuCard({
           onClick={openPreview}
           aria-label={`View larger image of ${dish.name}`}
         >
-          <div ref={imageWrapRef} className="menu-set-card__imageWrap">
+          <div
+            ref={imageWrapRef}
+            className="menu-set-card__imageWrap"
+            style={(dish.is_available === false || dish.is_available === 0) ? { filter: 'grayscale(100%) opacity(70%)' } : {}}
+          >
             <img
               src={imageSrc}
               alt={dish.name}
@@ -208,7 +239,7 @@ function SetMenuCard({
             />
           </div>
         </button>
-        {canAddToCart ? (
+        {canAddToCart && dish.is_available !== false && dish.is_available !== 0 ? (
           <MenuAddButton
             onClick={handleAdd}
             label={`Add ${dish.name} to cart`}
@@ -218,9 +249,8 @@ function SetMenuCard({
 
       {setCard.label ? (
         <p
-          className={`menu-set-card__label${
-            setCard.labelMuted ? ' menu-set-card__label--muted' : ''
-          }`}
+          className={`menu-set-card__label${setCard.labelMuted ? ' menu-set-card__label--muted' : ''
+            }`}
         >
           {setCard.label}
         </p>
@@ -239,7 +269,25 @@ function SetMenuCard({
         <p className="menu-set-card__desc">{dish.description}</p>
       ) : null}
 
-      <p className="menu-set-card__price">{formatVND(dish.price)}</p>
+      <p className="menu-card__price menu-grid__price">
+        {formatVND(dish.price)}
+        {(dish.is_available === false || dish.is_available === 0) && (
+          <span style={{
+            display: 'inline-block',
+            marginLeft: '12px',
+            backgroundColor: '#fee2e2',
+            color: '#dc2626',
+            padding: '4px 12px',
+            borderRadius: '9999px',
+            fontFamily: "'Hanken Grotesk', system-ui, sans-serif",
+            fontSize: '12px',
+            fontWeight: '700',
+            verticalAlign: 'middle'
+          }}>
+            Out of Dish
+          </span>
+        )}
+      </p>
     </article>
   );
 }

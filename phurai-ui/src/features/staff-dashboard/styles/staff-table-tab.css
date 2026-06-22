@@ -195,7 +195,7 @@
 .staff-reservations-toolbar__search {
   flex: 1 1 260px;
   min-width: 220px;
-  max-width: 420px;
+
 }
 
 .staff-reservations-toolbar__filters {
@@ -432,7 +432,7 @@
   color: #4b5563;
 }
 
-.staff-table-modal--light .staff-reservation-checkin__field > span {
+.staff-table-modal--light .staff-reservation-checkin__field>span {
   color: #4b5563;
 }
 
@@ -707,4 +707,20 @@
     grid-template-columns: 1fr;
     gap: 4px;
   }
+}
+
+@keyframes jiggle {
+  0% { transform: rotate(-1deg); }
+  50% { transform: rotate(1.5deg); }
+  100% { transform: rotate(-1deg); }
+}
+
+.sfx-mtile.is-jiggling {
+  animation: jiggle 0.3s infinite;
+  z-index: 10;
+  cursor: grab;
+  border-color: var(--sfx-gold);
+}
+.sfx-mtile.is-jiggling:active {
+  cursor: grabbing;
 }

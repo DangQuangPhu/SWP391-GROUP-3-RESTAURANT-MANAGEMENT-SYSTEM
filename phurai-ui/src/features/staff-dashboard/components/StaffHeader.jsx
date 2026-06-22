@@ -73,7 +73,6 @@ function StaffHeader({
           />
         </label>
 
-        <LiveClock variant="header" />
 
         <NotificationBell user={user} listenForStaffEvents />
 

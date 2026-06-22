@@ -67,14 +67,13 @@ export const AREA_PREFERENCES = [
 
 export const DINING_PURPOSES = [
   { id: "casual", label: "Casual Dinner" },
-  { id: "casual_date", label: "Casual Date" },
-  { id: "birthday", label: "Birthday Celebration", event: true },
+  { id: "date_night", label: "Date Night" },
+  { id: "birthday", label: "Birthday", event: true },
   { id: "anniversary", label: "Anniversary" },
-  { id: "business", label: "Business Dinner" },
+  { id: "business", label: "Business Meeting" },
   { id: "family", label: "Family Gathering" },
+  { id: "special", label: "Special Occasion", event: true },
   { id: "private", label: "Private Party", event: true },
-  { id: "rooftop", label: "Rooftop Gathering" },
-  { id: "corporate", label: "Corporate Dinner", event: true },
   { id: "other", label: "Other" },
 ];
 

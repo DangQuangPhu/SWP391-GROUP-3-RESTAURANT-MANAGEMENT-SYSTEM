@@ -1,6 +1,16 @@
 import pool from "../db.js";
 import { getMembershipInfo } from "./membership.js";
 
+// Must match CK_CustomerProfiles_gender CHECK constraint in SQL Server
+const ALLOWED_GENDERS = new Set(["Male", "Female", "Other"]);
+
+/** Sanitize gender — returns NULL for anything not in the DB whitelist */
+function sanitizeGender(value) {
+  if (!value) return null;
+  const normalized = String(value).trim();
+  return ALLOWED_GENDERS.has(normalized) ? normalized : null;
+}
+
 const PROFILE_SELECT = `
   SELECT
     ua.user_id,
@@ -21,10 +31,14 @@ const PROFILE_SELECT = `
     cp.bio,
     cp.loyalty_points,
     cp.membership_tier,
-    cp.preferences
+    cp.preferences,
+    sp.staff_code,
+    sp.job_title,
+    sp.hire_date
   FROM dbo.UserAccounts ua
   LEFT JOIN dbo.Roles r ON ua.role_id = r.role_id
   LEFT JOIN dbo.CustomerProfiles cp ON ua.user_id = cp.user_id
+  LEFT JOIN dbo.StaffProfiles sp ON ua.user_id = sp.user_id
 `;
 
 export function getEmailPrefix(email = "") {
@@ -84,6 +98,8 @@ export function formatProfileResponse(row) {
     points_to_next_tier: membership.points_to_next_tier,
     progress_percent: membership.progress_percent,
     preferences,
+    staff_code: row.staff_code || null,
+    job_title: row.job_title || null,
   };
 }
 
@@ -96,8 +112,13 @@ export async function getCustomerRoleId() {
 }
 
 export async function fetchProfileByUserId(userId) {
-  const [rows] = await pool.query(`${PROFILE_SELECT} WHERE ua.user_id = ?`, [userId]);
-  return rows[0] || null;
+  try {
+    const [rows] = await pool.query(`${PROFILE_SELECT} WHERE ua.user_id = ?`, [userId]);
+    return rows[0] || null;
+  } catch (error) {
+    console.error("fetchProfileByUserId SQL Error:", error.message || error);
+    throw new Error(`Database error fetching profile: ${error.message}`);
+  }
 }
 
 export async function fetchProfileByEmail(email) {
@@ -114,18 +135,31 @@ export async function ensureCustomerProfile(userId, email, defaults = {}) {
     return existing;
   }
 
-  const username = defaults.username || getEmailPrefix(email);
+  // Do not automatically create Customer Profiles for Staff/Manager roles
+  const roleName = String(existing?.role_name || "").toLowerCase();
+  if (roleName.includes("manager") || roleName.includes("staff") || roleName.includes("admin")) {
+    return existing;
+  }
+
+  const baseUsername = defaults.username || getEmailPrefix(email);
+  const safeUsername = baseUsername + '_' + Date.now().toString().slice(-4);
   const preferences = serializePreferences(defaults.preferences || []);
   const membership = getMembershipInfo(defaults.loyalty_points ?? 0);
 
   await pool.query(
-    `INSERT INTO dbo.CustomerProfiles
-      (user_id, username, date_of_birth, gender, country, [language], bio,
-       loyalty_points, membership_tier, preferences, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSDATETIME(), SYSDATETIME())`,
+    `
+    IF NOT EXISTS (SELECT 1 FROM dbo.CustomerProfiles WHERE user_id = ?)
+    BEGIN
+      INSERT INTO dbo.CustomerProfiles
+        (user_id, username, date_of_birth, gender, country, [language], bio,
+         loyalty_points, membership_tier, preferences, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSDATETIME(), SYSDATETIME())
+    END
+    `,
     [
       userId,
-      username,
+      userId,
+      safeUsername,
       defaults.date_of_birth || null,
       defaults.gender || null,
       defaults.country || null,
@@ -205,7 +239,7 @@ export async function updateUserProfile(userId, payload) {
     [
       username ?? existing.username ?? getEmailPrefix(existing.email),
       date_of_birth !== undefined ? date_of_birth || null : existing.date_of_birth,
-      gender !== undefined ? gender || null : existing.gender,
+      gender !== undefined ? sanitizeGender(gender) : sanitizeGender(existing.gender),
       country !== undefined ? country || null : existing.country,
       language !== undefined ? language || null : existing.language,
       bio !== undefined ? bio || null : existing.bio,

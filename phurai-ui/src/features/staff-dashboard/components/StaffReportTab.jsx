@@ -9,7 +9,7 @@ import {
   fetchShiftReportAudit,
   fetchShiftReportSummary,
 } from "../services/staffApi.js";
-import { DEMO_NOTICE } from "../data/staffDashboardMockData.js";
+import { DEMO_NOTICE } from "@/shared/constants.js";
 import "../styles/staff-report-tab.css";
 
 function formatMoney(value) {

@@ -1,4 +1,4 @@
-import { TABLE_STATUS_META } from "../../data/managerDashboardMockData.js";
+import { TABLE_STATUS_META } from "@/shared/constants.js";
 
 export const STATUS_KEYS = Object.keys(TABLE_STATUS_META);
 

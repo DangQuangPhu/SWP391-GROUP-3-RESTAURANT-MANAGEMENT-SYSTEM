@@ -8,7 +8,7 @@ export const SYSTEM_AVATARS = [
 ];
 
 export function getApiOrigin() {
-  const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
+  const apiBase = import.meta.env.VITE_API_BASE_URL || "/api";
   return apiBase.replace(/\/api\/?$/, "");
 }
 
