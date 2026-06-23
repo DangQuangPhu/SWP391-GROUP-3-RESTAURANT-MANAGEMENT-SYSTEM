@@ -1,4 +1,4 @@
-import { SHARED_MOCK_RESERVATIONS } from "../../../data/sharedMockReservations.js";
+import { SHARED_MOCK_RESERVATIONS } from "@/features/reservations/data/sharedMockReservations.js";
 
 
 export const RESERVATION_STATUS_META = {
@@ -15,11 +15,11 @@ const todayIso = new Date().toISOString().split("T")[0];
 export const QUEUE_RESERVATIONS = SHARED_MOCK_RESERVATIONS;
 
 export const ASSIGN_TABLE_OPTIONS = [
-  { table_id: 1, table_number: "W-01", area_name: "Window Area", capacity: 2 },
-  { table_id: 3, table_number: "W-03", area_name: "Window Area", capacity: 4 },
-  { table_id: 8, table_number: "S-03", area_name: "Standard Area", capacity: 4 },
-  { table_id: 18, table_number: "VIP-01", area_name: "VIP Lounge", capacity: 4 },
-  { table_id: 21, table_number: "PR-01", area_name: "Private Room", capacity: 10 },
+  { table_id: 1, table_number: "WIN-A", area_name: "Window Area", capacity: 2 },
+  { table_id: 3, table_number: "WIN-C", area_name: "Window Area", capacity: 6 },
+  { table_id: 7, table_number: "S-03", area_name: "Standard Area", capacity: 4 },
+  { table_id: 21, table_number: "VIP-1", area_name: "VIP Lounge", capacity: 6 },
+  { table_id: 24, table_number: "PR-01", area_name: "Private Room", capacity: 2 },
 ];
 
 

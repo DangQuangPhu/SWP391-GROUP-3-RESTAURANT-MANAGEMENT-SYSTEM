@@ -98,6 +98,8 @@ function mapTableRow(row) {
     merged_into_table_id: row.merged_into_table_id ?? null,
     is_counter: Boolean(row.is_counter),
     active_session_id: row.active_session_id ?? null,
+    active_reservation_id: row.active_reservation_id ?? null,
+    active_reservation_customer_name: row.active_reservation_customer_name ?? null,
   };
 }
 
@@ -134,7 +136,26 @@ export async function listStaffTables(_req, res) {
              AND qs.session_status = N'Active'
              AND (qs.expires_at IS NULL OR qs.expires_at > SYSUTCDATETIME())
            ORDER BY qs.generated_at DESC
-         ) AS active_session_id
+         ) AS active_session_id,
+         (
+           SELECT TOP 1 r.reservation_id
+           FROM dbo.Reservations AS r
+           INNER JOIN dbo.ReservationTables AS rt ON r.reservation_id = rt.reservation_id
+           WHERE rt.table_id = t.table_id
+             AND r.reservation_status IN (N'Confirmed', N'Reserved', N'Await Check-in')
+             AND CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
+           ORDER BY r.reservation_start_at ASC
+         ) AS active_reservation_id,
+         (
+           SELECT TOP 1 COALESCE(ua.full_name, r.contact_name, N'Guest')
+           FROM dbo.Reservations AS r
+           LEFT JOIN dbo.UserAccounts AS ua ON r.customer_id = ua.user_id
+           INNER JOIN dbo.ReservationTables AS rt ON r.reservation_id = rt.reservation_id
+           WHERE rt.table_id = t.table_id
+             AND r.reservation_status IN (N'Confirmed', N'Reserved', N'Await Check-in')
+             AND CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
+           ORDER BY r.reservation_start_at ASC
+         ) AS active_reservation_customer_name
        FROM dbo.RestaurantTables AS t
        INNER JOIN dbo.RestaurantAreas AS a ON a.area_id = t.area_id
        WHERE a.is_active = 1
@@ -782,23 +803,14 @@ export async function resetTable(req, res) {
     for (const row of affectedRes) {
       let currentStatus = row.reservation_status;
       
-      // Step through the state machine correctly
       if (currentStatus === RESERVATION_STATUS.SEATED) {
-        await updateReservationStatus({ connection, reservationId: row.reservation_id, toStatus: RESERVATION_STATUS.CLEANING });
-        currentStatus = RESERVATION_STATUS.CLEANING;
-      }
-      if (currentStatus === RESERVATION_STATUS.CLEANING) {
-        await updateReservationStatus({ connection, reservationId: row.reservation_id, toStatus: RESERVATION_STATUS.CHECK_OUT });
-        currentStatus = RESERVATION_STATUS.CHECK_OUT;
-      }
-      if (currentStatus === RESERVATION_STATUS.CHECK_OUT) {
         await updateReservationStatus({
           connection,
           reservationId: row.reservation_id,
           toStatus: RESERVATION_STATUS.COMPLETED,
           staffId: null,
-          auditAction: null,
-          extraUpdates: ", reservation_end_at = SYSDATETIME()"
+          auditAction: "STAFF_CLEANED_TABLE_RESERVATION",
+          extraUpdates: ", checked_out_at = SYSDATETIME(), reservation_end_at = SYSDATETIME()"
         });
       }
     }
@@ -1637,6 +1649,18 @@ export async function getTableBill(req, res) {
     const { table, order } = await loadOccupiedTableContext(connection, tableId);
     const serviceChargePercent = await getServiceChargePercent(connection);
 
+    // Fetch active reservation details if they exist for the table
+    const [reservationRows] = await connection.query(
+      `SELECT TOP 1 r.reservation_id, r.deposit_amount, r.final_total, r.applied_promo_code, r.order_code
+       FROM dbo.Reservations r
+       INNER JOIN dbo.ReservationTables rt ON rt.reservation_id = r.reservation_id
+       WHERE rt.table_id = ? AND r.reservation_status IN (N'Seated', N'Cleaning')`,
+      [tableId]
+    );
+
+    const reservation = reservationRows[0] || null;
+    const reservation_remaining_balance = reservation ? Number(reservation.final_total) : 0;
+
     if (!order) {
       const emptyTotals = computeBillTotals(0, serviceChargePercent, 0);
       return jsonOk(res, {
@@ -1648,7 +1672,11 @@ export async function getTableBill(req, res) {
         order_status: null,
         items: [],
         applied_voucher: null,
+        reservation_id: reservation ? reservation.reservation_id : null,
+        reservation_order_code: reservation ? reservation.order_code : null,
+        reservation_remaining_balance,
         ...emptyTotals,
+        total_amount: emptyTotals.total_amount + reservation_remaining_balance,
       });
     }
 
@@ -1671,7 +1699,11 @@ export async function getTableBill(req, res) {
       order_status: "Billed",
       items,
       applied_voucher: null,
+      reservation_id: reservation ? reservation.reservation_id : null,
+      reservation_order_code: reservation ? reservation.order_code : null,
+      reservation_remaining_balance,
       ...totals,
+      total_amount: totals.total_amount + reservation_remaining_balance,
     });
   } catch (error) {
     if (error.code === "TABLE_NOT_FOUND") {
@@ -1844,12 +1876,24 @@ export async function checkoutTablePayment(req, res) {
   const connection = await pool.getConnection();
 
   try {
-    await connection.beginTransaction();
-
     const { table, order } = await loadOccupiedTableContext(connection, tableId);
-    if (!order) {
+    const serviceChargePercent = await getServiceChargePercent(connection);
+
+    // Fetch active reservation details if they exist for the table
+    const [reservationRows] = await connection.query(
+      `SELECT TOP 1 r.reservation_id, r.deposit_amount, r.final_total, r.applied_promo_code, r.order_code
+       FROM dbo.Reservations r
+       INNER JOIN dbo.ReservationTables rt ON rt.reservation_id = r.reservation_id
+       WHERE rt.table_id = ? AND r.reservation_status IN (N'Seated', N'Cleaning')`,
+      [tableId]
+    );
+
+    const reservation = reservationRows[0] || null;
+    const reservation_remaining_balance = reservation ? Number(reservation.final_total) : 0;
+
+    if (!order && reservation_remaining_balance <= 0) {
       await connection.rollback();
-      return jsonError(res, "No active order found for this table.", 404);
+      return jsonError(res, "No active order or unpaid reservation balance found for this table.", 404);
     }
 
     const [methodRows] = await connection.query(
@@ -1864,39 +1908,50 @@ export async function checkoutTablePayment(req, res) {
       return jsonError(res, "Invalid payment method.", 400);
     }
 
-    const items = await loadBillableItems(connection, order.order_id);
-    if (!items.length) {
-      await connection.rollback();
-      return jsonError(res, "No billable items (Served/Ready) on this order.", 409);
+    let items = [];
+    let totals = {
+      subtotal: 0,
+      service_charge_percent: serviceChargePercent,
+      service_charge: 0,
+      discount_amount: 0,
+      total_amount: 0,
+    };
+
+    if (order) {
+      items = await loadBillableItems(connection, order.order_id);
+      const subtotal = items.reduce((sum, item) => sum + item.line_total, 0);
+      totals = computeBillTotals(
+        subtotal,
+        serviceChargePercent,
+        Number(order.discount_amount) || 0
+      );
     }
 
-    const subtotal = items.reduce((sum, item) => sum + item.line_total, 0);
-    const serviceChargePercent = await getServiceChargePercent(connection);
-    const totals = computeBillTotals(
-      subtotal,
-      serviceChargePercent,
-      Number(order.discount_amount) || 0
-    );
+    const totalBillAmount = totals.total_amount + reservation_remaining_balance;
 
-    if (amountPaid + 0.009 < totals.total_amount) {
+    if (amountPaid + 0.009 < totalBillAmount) {
       await connection.rollback();
       return jsonError(res, "Amount paid is less than the bill total.", 409);
     }
 
-    const changeGiven = roundMoney(amountPaid - totals.total_amount);
-    await syncOrderBillTotals(connection, order.order_id, totals);
+    const changeGiven = roundMoney(amountPaid - totalBillAmount);
+
+    if (order) {
+      await syncOrderBillTotals(connection, order.order_id, totals);
+    }
 
     const [paymentRows] = await connection.query(
       `DECLARE @OutputTbl TABLE (payment_id INT);
        INSERT INTO dbo.Payments
-         (order_id, payment_method_id, amount_paid, change_given, payment_status,
+         (order_id, reservation_id, payment_method_id, amount_paid, change_given, payment_status,
           transaction_ref, processed_by_staff_id, paid_at)
        OUTPUT INSERTED.payment_id INTO @OutputTbl
        VALUES
-         (?, ?, ?, ?, N'Completed', ?, ?, SYSDATETIME());
+         (?, ?, ?, ?, ?, N'Completed', ?, ?, SYSDATETIME());
        SELECT payment_id FROM @OutputTbl;`,
       [
-        order.order_id,
+        order ? order.order_id : null,
+        reservation ? reservation.reservation_id : null,
         paymentMethodId,
         amountPaid,
         changeGiven,
@@ -1907,7 +1962,7 @@ export async function checkoutTablePayment(req, res) {
 
     const paymentId = paymentRows[0].payment_id;
 
-    if (voucherId) {
+    if (voucherId && order) {
       const [voucherRows] = await connection.query(
         `SELECT TOP 1 voucher_id, usage_limit, times_used, is_active
          FROM dbo.Vouchers
@@ -1934,13 +1989,16 @@ export async function checkoutTablePayment(req, res) {
       }
     }
 
-    await connection.query(
-      `UPDATE dbo.Orders
-       SET order_status = N'Paid',
-           updated_at = SYSDATETIME()
-       WHERE order_id = ?;`,
-      [order.order_id]
-    );
+    if (order) {
+      await connection.query(
+        `UPDATE dbo.Orders
+         SET order_status = N'Paid',
+             amount_paid = ?,
+             updated_at = SYSDATETIME()
+         WHERE order_id = ?;`,
+        [totals.total_amount, order.order_id]
+      );
+    }
 
     await connection.query(
       `UPDATE dbo.QROrderSessions
@@ -1961,9 +2019,8 @@ export async function checkoutTablePayment(req, res) {
 
     await connection.commit();
 
-    // ── Auto-checkout: if this table had an Occupied reservation, mark it CheckedOut ──
+    // ── Auto-checkout: if this table had an Occupied reservation, mark it Completed ──
     // Fire-and-forget after commit — does not affect payment success
-    const paymentIdForCheckout = paymentRows[0]?.payment_id ?? null;
     pool.getConnection().then(async (checkoutConn) => {
       try {
         await checkoutConn.beginTransaction();
@@ -1978,19 +2035,15 @@ export async function checkoutTablePayment(req, res) {
           const resId = occupiedRows[0].reservation_id;
           let currentStatus = occupiedRows[0].reservation_status;
 
-          // Step through strict transitions
+          // Transition directly from Seated -> Completed (which is RESERVATION_STATUS.COMPLETED)
           if (currentStatus === RESERVATION_STATUS.SEATED) {
-            await updateReservationStatus({ connection: checkoutConn, reservationId: resId, toStatus: RESERVATION_STATUS.CLEANING });
-            currentStatus = RESERVATION_STATUS.CLEANING;
-          }
-          if (currentStatus === RESERVATION_STATUS.CLEANING) {
             await updateReservationStatus({
               connection: checkoutConn,
               reservationId: resId,
-              toStatus: RESERVATION_STATUS.CHECK_OUT,
+              toStatus: RESERVATION_STATUS.COMPLETED,
               staffId,
               auditAction: "STAFF_CHECKOUT_RESERVATION",
-              extraUpdates: ", checked_out_at = SYSDATETIME()"
+              extraUpdates: ", checked_out_at = SYSDATETIME(), reservation_end_at = SYSDATETIME()"
             });
           }
 
@@ -1998,7 +2051,7 @@ export async function checkoutTablePayment(req, res) {
           const io = getIO();
           if (io) {
             io.to('room:staff').emit('reservation:checkout_ready', { reservation_id: resId });
-            io.to('room:manager').emit('reservation:status_changed', { reservation_id: resId, new_status: RESERVATION_STATUS.CHECK_OUT });
+            io.to('room:manager').emit('reservation:status_changed', { reservation_id: resId, new_status: RESERVATION_STATUS.COMPLETED });
           }
         } else {
           await checkoutConn.rollback();
@@ -2015,15 +2068,16 @@ export async function checkoutTablePayment(req, res) {
       res,
       {
         payment_id: paymentId,
-        order_id: order.order_id,
+        order_id: order ? order.order_id : null,
         table_id: tableId,
         table_number: table.table_number,
         table_status: "Cleaning",
-        order_status: "Paid",
+        order_status: order ? "Paid" : null,
         payment_method: methodRows[0].method_name,
         amount_paid: amountPaid,
         change_given: changeGiven,
         ...totals,
+        total_amount: totalBillAmount,
       },
       201
     );

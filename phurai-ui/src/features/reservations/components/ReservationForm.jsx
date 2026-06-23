@@ -49,7 +49,7 @@ function ReservationForm() {
       id: formattedId,
       date: selectedDate,
       time: selectedTime,
-      pax: selectedSeats,
+      guest_count: selectedSeats,
       status: "Pending",
       timestamp: new Date().toISOString()
     };

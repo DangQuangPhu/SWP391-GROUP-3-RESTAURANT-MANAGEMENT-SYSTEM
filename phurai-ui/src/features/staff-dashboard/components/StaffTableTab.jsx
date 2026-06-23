@@ -16,8 +16,9 @@ import {
   markStaffTableClean,
   mergeTablesApi,
   unmergeTableApi,
+  fetchStaffReservationDetail,
 } from "../services/staffApi.js";
-import { formatBookingId } from "@/utils/formatBookingId.js";
+import { formatBookingId } from "@/features/reservations/utils/formatBookingId.js";
 import { DEMO_NOTICE, TABLE_STATUS_META } from "@/shared/constants.js";
 import "../styles/staff-table-tab.css";
 
@@ -154,7 +155,7 @@ function BriefingDetail({ label, value }) {
 }
 
 function getTablesForReservationCheckIn(tables, reservation) {
-  const partySize = Number(reservation?.party_size ?? reservation?.guest_count ?? 1);
+  const partySize = Number(reservation?.guest_count ?? 1);
   const assignedTableId = getAssignedTableId(reservation);
   const tableList = Array.isArray(tables) ? [...tables] : [];
 
@@ -412,7 +413,7 @@ function TableManagementFloorMap() {
 
 function TableManagementTableModal() {
   const { state, actions } = useTableManagement();
-  const { selectedTable: table, user, actionBusy: busy } = state;
+  const { selectedTable: table, user, actionBusy: busy, toast } = state;
   const { setSelectedTable, handleCheckIn, handleReset } = actions;
 
   if (!table) return null;
@@ -422,7 +423,8 @@ function TableManagementTableModal() {
   const manager = isManagerUser(user);
   const onClose = () => setSelectedTable(null);
 
-  const showCheckIn = status === "Available" || status === "Reserved";
+  const showCheckIn = status === "Available";
+  const showViewReservation = status === "Reserved";
   const showCheckOut = status === "Occupied" || status === "Cleaning";
 
   return (
@@ -466,6 +468,11 @@ function TableManagementTableModal() {
               Session #{table.active_session_id}
             </span>
           ) : null}
+          {table.active_reservation_customer_name ? (
+            <span className="staff-table-modal__session" style={{ backgroundColor: "rgba(59, 130, 246, 0.1)", color: "#2563eb", border: "1px solid rgba(59, 130, 246, 0.2)" }}>
+              Reserved for {table.active_reservation_customer_name}
+            </span>
+          ) : null}
         </div>
 
         <div className="staff-table-modal__actions">
@@ -477,6 +484,30 @@ function TableManagementTableModal() {
               disabled={busy}
             >
               Check-in
+            </button>
+          ) : null}
+
+          {showViewReservation ? (
+            <button
+              type="button"
+              className="sfx-btn sfx-btn--gold sfx-btn--md staff-table-action"
+              onClick={async () => {
+                if (table.active_reservation_id) {
+                  setSelectedTable(null);
+                  try {
+                    const userId = Number(user?.userId ?? user?.id);
+                    const resDetail = await fetchStaffReservationDetail(table.active_reservation_id, userId);
+                    actions.setCheckInReservation(resDetail.reservation || resDetail);
+                  } catch (err) {
+                    toast?.(err.message || "Failed to load reservation details", "error");
+                  }
+                } else {
+                  toast?.("No active reservation found for this table.", "error");
+                }
+              }}
+              disabled={busy}
+            >
+              View Reservation
             </button>
           ) : null}
 
@@ -529,7 +560,7 @@ function TableManagementReservationModal() {
     [tables, reservation]
   );
 
-  const partySize = reservation?.party_size ?? reservation?.guest_count ?? "—";
+  const partySize = reservation?.guest_count ?? "—";
   const timeAndDuration = briefing?.durationLabel
     ? `${reservation?.start_time || "—"} (${briefing.durationLabel})`
     : reservation?.start_time || "—";
@@ -566,7 +597,9 @@ function TableManagementReservationModal() {
 
   if (!reservation || !briefing) return null;
 
-  const contactLine = [reservation.phone, reservation.email].filter(Boolean).join(" · ");
+  const phone = reservation.customer_phone || reservation.phone;
+  const email = reservation.customer_email || reservation.email;
+  const contactLine = [phone, email].filter(Boolean).join(" · ");
 
   return (
     <div
@@ -608,7 +641,7 @@ function TableManagementReservationModal() {
         <div className="staff-checkin-brief__grid">
           <BriefingDetail label="Time & duration" value={timeAndDuration} />
           <BriefingDetail
-            label="Guests (pax)"
+            label="Guests"
             value={`${partySize} ${Number(partySize) === 1 ? "person" : "people"}`}
           />
           <BriefingDetail label="Assigned table" value={briefing.tableDisplay} />
@@ -679,7 +712,7 @@ function TableManagementReservationModal() {
               onClick={() => handleConfirmReservationCheckIn(Number(selectedTableId))}
               disabled={busy || !selectedTableId}
             >
-              CONFIRM CHECK-IN
+              Check-in Customer
             </button>
             <button
               type="button"
@@ -1039,6 +1072,7 @@ function StaffTableTab({
       isJiggling,
       areas,
       groupedEntries,
+      toast,
     },
     actions: {
       setSearchTerm,

@@ -1,5 +1,5 @@
 import { format, parseISO } from "date-fns";
-import { formatBookingId } from "@/utils/formatBookingId.js";
+import { formatBookingId } from "@/features/reservations/utils/formatBookingId.js";
 import { normalizeQueueToken } from "../services/staffApi.js";
 import { DASHBOARD_TODAY } from "@/shared/constants.js";
 import { RESERVATION_STATUS_META } from "@/shared/reservationStatus.js";

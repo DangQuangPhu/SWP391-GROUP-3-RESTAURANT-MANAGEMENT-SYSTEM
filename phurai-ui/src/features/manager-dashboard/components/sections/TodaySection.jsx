@@ -43,7 +43,7 @@ function TodaySection({ kpis, reservations, tables, orders, onNavigate }) {
                   <span className="sfx-timeline__time">{r.start_time}</span>
                   <span className="sfx-timeline__main">
                     <strong>{r.customer_name}</strong>
-                    <small>{r.party_size} guests · {r.table_label}</small>
+                    <small>{r.guest_count} guests · {r.table_label}</small>
                   </span>
                   <StatusBadge tone={RESERVATION_STATUS_META[r.status]?.tone} color={RESERVATION_STATUS_META[r.status]?.color}>
                     {RESERVATION_STATUS_META[r.status]?.label}

@@ -1,10 +1,2 @@
-export {
-  API_BASE_URL,
-  saveAuthUser,
-  loadAuthUser,
-  clearAuthUser,
-} from "@/core/api/index.js";
-
-export { mapApiUserToFrontend } from "@/features/auth/utils/userMapper.js";
-export * from "@/features/auth/services/authApi.js";
-export * from "@/features/profile/services/profileApi.js";
+// Deprecated: API methods extracted to src/core/api/index.js and feature folders (e.g. features/auth/services/authApi.js).
+// DO NOT import from @/api anymore.

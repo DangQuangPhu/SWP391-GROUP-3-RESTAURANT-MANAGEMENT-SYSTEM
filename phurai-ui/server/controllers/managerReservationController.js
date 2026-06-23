@@ -80,7 +80,6 @@ export const getAllReservations = async (req, res) => {
       `SELECT
          r.reservation_id,
          r.customer_id,
-         cp.membership_tier,
          COALESCE(ua.full_name, r.contact_name, N'Guest')   AS customer_name,
          COALESCE(ua.phone,    r.contact_phone, N'')         AS customer_phone,
          COALESCE(ua.email,    r.contact_email, N'')         AS customer_email,
@@ -113,7 +112,7 @@ export const getAllReservations = async (req, res) => {
        LEFT JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
        LEFT JOIN dbo.RestaurantTables t ON rt.table_id = t.table_id
        GROUP BY
-         r.reservation_id, r.customer_id, cp.membership_tier, ua.full_name, r.contact_name, ua.phone, r.contact_phone,
+         r.reservation_id, r.customer_id, ua.full_name, r.contact_name, ua.phone, r.contact_phone,
          ua.email, r.contact_email, r.reservation_start_at, r.reservation_end_at,
          r.guest_count, r.special_request, r.reservation_status, r.reservation_source,
          r.created_at, r.confirmed_at, r.checked_in_at, r.cancelled_at,

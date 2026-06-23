@@ -560,7 +560,7 @@ export async function submitQrOrderPublic(req, res) {
       const insertOrder = await conn.query(
         `INSERT INTO dbo.Orders (table_id, order_type, order_status, created_at, subtotal, total_amount)
          OUTPUT INSERTED.order_id
-         VALUES (?, N'Dine-in', N'Open', SYSUTCDATETIME(), 0, 0)`,
+         VALUES (?, N'Dine In', N'Open', SYSUTCDATETIME(), 0, 0)`,
         [tableId]
       );
       orderId = insertOrder[0][0].order_id;
@@ -573,18 +573,28 @@ export async function submitQrOrderPublic(req, res) {
       const [dishes] = await conn.query(`SELECT price FROM dbo.Dishes WHERE dish_id = ?`, [dishId]);
       const price = dishes[0]?.price || 0;
 
-      await conn.query(
-        `INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, price_at_time, notes, item_status)
-          VALUES (?, ?, ?, ?, ?, N'Pending')`,
+      const insertItem = await conn.query(
+        `INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+         OUTPUT INSERTED.order_item_id
+         VALUES (?, ?, ?, ?, ?, N'Pending')`,
         [orderId, dishId, item.quantity, price, item.notes || null]
+      );
+      
+      const orderItemId = insertItem[0][0].order_item_id;
+
+      // Automatically create Kitchen Ticket
+      await conn.query(
+        `INSERT INTO dbo.KitchenTickets (order_item_id, kitchen_status, priority_level, sent_at)
+         VALUES (?, N'Pending', 3, SYSUTCDATETIME())`,
+        [orderItemId]
       );
     }
 
     // 5. Recalculate Order Total
     await conn.query(
       `UPDATE dbo.Orders 
-       SET total_amount = (SELECT SUM(quantity * price_at_time) FROM dbo.OrderItems WHERE order_id = ?),
-           subtotal = (SELECT SUM(quantity * price_at_time) FROM dbo.OrderItems WHERE order_id = ?)
+       SET total_amount = (SELECT SUM(quantity * unit_price) FROM dbo.OrderItems WHERE order_id = ?),
+           subtotal = (SELECT SUM(quantity * unit_price) FROM dbo.OrderItems WHERE order_id = ?)
        WHERE order_id = ?`,
       [orderId, orderId, orderId]
     );

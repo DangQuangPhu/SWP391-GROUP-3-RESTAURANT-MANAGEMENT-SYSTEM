@@ -5,8 +5,8 @@ import {
   forgotPasswordVerifyOtp,
   forgotPasswordResendOtp,
   forgotPasswordReset,
-  loadAuthUser,
-} from "@/api";
+} from "@/features/auth";
+import { loadAuthUser } from "@/core/api";
 import {
   isPasswordStrong,
   normalizePhone,

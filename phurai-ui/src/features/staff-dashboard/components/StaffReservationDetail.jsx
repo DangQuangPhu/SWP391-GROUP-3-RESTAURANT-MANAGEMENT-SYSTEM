@@ -237,7 +237,7 @@ function StaffReservationDetail({ reservation, userId, checkedInAt: checkedInAtP
     reservation_end_at,
     reservation_date,
     start_time,
-    party_size, guest_count,
+    guest_count,
     table_label, assigned_tables,
     area_name, preferred_area,
     special_request, notes,
@@ -287,7 +287,7 @@ function StaffReservationDetail({ reservation, userId, checkedInAt: checkedInAtP
           <EmptyVal val={reservation_end_at ? format(new Date(reservation_end_at), "HH:mm (dd/MM/yyyy)") : "—"} />
         </DetailRow>
         <DetailRow label="Duration"><EmptyVal val={duration} fallback="None" /></DetailRow>
-        <DetailRow label="Guests"><EmptyVal val={party_size ?? guest_count} /></DetailRow>
+        <DetailRow label="Guests"><EmptyVal val={guest_count} /></DetailRow>
         <DetailRow label="Table">
           <span style={{ fontWeight: 600 }}>{assigned_tables || table_label || FadedUnassigned}</span>
         </DetailRow>

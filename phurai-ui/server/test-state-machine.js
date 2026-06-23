@@ -16,14 +16,14 @@ async function testStateMachine() {
             order_code, contact_name, contact_phone, reservation_start_at, reservation_end_at, guest_count, deposit_amount, final_total, reservation_status, created_at, updated_at
           ) OUTPUT inserted.reservation_id
           VALUES (
-            'TEST_ORDER_123', 'John Test', '0123456789', DATEADD(day, 1, SYSDATETIME()), DATEADD(day, 1, DATEADD(hour, 2, SYSDATETIME())), 2, 10000, 50000, 'Pending Payment', SYSDATETIME(), SYSDATETIME()
+            'TEST_ORDER_123', 'John Test', '0123456789', DATEADD(day, 1, SYSDATETIME()), DATEADD(day, 1, DATEADD(hour, 2, SYSDATETIME())), 2, 10000, 50000, 'Payment Pending', SYSDATETIME(), SYSDATETIME()
           )
         `);
       const reservationId = resResult.recordset[0].reservation_id;
       
       const safeValueJson1 = JSON.stringify({
         reservation_id: reservationId,
-        reservation_status: 'Pending Payment',
+        reservation_status: 'Payment Pending',
         order_code: 'TEST_ORDER_123'
       });
       await transaction.request()
@@ -39,9 +39,9 @@ async function testStateMachine() {
       console.log('--- 2. Payment Webhook Success ---');
       await transaction.request()
         .input('resId', sql.Int, reservationId)
-        .query(`UPDATE dbo.Reservations SET reservation_status = 'Await Check-in', updated_at = SYSDATETIME() WHERE reservation_id = @resId`);
+        .query(`UPDATE dbo.Reservations SET reservation_status = 'Confirmed', updated_at = SYSDATETIME() WHERE reservation_id = @resId`);
         
-      const safeValueJson2 = JSON.stringify({ reservation_status: 'Await Check-in', transactionRef: 'VNP12345' });
+      const safeValueJson2 = JSON.stringify({ reservation_status: 'Confirmed', transactionRef: 'VNP12345' });
       await transaction.request()
         .input('resId', sql.Int, reservationId)
         .input('val', sql.NVarChar(sql.MAX), safeValueJson2)

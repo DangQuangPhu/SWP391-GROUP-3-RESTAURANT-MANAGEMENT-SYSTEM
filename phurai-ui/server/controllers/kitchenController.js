@@ -109,6 +109,11 @@ export const processTicketStatusUpdate = async (pool, ticketId, new_status, trig
                 .input('orderItemId', sql.Int, orderItemId)
                 .input('reason', sql.NVarChar(500), cancel_reason.trim())
                 .query(`UPDATE dbo.OrderItems SET item_status = N'Cancelled', notes = CONCAT(notes, ' [Cancel Reason: ', @reason, ']') WHERE order_item_id = @orderItemId`);
+        } else if (new_status === 'Preparing' || new_status === 'Ready') {
+            await transaction.request()
+                .input('orderItemId', sql.Int, orderItemId)
+                .input('newStatus', sql.NVarChar(25), new_status)
+                .query(`UPDATE dbo.OrderItems SET item_status = @newStatus WHERE order_item_id = @orderItemId`);
         }
 
         const actionName = new_status === 'Cancelled' ? 'KITCHEN_CANCEL_TICKET' : 'KITCHEN_UPDATE_TICKET_STATUS';

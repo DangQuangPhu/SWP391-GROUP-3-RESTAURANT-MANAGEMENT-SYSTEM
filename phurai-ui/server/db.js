@@ -18,32 +18,48 @@ let poolPromise;
 function getPool() {
   if (!poolPromise) {
     poolPromise = sql.connect(config).then(async (pool) => {
-      /* Try/catch auto-patch DB block disabled as DB is the Single Source of Truth (Phase 3.1)
       try {
-        // Auto-patch migration: clean up legacy statuses
+        // 1. Chuẩn hóa trạng thái cho Bàn (RestaurantTables)
         await pool.request().query(`
-          UPDATE dbo.Reservations SET reservation_status = 'Confirmed' WHERE reservation_status = 'Await Check-in';
-          UPDATE dbo.Reservations SET reservation_status = 'Seated' WHERE reservation_status IN ('Check-in', 'Occupied');
-          UPDATE dbo.Reservations SET reservation_status = 'Completed' WHERE reservation_status = 'Complete Paid';
+          IF OBJECT_ID('dbo.CK_RestaurantTables_status', 'C') IS NOT NULL
+          BEGIN
+              ALTER TABLE dbo.RestaurantTables DROP CONSTRAINT CK_RestaurantTables_status;
+          END
+          ALTER TABLE dbo.RestaurantTables ADD CONSTRAINT CK_RestaurantTables_status CHECK (
+              table_status IN (
+                  N'Available', -- Bàn trống, sẵn sàng đón khách
+                  N'Reserved',  -- Đã gán cho một Reservation nhưng khách chưa tới
+                  N'Occupied',  -- Khách đang ngồi ăn
+                  N'Cleaning',  -- Khách đã về, đang dọn dẹp
+                  N'Inactive'   -- Bàn hỏng/Bảo trì
+              )
+          );
         `);
 
-        // Automatically patch the DB constraint to allow all used statuses across different versions
+        // 2. Chuẩn hóa trạng thái cho Đơn đặt bàn (Reservations)
         await pool.request().query(`
           IF OBJECT_ID('dbo.CK_Reservations_status', 'C') IS NOT NULL
           BEGIN
               ALTER TABLE dbo.Reservations DROP CONSTRAINT CK_Reservations_status;
           END
-          ALTER TABLE dbo.Reservations ADD CONSTRAINT CK_Reservations_status CHECK (reservation_status IN (
-            N'Pending', N'Confirmed', N'Checked In', N'Completed', N'Cancelled', N'No Show', 
-            N'Pending Request', N'Pending Payment', N'Reserved', N'Await Check-in', N'Check-in', N'Occupied', N'Complete Paid', 
-            N'Check-out', N'Reject Check-in', N'Reject Request', N'Reject Check-out', N'Paid', N'PaymentFailed',
-            N'Request', N'Rejected'
-          ));
+          ALTER TABLE dbo.Reservations ADD CONSTRAINT CK_Reservations_status CHECK (
+              reservation_status IN (
+                  N'Pending Request',  -- Khách vừa đặt online, chờ duyệt
+                  N'Awaiting Deposit', -- Chờ khách cọc tiền
+                  N'Confirmed',        -- Đã duyệt/Đã cọc (Bàn sẽ chuyển sang Reserved)
+                  N'Checked-in',       -- Lễ tân đã xác nhận khách đến cửa
+                  N'Seated',           -- Khách đã vào bàn (Bàn sẽ chuyển sang Occupied)
+                  N'Payment Pending',  -- Đang chờ thanh toán
+                  N'Completed',        -- Đã thanh toán xong
+                  N'Cancelled',        -- Hủy đơn
+                  N'No Show'           -- Khách không đến
+              )
+          );
         `);
+        console.log("Database constraints synchronized successfully.");
       } catch (err) {
-        console.error("Auto constraint patch failed (safe to ignore if already applied):", err.message);
+        console.error("Auto constraint patch failed:", err.message);
       }
-      */
       return pool;
     });
   }

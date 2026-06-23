@@ -981,38 +981,183 @@ export async function sendReservationInvoiceEmail({ to, reservation, preorderIte
   const formattedId = `#${String(reservation.reservation_id).padStart(6, "0")}`;
   const safeName = reservation.contact_name || "Guest";
 
-  let itemsHtml = "";
-  if (preorderItems && preorderItems.length > 0) {
-    itemsHtml = preorderItems
-      .map((item) => `<tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;">${item.dish_name || item.name || 'Preorder Item'} x${item.quantity || item.qty}</td><td style="text-align:right; padding: 8px 0; border-bottom: 1px solid #eee;">${Number(item.price || item.unit_price || 0 * (item.quantity || item.qty || 1)).toLocaleString('vi-VN')} đ</td></tr>`)
-      .join('');
-  }
+  const formatDateTimeVN = (dateObj) => {
+    if (!dateObj) return '—';
+    const d = new Date(dateObj);
+    if (isNaN(d.getTime())) return String(dateObj);
+    const pad = (n) => String(n).padStart(2, '0');
+    // GMT+7 time offset adjustment if server timezone differs, but usually d.toLocale... is fine.
+    // Let's use simple UTC/Local pad formatting:
+    const day = pad(d.getDate());
+    const month = pad(d.getMonth() + 1);
+    const year = d.getFullYear();
+    const hours = pad(d.getHours());
+    const minutes = pad(d.getMinutes());
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  };
+
+  const formatDateVN = (dateObj) => {
+    if (!dateObj) return '—';
+    const d = new Date(dateObj);
+    if (isNaN(d.getTime())) return String(dateObj);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  };
+
+  const infoRow = (label, value) => `
+    <tr>
+      <td style="padding:8px 0;font-size:13px;color:#8a7a60;width:170px;vertical-align:top;">${label}</td>
+      <td style="padding:8px 0;font-size:14px;color:#2c1d0a;font-weight:600;">${value}</td>
+    </tr>`;
 
   const depositAmount = Number(reservation.deposit_amount || 0);
-  const finalTotal = Number(totalAmount || reservation.final_total || 0);
+  const finalRemaining = Number(reservation.final_total || 0);
 
   const html = `
-    <div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; color: #2b2620;">
-      <p style="color:#8a7445; letter-spacing:1px; font-size:12px; text-transform:uppercase;">PHŪRAI — PAYMENT RECEIPT</p>
-      <h2 style="margin:0 0 16px;">Reservation confirmed</h2>
-      <p>Dear <strong>${safeName}</strong>,</p>
-      <p>Your payment for Reservation <strong>${formattedId}</strong> has been confirmed.</p>
-      <p>Date: ${reservation.reservation_date || reservation.date || ''} · Time: ${reservation.start_time || reservation.time || ''} · Guest(s): ${reservation.guest_count}</p>
-      <table style="width:100%; font-size:14px; margin-top:16px; border-collapse: collapse;">
-        <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;">Deposit</td><td style="text-align:right; padding: 8px 0; border-bottom: 1px solid #eee;">${depositAmount.toLocaleString('vi-VN')} đ</td></tr>
-        ${itemsHtml}
-        <tr style="font-weight:bold;"><td style="padding: 12px 0;">Total paid</td><td style="text-align:right; padding: 12px 0;">${finalTotal.toLocaleString('vi-VN')} đ</td></tr>
-      </table>
-      <p style="margin-top:20px; font-size:13px; color:#777;">Thank you for choosing Phūrai. See you soon!</p>
-      <p><a href="${primaryOrigin}/my-reservations">View My Reservation →</a></p>
-    </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Reservation Have Been Successful — Phūrai</title>
+</head>
+<body style="margin:0;padding:0;background:#f8f5ef;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f5ef;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 40px rgba(31,26,23,0.10);">
+
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#1a1008 0%,#2c1d0a 100%);padding:36px 48px;text-align:center;">
+              <h1 style="margin:0;font-size:32px;letter-spacing:0.14em;color:#c9a96e;font-weight:300;">Phūrai</h1>
+              <p style="margin:6px 0 0;color:#8a7a60;font-size:11px;letter-spacing:0.22em;text-transform:uppercase;">Restaurant &amp; Bar</p>
+            </td>
+          </tr>
+
+          <!-- Gold divider -->
+          <tr><td style="height:3px;background:linear-gradient(90deg,transparent,#c9a96e,transparent);"></td></tr>
+
+          <!-- Status badge -->
+          <tr>
+            <td style="padding:28px 48px 0;text-align:center;">
+              <span style="display:inline-block;background:#d4edda;color:#155724;font-size:12px;font-weight:700;padding:6px 18px;border-radius:24px;letter-spacing:0.08em;text-transform:uppercase;">
+                ✓ Your Reservation Have Been Successful
+              </span>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:28px 48px 36px;">
+              <p style="margin:0 0 24px;font-size:15px;color:#4a3f35;line-height:1.7;">
+                Dear <strong style="color:#2c1d0a;">${safeName}</strong>,<br />
+                We are delighted to confirm that your table reservation at Phūrai has been successfully processed and confirmed.
+              </p>
+
+              <!-- Main Details Ticket -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border:1px solid #e8dcc8;border-radius:10px;margin:0 0 28px;">
+                <tr>
+                  <td style="padding:24px 28px;">
+                    <p style="margin:0 0 14px;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#a09080;font-weight:600;">
+                      Reservation Information
+                    </p>
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      ${infoRow("Your Reservation ID", `<strong style="color:#9f7c3a;font-size:15px;">${formattedId}</strong>`)}
+                      ${infoRow("Request time", formatDateTimeVN(reservation.created_at))}
+                      ${infoRow("Customer Name", safeName)}
+                      ${infoRow("Phone Number", reservation.contact_phone || "—")}
+                      ${infoRow("Email Address", recipient)}
+                      ${infoRow("Reservation Date", formatDateVN(reservation.reservation_start_at))}
+                      ${infoRow("Arrival Time", reservation.time || "—")}
+                      ${infoRow("Guest Count", `${reservation.guest_count} guests`)}
+                      ${infoRow("Dining Area", reservation.area_name || "Standard area")}
+                      ${infoRow("Assigned Table(s)", reservation.table_names ? `<strong>#${reservation.table_names}</strong>` : "Assigned on arrival")}
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Payment summary & Preorders -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border:1px solid #e8dcc8;border-radius:10px;margin:0 0 28px;">
+                <tr>
+                  <td style="padding:24px 28px;">
+                    <p style="margin:0 0 14px;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#a09080;font-weight:600;">
+                      Payment &amp; Pre-orders
+                    </p>
+                    <table width="100%" cellpadding="0" cellspacing="0" style="font-size:14px; line-height: 1.6;">
+                      ${preorderItems && preorderItems.length > 0 ? `
+                        <tr>
+                          <td colspan="2" style="font-weight: 600; font-size:13px; color:#a09080; padding-bottom: 6px; border-bottom: 1px dashed #e8dcc8;">Pre-ordered Items:</td>
+                        </tr>
+                        ${preorderItems.map(item => `
+                          <tr>
+                            <td style="padding: 8px 0; border-bottom: 1px solid #eee; color:#4a3f35;">${item.dish_name || item.name} x${item.quantity || item.qty}</td>
+                            <td align="right" style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600; color:#2c1d0a;">${Number(item.price || item.unit_price || 0).toLocaleString('vi-VN')} đ</td>
+                          </tr>
+                        `).join('')}
+                      ` : ''}
+                      <tr>
+                        <td style="padding: 8px 0; color:#4a3f35;">Base Table Deposit:</td>
+                        <td align="right" style="padding: 8px 0; font-weight: 600; color:#2c1d0a;">20.000 đ</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color:#4a3f35; font-weight: 600;">Total Paid (30% Deposit):</td>
+                        <td align="right" style="padding: 8px 0; font-weight: 700; color:#27ae60; font-size: 16px;">${depositAmount.toLocaleString('vi-VN')} đ</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color:#8a7a60; font-style: italic;">Remaining Balance (70%):</td>
+                        <td align="right" style="padding: 8px 0; font-weight: 600; color:#8a7a60; font-style: italic;">${finalRemaining.toLocaleString('vi-VN')} đ</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Action Link -->
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 32px; width:100%;">
+                <tr>
+                  <td align="center">
+                    <div style="background:linear-gradient(135deg,#9f7c3a,#c9a96e);border-radius:8px; display:inline-block;">
+                      <a href="${primaryOrigin}/my-reservations"
+                         style="display:inline-block;padding:14px 32px;font-size:14px;font-weight:600;color:#fff;text-decoration:none;letter-spacing:0.06em;">
+                        View My Reservation &rarr;
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0;font-size:14px;color:#4a3f35;line-height:1.8;font-style:italic;text-align:center;">
+                We look forward to welcoming you at Phūrai. Thank you for dining with us! 🌸
+              </p>
+            </td>
+          </tr>
+
+          <!-- Gold divider -->
+          <tr><td style="height:1px;background:linear-gradient(90deg,transparent,#e8dcc8,transparent);"></td></tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:24px 48px;text-align:center;background:#fcfbf9;">
+              <p style="margin:0 0 4px;font-size:12px;color:#a09080;">&copy; 2026 Phūrai Restaurant &amp; Bar. All rights reserved.</p>
+              <p style="margin:0;font-size:11px;color:#b8a898;">This is an automated email. Please do not reply directly to this message.</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
   `;
 
   try {
     await getTransporter().sendMail({
       from: `"Phūrai Restaurant" <${getSmtpFrom()}>`,
       to: recipient,
-      subject: `[Phūrai] Payment Receipt — Reservation ${formattedId}`,
+      subject: `[Phūrai] Successful Reservation Confirmation — ${formattedId}`,
       html,
     });
     console.log(`[sendReservationInvoiceEmail] Sent to ${recipient} for ${formattedId}`);

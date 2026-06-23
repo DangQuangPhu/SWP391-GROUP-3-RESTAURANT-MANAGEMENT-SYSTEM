@@ -27,46 +27,28 @@ import {
   ProfilePage,
   SettingsPage,
   useUserProfile,
-  normalizeStoredAvatarUrl,
 } from "@/features/profile";
 import { ManagerPortalPage } from "@/features/manager-dashboard";
 import { GiftCardPage } from "@/features/gift-cards";
 import ScrollToTop from "@/components/common/ScrollToTop.jsx";
-import { StaffDashboardPage as StaffDashboard, isStaffPortalUser } from "@/features/staff-dashboard";
+import { StaffDashboardPage as StaffDashboard } from "@/features/staff-dashboard";
 import AdminLayout from '@/features/admin-dashboard/layout/AdminLayout';
 import AdminDashboardPage from '@/features/admin-dashboard/pages/AdminDashboardPage';
 import AdminAccountsPage from '@/pages/admin/Accounts';
 import AdminAuditLogsPage from '@/pages/admin/AuditLogs';
 import AdminSystemSettingsPage from '@/pages/admin/SystemSettings';
+import AdminRolesPage from '@/pages/admin/Roles';
+import AdminAnalyticsPage from '@/pages/admin/Analytics';
+import AdminRestaurantInfoPage from '@/pages/admin/RestaurantInfo';
 import NotFound from "@/pages/NotFound";
 import LandingPage from "@/pages/public/LandingPage";
 import QrScanPage from "@/pages/public/QrScanPage.jsx";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import FloatingActionButtons from "@/components/common/FloatingActionButtons";
-import {
-  Register,
-  VerifyEmail,
-  AuthModal,
-  AuthSuccessOverlay,
-  ProfileModal,
-  blurActiveElement,
-} from "@/features/auth";
-import {
-  clearAuthUser,
-  getProfile,
-  loadAuthUser,
-  mapApiUserToFrontend,
-  saveAuthUser,
-} from "@/api";
-
-const PlaceholderPage = ({ title }) => (
-  <div style={{ padding: "2rem", textAlign: "center", width: "100%", color: "#6b7280" }}>
-    <h2 style={{ fontSize: "1.5rem", fontWeight: "600", marginBottom: "0.5rem", color: "#111827" }}>{title}</h2>
-    <p>This module is currently under development.</p>
-  </div>
-);
-
+import { ProfileModal, Register, VerifyEmail } from "@/features/auth";
+import { saveAuthUser } from "@/core/api";
+import { useAuth } from "@/features/auth/context/AuthContext";
 
 const PAGE_PATHS = {
   home: "/",
@@ -87,36 +69,6 @@ const PAGE_PATHS = {
   manager: "/manager/dashboard",
   staff: "/staff",
 };
-
-function normalizeAuthUser(user) {
-  const mapped = mapApiUserToFrontend(user) || user;
-  return {
-    ...mapped,
-    avatarUrl: normalizeStoredAvatarUrl(mapped?.avatarUrl),
-    id: mapped.id ?? mapped.userId,
-    userId: mapped.userId ?? mapped.id,
-  };
-}
-
-function isAdminUser(user) {
-  if (!user) return false;
-  const roleId = Number(user.roleId ?? user.role_id);
-  if (roleId === 5) return true;
-  const role = String(user.roleName ?? user.role_name ?? user.role ?? "")
-    .trim()
-    .toLowerCase();
-  return role === "admin";
-}
-
-function isManagerUser(user) {
-  if (!user) return false;
-  const roleId = Number(user.roleId ?? user.role_id);
-  if (roleId === 4) return true;
-  const role = String(user.roleName ?? user.role_name ?? user.role ?? "")
-    .trim()
-    .toLowerCase();
-  return role === "manager";
-}
 
 function normalizePathname(path) {
   if (!path || path === "/") return "/";
@@ -159,23 +111,24 @@ function App() {
   const pathname = location.pathname;
   const activePage = getPageFromPath(pathname);
 
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [pendingAuthUser, setPendingAuthUser] = useState(null);
-  const [showWelcome, setShowWelcome] = useState(false);
-  const [welcomeFading, setWelcomeFading] = useState(false);
+  const {
+    isAuthenticated,
+    currentUser,
+    authReady,
+    setCurrentUser,
+    handleSignOut,
+    handlePasswordReset,
+    openAuthModal,
+    navigateToPath
+  } = useAuth();
+
   const [showProfile, setShowProfile] = useState(false);
   const [profileView, setProfileView] = useState("view");
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalMode, setAuthModalMode] = useState("login");
-  const [loginSuccessMessage, setLoginSuccessMessage] = useState("");
 
   const handleProfileSave = (updatedUser) => {
-    const normalized = normalizeAuthUser(updatedUser);
-    setCurrentUser(normalized);
+    setCurrentUser(updatedUser);
     const remember = Boolean(localStorage.getItem("phurai_auth_user"));
-    saveAuthUser(normalized, remember);
+    saveAuthUser(updatedUser, remember);
   };
 
   const {
@@ -208,108 +161,18 @@ function App() {
     [isAuthenticated, currentUser]
   );
 
-  const navigateToPath = useCallback(
-    (path) => {
-      const nextPath =
-        path === "/settings" || path === "/settings/" ? "/settings/profile" : path;
-      navigate(nextPath);
-      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    },
-    [navigate]
-  );
-
-  const openAuthModal = (mode = "login") => {
-    setAuthModalMode(mode);
-    setIsAuthModalOpen(true);
-  };
-
-  const closeAuthModal = () => {
-    blurActiveElement();
-    setIsAuthModalOpen(false);
-  };
-
   useEffect(() => {
-    const stored = loadAuthUser();
-    if (stored) {
-      setIsAuthenticated(true);
-      setCurrentUser(stored);
-
-      const uid = stored.userId ?? stored.id;
-      if (uid) {
-        getProfile(uid)
-          .then((data) => {
-            if (!data?.user) return;
-            const normalized = normalizeAuthUser(data.user);
-            setCurrentUser(normalized);
-            saveAuthUser(normalized, Boolean(localStorage.getItem("phurai_auth_user")));
-          })
-          .catch((err) => {
-            if (err?.status === 404 || err?.status === 401) {
-              console.warn("Ghost session detected, clearing auth data.");
-              clearAuthUser();
-              setIsAuthenticated(false);
-              setCurrentUser(null);
-            }
-          });
-      }
-    }
-
     if (pathname === "/login") {
       openAuthModal("login");
       navigate("/", { replace: true });
     }
-
-    setAuthReady(true);
-  }, []);
+  }, [pathname, navigate, openAuthModal]);
 
   useEffect(() => {
     if (pathname === "/settings" || pathname === "/settings/") {
       navigate("/settings/profile", { replace: true });
     }
   }, [pathname, navigate]);
-
-  /* Admins belong on /admin, Managers on /manager — never on /staff. */
-  useEffect(() => {
-    if (!isAuthenticated || !currentUser) return;
-    const onStaffRoute = pathname === "/staff" || pathname.startsWith("/staff/");
-    if (onStaffRoute) {
-      if (isAdminUser(currentUser)) {
-        navigateToPath("/admin");
-      } else if (isManagerUser(currentUser)) {
-        navigateToPath("/manager/dashboard");
-      }
-    }
-  }, [isAuthenticated, currentUser, pathname, navigateToPath]);
-
-  useEffect(() => {
-    if (!showWelcome) return undefined;
-
-    const fadeTimer = setTimeout(() => setWelcomeFading(true), 2600);
-    const closeTimer = setTimeout(() => {
-      setShowWelcome(false);
-      setWelcomeFading(false);
-      blurActiveElement();
-      setIsAuthModalOpen(false);
-      if (pendingAuthUser) {
-        setIsAuthenticated(true);
-        setCurrentUser(pendingAuthUser);
-        saveAuthUser(pendingAuthUser, Boolean(localStorage.getItem("phurai_auth_user")));
-        if (isAdminUser(pendingAuthUser)) {
-          navigateToPath("/admin");
-        } else if (isManagerUser(pendingAuthUser)) {
-          navigateToPath("/manager/dashboard");
-        } else if (isStaffPortalUser(pendingAuthUser)) {
-          navigateToPath("/staff");
-        }
-        setPendingAuthUser(null);
-      }
-    }, 3200);
-
-    return () => {
-      clearTimeout(fadeTimer);
-      clearTimeout(closeTimer);
-    };
-  }, [showWelcome, pendingAuthUser, navigateToPath]);
 
   const handleNavigate = (page) => {
     if (page === "login") {
@@ -349,49 +212,6 @@ function App() {
     }
   };
 
-  const handleAuthSuccess = (user, options = {}) => {
-    const normalized = normalizeAuthUser(user);
-
-    if (options.showWelcome) {
-      setPendingAuthUser(normalized);
-      setShowWelcome(true);
-      return;
-    }
-
-    setIsAuthenticated(true);
-    setCurrentUser(normalized);
-    saveAuthUser(normalized, options.remember);
-    blurActiveElement();
-    setIsAuthModalOpen(false);
-    if (isManagerUser(normalized)) {
-      navigateToPath("/manager/dashboard");
-    } else if (isStaffPortalUser(normalized)) {
-      navigateToPath("/staff");
-    }
-  };
-
-  const handleSignOut = () => {
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    setShowProfile(false);
-    setPendingAuthUser(null);
-    setShowWelcome(false);
-    clearAuthUser();
-    navigateToPath("/");
-  };
-
-  const handlePasswordReset = ({ message } = {}) => {
-    clearAuthUser();
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    setShowProfile(false);
-    setProfileView("view");
-    setLoginSuccessMessage(
-      message || "Password reset successfully. Please sign in with your new password."
-    );
-    openAuthModal("login");
-  };
-
   const openChangePassword = () => {
     setProfileView("password");
     setShowProfile(true);
@@ -404,6 +224,10 @@ function App() {
     pathname.startsWith("/profile") || pathname.startsWith("/settings");
   const isReservationPage = pathname === "/reservations" || pathname.startsWith("/reservations/");
   const isPortalPage = isAccountPage || isManagerPage || isStaffPage || isAdminPage || isReservationPage;
+
+  if (!authReady) {
+    return null; // Or a loading spinner
+  }
 
   return (
     <TableSessionProvider userId={customerUserId} isCustomer={isCustomerUser}>
@@ -523,18 +347,18 @@ function App() {
             
             {/* Accounts Group */}
             <Route path="accounts" element={<AdminAccountsPage />} />
-            <Route path="roles" element={<PlaceholderPage title="Roles & Permissions" />} />
+            <Route path="roles" element={<AdminRolesPage />} />
             <Route path="audit-logs" element={<AdminAuditLogsPage />} />
             
             {/* Analytics Group */}
-            <Route path="analytics/reservations" element={<PlaceholderPage title="Reservations Analytics" />} />
-            <Route path="analytics/revenue" element={<PlaceholderPage title="Revenue Analytics" />} />
-            <Route path="analytics/orders" element={<PlaceholderPage title="Orders Analytics" />} />
-            <Route path="analytics/reviews" element={<PlaceholderPage title="Customer Reviews" />} />
-            <Route path="analytics/staff-performance" element={<PlaceholderPage title="Staff Performance" />} />
+            <Route path="analytics/reservations" element={<AdminAnalyticsPage type="reservations" title="Reservations Analytics" description="Status distribution of reservations" />} />
+            <Route path="analytics/revenue" element={<AdminAnalyticsPage type="revenue" title="Revenue Analytics" description="30-day revenue trends" />} />
+            <Route path="analytics/orders" element={<AdminAnalyticsPage type="orders" title="Orders Analytics" description="Order status and average values" />} />
+            <Route path="analytics/reviews" element={<AdminAnalyticsPage type="reviews" title="Customer Reviews" description="Overall rating distribution" />} />
+            <Route path="analytics/staff-performance" element={<AdminAnalyticsPage type="staff-performance" title="Staff Performance" description="Total shifts handled per staff member" />} />
             
             {/* Settings Group */}
-            <Route path="settings/restaurant" element={<PlaceholderPage title="Restaurant Info" />} />
+            <Route path="settings/restaurant" element={<AdminRestaurantInfoPage />} />
             <Route path="settings/system" element={<AdminSystemSettingsPage />} />
           </Route>
           <Route path="/manager" element={<Navigate to="/manager/dashboard" replace />} />
@@ -576,22 +400,6 @@ function App() {
 
         {!isPortalPage ? <Footer /> : null}
         {!isPortalPage ? <FloatingActionButtons /> : null}
-
-        <AuthModal
-          isOpen={isAuthModalOpen}
-          onClose={closeAuthModal}
-          isAuthenticated={isAuthenticated}
-          onAuthSuccess={handleAuthSuccess}
-          initialMode={authModalMode}
-          successMessage={loginSuccessMessage}
-          onClearSuccess={() => setLoginSuccessMessage("")}
-        />
-
-        <AuthSuccessOverlay
-          isVisible={showWelcome}
-          user={pendingAuthUser}
-          fading={welcomeFading}
-        />
 
         <ProfileModal
           isOpen={showProfile}

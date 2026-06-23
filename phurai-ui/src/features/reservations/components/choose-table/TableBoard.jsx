@@ -1,198 +1,95 @@
-import React, { useState, useMemo } from "react";
-import TableBoardFilter from "./TableBoardFilter";
-import TableStatusCard from "./TableStatusCard";
-import UpgradeMembershipModal from "./UpgradeMembershipModal";
-import { canAccessArea, getRequiredTierForArea, MEMBERSHIP_RANKS } from "../../utils/membershipUtils.js";
-import "../../styles/table-board.css";
-// Normalized status: AVAILABLE, RESERVED, OCCUPIED, CLEANING, INACTIVE
-function normalizeStatus(table) {
-  if (!table.is_bookable) {
-    const avail = table.availability_at_slot || "";
-    const lowerAvail = avail.toLowerCase();
-    if (lowerAvail === "occupied") return "OCCUPIED";
-    if (lowerAvail === "cleaning") return "CLEANING";
-    if (lowerAvail === "inactive") return "INACTIVE";
-    return "RESERVED"; // default for not bookable
-  }
+import React, { useMemo } from 'react';
+import FloorPlanSVG from './FloorPlanSVG';
+import { validateTableCapacity } from '../../utils/validateTableCapacity';
+import '../../styles/table-board.css';
 
-  // if bookable
-  const dbStatus = (table.table_status || "").toLowerCase();
-  if (dbStatus === "available") return "AVAILABLE";
-  if (dbStatus === "reserved") return "RESERVED";
-  if (dbStatus === "occupied") return "OCCUPIED";
-  if (dbStatus === "cleaning") return "CLEANING";
-  if (dbStatus === "inactive") return "INACTIVE";
-  return "AVAILABLE"; // fallback
+// Normalize status based on backend API data
+function normalizeStatus(apiTable) {
+  if (apiTable.is_bookable === false) {
+    const avail = apiTable.availability_at_slot || "";
+    const lowerAvail = avail.toLowerCase();
+    if (lowerAvail === "occupied") return "Occupied";
+    if (lowerAvail === "cleaning") return "Occupied"; 
+    if (lowerAvail === "inactive") return "Occupied"; 
+    return "Reserved"; 
+  }
+  return "Available"; 
 }
+
 export default function TableBoard({
   tables = [],
-  selectedTableId = null,
+  selectedTableId,
   onSelectTable,
-  loading,
-  guestCount = 2,
-  membershipTier = "Bronze",
-  isAuthenticated = false,
-  onNavigateLogin,
-  onNavigateRegister
+  guestCount
 }) {
-  const [activeFilter, setActiveFilter] = useState("all");
-  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
-  const [modalRequiredTier, setModalRequiredTier] = useState("Gold");
-
-  const groupedTables = useMemo(() => {
-    const parentMap = new Map();
-    tables.forEach((t) => {
-      if (!t.merged_into_table_id) {
-        parentMap.set(t.table_id, { ...t, combined_names: [t.table_number], combined_capacity: t.capacity, child_ids: [] });
-      }
+  // We need to map config Table ID (e.g. "S-03") to API Table object
+  const apiTableMap = useMemo(() => {
+    const map = new Map();
+    tables.forEach(t => {
+      // Map table_number (e.g. S-03) to the full API object
+      map.set(t.table_number, t);
     });
-
-    tables.forEach((t) => {
-      if (t.merged_into_table_id && parentMap.has(t.merged_into_table_id)) {
-        const parent = parentMap.get(t.merged_into_table_id);
-        parent.combined_names.push(t.table_number);
-        parent.combined_capacity += t.capacity;
-        parent.child_ids.push(t.table_id);
-      }
-    });
-
-    const finalGrouped = [];
-    parentMap.forEach((parent) => {
-      finalGrouped.push({
-        ...parent,
-        display_label: parent.combined_names.join(" | "),
-        capacity: parent.combined_capacity,
-      });
-    });
-    return finalGrouped;
+    return map;
   }, [tables]);
 
-  const filteredTables = useMemo(() => {
-    let result = groupedTables.filter((t) => {
-      if (activeFilter === "all") return true;
-      const area = (t.area_name || "").toLowerCase();
-      if (activeFilter === "window") return area.includes("window") || area.includes("bar");
-      if (activeFilter === "standard") return area.includes("main") || area.includes("standard") || t.table_number.startsWith("S-");
-      if (activeFilter === "premium") return area.includes("premium") || t.table_number.startsWith("PRE-");
-      if (activeFilter === "vip") return area.includes("vip") || area.includes("private");
-      if (activeFilter === "kitchen") return area.includes("kitchen");
-      if (activeFilter === "rooftop") return area.includes("rooftop") || area.includes("terrace") || area.includes("garden");
-      return true;
-    });
+  const handleTableClick = (configId) => {
+    const apiTable = apiTableMap.get(configId);
+    if (!apiTable) return; // if not found in API, can't select
 
-    // Sort ascending by capacity so smallest suitable tables are recommended first
-    // Then sort by membership tier access (higher tier required means lower priority if user has access)
-    result.sort((a, b) => {
-      if (a.capacity !== b.capacity) return a.capacity - b.capacity;
-      const rankA = MEMBERSHIP_RANKS[getRequiredTierForArea(a.area_name)] || 1;
-      const rankB = MEMBERSHIP_RANKS[getRequiredTierForArea(b.area_name)] || 1;
-      return rankB - rankA; // Higher rank requirements first, actually wait: the user requested specific priority. Let's just do capacity for now.
-    });
-    return result;
-  }, [groupedTables, activeFilter]);
-  const selectedTableData = useMemo(() => {
-    return groupedTables.find(t => t.table_id === selectedTableId);
-  }, [groupedTables, selectedTableId]);
+    // Enforce capacity validation
+    const isCapacityValid = validateTableCapacity(guestCount, apiTable.capacity);
+    if (!isCapacityValid) return;
 
-  const handleCardClick = (table) => {
-    const isLocked = !canAccessArea(membershipTier, table.area_name);
-    if (isLocked) {
-      setModalRequiredTier(getRequiredTierForArea(table.area_name));
-      setUpgradeModalOpen(true);
+    const status = normalizeStatus(apiTable);
+    if (status === 'Occupied' || status === 'Reserved') {
       return;
     }
-    onSelectTable(table.table_id);
+
+    const actualTableId = apiTable.table_id;
+    const newSelected = selectedTableId === actualTableId ? null : actualTableId;
+    
+    if (onSelectTable) {
+      onSelectTable(newSelected);
+    }
   };
 
-  return (
-    <div className="tb-board">
-      <div className="tb-board__header">
+  const selectedApiTable = useMemo(() => tables.find(t => t.table_id === selectedTableId), [tables, selectedTableId]);
 
+  return (
+    <div className="table-board-container">
+      <div className="tb-board__header">
         <p className="tb-board__hint">
-          Filter by area and select an available table.
+          Select an available table. Occupied or invalid capacity tables are disabled.
         </p>
       </div>
-      <TableBoardFilter activeFilter={activeFilter} onFilterChange={setActiveFilter} />
-      <div className="tb-legend">
-        <span className="tb-legend__item"><span className="tb-legend__dot tb-legend__dot--available"></span> Available</span>
-        <span className="tb-legend__item"><span className="tb-legend__dot tb-legend__dot--reserved"></span> Reserved</span>
-        <span className="tb-legend__item"><span className="tb-legend__dot tb-legend__dot--occupied"></span> Occupied</span>
-        <span className="tb-legend__item"><span className="tb-legend__dot tb-legend__dot--cleaning"></span> Cleaning</span>
-        <span className="tb-legend__item"><span className="tb-legend__dot tb-legend__dot--selected"></span> Selected</span>
-      </div>
-      <div className="tb-grid">
-        {loading ? (
-          <div className="tb-loading">Checking live availability…</div>
-        ) : filteredTables.length > 0 ? (
-          filteredTables.map((t) => {
-            const isSelected = t.table_id === selectedTableId;
-            const status = normalizeStatus(t);
-            const isSuitable = t.capacity >= guestCount && t.capacity <= guestCount + 2;
-            const requiredTier = getRequiredTierForArea(t.area_name);
-            const isLocked = !canAccessArea(membershipTier, t.area_name);
 
-            return (
-              <TableStatusCard
-                key={t.table_id}
-                table={t}
-                status={status}
-                isSelected={isSelected}
-                isSuitable={isSuitable}
-                guestCount={guestCount}
-                isLocked={isLocked}
-                requiredTier={requiredTier}
-                onClick={() => handleCardClick(t)}
-              />
-            );
-          })
-        ) : (
-          <div className="tb-empty" style={{ gridColumn: "1 / -1", textAlign: "center", padding: "2rem" }}>
-            {tables.length === 0
-              ? "Select a date, time and guests to load tables"
-              : "No suitable table is available for this party size. Please choose another time or contact staff for table arrangement."}
-          </div>
-        )}
+      <div className="tb-legend" style={{ display: 'flex', gap: '20px', marginBottom: '20px', flexWrap: 'wrap', fontWeight: 600 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <span className="swatch" style={{ width: 16, height: 16, borderRadius: 4, background: '#dceaf5', border: '1.5px solid #5a8bb0' }}></span>
+          Available
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <span className="swatch" style={{ width: 16, height: 16, borderRadius: 4, background: '#f6c453', border: '1.5px solid #b8862c' }}></span>
+          Selected
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <span className="swatch" style={{ width: 16, height: 16, borderRadius: 4, background: '#dcdcdc', border: '1.5px solid #a3a3a3' }}></span>
+          Occupied / Unavailable
+        </span>
       </div>
-      {selectedTableData && (
-        <div className="tb-summary">
-          <h4 className="tb-summary__title">Selected Table</h4>
-          <ul className="tb-summary__list">
-            <li className="tb-summary__item">
-              <div className="tb-summary__info">
-                <span className="tb-summary__id">{selectedTableData.display_label || selectedTableData.table_number}</span>
-                <span className="tb-summary__status">({normalizeStatus(selectedTableData).charAt(0).toUpperCase() + normalizeStatus(selectedTableData).slice(1).toLowerCase()})</span>
-              </div>
-              <button
-                type="button"
-                className="tb-summary__remove"
-                onClick={() => onSelectTable(null)}
-              >
-                Remove
-              </button>
-            </li>
-          </ul>
+
+      <FloorPlanSVG
+        tables={tables}
+        selectedTableId={selectedTableId}
+        guestCount={guestCount}
+        onTableClick={handleTableClick}
+      />
+      
+      {selectedApiTable && (
+        <div className="panel mt-4 p-4 border rounded shadow-sm bg-white">
+          <strong>SELECTED TABLE: </strong> <span className="text-amber-600 ml-2">{selectedApiTable.table_number}</span>
         </div>
       )}
-
-      <UpgradeMembershipModal
-        isOpen={upgradeModalOpen}
-        onClose={() => setUpgradeModalOpen(false)}
-        requiredTier={modalRequiredTier}
-        userTier={membershipTier}
-        isAuthenticated={isAuthenticated}
-        onNavigateLogin={() => {
-          setUpgradeModalOpen(false);
-          if (onNavigateLogin) onNavigateLogin();
-        }}
-        onNavigateRegister={() => {
-          setUpgradeModalOpen(false);
-          if (onNavigateRegister) onNavigateRegister();
-        }}
-        onNavigateUpgrade={() => {
-          // Placeholder for upgrade
-          alert("Membership upgrade flow will be available soon.");
-        }}
-      />
     </div>
   );
 }

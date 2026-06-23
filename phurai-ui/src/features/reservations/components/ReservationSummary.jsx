@@ -1,7 +1,9 @@
 import { DINING_PURPOSES, PROMOTIONS } from "../data/floorPlanConfig.js";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import PreorderDashboardModal from "./PreorderDashboardModal.jsx";
+import PromotionModal from "./PromotionModal.jsx";
 import { formatVND } from "@/utils/formatCurrency.js";
+import { apiPost } from "@/core/api/httpClient";
 function formatDate(dateStr) {
   if (!dateStr) return "—";
   const d = new Date(`${dateStr}T00:00:00`);
@@ -61,16 +63,82 @@ function ReservationSummary({
   setPromoDiscount,
 }) {
   const [showPreorder, setShowPreorder] = useState(false);
-  const [showPromo, setShowPromo] = useState(false);
-  const [promoInput, setPromoInput] = useState(promoCode || "");
+  const [showPromoModal, setShowPromoModal] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
+
+  // Clear promo code if preorderTotal becomes 0
+  useEffect(() => {
+    if (preorderTotal === 0 && promoCode) {
+      setPromoCode("");
+      setPromoDiscount(null);
+      setPromoInput("");
+      setPromoError("");
+    }
+  }, [preorderTotal, promoCode, setPromoCode, setPromoDiscount]);
+
+  // Automatically revalidate/update discount when preorder food total changes
+  useEffect(() => {
+    if (!promoCode || preorderTotal === 0) return;
+
+    const reapplyVoucher = async () => {
+      setIsValidating(true);
+      try {
+        const res = await apiPost("/vouchers/apply", {
+          voucher_code: promoCode,
+          cart_total: preorderTotal
+        });
+        if (res?.success) {
+          setPromoDiscount({
+            discount_amount: res.discount_amount,
+            promotion_name: res.promotion_name,
+            description: `Discount applied to food preorder`
+          });
+          setPromoError("");
+        }
+      } catch (err) {
+        // If no longer valid, clear it
+        setPromoCode("");
+        setPromoDiscount(null);
+        setPromoInput("");
+        setPromoError(err.response?.data?.message || err.message || "Promo code is no longer valid for this total.");
+      } finally {
+        setIsValidating(false);
+      }
+    };
+
+    reapplyVoucher();
+  }, [preorderTotal, promoCode, setPromoCode, setPromoDiscount]);
+
+  const applyVoucherByCode = async (code) => {
+    if (!code || preorderTotal === 0) return;
+    setIsValidating(true);
+    setPromoError("");
+    try {
+      const res = await apiPost("/vouchers/apply", {
+        voucher_code: code,
+        cart_total: preorderTotal
+      });
+      if (res?.success) {
+        setPromoCode(code);
+        setPromoDiscount({
+          discount_amount: res.discount_amount,
+          promotion_name: res.promotion_name,
+          description: `Discount applied to food preorder`
+        });
+        setPromoInput(code);
+        setPromoError("");
+      }
+    } catch (err) {
+      setPromoError(err.response?.data?.message || err.message || "Invalid promo code");
+      setPromoDiscount(null);
+    } finally {
+      setIsValidating(false);
+    }
+  };
 
   const handleApplyPromo = () => {
-    if (!promoInput) return;
-    const promo = PROMOTIONS.find(p => p.id === promoInput);
-    if (promo) {
-      setPromoCode(promo.id);
-      setPromoDiscount({ discount_type: 'percent', discount_value: 10, description: promo.label });
-    }
+    if (!promoInput.trim()) return;
+    applyVoucherByCode(promoInput.trim());
   };
 
   const handleRemovePromo = () => {
@@ -142,23 +210,62 @@ function ReservationSummary({
           </span>
         </div>
 
-        {preorderTotal > 0 && (
-          <div className="rzv-summary__row" style={{ color: "var(--rzv-gold)" }}>
-            <span className="rzv-summary__label">Pre-order Total</span>
-            <span className="rzv-summary__value">{formatVND(preorderTotal)}</span>
+        {/* Payment Details Section */}
+        <div style={{ gridColumn: "1 / -1", marginTop: "1.5rem", borderTop: "1px solid #f0f0f0", paddingTop: "1rem" }}>
+          <h3 style={{ fontSize: "1.1rem", fontWeight: 600, color: "#111", marginBottom: "1rem" }}>Payment Details</h3>
+          
+          <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "8px 0" }}>
+            <span className="rzv-summary__label" style={{ color: "#666" }}>Base Table Deposit</span>
+            <span className="rzv-summary__value" style={{ fontWeight: 500 }}>{formatVND(20000)}</span>
           </div>
-        )}
 
-        {promoDiscount && (
-          <div className="rzv-summary__row" style={{ color: "var(--rzv-green)" }}>
-            <span className="rzv-summary__label">Voucher Applied</span>
-            <span className="rzv-summary__value">
-              {promoDiscount.discount_type === "percentage"
-                ? `-${promoDiscount.discount_value}%`
-                : `-${formatVND(promoDiscount.discount_value)}`}
-            </span>
-          </div>
-        )}
+          {preorderTotal > 0 && (
+            <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "8px 0" }}>
+              <span className="rzv-summary__label" style={{ color: "#666" }}>Pre-order Food Total</span>
+              <span className="rzv-summary__value" style={{ fontWeight: 500 }}>{formatVND(preorderTotal)}</span>
+            </div>
+          )}
+
+          {promoDiscount && (
+            <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "8px 0", color: "#16a34a" }}>
+              <span className="rzv-summary__label" style={{ color: "#16a34a" }}>Voucher Discount ({promoCode})</span>
+              <span className="rzv-summary__value" style={{ fontWeight: 600 }}>-{formatVND(promoDiscount.discount_amount)}</span>
+            </div>
+          )}
+
+          {(() => {
+            const discountAmt = promoDiscount ? Number(promoDiscount.discount_amount) : 0;
+            const foodTotal = Math.max(0, preorderTotal - discountAmt);
+            const foodDeposit = Math.round(foodTotal * 0.3);
+            const tableDeposit = 20000;
+            const depositRequired = tableDeposit + foodDeposit;
+            const remainingBalance = Math.round(foodTotal * 0.7);
+            const netTotal = depositRequired + remainingBalance;
+
+            return (
+              <>
+                <div className="rzv-summary__row" style={{ borderBottom: "1px solid #e5e5e5", padding: "12px 0", fontWeight: 600, fontSize: "1.1rem" }}>
+                  <span className="rzv-summary__label" style={{ color: "#111" }}>Net Total</span>
+                  <span className="rzv-summary__value" style={{ color: "#111" }}>{formatVND(netTotal)}</span>
+                </div>
+
+                <div style={{ marginTop: "1rem", background: "#f8fafc", padding: "1.25rem", borderRadius: "0.75rem", border: "1px solid #e2e8f0" }}>
+                  <div className="rzv-summary__row" style={{ padding: "4px 0", fontWeight: 700, color: "var(--rzv-gold)" }}>
+                    <span className="rzv-summary__label" style={{ fontSize: "1rem" }}>Required Deposit (Table + 30% Food)</span>
+                    <span className="rzv-summary__value" style={{ fontSize: "1.2rem" }}>{formatVND(depositRequired)}</span>
+                  </div>
+                  <div className="rzv-summary__row" style={{ padding: "4px 0", color: "#64748b", fontSize: "0.95rem" }}>
+                    <span className="rzv-summary__label">Remaining Balance (70% Food)</span>
+                    <span className="rzv-summary__value" style={{ fontWeight: 600 }}>{formatVND(remainingBalance)}</span>
+                  </div>
+                  <p style={{ margin: "10px 0 0 0", fontSize: "11px", color: "#64748b", fontStyle: "italic", lineHeight: "1.4" }}>
+                    * The required deposit secures your table and pre-ordered items. The remaining balance is paid during checkout.
+                  </p>
+                </div>
+              </>
+            );
+          })()}
+        </div>
 
         <div className="rd-field" style={{ gridColumn: "1 / -1", marginTop: "1.5rem" }}>
           <label htmlFor="rzv-notes">SPECIAL REQUESTS / NOTES</label>
@@ -213,48 +320,35 @@ function ReservationSummary({
           />
         </div>
 
-        {/* Promo Collapsible */}
-        <div style={{ marginBottom: "1rem", border: "1px solid #e5e5e5", borderRadius: "0.75rem", overflow: "hidden" }}>
-          <button
-            type="button"
-            style={{ width: "100%", display: "flex", justifyContent: "space-between", padding: "1rem", background: "#f9f9f9", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 600, letterSpacing: "0.5px", textTransform: "uppercase", color: "#333" }}
-            onClick={() => setShowPromo(!showPromo)}
-          >
-            <span>APPLY VOUCHER / PROMOTION</span>
-            <span>{showPromo ? "▲" : "▼"}</span>
-          </button>
-          {showPromo && (
-            <div style={{ borderTop: "1px solid #e5e5e5", padding: "1rem", background: "#fff" }}>
-              {promoDiscount ? (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {/* Promo Section */}
+        <div style={{ marginBottom: "1rem" }}>
+          {preorderTotal === 0 ? (
+            <div style={{ background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "0.75rem", padding: "1.25rem", textAlign: "center", color: "#64748b", fontSize: "0.95rem" }}>
+              Pre-order food items to unlock voucher promotions.
+            </div>
+          ) : (
+            <div style={{ border: "1px solid #e2e8f0", borderRadius: "0.75rem", overflow: "hidden" }}>
+              <button
+                type="button"
+                onClick={() => setShowPromoModal(true)}
+                style={{ width: "100%", padding: "14px 16px", background: "#f8fafc", border: "none", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontSize: "0.95rem", fontWeight: 600, color: "#334155" }}
+              >
+                <span>{promoCode ? `Applied: ${promoCode}` : "APPLY VOUCHER / PROMO CODE"}</span>
+                <span>→</span>
+              </button>
+
+              {promoCode && (
+                <div style={{ padding: "12px 16px", background: "#fff", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
-                    <strong style={{ color: "var(--rzv-green)", fontSize: "14px" }}>{promoCode} Applied!</strong>
-                    <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#777" }}>{promoDiscount.description}</p>
+                    <strong style={{ color: "#16a34a", fontSize: "0.9rem" }}>{promoCode} Applied!</strong>
+                    {promoDiscount && <div style={{ fontSize: "0.8rem", color: "#15803d" }}>{promoDiscount.promotion_name || promoDiscount.description}</div>}
                   </div>
-                  <button type="button" className="rd-btn-outline" style={{ margin: 0, padding: "8px 16px" }} onClick={handleRemovePromo}>
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <select
-                    value={promoInput}
-                    onChange={(e) => setPromoInput(e.target.value)}
-                    style={{ flex: 1, padding: "0.75rem 1rem", borderRadius: "0.5rem", border: "1px solid #e5e5e5", background: "#f9f9f9", fontSize: "14px" }}
-                  >
-                    <option value="">Select a promotion...</option>
-                    {PROMOTIONS.map(p => (
-                      <option key={p.id} value={p.id}>{p.label}</option>
-                    ))}
-                  </select>
                   <button
                     type="button"
-                    className="rd-btn-primary"
-                    style={{ margin: 0, padding: "0.75rem 1.5rem", width: "auto" }}
-                    onClick={handleApplyPromo}
-                    disabled={!promoInput}
+                    onClick={handleRemovePromo}
+                    style={{ border: "none", background: "none", color: "#dc2626", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}
                   >
-                    Apply
+                    Remove
                   </button>
                 </div>
               )}
@@ -267,7 +361,7 @@ function ReservationSummary({
 
       {showVatWarning ? (
         <div className="rzv-alert rzv-alert--surcharge" role="status" style={{ marginTop: 16 }}>
-          Note: Reservations for 45 minutes or 1 hour are subject to an additional premium
+          Note: Reservations for 45 minutes to 2 hours are subject to an additional premium
           VAT/surcharge fee.
         </div>
       ) : null}
@@ -291,6 +385,18 @@ function ReservationSummary({
           {submitting ? "PROCESSING..." : "CONFIRM RESERVATION"}
         </button>
       </div>
+
+      <PromotionModal 
+        open={showPromoModal}
+        isAuthenticated={true} // Allow guests to see promotions based on our earlier config
+        current={{ id: promoCode }}
+        onClose={() => setShowPromoModal(false)}
+        onApply={(promo) => {
+          if (promo) {
+            applyVoucherByCode(promo.id === "member-10" ? "WEEKEND10" : "FIXED20K");
+          }
+        }}
+      />
     </div>
   );
 }

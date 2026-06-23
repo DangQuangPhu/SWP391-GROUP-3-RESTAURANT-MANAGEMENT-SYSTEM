@@ -322,3 +322,95 @@
   background: #ea4335;
   color: #fff;
 }
+/* ---- Bàn (Data-driven) ---- */
+.table-unit {
+  cursor: pointer;
+}
+
+.table-unit .chair {
+  fill: var(--chair-fill, #cfe3da);
+  stroke: #8fae9f;
+  stroke-width: 1.5;
+  transition: fill .2s, filter .2s;
+}
+
+.table-unit .table-shape {
+  fill: var(--table-fill, #dceaf5);
+  stroke: #5a8bb0;
+  stroke-width: 2;
+  transition: fill .2s, filter .2s;
+}
+
+.table-unit:hover .table-shape,
+.table-unit:hover .chair {
+  filter: brightness(0.9);
+}
+
+.table-unit .table-label {
+  fill: #3b2c15;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.table-unit.selected .table-shape {
+  fill: #f6c453 !important;
+  stroke: #b8862c !important;
+}
+
+.table-unit.selected .chair {
+  fill: #f8d98a !important;
+  stroke: #b8862c !important;
+}
+
+.table-unit.occupied {
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.table-unit.occupied .table-shape {
+  fill: #dcdcdc !important;
+  stroke: #a3a3a3 !important;
+}
+
+.table-unit.occupied .chair {
+  fill: #ececec !important;
+  stroke: #a3a3a3 !important;
+}
+
+.table-unit.occupied:hover .table-shape,
+.table-unit.occupied:hover .chair {
+  filter: none;
+}
+
+/* ---- SVG Floor Plan Zones ---- */
+.zone-rect {
+  fill: #faf9f6;
+  stroke: #e6e3dd;
+  stroke-width: 1.5;
+}
+
+.zone-rect.alt {
+  fill: transparent;
+  stroke: none;
+}
+
+.zone-label {
+  fill: #8e806a;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-anchor: middle;
+}
+
+.sub-label {
+  fill: #aba08f;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-anchor: middle;
+}

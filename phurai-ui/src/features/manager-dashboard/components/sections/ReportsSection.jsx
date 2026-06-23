@@ -151,7 +151,7 @@ function ReportsSection({
                       {r.reservation_date}
                       <small className="sfx-cell-sub">{r.start_time}</small>
                     </td>
-                    <td>{r.party_size}</td>
+                    <td>{r.guest_count}</td>
                     <td>{r.table_label}</td>
                     <td>
                       <StatusBadge tone={RESERVATION_STATUS_META[r.status]?.tone} color={RESERVATION_STATUS_META[r.status]?.color}>

@@ -30,7 +30,6 @@ const PROFILE_SELECT = `
     cp.[language],
     cp.bio,
     cp.loyalty_points,
-    cp.membership_tier,
     cp.preferences,
     sp.staff_code,
     sp.job_title,
@@ -92,11 +91,6 @@ export function formatProfileResponse(row) {
     language: row.language || "",
     bio: row.bio || "",
     loyalty_points: loyaltyPoints,
-    membership_tier: membership.membership_tier,
-    membership_icon: membership.membership_icon,
-    next_tier: membership.next_tier,
-    points_to_next_tier: membership.points_to_next_tier,
-    progress_percent: membership.progress_percent,
     preferences,
     staff_code: row.staff_code || null,
     job_title: row.job_title || null,
@@ -152,8 +146,8 @@ export async function ensureCustomerProfile(userId, email, defaults = {}) {
     BEGIN
       INSERT INTO dbo.CustomerProfiles
         (user_id, username, date_of_birth, gender, country, [language], bio,
-         loyalty_points, membership_tier, preferences, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSDATETIME(), SYSDATETIME())
+         loyalty_points, preferences, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, SYSDATETIME(), SYSDATETIME())
     END
     `,
     [
@@ -166,7 +160,6 @@ export async function ensureCustomerProfile(userId, email, defaults = {}) {
       defaults.language || null,
       defaults.bio || null,
       defaults.loyalty_points ?? 0,
-      membership.membership_tier,
       preferences,
     ]
   );
@@ -249,14 +242,7 @@ export async function updateUserProfile(userId, payload) {
   );
 
   const loyaltyPoints = Number(existing.loyalty_points) || 0;
-  const membership = getMembershipInfo(loyaltyPoints);
-  await pool.query(
-    `UPDATE dbo.CustomerProfiles
-     SET membership_tier = ?, updated_at = SYSDATETIME()
-     WHERE user_id = ?`,
-    [membership.membership_tier, userId]
-  );
-
+  // Membership tier logic removed per Fine-Dining equality architecture
   return getProfileForUser(userId, { ensureProfile: false });
 }
 

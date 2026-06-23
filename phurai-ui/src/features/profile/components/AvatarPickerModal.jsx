@@ -4,7 +4,7 @@ import {
   uploadProfileAvatar,
   updateSystemAvatar,
   updateGoogleAvatar,
-} from "@/api";
+} from "../services/profileApi.js";
 import { SYSTEM_AVATARS, getAvatarSrc, normalizeStoredAvatarUrl } from "../utils/avatarUtils.js";
 import { validateAvatarFile, SystemAvatarOption, UserAvatar } from "@/features/auth";
 import "@/styles/AvatarPickerModal.css";

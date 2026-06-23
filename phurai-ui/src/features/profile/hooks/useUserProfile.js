@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getProfileMe,
-  mapApiUserToFrontend,
   updateProfile,
   updateProfilePhone,
-  saveAuthUser,
-  loadAuthUser,
-} from "@/api";
+} from "../services/profileApi.js";
+import { mapApiUserToFrontend } from "@/features/auth";
+import { saveAuthUser, loadAuthUser } from "@/core/api";
 import { normalizePhone, splitFullName } from "@/features/auth";
 import { normalizeStoredAvatarUrl } from "../utils/avatarUtils.js";
 

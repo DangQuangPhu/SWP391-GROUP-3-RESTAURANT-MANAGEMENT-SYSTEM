@@ -126,7 +126,7 @@ export function generateMockReservations(referenceDate = new Date()) {
       reservation_end_at: buildLocalReservationStartAt(hours + 2, minutes, referenceDate),
       reservation_date: dateIso,
       start_time,
-      party_size: guest_count,
+      guest_count,
       guest_count,
       area_name: table.area_name,
       table_id: hasTable ? 100 + index : null,
@@ -315,8 +315,8 @@ export async function fetchShiftMapping() {
 }
 
 export async function checkInStaffReservation(reservationId, userId, { table_id }) {
-  const res = await staffPatch(
-    `/staff/reservations/${reservationId}/checkin`,
+  const res = await staffPost(
+    `/staff/reservations/${reservationId}/check-in`,
     userId,
     { table_id }
   );
@@ -324,6 +324,17 @@ export async function checkInStaffReservation(reservationId, userId, { table_id 
     throw new Error(res?.message || "Reservation check-in failed");
   }
   return res;
+}
+
+export async function fetchStaffReservationDetail(reservationId, userId) {
+  const res = await request(`/staff/reservations/${reservationId}`, {
+    method: "GET",
+    headers: profileRequestHeaders(userId),
+  });
+  if (!res?.success) {
+    throw new Error(res?.message || "Failed to fetch reservation detail");
+  }
+  return res.data;
 }
 
 export async function confirmCheckoutReservation(reservationId, userId) {
@@ -371,6 +382,18 @@ export async function rejectStaffReservation(reservationId, userId, { reason, ne
   );
   if (!res?.success) {
     throw new Error(res?.message || "Reservation rejection failed");
+  }
+  return res;
+}
+
+export async function editStaffReservation(reservationId, userId, payload) {
+  const res = await staffPatch(
+    `/staff/reservations/${reservationId}/edit`,
+    userId,
+    payload
+  );
+  if (!res?.success) {
+    throw new Error(res?.message || "Lỗi cập nhật lịch đặt bàn");
   }
   return res;
 }

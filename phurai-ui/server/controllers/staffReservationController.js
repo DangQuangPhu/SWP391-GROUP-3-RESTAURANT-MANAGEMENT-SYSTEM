@@ -53,7 +53,6 @@ export const getTodayShiftReservations = async (req, res) => {
                 COALESCE(ua.phone, r.contact_phone) AS customer_phone,
                 COALESCE(ua.email, r.contact_email) AS customer_email,
                 cp.username,
-                cp.membership_tier,
                 r.reservation_start_at,
                 r.reservation_end_at,
                 r.guest_count,
@@ -81,7 +80,7 @@ export const getTodayShiftReservations = async (req, res) => {
                  ${dateCondition}
              GROUP BY
                  r.reservation_id, ua.full_name, r.contact_name, ua.phone, r.contact_phone,
-                 ua.email, r.contact_email, cp.username, cp.membership_tier, r.reservation_start_at,
+                 ua.email, r.contact_email, cp.username, r.reservation_start_at,
                  r.reservation_end_at, r.guest_count, r.special_request, r.reservation_status,
                  r.has_pending_request, r.created_at, r.checked_in_at, sh.shift_name, sh.start_time, sh.end_time
              ORDER BY 
@@ -125,7 +124,7 @@ export const getStaffReservationDetail = async (req, res) => {
           COALESCE(ua.full_name, r.contact_name, N'Guest') AS customer_name,
           COALESCE(ua.phone, r.contact_phone) AS customer_phone,
           COALESCE(ua.email, r.contact_email) AS customer_email,
-          cp.username, cp.membership_tier,
+          cp.username,
           r.reservation_start_at, r.reservation_end_at, r.guest_count,
           r.special_request, r.reservation_status, r.reservation_source,
           r.created_at, r.checked_in_at,
@@ -140,7 +139,7 @@ export const getStaffReservationDetail = async (req, res) => {
        WHERE r.reservation_id = ?
        GROUP BY r.reservation_id, ua.full_name, ua.phone, ua.email,
                 r.contact_name, r.contact_phone, r.contact_email,
-                cp.username, cp.membership_tier,
+                cp.username,
                 r.reservation_start_at, r.reservation_end_at, r.guest_count,
                 r.special_request, r.reservation_status, r.reservation_source,
                 r.created_at, r.checked_in_at`,
@@ -404,6 +403,9 @@ export const rejectReservation = async (req, res) => {
 
       await connection.beginTransaction();
 
+      const mappedStatus = new_status === 'Check-in Rejected' ? 'Cancelled' : new_status;
+      const eventType = new_status === 'Check-in Rejected' ? 'REJECT_CHECK_IN' : (new_status === 'No Show' ? 'NO_SHOW' : 'CANCELLED');
+
       const [updateResult] = await connection.query(
         `DECLARE @OutputTbl TABLE (customer_id INT);
          UPDATE dbo.Reservations
@@ -415,7 +417,7 @@ export const rejectReservation = async (req, res) => {
          WHERE reservation_id = ?
            AND reservation_status = N'Confirmed';
          SELECT customer_id FROM @OutputTbl;`,
-        [new_status, reason, reservationId]
+        [mappedStatus, reason, reservationId]
       );
 
       if (!updateResult || updateResult.length === 0) {
@@ -426,16 +428,23 @@ export const rejectReservation = async (req, res) => {
 
       const customerId = updateResult[0].customer_id;
 
-      // Audit log
+      // Audit log & Timeline Event
       await connection.query(
         `INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, old_value_json, new_value_json, ip_address, created_at)
-         VALUES (?, N'REJECT_RESERVATION', N'Reservations', ?, ?, ?, ?, SYSDATETIME())`,
+         VALUES (?, N'REJECT_RESERVATION', N'Reservations', ?, ?, ?, ?, SYSDATETIME());
+         
+         INSERT INTO dbo.ReservationTimelines (reservation_id, event_type, performed_by, notes, created_at)
+         VALUES (?, ?, ?, ?, SYSDATETIME());`,
         [
           staffUserId,
           reservationId,
           JSON.stringify({ reservation_status: RESERVATION_STATUS.CONFIRMED }),
-          JSON.stringify({ reservation_status: new_status, cancel_reason: reason }),
-          req.ip
+          JSON.stringify({ reservation_status: mappedStatus, cancel_reason: reason }),
+          req.ip,
+          reservationId,
+          eventType,
+          staffUserId,
+          reason
         ]
       );
 
@@ -655,6 +664,7 @@ export const sendCookingQueue = async (req, res) => {
 export const staffCheckIn = async (req, res) => {
   const staffUserId = req.userId;
   const reservationId = parseInt(req.params.id, 10);
+  const newTableId = req.body?.table_id ? Number(req.body.table_id) : null;
 
   if (isNaN(reservationId)) {
     return res.status(400).json({ success: false, message: 'Invalid reservation ID' });
@@ -667,7 +677,7 @@ export const staffCheckIn = async (req, res) => {
 
       // Ensure reservation exists and is ready for check-in
       const [resRows] = await connection.query(
-        `SELECT reservation_status, table_ids = STUFF((SELECT ',' + CAST(table_id AS VARCHAR) FROM dbo.ReservationTables WHERE reservation_id = r.reservation_id FOR XML PATH('')), 1, 1, '')
+        `SELECT customer_id, reservation_status, table_ids = STUFF((SELECT ',' + CAST(table_id AS VARCHAR) FROM dbo.ReservationTables WHERE reservation_id = r.reservation_id FOR XML PATH('')), 1, 1, '')
          FROM dbo.Reservations r
          WHERE r.reservation_id = ? WITH (UPDLOCK, HOLDLOCK)`,
         [reservationId]
@@ -681,12 +691,6 @@ export const staffCheckIn = async (req, res) => {
 
       const reservation = resRows[0];
 
-      if (!reservation.table_ids) {
-        await connection.rollback();
-        connection.release();
-        return res.status(400).json({ success: false, message: 'Reservation has no assigned tables. Cannot check-in.' });
-      }
-
       const allowedFrom = [RESERVATION_STATUS.CONFIRMED, RESERVATION_STATUS.AWAIT_CHECK_IN, RESERVATION_STATUS.RESERVED];
       if (!allowedFrom.includes(reservation.reservation_status)) {
         await connection.rollback();
@@ -694,14 +698,51 @@ export const staffCheckIn = async (req, res) => {
         return res.status(400).json({ success: false, message: `Cannot check-in from status: ${reservation.reservation_status}` });
       }
 
-      const tableIdList = reservation.table_ids.split(',').map(Number);
+      let tableIdList = [];
 
-      // Update reservation status to Check-in
+      if (newTableId) {
+        // If a different table_id is passed, update the ReservationTables mapping
+        const oldTableIds = reservation.table_ids ? reservation.table_ids.split(',').map(Number) : [];
+        
+        // 1. Release previous reserved tables (make them Available if they were Reserved)
+        if (oldTableIds.length > 0) {
+          const oldPlaceholders = oldTableIds.map(() => '?').join(',');
+          await connection.query(
+            `UPDATE dbo.RestaurantTables
+             SET table_status = 'Available', updated_at = SYSDATETIME()
+             WHERE table_id IN (${oldPlaceholders}) AND table_status = 'Reserved'`,
+            [...oldTableIds]
+          );
+          
+          await connection.query(
+            `DELETE FROM dbo.ReservationTables WHERE reservation_id = ?`,
+            [reservationId]
+          );
+        }
+
+        // 2. Assign the new table
+        await connection.query(
+          `INSERT INTO dbo.ReservationTables (reservation_id, table_id, assigned_by_staff_id)
+           VALUES (?, ?, ?)`,
+          [reservationId, newTableId, staffUserId]
+        );
+
+        tableIdList = [newTableId];
+      } else {
+        if (!reservation.table_ids) {
+          await connection.rollback();
+          connection.release();
+          return res.status(400).json({ success: false, message: 'Reservation has no assigned tables. Cannot check-in.' });
+        }
+        tableIdList = reservation.table_ids.split(',').map(Number);
+      }
+
+      // Update reservation status to Seated
       await connection.query(
         `UPDATE dbo.Reservations 
          SET reservation_status = ?, checked_in_at = SYSDATETIME(), updated_at = SYSDATETIME()
          WHERE reservation_id = ?`,
-        [RESERVATION_STATUS.CHECK_IN, reservationId]
+        [RESERVATION_STATUS.SEATED, reservationId]
       );
 
       // Update mapped tables to Occupied
@@ -713,8 +754,65 @@ export const staffCheckIn = async (req, res) => {
         [...tableIdList]
       );
 
+      // Create QR Order Sessions for each table in tableIdList if none exists
+      let firstSessionId = null;
+      for (const tId of tableIdList) {
+        const [activeSessionRows] = await connection.query(
+          `SELECT TOP 1 qr_session_id
+           FROM dbo.QROrderSessions
+           WHERE table_id = ?
+             AND session_status = N'Active'
+             AND (expires_at IS NULL OR expires_at > SYSUTCDATETIME());`,
+          [tId]
+        );
+
+        if (!activeSessionRows[0]) {
+          const [tRows] = await connection.query(
+            `SELECT table_number FROM dbo.RestaurantTables WHERE table_id = ?`,
+            [tId]
+          );
+          const tNum = tRows[0]?.table_number || `T-${tId}`;
+          
+          const slug = String(tNum).trim().toLowerCase().replace(/\s+/g, "-");
+          const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+          const token = `qr-session-${slug}-${stamp}`;
+
+          const [insRes] = await connection.query(
+            `INSERT INTO dbo.QROrderSessions
+               (table_id, reservation_id, customer_id, token, session_status, generated_by_staff_id, generated_at, expires_at)
+             OUTPUT INSERTED.qr_session_id AS session_id
+             VALUES
+               (?, ?, ?, ?, N'Active', ?, SYSDATETIME(), DATEADD(hour, 4, SYSDATETIME()));`,
+            [tId, reservationId, reservation.customer_id || null, token, staffUserId]
+          );
+          
+          if (insRes?.[0]?.session_id && !firstSessionId) {
+            firstSessionId = insRes[0].session_id;
+          }
+        } else {
+          firstSessionId = activeSessionRows[0].qr_session_id;
+        }
+      }
+
+      // Process Preorders to KDS within the SAME transaction
+      let kdsResult = null;
+      try {
+        kdsResult = await processPreordersToKds(reservationId, connection, staffUserId);
+      } catch (kdsErr) {
+        console.error("Auto-KDS error during check-in:", kdsErr.message);
+        if (kdsErr.message.includes("No table assigned")) {
+          await connection.rollback();
+          connection.release();
+          return res.status(400).json({ 
+            success: false, 
+            message: "Cannot check in: Please assign a table first so preorders can be sent to the kitchen." 
+          });
+        }
+        throw kdsErr;
+      }
+
       // Insert into AuditLogs
-      const safeValueJson = JSON.stringify({ reservation_status: RESERVATION_STATUS.CHECK_IN });
+      const safeValueJson = JSON.stringify({ reservation_status: RESERVATION_STATUS.SEATED });
       await connection.query(
         `INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, created_at)
          VALUES (?, 'STAFF_MANUAL_CHECKIN', 'Reservations', ?, ?, SYSDATETIME())`,
@@ -723,16 +821,74 @@ export const staffCheckIn = async (req, res) => {
 
       await connection.commit();
 
-      const io = getIO();
-      if (io) {
-        io.emit('RESERVATION_STATUS_CHANGED', { id: reservationId, status: RESERVATION_STATUS.CHECK_IN });
-        tableIdList.forEach(tId => {
-          io.emit('TABLE_STATUS_CHANGED', { tableId: tId, newStatus: 'Occupied' });
+      // Emit sockets
+      try {
+        const io = getIO();
+        if (io) {
+          io.emit('RESERVATION_STATUS_CHANGED', { id: reservationId, status: RESERVATION_STATUS.SEATED });
+          tableIdList.forEach(tId => {
+            io.emit('TABLE_STATUS_CHANGED', { tableId: tId, newStatus: 'Occupied' });
+          });
+          if (kdsResult) {
+            const kitchenPayload = {
+              reservation_id: reservationId,
+              order_id: kdsResult.orderId,
+              item_count: kdsResult.itemCount,
+              sent_by: staffUserId,
+              timestamp: new Date().toISOString(),
+            };
+            io.to('room:kitchen').emit('kitchen:new_preorder', kitchenPayload);
+            io.to('room:manager').emit('kitchen:new_preorder', kitchenPayload);
+            io.to('room:staff').emit('reservation:kitchen_sent', {
+              reservation_id: reservationId,
+              item_count: kdsResult.itemCount,
+            });
+          }
+        }
+      } catch (socketErr) {
+        console.error("[Socket.IO] Error emitting checkin status:", socketErr);
+      }
+
+      // Send email asynchronously
+      try {
+        setImmediate(async () => {
+          try {
+            const [rows] = await pool.query(
+              `SELECT COALESCE(ua.email, r.contact_email, N'') AS customer_email,
+                      COALESCE(ua.full_name, r.contact_name, N'Guest') AS customer_name,
+                      r.reservation_start_at
+               FROM dbo.Reservations r
+               LEFT JOIN dbo.UserAccounts ua ON r.customer_id = ua.user_id
+               WHERE r.reservation_id = ?`,
+              [reservationId]
+            );
+            const row = rows[0];
+            if (row?.customer_email) {
+              const d = new Date(row.reservation_start_at);
+              await sendBookingCheckedInEmail({
+                toEmail: row.customer_email,
+                customerName: row.customer_name,
+                reservationId,
+                reservationDate: d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }),
+                reservationTime: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
+              });
+            }
+          } catch (emailInnerErr) {
+            console.error("[checkin email query] Failed to send email:", emailInnerErr?.message || emailInnerErr);
+          }
         });
+      } catch (emailErr) {
+        console.error("[Email Dispatch] Error kicking off email:", emailErr);
       }
 
       connection.release();
-      res.json({ success: true, message: 'Successfully checked in.' });
+      res.json({
+        success: true,
+        message: 'Successfully checked in.',
+        data: {
+          session_id: firstSessionId
+        }
+      });
 
     } catch (txError) {
       await connection.rollback();

@@ -49,47 +49,28 @@ export const createPreSaveReservation = async (req, res) => {
       console.log(`[DEBUG TRACE 2 - PreSave] Finished Preorder Items loop. Final items_total from preorder: ${items_total}`);
     }
 
-    // 2. Validate Promo Code via voucher service
+    // 2. Validate Promo Code via voucher service (Discount applies ONLY to preorder food items subtotal)
+    const BASE_TABLE_DEPOSIT = 20000;
+
     if (promo_code) {
        const { checkVoucherValidity } = await import("./vouchersController.js");
+       // Validate against items_total (the preorder items total only)
        const result = await checkVoucherValidity(promo_code, items_total);
        
        if (!result.isValid) {
          return res.status(400).json({ success: false, message: result.message });
        }
        
-       const promo = result.promo;
-       const value = parseFloat(promo.discount_value);
-       if (promo.discount_type === 'Percent') {
-         discount_amount = items_total * (value / 100);
-         if (promo.max_discount && discount_amount > parseFloat(promo.max_discount)) {
-           discount_amount = parseFloat(promo.max_discount);
-         }
-       } else {
-         discount_amount = value;
-       }
+       discount_amount = result.discount_amount;
     }
 
-    // 3. Deposit Amount & Final Total Calculation
-    // 1. Calculate the raw total of all pre-ordered items from the request
-    const preorderItemsTotal = items_total;
+    // 3. Deposit Amount & Final Total Calculation (30% cọc món, 70% còn lại, tiền cọc bàn 100%)
+    const food_total = Math.max(0, items_total - discount_amount);
+    const food_deposit = Math.round(food_total * 0.3);
+    const deposit_amount = BASE_TABLE_DEPOSIT + food_deposit;
+    final_total = Math.round(food_total * 0.7);
 
-    // 2. Define the Base Table Deposit (Fetch from RestaurantSettings or default to 10,000 VND)
-    const BASE_TABLE_DEPOSIT = 10000;
-
-    // 3. Define the exact money the customer MUST pay upfront via QR right now
-    // Total Advance Payment = Base Table Deposit + Pre-order Total - Discount
-    const totalAdvancePaymentRequired = BASE_TABLE_DEPOSIT + preorderItemsTotal - discount_amount;
-
-    // 4. Map correctly to the Database Columns defined in the Master SQL script:
-    // - deposit_amount: The actual upfront money collected today to secure the booking.
-    // - final_total: The food subtotal value for accounting references.
-    const deposit_amount = totalAdvancePaymentRequired > 0 ? totalAdvancePaymentRequired : 0;
-    final_total = preorderItemsTotal;
-
-    const totalAmount = preorderItemsTotal;
-    const baseDeposit = BASE_TABLE_DEPOSIT;
-    console.log(`[AUTOMATION CHECK] Preorder: ${totalAmount} | Deposit: ${baseDeposit} | QR Target: ${deposit_amount}`);
+    console.log(`[AUTOMATION CHECK] Preorder: ${items_total} | Discount: ${discount_amount} | Table Deposit: ${BASE_TABLE_DEPOSIT} | Food Deposit (30%): ${food_deposit} | QR Target: ${deposit_amount} | Remaining (70%): ${final_total}`);
     // 4. Generate Order Code (e.g. PHURAI123456)
     const order_code = `PHURAI${Math.floor(100000 + Math.random() * 900000)}`;
 
@@ -283,27 +264,49 @@ export const applyPromoCodeToReservation = async (req, res) => {
     }
 
     const { checkVoucherValidity } = await import("./vouchersController.js");
-    // final_total is the preorder subtotal
-    const result = await checkVoucherValidity(promo_code, reservation.final_total);
+    
+    // Calculate the preorder items total from PreorderItems in the DB
+    const itemsTotalResult = await pool.request()
+      .input('resId', sql.Int, reservationId)
+      .query(`SELECT ISNULL(SUM(quantity * unit_price), 0) AS items_total FROM dbo.PreorderItems WHERE reservation_id = @resId`);
+    const preorderItemsTotal = parseFloat(itemsTotalResult.recordset[0].items_total);
+
+    if (preorderItemsTotal <= 0) {
+      return res.status(400).json({ success: false, message: "Voucher can only be applied to reservations with food preorder." });
+    }
+
+    const result = await checkVoucherValidity(promo_code, preorderItemsTotal);
 
     if (!result.isValid) {
       return res.status(400).json({ success: false, message: result.message });
     }
 
-    const BASE_TABLE_DEPOSIT = 10000;
-    const preorderItemsTotal = Number(reservation.final_total);
-    const discount_amount = result.discount_amount;
-    const totalAdvancePaymentRequired = BASE_TABLE_DEPOSIT + preorderItemsTotal - discount_amount;
-    const new_deposit_amount = totalAdvancePaymentRequired > 0 ? totalAdvancePaymentRequired : 0;
+    const BASE_TABLE_DEPOSIT = 20000;
+    const discount_amount = Number(result.discount_amount) || 0;
+    const net_total = BASE_TABLE_DEPOSIT + Math.max(0, preorderItemsTotal - discount_amount);
+    const new_deposit_amount = Math.round(net_total * 0.3);
+    const new_final_total = net_total - new_deposit_amount;
 
+    // Update reservation with new deposit and final total
     await pool.request()
       .input('resId', sql.Int, reservationId)
       .input('promo', sql.VarChar(50), promo_code)
       .input('newDeposit', sql.Decimal(12,2), new_deposit_amount)
+      .input('newFinalTotal', sql.Decimal(12,2), new_final_total)
       .query(`
         UPDATE dbo.Reservations 
-        SET applied_promo_code = @promo, deposit_amount = @newDeposit
+        SET applied_promo_code = @promo, deposit_amount = @newDeposit, final_total = @newFinalTotal
         WHERE reservation_id = @resId
+      `);
+
+    // Sync the preorder total_amount inside dbo.Orders
+    await pool.request()
+      .input('resId', sql.Int, reservationId)
+      .input('totalAmount', sql.Decimal(12, 2), Math.max(0, preorderItemsTotal - discount_amount))
+      .query(`
+        UPDATE dbo.Orders 
+        SET total_amount = @totalAmount 
+        WHERE reservation_id = @resId AND order_type = N'Preorder' AND order_status = 'Open'
       `);
 
     return res.json({
@@ -374,7 +377,10 @@ export const cancelPendingPayment = async (req, res) => {
         .input('newValue', sql.VarChar, JSON.stringify({ reservation_status: RESERVATION_STATUS.PAYMENT_FAILED }))
         .query(`
           INSERT INTO dbo.AuditLogs (action_name, target_table, target_id, new_value_json, created_at)
-          VALUES (@actionName, @targetTable, @targetId, @newValue, SYSDATETIME())
+          VALUES (@actionName, @targetTable, @targetId, @newValue, SYSDATETIME());
+
+          INSERT INTO dbo.ReservationTimelines (reservation_id, event_type, performed_by, notes, created_at)
+          VALUES (@targetId, 'PAYMENT_FAILED', NULL, 'Aborted by customer during checkout', SYSDATETIME());
         `);
 
       await transaction.commit();

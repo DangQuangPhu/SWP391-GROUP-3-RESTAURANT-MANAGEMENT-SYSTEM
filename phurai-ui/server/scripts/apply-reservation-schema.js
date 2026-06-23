@@ -95,7 +95,7 @@ const DDL = [
     reservation_end_at    DATETIME2(0) NOT NULL,
     guest_count           TINYINT NOT NULL,
     special_request       NVARCHAR(1000) NULL,
-    reservation_status    NVARCHAR(20) NOT NULL CONSTRAINT DF_Reservations_status DEFAULT N'Pending',
+    reservation_status    NVARCHAR(25) NOT NULL CONSTRAINT DF_Reservations_status DEFAULT N'Pending Request',
     reservation_source    NVARCHAR(20) NOT NULL CONSTRAINT DF_Reservations_source DEFAULT N'Online',
     confirmed_by_staff_id INT NULL,
     confirmed_at          DATETIME2(0) NULL,
@@ -113,7 +113,7 @@ const DDL = [
     CONSTRAINT CK_Reservations_guest_count CHECK (guest_count > 0),
     CONSTRAINT CK_Reservations_time CHECK (reservation_end_at > reservation_start_at),
     CONSTRAINT CK_Reservations_status CHECK (reservation_status IN
-        (N'Pending', N'Confirmed', N'Checked In', N'Completed', N'Cancelled', N'No Show')),
+        (N'Pending Request', N'Awaiting Deposit', N'Confirmed', N'Check-in', N'Seated', N'Payment Pending', N'Completed', N'Cancelled', N'No Show')),
     CONSTRAINT CK_Reservations_source CHECK (reservation_source IN (N'Online', N'Walk-in', N'Phone'))
   )`,
   `CREATE TABLE dbo.ReservationTables (
@@ -140,6 +140,17 @@ const DDL = [
     CONSTRAINT CK_PreorderItems_quantity CHECK (quantity > 0),
     CONSTRAINT CK_PreorderItems_unit_price CHECK (unit_price >= 0)
   )`,
+  `CREATE TABLE dbo.ReservationTimelines (
+    timeline_id    INT IDENTITY(1,1) NOT NULL,
+    reservation_id INT NOT NULL,
+    event_type     NVARCHAR(50) NOT NULL,
+    performed_by   INT NULL,
+    notes          NVARCHAR(1000) NULL,
+    created_at     DATETIME2(0) NOT NULL CONSTRAINT DF_ReservationTimelines_created_at DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_ReservationTimelines PRIMARY KEY (timeline_id),
+    CONSTRAINT FK_ReservationTimelines_Reservations FOREIGN KEY (reservation_id) REFERENCES dbo.Reservations(reservation_id) ON DELETE CASCADE,
+    CONSTRAINT FK_ReservationTimelines_UserAccounts FOREIGN KEY (performed_by) REFERENCES dbo.UserAccounts(user_id)
+  )`,
 ];
 
 const TABLE_ORDER = [
@@ -150,6 +161,7 @@ const TABLE_ORDER = [
   "Reservations",
   "ReservationTables",
   "PreorderItems",
+  "ReservationTimelines",
 ];
 
 async function ensureTables() {
@@ -207,18 +219,39 @@ async function seedIfEmpty() {
   if ((await rowCount("RestaurantTables")) === 0) {
     await exec(`SET IDENTITY_INSERT dbo.RestaurantTables ON;
       INSERT INTO dbo.RestaurantTables (table_id, area_id, table_number, capacity, table_status, static_qr_code) VALUES
-      (1,  1, N'T01', 2,  N'Available', N'qr-t01-abc123'),
-      (2,  1, N'T02', 4,  N'Available', N'qr-t02-def456'),
-      (3,  1, N'T03', 4,  N'Occupied',  N'qr-t03-ghi789'),
-      (4,  1, N'T04', 6,  N'Reserved',  N'qr-t04-jkl012'),
-      (5,  2, N'V01', 4,  N'Available', N'qr-v01-vip001'),
-      (6,  2, N'V02', 6,  N'Available', N'qr-v02-vip002'),
-      (7,  3, N'G01', 4,  N'Available', N'qr-g01-gar001'),
-      (8,  3, N'G02', 4,  N'Cleaning',  N'qr-g02-gar002'),
-      (9,  4, N'B01', 2,  N'Available', N'qr-b01-bar001'),
-      (10, 5, N'P01', 12, N'Available', N'qr-p01-pvt001');
+      (1,  1, N'WIN-A',  2, N'Available', N'qr-win-a'),
+      (2,  1, N'WIN-B',  4, N'Available', N'qr-win-b'),
+      (3,  1, N'WIN-C',  6, N'Available', N'qr-win-c'),
+      (4,  1, N'WIN-D',  8, N'Available', N'qr-win-d'),
+      (5,  2, N'S-01',   4, N'Available', N'qr-s-01'),
+      (6,  2, N'S-02',   4, N'Available', N'qr-s-02'),
+      (7,  2, N'S-03',   4, N'Available', N'qr-s-03'),
+      (8,  2, N'S-04',   4, N'Available', N'qr-s-04'),
+      (9,  2, N'S-05',   4, N'Available', N'qr-s-05'),
+      (10, 2, N'S-06',   4, N'Available', N'qr-s-06'),
+      (11, 2, N'S-07',   4, N'Available', N'qr-s-07'),
+      (12, 2, N'S-08',   4, N'Available', N'qr-s-08'),
+      (13, 2, N'S-09',   4, N'Available', N'qr-s-09'),
+      (14, 2, N'S-10',   4, N'Available', N'qr-s-10'),
+      (15, 2, N'S-11',   4, N'Available', N'qr-s-11'),
+      (16, 2, N'S-12',   4, N'Available', N'qr-s-12'),
+      (17, 3, N'PRE-01', 4, N'Available', N'qr-pre-01'),
+      (18, 3, N'PRE-02', 4, N'Available', N'qr-pre-02'),
+      (19, 3, N'PRE-03', 4, N'Available', N'qr-pre-03'),
+      (20, 3, N'PRE-04', 4, N'Available', N'qr-pre-04'),
+      (21, 4, N'VIP-1',  6, N'Available', N'qr-vip-1'),
+      (22, 4, N'VIP-2',  6, N'Available', N'qr-vip-2'),
+      (23, 4, N'VIP-3',  6, N'Available', N'qr-vip-3'),
+      (24, 5, N'PR-01',  2, N'Available', N'qr-pr-01'),
+      (25, 5, N'PR-02',  4, N'Available', N'qr-pr-02'),
+      (26, 5, N'PR-03',  6, N'Available', N'qr-pr-03'),
+      (27, 5, N'PR-04',  8, N'Available', N'qr-pr-04'),
+      (28, 6, N'K-01',   4, N'Available', N'qr-k-01'),
+      (29, 6, N'K-02',   4, N'Available', N'qr-k-02'),
+      (30, 6, N'K-03',   4, N'Available', N'qr-k-03'),
+      (31, 6, N'K-04',   4, N'Available', N'qr-k-04');
       SET IDENTITY_INSERT dbo.RestaurantTables OFF`);
-    console.log("  Seeded RestaurantTables (10 tables)");
+    console.log("  Seeded RestaurantTables (31 tables)");
   }
 
   if ((await rowCount("MenuCategories")) === 0) {

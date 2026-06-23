@@ -25,6 +25,21 @@ async function loadMaxBookingDuration() {
   return 4; // Fallback to 4 hours
 }
 
+async function loadTableHoldMin() {
+  try {
+    const [rows] = await pool.query(
+      `SELECT setting_value FROM dbo.RestaurantSettings WHERE setting_key = 'table_hold_min'`
+    );
+    if (rows.length > 0) {
+      const val = Number(rows[0].setting_value);
+      if (Number.isFinite(val) && val > 0) return val;
+    }
+  } catch (err) {
+    console.error("[validateReservation] Failed to load table_hold_min setting:", err.message);
+  }
+  return 15; // Fallback
+}
+
 function buildLocalDate(dateStr, timeStr) {
   if (!dateStr || !timeStr) return null;
   const [y, m, d] = String(dateStr).split("-").map(Number);
@@ -100,7 +115,7 @@ export const validateReservationCreate = async (req, res, next) => {
     let slotEnd = body.reservation_end_at
       ? new Date(body.reservation_end_at)
       : slotStart
-        ? new Date(slotStart.getTime() + (Number(body.durationMinutes) || 90) * 60000)
+        ? new Date(slotStart.getTime() + (90 + (Number(body.durationMinutes) || 30)) * 60000)
         : null;
         
     if (!slotStart || Number.isNaN(slotStart.getTime()) || !slotEnd || Number.isNaN(slotEnd.getTime())) {
@@ -161,18 +176,35 @@ export const validateReservationCreate = async (req, res, next) => {
       });
     }
 
-    // Duration Check: max 1h30m (90 minutes)
+    // Duration Check: 90 minutes dining base plus selected hold duration
     const durationMinutes = Math.round((slotEnd - slotStart) / 60000);
-    if (durationMinutes > 90) {
+    const selectedDuration = Number(body.durationMinutes) || 30;
+    const maxAllowedDuration = 90 + selectedDuration;
+    console.log("[validateReservationCreate] DEBUG:", {
+      slotStart: slotStart.toISOString(),
+      slotEnd: slotEnd.toISOString(),
+      durationMinutes,
+      selectedDuration,
+      maxAllowedDuration,
+      body
+    });
+    if (durationMinutes < maxAllowedDuration) {
       return res.status(400).json({
         success: false,
         error: "VALIDATION_FAILED",
-        message: "Reservation duration cannot exceed 1 hour and 30 minutes (90 minutes)."
+        message: `Reservation duration must be at least 90 minutes plus hold duration (${maxAllowedDuration} minutes total).`
+      });
+    }
+    if (durationMinutes > maxAllowedDuration) {
+      return res.status(400).json({
+        success: false,
+        error: "VALIDATION_FAILED",
+        message: `Reservation duration cannot exceed selected hold duration (${selectedDuration} minutes) plus dining time (90 minutes) (${maxAllowedDuration} minutes total).`
       });
     }
 
-    // Fee Policy Notification for duration > 30 minutes
-    if (durationMinutes > 30) {
+    // Fee Policy Notification for hold duration of 45 or 60 minutes
+    if (selectedDuration === 45 || selectedDuration === 60) {
       let currentNotes = body.special_request || "";
       if (!currentNotes.includes("[Duration over 30 mins: Extra fee applies]")) {
         body.special_request = (currentNotes ? currentNotes + "\n" : "") + "[Duration over 30 mins: Extra fee applies]";
@@ -245,7 +277,11 @@ export const validateReservationCreate = async (req, res, next) => {
          FROM dbo.Reservations r
          JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
          WHERE rt.table_id IN (${tableIds.join(',')})
-           AND r.reservation_status NOT IN (N'Completed', N'Cancelled', N'No Show', N'Rejected', N'PaymentFailed')
+           AND (
+             r.reservation_status IN (N'Confirmed', N'Reserved', N'Seated')
+             OR
+             (r.reservation_status IN (N'Pending Request', N'Pending Payment') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
+           )
            AND r.reservation_start_at < ?
            AND r.reservation_end_at > ?`,
         [slotEnd.toISOString(), slotStart.toISOString()]
@@ -295,12 +331,14 @@ export const validateReservationCreate = async (req, res, next) => {
       if (body.preorderItems !== undefined) body.preorderItems = validPreorderItems;
     }
     
-    // Recalculate & override deposit_amount and final_total
-    const BASE_TABLE_DEPOSIT = 10000;
-    const secureDepositAmount = BASE_TABLE_DEPOSIT + preorderItemsTotal;
+    // Recalculate & override deposit_amount and final_total (30% deposit of Net Total, 70% remaining balance)
+    const BASE_TABLE_DEPOSIT = 20000;
+    const net_total = BASE_TABLE_DEPOSIT + preorderItemsTotal;
+    const secureDepositAmount = Math.round(net_total * 0.3);
+    const secureFinalTotal = net_total - secureDepositAmount;
     
     body.deposit_amount = secureDepositAmount;
-    body.final_total = preorderItemsTotal;
+    body.final_total = secureFinalTotal;
     body.items_total = preorderItemsTotal;
     
     next();
@@ -422,7 +460,7 @@ export const validateReservationUpdate = async (req, res, next) => {
       if (target.reservation_end_at) {
         slotEnd = new Date(target.reservation_end_at);
       } else if (target.durationMinutes) {
-        slotEnd = new Date(slotStart.getTime() + Number(target.durationMinutes) * 60000);
+        slotEnd = new Date(slotStart.getTime() + (90 + Number(target.durationMinutes)) * 60000);
       } else {
         // Compute relative difference from old reservation if only start_at changed
         if (target.reservation_start_at) {
@@ -491,18 +529,35 @@ export const validateReservationUpdate = async (req, res, next) => {
         });
       }
 
-      // Duration Check: max 1h30m (90 minutes)
+      // Duration Check: 90 minutes dining base plus selected hold duration
       const durationMinutes = Math.round((slotEnd - slotStart) / 60000);
-      if (durationMinutes > 90) {
+      const selectedDuration = Number(target.durationMinutes) || 30;
+      const maxAllowedDuration = 90 + selectedDuration;
+      console.log("[validateReservationUpdate] DEBUG:", {
+        slotStart: slotStart.toISOString(),
+        slotEnd: slotEnd.toISOString(),
+        durationMinutes,
+        selectedDuration,
+        maxAllowedDuration,
+        target
+      });
+      if (durationMinutes < maxAllowedDuration) {
         return res.status(400).json({
           success: false,
           error: "VALIDATION_FAILED",
-          message: "Reservation duration cannot exceed 1 hour and 30 minutes (90 minutes)."
+          message: `Reservation duration must be at least 90 minutes plus hold duration (${maxAllowedDuration} minutes total).`
+        });
+      }
+      if (durationMinutes > maxAllowedDuration) {
+        return res.status(400).json({
+          success: false,
+          error: "VALIDATION_FAILED",
+          message: `Reservation duration cannot exceed selected hold duration (${selectedDuration} minutes) plus dining time (90 minutes) (${maxAllowedDuration} minutes total).`
         });
       }
 
-      // Fee Policy Notification for duration > 30 minutes
-      if (durationMinutes > 30) {
+      // Fee Policy Notification for hold duration of 45 or 60 minutes
+      if (selectedDuration === 45 || selectedDuration === 60) {
         let currentNotes = target.special_request || "";
         if (!currentNotes.includes("[Duration over 30 mins: Extra fee applies]")) {
           target.special_request = (currentNotes ? currentNotes + "\n" : "") + "[Duration over 30 mins: Extra fee applies]";
@@ -590,7 +645,11 @@ export const validateReservationUpdate = async (req, res, next) => {
            JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
            WHERE rt.table_id IN (${activeTableIds.join(',')})
              AND r.reservation_id != ?
-             AND r.reservation_status NOT IN (N'Completed', N'Cancelled', N'No Show', N'Rejected', N'PaymentFailed')
+             AND (
+               r.reservation_status IN (N'Confirmed', N'Reserved', N'Seated')
+               OR
+               (r.reservation_status IN (N'Pending Request', N'Pending Payment') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
+             )
              AND r.reservation_start_at < ?
              AND r.reservation_end_at > ?`,
           [reservationId, activeSlotEnd.toISOString(), activeSlotStart.toISOString()]
@@ -641,11 +700,13 @@ export const validateReservationUpdate = async (req, res, next) => {
       if (target.pre_order_items !== undefined) target.pre_order_items = validPreorderItems;
       if (target.preorderItems !== undefined) target.preorderItems = validPreorderItems;
 
-      const BASE_TABLE_DEPOSIT = 10000;
-      const secureDepositAmount = BASE_TABLE_DEPOSIT + preorderItemsTotal;
-
+      const BASE_TABLE_DEPOSIT = 20000;
+      const net_total = BASE_TABLE_DEPOSIT + preorderItemsTotal;
+      const secureDepositAmount = Math.round(net_total * 0.3);
+      const secureFinalTotal = net_total - secureDepositAmount;
+ 
       target.deposit_amount = secureDepositAmount;
-      target.final_total = preorderItemsTotal;
+      target.final_total = secureFinalTotal;
       target.items_total = preorderItemsTotal;
     }
 

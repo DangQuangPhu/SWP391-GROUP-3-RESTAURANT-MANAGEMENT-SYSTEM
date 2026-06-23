@@ -30,10 +30,10 @@ function todayString() {
 }
 
 const INITIAL_FORM = {
-  date: "",
+  date: todayString(),
   time: "",
   endTime: "",
-  guestCount: 2,
+  guestCount: "",
   holdDurationMinutes: 30,
   diningPurpose: "casual",
   selectedArea: "",
@@ -89,12 +89,51 @@ function ReservationPage({
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [successReservation, setSuccessReservation] = useState(null);
+  const [successReservation, setSuccessReservation] = useState(() => {
+    const stored = localStorage.getItem("phurai_pending_reservation");
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        const elapsed = Math.floor((Date.now() - parsed.createdAt) / 1000);
+        if (elapsed < 15 * 60) {
+          return parsed;
+        } else {
+          localStorage.removeItem("phurai_pending_reservation");
+        }
+      } catch (e) {
+        console.error("Failed to parse stored reservation", e);
+      }
+    }
+    return null;
+  });
 
   const [preorderItems, setPreorderItems] = useState({});
   const [preorderTotal, setPreorderTotal] = useState(0);
-  const [promoCode, setPromoCode] = useState("");
-  const [promoDiscount, setPromoDiscount] = useState(null);
+  const [promoCode, setPromoCode] = useState(() => localStorage.getItem("phurai_applied_promo") || "");
+  const [promoDiscount, setPromoDiscount] = useState(() => {
+    try {
+      const stored = localStorage.getItem("phurai_applied_promo_discount");
+      return stored ? JSON.parse(stored) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    if (promoCode) {
+      localStorage.setItem("phurai_applied_promo", promoCode);
+    } else {
+      localStorage.removeItem("phurai_applied_promo");
+    }
+  }, [promoCode]);
+
+  useEffect(() => {
+    if (promoDiscount) {
+      localStorage.setItem("phurai_applied_promo_discount", JSON.stringify(promoDiscount));
+    } else {
+      localStorage.removeItem("phurai_applied_promo_discount");
+    }
+  }, [promoDiscount]);
 
   const { step: urlStep } = useParams();
 
@@ -113,12 +152,52 @@ function ReservationPage({
     }
   }, [urlStep, step, navigate]);
 
+  // Redirect to details if on payment or success step without a valid reservation
+  useEffect(() => {
+    const isPaymentOrSuccess = step === "payment" || step === "success";
+    if (isPaymentOrSuccess && !successReservation) {
+      const stored = localStorage.getItem("phurai_pending_reservation");
+      if (!stored) {
+        navigate('/reservations/details', { replace: true });
+      } else {
+        try {
+          const parsed = JSON.parse(stored);
+          const elapsed = Math.floor((Date.now() - parsed.createdAt) / 1000);
+          if (elapsed >= 15 * 60) {
+            navigate('/reservations/details', { replace: true });
+          } else {
+            // Restore the reservation state so the UI renders
+            setSuccessReservation(parsed);
+          }
+        } catch {
+          navigate('/reservations/details', { replace: true });
+        }
+      }
+    }
+  }, [step, successReservation, navigate]);
+
   const bookingRef = useRef(null);
   const tablesRef = useRef(null);
 
   const setField = useCallback((name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
   }, []);
+
+  // Stable callbacks for ReservationDetails — must be useCallback to prevent
+  // re-render loops caused by the useEffect inside ReservationDetails that
+  // depends on onSelectTable as a dependency.
+  const handleSelectTable = useCallback((tableId) => {
+    setSelectedTableId(tableId);
+  }, []);
+
+  const handleUpdateForm = useCallback((name, value) => {
+    if (name === 'date') setField('date', value);
+    else if (name === 'startTime') setField('time', value);
+    else if (name === 'endTime') setField('endTime', value);
+    else if (name === 'guests') setField('guestCount', value);
+    else if (name === 'duration') setField('holdDurationMinutes', parseInt(value) || 30);
+    else if (name === 'diningPurpose') setField('diningPurpose', value);
+  }, [setField]);
 
   /* Load settings once. */
   useEffect(() => {
@@ -166,7 +245,7 @@ function ReservationPage({
       getAvailability({
         date: form.date,
         time: form.time,
-        durationMinutes: form.holdDurationMinutes,
+        durationMinutes: 90 + (Number(form.holdDurationMinutes) || 30),
         guestCount: form.guestCount,
         areaType: null,
         eventType: form.diningPurpose,
@@ -193,7 +272,7 @@ function ReservationPage({
       active = false;
       clearTimeout(handle);
     };
-  }, [form.date, form.time, form.holdDurationMinutes, form.guestCount, form.diningPurpose]);
+  }, [form.date, form.time, form.holdDurationMinutes, form.guestCount, form.diningPurpose, settings]);
 
   const selectedTables = useMemo(() => {
     if (!selectedTableId) return [];
@@ -248,7 +327,9 @@ function ReservationPage({
       const res = await createPreSaveReservation(payload);
 
       if (res?.success) {
-        setSuccessReservation(res);
+        const enrichedRes = { ...res, createdAt: Date.now() };
+        setSuccessReservation(enrichedRes);
+        localStorage.setItem("phurai_pending_reservation", JSON.stringify(enrichedRes));
         transitionTo("payment");
       } else {
         throw new Error("Failed to create reservation");
@@ -261,13 +342,22 @@ function ReservationPage({
     }
   };
 
-  const handlePaymentSuccess = useCallback(() => {
-    setIsPaymentSuccess(true);
-    setTimeout(() => {
-      navigate("/");
-      toast.success("Reservation confirmed successfully!");
-    }, 700);
+  const handleReturnHome = useCallback(() => {
+    localStorage.removeItem("phurai_pending_reservation");
+    navigate("/");
   }, [navigate]);
+
+  const handleViewReservation = useCallback(() => {
+    localStorage.removeItem("phurai_pending_reservation");
+    navigate("/my-reservations");
+  }, [navigate]);
+
+  const handlePaymentSuccess = useCallback(() => {
+    localStorage.removeItem("phurai_applied_promo");
+    localStorage.removeItem("phurai_applied_promo_discount");
+    setIsPaymentSuccess(true);
+    transitionTo("success");
+  }, [transitionTo]);
 
   return (
     <div className={`rd-page ${step === 'summary' ? 'rd-page--bg-summary' : ''}`}>
@@ -339,7 +429,7 @@ function ReservationPage({
                     diningArea: form.selectedArea || 'Standard dining (choose a table)',
                     selectedTable: selectedTableId,
                     guests: form.guestCount,
-                    duration: form.holdDurationMinutes ? `${form.holdDurationMinutes} minutes` : '30 minutes',
+                    duration: form.holdDurationMinutes || 30,
                     endTime: form.endTime,
                     diningPurpose: DINING_PURPOSES.find(p => p.id === form.diningPurpose)?.label || 'Casual Dinner',
                     diningPurposeNote: form.diningPurposeNote,
@@ -347,19 +437,14 @@ function ReservationPage({
                     email: form.email,
                     phone: form.phone,
                   }}
+                  tableHoldMin={Number(settings?.table_hold_min) || 15}
                   tables={tables}
                   selectedTableId={selectedTableId}
-                  onSelectTable={setSelectedTableId}
+                  onSelectTable={handleSelectTable}
                   tablesLoading={loadingAvailability}
                   membershipTier={membershipTier}
                   isAuthenticated={isAuthenticated}
-                  onUpdateForm={(name, value) => {
-                    if (name === 'date') setField('date', value);
-                    if (name === 'startTime') setField('time', value);
-                    if (name === 'guests') setField('guestCount', value);
-                    if (name === 'duration') setField('holdDurationMinutes', parseInt(value) || 30);
-                    if (name === 'diningPurpose') setField('diningPurpose', value);
-                  }}
+                  onUpdateForm={handleUpdateForm}
                   onGoHome={() => navigate("/")}
                   onContinue={(localForm) => {
                     setField("date", localForm.date);
@@ -373,8 +458,7 @@ function ReservationPage({
                     setField("fullName", localForm.fullName);
                     setField("email", localForm.email);
                     setField("phone", localForm.phone);
-
-                    transitionTo("summary");
+                    setTimeout(() => transitionTo("summary"), 0);
                   }}
                 />
               </motion.div>
@@ -444,7 +528,7 @@ function ReservationPage({
                 <div className={`w-full transition-all duration-500 ease-in-out ${isPaymentSuccess ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
                   <ReservationPaymentPanel
                     reservation={successReservation}
-                    amount={successReservation.final_total}
+                    amount={successReservation.deposit_amount}
                     orderCode={successReservation.order_code}
                     qrUrl={successReservation.vietqr_url}
                     onSuccess={handlePaymentSuccess}
@@ -467,8 +551,8 @@ function ReservationPage({
               >
                 <ReservationSuccessPanel
                   reservation={successReservation}
-                  onReturnHome={() => navigate("/")}
-                  onViewReservation={() => navigate("/my-reservations")}
+                  onReturnHome={handleReturnHome}
+                  onViewReservation={handleViewReservation}
                 />
               </motion.div>
             )}

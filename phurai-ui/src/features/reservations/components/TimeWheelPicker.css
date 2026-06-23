@@ -1,0 +1,74 @@
+/* src/features/reservations/components/TimeWheelPicker.css */
+/* ECC-ARCH: Pure CSS Implementation, NO external frameworks */
+.time-wheel-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+  width: max-content;
+  margin: 0 auto;
+}
+
+.wheel-column-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.wheel-label {
+  font-size: 0.75rem;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.wheel-container {
+  height: 120px; /* Exactly 3 items visible (40px each) */
+  width: 60px;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  -ms-overflow-style: none; /* Hide scrollbar IE */
+  scrollbar-width: none; /* Hide scrollbar Firefox */
+  position: relative;
+  border-top: 1px solid #e9ecef;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.wheel-container::-webkit-scrollbar {
+  display: none; /* Hide scrollbar Chrome/Safari */
+}
+
+.wheel-padding {
+  height: 40px; /* 1 item height of padding top and bottom */
+}
+
+.wheel-item {
+  height: 40px;
+  line-height: 40px;
+  text-align: center;
+  font-size: 1.2rem;
+  color: #adb5bd;
+  scroll-snap-align: center;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.wheel-item.active {
+  color: #212529;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.wheel-separator {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #212529;
+  margin: 0 12px;
+  margin-top: 24px; /* Align with numbers, skipping label */
+}

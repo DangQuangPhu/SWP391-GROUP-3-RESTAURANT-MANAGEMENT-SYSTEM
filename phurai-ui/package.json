@@ -10,7 +10,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "db:init": "bash server/init-db.sh"
+    "db:init": "node server/run_master_schema.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

@@ -47,7 +47,14 @@ function CopyableField({ label, copyValue, children }) {
 
 export default function ReservationPaymentPanel({ reservation, amount, orderCode, qrUrl, onSuccess, onCancel }) {
   const [phase, setPhase] = useState("pending"); // pending | processing | success | expired
-  const [secondsLeft, setSecondsLeft] = useState(15 * 60); // 15 mins
+  const [secondsLeft, setSecondsLeft] = useState(() => {
+    if (reservation?.createdAt) {
+      const elapsed = Math.floor((Date.now() - reservation.createdAt) / 1000);
+      const remaining = 15 * 60 - elapsed;
+      return remaining > 0 ? remaining : 0;
+    }
+    return 15 * 60;
+  });
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [promoCodeInput, setPromoCodeInput] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState(0);
@@ -68,71 +75,149 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
     if (phase !== "pending") return;
     if (secondsLeft <= 0) {
       setPhase("expired");
+      localStorage.removeItem("phurai_pending_reservation");
       return;
     }
     const timerId = setInterval(() => setSecondsLeft(prev => prev - 1), 1000);
     return () => clearInterval(timerId);
   }, [phase, secondsLeft, reservation?.reservation_id]);
 
-  // Socket listener
+  // Guard: prevent duplicate payment detection calls
+  const paymentDetectedRef = useRef(false);
+
+  // Helper: triggered whenever we detect payment was received
+  // Uses setTimeout(0) to defer parent state updates past the current React render cycle,
+  // preventing the "Cannot update a component while rendering" React error.
+  const handlePaymentDetected = useRef(null);
+  handlePaymentDetected.current = () => {
+    if (paymentDetectedRef.current) return; // already handled
+    paymentDetectedRef.current = true;
+
+    // Show "Processing Payment" spinning loader first
+    setPhase('processing');
+
+    setTimeout(() => {
+      // Then show green tick checkmark
+      setPhase('success');
+
+      setTimeout(() => {
+        // Then clear localStorage and notify parent
+        localStorage.removeItem('phurai_pending_reservation');
+        localStorage.removeItem('phurai_applied_promo');
+        localStorage.removeItem('phurai_applied_promo_discount');
+
+        if (onSuccess) onSuccess();
+      }, 2000); // Show tick for 2s
+    }, 1500); // Show spinner for 1.5s
+  };
+
+  // Socket listener — real-time push from server when SePay webhook fires
   useEffect(() => {
-    if (!socket || !reservation?.reservation_id || phaseRef.current !== "pending") return;
+    if (!socket || !reservation?.reservation_id) return;
 
     const handlePaymentSuccess = (payload) => {
-      if (payload.reservationId === reservation.reservation_id && 
-         (payload.status === 'Paid' || payload.status === 'Complete Paid' || payload.status === 'Reserved' || payload.status === 'Await Check-in')) {
-        setPaymentSuccess(true);
+      if (paymentDetectedRef.current) return;
+      const targetId = payload.reservationId || payload.reservation_id || payload.id;
+      // 'Confirmed' is the canonical paid/awaiting-check-in state in the new enum
+      const paidStatuses = ['Confirmed', 'Completed', 'Check-in', 'Seated', 'Await Check-in', 'Reserved', 'Paid', 'Complete Paid'];
+      if (Number(targetId) === Number(reservation.reservation_id) && paidStatuses.includes(payload.status)) {
+        console.log('[Payment] Socket PAYMENT_SUCCESS: confirmed', payload.status);
+        handlePaymentDetected.current();
       }
     };
 
-    socket.on("RESERVATION_PAYMENT_SUCCESS", handlePaymentSuccess);
+    const handleStatusChanged = (payload) => {
+      if (paymentDetectedRef.current) return;
+      const targetId = payload.reservationId || payload.reservation_id || payload.id;
+      const status = payload.status || payload.reservation_status;
+      if (Number(targetId) === Number(reservation.reservation_id)) {
+        if (status === 'Await Check-in' || status === 'Reserved' || status === 'Confirmed') {
+          console.log('[Payment] Socket: status changed to paid-like status', status);
+          handlePaymentDetected.current();
+        } else if (status === 'PaymentFailed' || status === 'Cancelled' || status === 'Rejected') {
+          setPhase('expired');
+          localStorage.removeItem('phurai_pending_reservation');
+        }
+      }
+    };
+
+    socket.on('RESERVATION_PAYMENT_SUCCESS', handlePaymentSuccess);
+    socket.on('RESERVATION_STATUS_CHANGED', handleStatusChanged);
+    socket.on('reservation:status_changed', handleStatusChanged);
+
     return () => {
-      socket.off("RESERVATION_PAYMENT_SUCCESS", handlePaymentSuccess);
+      socket.off('RESERVATION_PAYMENT_SUCCESS', handlePaymentSuccess);
+      socket.off('RESERVATION_STATUS_CHANGED', handleStatusChanged);
+      socket.off('reservation:status_changed', handleStatusChanged);
     };
   }, [socket, reservation?.reservation_id]);
 
-  // Polling fallback
+  // Polling fallback — every 3s check the DB directly for status change
   useEffect(() => {
-    if (phaseRef.current !== "pending" || !reservation?.reservation_id) return;
+    if (!reservation?.reservation_id) return;
 
     const intervalId = setInterval(async () => {
+      if (paymentDetectedRef.current) {
+        clearInterval(intervalId);
+        return;
+      }
+      if (phaseRef.current !== 'pending' && phaseRef.current !== 'processing') {
+        clearInterval(intervalId);
+        return;
+      }
       try {
         const res = await apiGet(`/payments/reservations/${reservation.reservation_id}/status`);
-        if (res?.data?.status && (res.data.status === 'Paid' || res.data.status === 'Complete Paid' || res.data.status === 'Reserved' || res.data.status === 'Await Check-in')) {
-          setPaymentSuccess(true);
+        // apiGet returns the JSON body directly: { success: true, data: { status: '...' } }
+        const status = res?.data?.status;
+        console.log('[Payment] Poll status:', status);
+        const paidStatuses = ['Confirmed', 'Completed', 'Check-in', 'Seated', 'Await Check-in', 'Reserved'];
+        const cancelStatuses = ['Cancelled', 'Rejected', 'PaymentFailed'];
+        if (paidStatuses.includes(status)) {
           clearInterval(intervalId);
+          handlePaymentDetected.current();
+        } else if (cancelStatuses.includes(status)) {
+          clearInterval(intervalId);
+          setPhase('expired');
+          localStorage.removeItem('phurai_pending_reservation');
         }
       } catch (err) {
-        // Silently ignore polling errors
+        console.warn('[Payment] Poll error (ignored):', err?.message);
       }
     }, 3000);
 
     return () => clearInterval(intervalId);
   }, [reservation?.reservation_id]);
 
-  // Redirection timer
-  useEffect(() => {
-    if (paymentSuccess) {
-      const timer = setTimeout(() => {
-        Maps('/');
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [paymentSuccess]);
-
-  // Handle "I have paid" button (Customer UX)
-  const handleIHavePaid = () => {
-    setPhase("processing");
-    // We just wait for the socket/polling. If it takes too long, we revert back.
-    setTimeout(() => {
-      if (phaseRef.current !== "success") {
-        setPhase("pending");
-        alert("We haven't received your payment yet. Please ensure the transaction was completed.");
+  // Handle "I have paid" button — calls verify-deposit endpoint which triggers
+  // the same webhook logic (DB update → socket emit → polling detects status change)
+  const handleIHavePaid = async () => {
+    setPhase('processing');
+    try {
+      const res = await apiPost(`/payments/verify-deposit/${reservation.reservation_id}`, {});
+      // If already paid or just confirmed, advance immediately
+      if (res?.success) {
+        // The verify-deposit endpoint already updated DB + emitted socket.
+        // The polling will pick it up within 3s. But if already_paid, trigger now.
+        if (res.already_paid) {
+          handlePaymentDetected.current();
+        }
+        // Otherwise wait for polling to detect the status change (≤3s)
+        return;
       }
-    }, 5000);
+    } catch (err) {
+      console.warn('[Payment] verify-deposit error:', err?.message);
+    }
+    // If request failed, wait 8s then show alert
+    setTimeout(() => {
+      if (phaseRef.current === 'processing') {
+        setPhase('pending');
+        alert('Payment not yet confirmed. Please wait a moment — it can take up to 30 seconds to verify.');
+      }
+    }, 8000);
   };
 
   const handleCancel = () => {
+    localStorage.removeItem("phurai_pending_reservation");
     if (phase === "pending") {
       apiPatch(`/reservations/${reservation.reservation_id}/cancel`, { cancel_reason: 'Payment Failed' }).catch(console.error);
     }
@@ -140,9 +225,8 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
   };
 
   const [baseAmount] = useState(() => {
-    if (amount && !isNaN(amount)) return Number(amount);
-    const randomAmounts = [5000, 10000, 15000, 20000];
-    return randomAmounts[Math.floor(Math.random() * randomAmounts.length)];
+    if (amount !== undefined && amount !== null && !isNaN(amount)) return Number(amount);
+    return 6000;
   });
 
   const displayAmount = Math.max(0, baseAmount - appliedDiscount);
@@ -172,21 +256,10 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
   };
 
   const generatedOrderCode = orderCode || `PHURAIRESTAURANT${reservation?.reservation_id || Math.floor(1000 + Math.random() * 9000)}`;
-  const finalQrUrl = qrUrl || `https://qr.sepay.vn/img?bank=TPBank&acc=00003942326&template=&showinfo=true&holder=DANG%20QUANG%20PHU&store=PHURAI%20RESTAURANT&amount=${displayAmount}&des=${encodeURIComponent(generatedOrderCode)}`;
+  const finalQrUrl = qrUrl;
 
-  if (paymentSuccess) {
-    return (
-      <div className="fixed inset-0 bg-white dark:bg-[#1a1a1a] flex flex-col items-center justify-center z-50 p-6 text-center">
-        <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-green-500/30 animate-bounce">
-          <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Thanh toán thành công!</h2>
-        <p className="text-lg text-gray-600 dark:text-gray-400">Hệ thống đang chuyển hướng về trang chủ...</p>
-      </div>
-    );
-  }
+  // When payment is detected, onSuccess() advances the parent to the Confirmed step.
+  // No need for a separate overlay here — the parent handles the transition.
 
   const mins = Math.floor(secondsLeft / 60);
   const secs = secondsLeft % 60;
@@ -203,16 +276,27 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
             exit={{ opacity: 0, y: -20 }}
             className="w-full text-center"
           >
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Scan VietQR to pay</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-              Transfer the exact amount and description for automatic reconciliation.
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Scan VietQR to pay</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Transfer the exact amount. Payment is detected automatically.
             </p>
+
+            {/* Auto-detection live status */}
+            <div className="flex items-center justify-center gap-2 mb-4 px-4 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-full w-fit mx-auto">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+              </span>
+              <span className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wide">
+                Monitoring for payment automatically...
+              </span>
+            </div>
 
             <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 inline-block mb-4 relative max-w-[320px] w-full overflow-hidden">
               <img src={finalQrUrl} alt="SePay QR Code" className="w-full aspect-square object-cover object-top block rounded-lg" />
             </div>
 
-            <div className="w-full text-center mb-6">
+            <div className="w-full text-center mb-4">
               <div className="inline-flex items-center justify-center gap-2 px-4 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium border border-blue-200 dark:border-blue-800/50">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -221,7 +305,7 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
               </div>
             </div>
 
-            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 text-left space-y-4 mb-8">
+            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 text-left space-y-4 mb-5">
               <div className="flex justify-between items-center border-b border-gray-200 dark:border-gray-700 pb-3">
                 <span className="text-gray-500 dark:text-gray-400 text-sm">Bank Name</span>
                 <span className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
@@ -241,68 +325,40 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
                 <span className="font-semibold text-blue-600 dark:text-blue-400 font-mono">{generatedOrderCode}</span>
               </CopyableField>
               <div className="flex justify-between items-center pb-2">
-                <span className="text-gray-500 dark:text-gray-400 text-sm">Base Amount</span>
+                <span className="text-gray-500 dark:text-gray-400 text-sm">Deposit Amount</span>
                 <span className="font-semibold text-gray-900 dark:text-white text-md">{formatVND(baseAmount)}</span>
               </div>
-              
-              {/* Promo Code Section */}
-              <div className="py-2 border-t border-b border-gray-200 dark:border-gray-700">
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    value={promoCodeInput}
-                    onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
-                    placeholder="Enter Promo Code" 
-                    disabled={isValidating || appliedDiscount > 0}
-                    className="flex-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 uppercase"
-                  />
-                  {appliedDiscount > 0 ? (
-                    <button onClick={() => { setAppliedDiscount(0); setPromoCodeInput(""); setValidPromoName(""); }} className="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-2 rounded-lg text-sm font-medium transition-colors">
-                      Remove
-                    </button>
-                  ) : (
-                    <button onClick={handleApplyPromo} disabled={isValidating || !promoCodeInput.trim()} className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                      {isValidating ? "..." : "Apply"}
-                    </button>
-                  )}
-                </div>
-                {promoErrorMessage && (
-                  <p className="text-red-500 text-xs mt-2">{promoErrorMessage}</p>
-                )}
-                {appliedDiscount > 0 && (
-                  <div className="flex justify-between items-center mt-3 text-sm">
-                    <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                      {validPromoName || "Voucher Applied"}
-                    </span>
-                    <span className="font-bold text-green-600 dark:text-green-400">-{formatVND(appliedDiscount)}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-between items-center pt-2">
+              <div className="flex justify-between items-center pt-2 border-t border-gray-200 dark:border-gray-700">
                 <span className="text-gray-900 dark:text-white font-medium text-base">Total Target</span>
                 <span className="font-bold text-blue-600 dark:text-blue-400 text-xl">{formatVND(displayAmount)}</span>
               </div>
             </div>
 
-            <div className="flex gap-4">
+            {/* Fallback check button — subtle secondary style */}
+            <div className="flex gap-3">
               <button
                 onClick={handleIHavePaid}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-xl transition-colors"
+                className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium py-3 px-4 rounded-xl transition-colors text-sm flex items-center justify-center gap-2"
               >
-                I have paid
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                Check the transaction
               </button>
               <button
                 onClick={handleCancel}
-                className="flex-1 bg-white hover:bg-gray-50 dark:bg-[#1a1a1a] dark:hover:bg-gray-900 text-red-500 font-medium py-3 px-4 rounded-xl border border-gray-200 dark:border-gray-800 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 bg-white hover:bg-gray-50 dark:bg-[#1a1a1a] dark:hover:bg-gray-900 text-red-500 font-medium py-3 px-4 rounded-xl border border-gray-200 dark:border-gray-800 transition-colors flex items-center justify-center gap-2 text-sm"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
                 Cancel order
               </button>
             </div>
+
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
+              Payment will be confirmed automatically once received. No action needed.
+            </p>
           </motion.div>
         )}
 
@@ -323,69 +379,18 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
         {phase === "success" && (
           <motion.div
             key="success"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full flex flex-col items-center justify-center py-2"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="w-full flex flex-col items-center justify-center py-12 text-center"
           >
-            <div className="w-full bg-gradient-to-b from-gray-900 to-gray-800 dark:from-gray-800 dark:to-gray-900 rounded-2xl overflow-hidden shadow-2xl relative text-white">
-              {/* Top section */}
-              <div className="p-6 text-center">
-                <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-green-500/30">
-                  <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-bold uppercase tracking-wider mb-1">Payment Successful!</h3>
-                <p className="text-green-400 text-sm font-medium">Thank you for your reservation. Redirecting to home...</p>
-              </div>
-
-              {/* Dashed divider */}
-              <div className="relative h-4 flex items-center w-full">
-                <div className="absolute -left-2 w-4 h-4 bg-white dark:bg-[#1a1a1a] rounded-full z-10"></div>
-                <div className="w-full border-t-2 border-dashed border-gray-600 relative z-0"></div>
-                <div className="absolute -right-2 w-4 h-4 bg-white dark:bg-[#1a1a1a] rounded-full z-10"></div>
-              </div>
-
-              {/* Details section */}
-              <div className="p-6 bg-gray-50 dark:bg-gray-800/80 text-gray-900 dark:text-white">
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500 dark:text-gray-400 text-sm">Order Code</span>
-                    <span className="font-bold font-mono">{generatedOrderCode}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500 dark:text-gray-400 text-sm">Total Paid</span>
-                    <span className="font-bold text-lg text-green-600 dark:text-green-400">{formatVND(displayAmount)}</span>
-                  </div>
-
-                  {reservation?.preorder_json && (
-                    <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <span className="text-gray-500 dark:text-gray-400 text-sm block mb-2">Pre-ordered Items</span>
-                      <ul className="space-y-2">
-                        {JSON.parse(reservation.preorder_json).map((item, idx) => (
-                          <li key={idx} className="flex justify-between text-sm">
-                            <span>{item.quantity}x {item.name || `Dish #${item.dish_id}`}</span>
-                            <span className="text-gray-600 dark:text-gray-300 font-medium">
-                              {item.unit_price ? formatVND(item.unit_price * item.quantity) : ''}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-center">
-                    <img src={finalQrUrl} alt="QR code thumbnail" className="w-16 h-16 opacity-50 grayscale mix-blend-multiply dark:mix-blend-screen" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom accent */}
-              <div className="h-2 w-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
+            <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-green-500/20">
+              <svg className="w-10 h-10 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
             </div>
-
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-6 animate-pulse">
-              Finalizing your reservation...
-            </p>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Payment Successful!</h3>
+            <p className="text-gray-500 dark:text-gray-400">Your table reservation is confirmed. Redirecting...</p>
           </motion.div>
         )}
 

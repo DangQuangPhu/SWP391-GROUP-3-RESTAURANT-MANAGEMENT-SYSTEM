@@ -25,7 +25,6 @@ async function testDB() {
         r.role_name,
         cp.username,
         cp.loyalty_points,
-        cp.membership_tier,
         cp.preferences
       FROM dbo.UserAccounts ua
       JOIN dbo.Roles r ON ua.role_id = r.role_id

@@ -54,17 +54,23 @@ export async function updateReservationStatus({ connection, reservationId, toSta
     [toStatus, reservationId]
   );
 
-  // 4. Log the audit action
+  // 4. Log the audit action and Reservation Timelines
   if (auditAction && staffId) {
     await execQuery(
       `INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, old_value_json, new_value_json)
-       VALUES (?, ?, N'Reservations', ?, ?, ?)`,
+       VALUES (?, ?, N'Reservations', ?, ?, ?);
+       
+       INSERT INTO dbo.ReservationTimelines (reservation_id, event_type, performed_by, notes, created_at)
+       VALUES (?, ?, ?, N'Status transitioned via system', SYSDATETIME());`,
       [
         staffId, 
         auditAction, 
         reservationId, 
         JSON.stringify({ reservation_status: fromStatus }),
-        JSON.stringify({ reservation_status: toStatus })
+        JSON.stringify({ reservation_status: toStatus }),
+        reservationId,
+        auditAction,
+        staffId
       ]
     );
   }

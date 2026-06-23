@@ -27,6 +27,9 @@ import {
 import { useSocket } from "@/core/socket/SocketContext.jsx";
 import { FILTER_GROUPS, RESERVATION_STATUS } from "@/shared/reservationStatus.js";
 
+import LateArrivalBadge from "./LateArrivalBadge.jsx";
+import StaffEditReservationModal from "./StaffEditReservationModal.jsx";
+
 /* ── Date filter ── */
 function matchesSelectedDate(reservation, selectedDate) {
   if (!selectedDate) return true;
@@ -140,9 +143,11 @@ function TimelineSection({ reservationId, userId }) {
 function ReservationManagement({ user, toast, refreshKey }) {
   const { socket } = useSocket();
   const userId = user?.userId ?? user?.user_id ?? user?.id;
+  const isManager = Number(user?.roleId ?? user?.role_id) === 4 || Number(user?.roleId ?? user?.role_id) === 5;
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [editReservation, setEditReservation] = useState(null);
   const [checkedInIds, setCheckedInIds] = useState(new Set());
   const [rejectedIds, setRejectedIds] = useState(new Set());
   const [confirmedAtMap, setConfirmedAtMap] = useState(new Map());
@@ -437,7 +442,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
     if (!confirmDialog?.target) return;
     const target = confirmDialog.target;
     try {
-      await rejectStaffReservation(target.reservation_id, userId, { reason: "Guest did not arrive.", new_status: "No Show" });
+      await rejectStaffReservation(target.reservation_id, userId, { reason: "Customer No-Show", new_status: "No Show" });
       toast("Marked as No Show. Table released.", "info");
       setRejectedIds((prev) => new Set([...prev, target.reservation_id]));
       loadReservations();
@@ -623,6 +628,19 @@ function ReservationManagement({ user, toast, refreshKey }) {
               </Button>
             )
           )}
+          <Button
+            size="sm"
+            variant="soft"
+            style={{ 
+              color: "#fff", 
+              backgroundColor: "#ef4444", 
+              fontWeight: 600,
+              border: "none"
+            }}
+            onClick={() => setConfirmDialog({ action: "noshow", target: reservation })}
+          >
+            Hủy bàn (No-Show)
+          </Button>
           {viewBtn}
         </div>
       );
@@ -655,7 +673,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
           </>}
 
           <span style={{ color: "#8a8175" }}>Guests</span>
-          <span style={{ color: "#1a1a1a" }}><EmptyVal val={target.party_size ?? target.guest_count} /></span>
+          <span style={{ color: "#1a1a1a" }}><EmptyVal val={target.guest_count} /></span>
 
           <span style={{ color: "#8a8175" }}>Time</span>
           <span style={{ color: "#1a1a1a", fontFamily: "'Courier New', monospace", fontSize: 13 }}>
@@ -666,8 +684,24 @@ function ReservationManagement({ user, toast, refreshKey }) {
           <span style={{ color: "#1a1a1a" }}><EmptyVal val={target.table_label || target.assigned_tables} /></span>
 
           <span style={{ color: "#8a8175" }}>Status</span>
-          <ReservationStatusBadge status={target.display_status || target.reservation_status} size="sm" isFlashing={target._isFlashing} />
+          <div>
+            <ReservationStatusBadge status={target.display_status || target.reservation_status} size="sm" isFlashing={target._isFlashing} />
+            <LateArrivalBadge reservationStartAt={target.reservation_start_at} status={target.reservation_status} />
+          </div>
         </div>
+
+        {isManager && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+            <Button
+              size="sm"
+              variant="outline"
+              style={{ color: "#3b82f6", borderColor: "#3b82f6", fontWeight: "bold" }}
+              onClick={() => setEditReservation(target)}
+            >
+              Edit (Admin)
+            </Button>
+          </div>
+        )}
 
         <hr style={{ margin: "14px 0", border: "none", borderTop: "1px solid rgba(0,0,0,0.08)" }} />
 
@@ -1175,6 +1209,20 @@ function ReservationManagement({ user, toast, refreshKey }) {
               </div>
             )}
           </>
+        )}
+
+        {editReservation && (
+          <StaffEditReservationModal
+            reservation={editReservation}
+            userId={userId}
+            allReservations={dateScopedQueue}
+            onClose={() => setEditReservation(null)}
+            onSuccess={() => {
+              setEditReservation(null);
+              toast("Đã cập nhật lịch đặt bàn (Admin Override).", "success");
+              loadReservations();
+            }}
+          />
         )}
       </div>
     </>

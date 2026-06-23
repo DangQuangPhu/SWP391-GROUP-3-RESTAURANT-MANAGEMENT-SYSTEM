@@ -83,7 +83,7 @@ export const checkVoucherValidity = async (code, orderValue) => {
 
   // Stage 5: Minimum Order Value Check
   if (val < parseFloat(data.min_order_value)) {
-    return { isValid: false, message: \`A minimum order value of \${data.min_order_value} is required.\` };
+    return { isValid: false, message: `A minimum order value of ${data.min_order_value} is required.` };
   }
 
   // Secure Calculation Logic

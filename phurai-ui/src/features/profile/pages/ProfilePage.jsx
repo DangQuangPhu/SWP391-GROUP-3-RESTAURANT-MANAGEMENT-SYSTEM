@@ -23,8 +23,8 @@ import {
   forgotPasswordVerifyOtp,
   forgotPasswordResendOtp,
   forgotPasswordReset,
-  loadAuthUser,
-} from "@/api";
+} from "@/features/auth";
+import { loadAuthUser } from "@/core/api";
 import "@/styles/OtpCodeInput.css";
 import "@/styles/profile.css";
 

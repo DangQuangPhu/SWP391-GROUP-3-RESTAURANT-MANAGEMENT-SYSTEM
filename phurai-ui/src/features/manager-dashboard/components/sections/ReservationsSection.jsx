@@ -306,7 +306,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
         customer_name: full.customer_name || "",
         customer_phone: full.customer_phone || full.phone || "",
         customer_email: full.customer_email || full.email || "",
-        party_size: full.party_size || full.guest_count || 1,
+        guest_count: full.guest_count || 1,
         table_id: full.table_id || "",
         occasion: full.occasion || "",
         promotions: full.promotions || "",
@@ -314,7 +314,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
         status: (full.status || full.reservation_status || "").toLowerCase(),
         edit_reason: "",
         reservation_start_at: full.reservation_start_at ? new Date(new Date(full.reservation_start_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
-        duration: full.reservation_start_at && full.reservation_end_at ? Math.round((new Date(full.reservation_end_at) - new Date(full.reservation_start_at)) / 60000) : (parseSpecialRequest(full.special_request || full.notes || "").holdMins || 60)
+        duration: full.reservation_start_at && full.reservation_end_at ? Math.max(15, Math.round((new Date(full.reservation_end_at) - new Date(full.reservation_start_at)) / 60000) - 90) : (parseSpecialRequest(full.special_request || full.notes || "").holdMins || 30)
       });
       const hist = await getReservationHistory(fetchId, user?.userId || user?.user_id);
       setHistory(hist || []);
@@ -324,7 +324,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
         customer_name: row.customer_name || "",
         customer_phone: row.customer_phone || row.phone || "",
         customer_email: row.customer_email || row.email || "",
-        party_size: row.party_size || row.guest_count || 1,
+        guest_count: row.guest_count || 1,
         table_id: row.table_id || "",
         occasion: row.occasion || "",
         promotions: row.promotions || "",
@@ -332,7 +332,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
         status: (row.status || row.reservation_status || "").toLowerCase(),
         edit_reason: "",
         reservation_start_at: row.reservation_start_at ? new Date(new Date(row.reservation_start_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
-        duration: row.reservation_start_at && row.reservation_end_at ? Math.round((new Date(row.reservation_end_at) - new Date(row.reservation_start_at)) / 60000) : (parseSpecialRequest(row.special_request || row.notes || "").holdMins || 60)
+        duration: row.reservation_start_at && row.reservation_end_at ? Math.max(15, Math.round((new Date(row.reservation_end_at) - new Date(row.reservation_start_at)) / 60000) - 90) : (parseSpecialRequest(row.special_request || row.notes || "").holdMins || 30)
       });
       setHistory([]);
     } finally {
@@ -467,12 +467,12 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
         contact_name: editForm.customer_name,
         contact_phone: editForm.customer_phone,
         contact_email: editForm.customer_email,
-        guest_count: editForm.party_size,
+        guest_count: editForm.guest_count,
         special_request: editForm.notes,
         reservation_status: editForm.status === "reject check-in" ? RESERVATION_STATUS.REJECT_CHECK_IN : (editForm.status === "await check-in" ? RESERVATION_STATUS.AWAIT_CHECK_IN : editForm.status),
         preferred_area_id: active.preferred_area_id,
         reservation_start_at: new Date(editForm.reservation_start_at).toISOString(),
-        reservation_end_at: new Date(new Date(editForm.reservation_start_at).getTime() + parseInt(editForm.duration) * 60000).toISOString(),
+        reservation_end_at: new Date(new Date(editForm.reservation_start_at).getTime() + (90 + parseInt(editForm.duration)) * 60000).toISOString(),
         table_id: editForm.table_id || null
       };
 
@@ -910,7 +910,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                 const changeFields = [
                   { label: "Date & Time", oldVal: active.reservation_start_at ? fmt(active.reservation_start_at) : <EmptyVal val="" />, newVal: pendingChanges.reservation_start_at ? fmt(pendingChanges.reservation_start_at) : null },
                   { label: "End Time", oldVal: active.reservation_end_at ? fmt(active.reservation_end_at) : <EmptyVal val="" />, newVal: pendingChanges.reservation_end_at ? fmt(pendingChanges.reservation_end_at) : null },
-                  { label: "Guests", oldVal: <EmptyVal val={String(active.guest_count || active.party_size || "")} />, newVal: pendingChanges.guest_count != null ? String(pendingChanges.guest_count) : null },
+                  { label: "Guests", oldVal: <EmptyVal val={String(active.guest_count || "")} />, newVal: pendingChanges.guest_count != null ? String(pendingChanges.guest_count) : null },
                   { label: "Tables", oldVal: active.assigned_tables || active.table_label || "Unassigned", newVal: pendingChanges.table_ids ? `Table #${pendingChanges.table_ids.join(", ")}` : null },
                   { label: "Dining Purpose", oldVal: active.dining_purpose || active.occasion || parseSpecialRequest(active.special_request).diningPurpose || "None", newVal: pendingChanges.dining_purpose || null },
                   { label: "Notes", oldVal: parseSpecialRequest(active.special_request).notes || "None", newVal: pendingChanges.special_request ? parseSpecialRequest(pendingChanges.special_request).notes : null },
@@ -1000,7 +1000,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                   <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>End Time</span>
                   {isEditing ? (
                     <strong style={{ fontWeight: "bold", fontSize: "14px" }}>
-                      <EmptyVal val={editForm.reservation_start_at ? format(new Date(new Date(editForm.reservation_start_at).getTime() + parseInt(editForm.duration || 0) * 60000), "HH:mm (dd/MM/yyyy)") : "—"} />
+                       <EmptyVal val={editForm.reservation_start_at ? format(new Date(new Date(editForm.reservation_start_at).getTime() + (90 + parseInt(editForm.duration || 0)) * 60000), "HH:mm (dd/MM/yyyy)") : "—"} />
                     </strong>
                   ) : (
                     <strong style={{ fontWeight: "bold", fontSize: "14px" }}>
@@ -1011,9 +1011,9 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
                   <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Guests</span>
                   {isEditing ? (
-                    <input className="sfx-input" type="number" min="1" value={editForm.party_size} onChange={e => setEditForm(p => ({ ...p, party_size: e.target.value }))} />
+                    <input className="sfx-input" type="number" min="1" value={editForm.guest_count} onChange={e => setEditForm(p => ({ ...p, guest_count: e.target.value }))} />
                   ) : (
-                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.party_size || active.guest_count}</strong>
+                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.guest_count}</strong>
                   )}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
@@ -1046,8 +1046,6 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                       <option value={30}>30 minutes</option>
                       <option value={45}>45 minutes</option>
                       <option value={60}>60 minutes</option>
-                      <option value={90}>90 minutes</option>
-                      <option value={120}>120 minutes</option>
                     </select>
                   ) : (
                     <strong style={{ fontWeight: "bold", fontSize: "14px" }}>
@@ -1257,7 +1255,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
             <span className="sfx-detail__value">{formatReservationDateTime(pendingAction?.reservation)}</span>
 
             <span className="sfx-detail__label">Guests</span>
-            <span className="sfx-detail__value">{pendingAction?.reservation?.guest_count || pendingAction?.reservation?.party_size} people</span>
+            <span className="sfx-detail__value">{pendingAction?.reservation?.guest_count} people</span>
           </div>
 
           <div className="sfx-actions" style={{ marginTop: "32px", display: "flex", gap: "12px", justifyContent: "flex-end" }}>
@@ -1322,10 +1320,10 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                   <strong>{editForm.notes || "(cleared)"}</strong>
                 </div>
               )}
-              {editForm.party_size != (active?.party_size || active?.guest_count) && (
-                <div style={{ fontSize: "13px" }}>
-                  <span style={{ color: "var(--sfx-muted)" }}>Guests: </span>
-                  <strong>{editForm.party_size}</strong>
+              {editForm.guest_count != active?.guest_count && (
+                <div className="sfx-action-modal__change">
+                  <span>Guests: </span>
+                  <strong>{editForm.guest_count}</strong>
                 </div>
               )}
               {editForm.status && editForm.status !== (active?.status || "").toLowerCase() && (
@@ -1334,7 +1332,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                   <strong>{editForm.status}</strong>
                 </div>
               )}
-              {!editForm.customer_name && !editForm.notes && !editForm.party_size && !editForm.status && (
+              {!editForm.customer_name && !editForm.notes && !editForm.guest_count && !editForm.status && (
                 <span style={{ fontSize: "13px", color: "var(--sfx-muted)" }}>All current values will be saved.</span>
               )}
             </div>

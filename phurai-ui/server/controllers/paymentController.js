@@ -72,22 +72,24 @@ export const handleSepayWebhook = async (req, res) => {
         }
 
         const reservation = resResult.recordset[0];
-        if (reservation.reservation_status === RESERVATION_STATUS.AWAIT_CHECK_IN || reservation.reservation_status === RESERVATION_STATUS.COMPLETE_PAID) {
+        // Guard: skip if already paid (Confirmed = paid & awaiting check-in in new enum)
+        const alreadyPaidStatuses = ['Confirmed', 'Completed', 'Check-in', 'Seated'];
+        if (alreadyPaidStatuses.includes(reservation.reservation_status)) {
           await transaction.rollback();
-          return res.status(200).json({ success: true, message: 'Webhook received, reservation is already Paid/Awaiting Check-in' });
+          return res.status(200).json({ success: true, message: 'Webhook received, reservation is already confirmed/paid' });
         }
 
-        // Validate Amount
-        if (parseFloat(transferAmount) < parseFloat(reservation.deposit_amount)) {
+        // Validate Amount — be lenient with floating point
+        if (parseFloat(transferAmount) + 0.009 < parseFloat(reservation.deposit_amount)) {
            await transaction.rollback();
-           console.warn(`[SePay Webhook] Insufficient funds transferred for ${actualOrderCode}. Expected: ${reservation.deposit_amount}, Received: ${transferAmount}`);
+           console.warn(`[SePay Webhook] Insufficient funds for ${actualOrderCode}. Expected: ${reservation.deposit_amount}, Received: ${transferAmount}`);
            return res.status(200).json({ success: true, message: 'Insufficient funds received' });
         }
 
-        // a. Update reservation to 'Await Check-in'
+        // a. Update reservation to 'Confirmed' (the canonical paid/awaiting-check-in state)
         await transaction.request()
           .input('resId', sql.Int, reservation.reservation_id)
-          .input('resStatus', sql.VarChar, 'Await Check-in')
+          .input('resStatus', sql.VarChar, 'Confirmed')
           .query(`
             UPDATE dbo.Reservations 
             SET reservation_status = @resStatus, 
@@ -154,8 +156,13 @@ export const handleSepayWebhook = async (req, res) => {
              
            if (voucherResult.recordset.length > 0) {
               const voucherId = voucherResult.recordset[0].voucher_id;
-              const baseDeposit = 10000;
-              const calculatedDiscount = Math.max(0, baseDeposit + Number(reservation.final_total) - Number(reservation.deposit_amount));
+              const baseDeposit = 20000;
+              const poQuery = await transaction.request()
+                .input('resId', sql.Int, reservation.reservation_id)
+                .query('SELECT SUM(quantity * unit_price) AS preorder_total FROM dbo.PreorderItems WHERE reservation_id = @resId');
+              const preorderTotal = Number(poQuery.recordset[0]?.preorder_total || 0);
+              const net_total = Number(reservation.deposit_amount) + Number(reservation.final_total);
+              const calculatedDiscount = Math.max(0, preorderTotal - (net_total - baseDeposit));
               
               // Increment usage
               await transaction.request()
@@ -197,18 +204,21 @@ export const handleSepayWebhook = async (req, res) => {
             VALUES (@actionName, @targetTable, @targetId, @newValue, SYSDATETIME())
           `);
 
-        // Emit socket event for Staff UI illusion
+        // Emit socket event — frontend listens for these to advance to Confirmed step
         const io = getIO();
         if (io) {
           io.emit('RESERVATION_PAYMENT_SUCCESS', { 
              reservationId: reservation.reservation_id, 
+             reservation_id: reservation.reservation_id,
              orderCode: reservation.order_code,
-             status: 'Await Check-in', 
+             status: 'Confirmed',
              flashCompletePaid: true 
           });
           io.emit('RESERVATION_STATUS_CHANGED', {
              id: reservation.reservation_id,
-             status: RESERVATION_STATUS.AWAIT_CHECK_IN
+             reservationId: reservation.reservation_id,
+             reservation_id: reservation.reservation_id,
+             status: 'Confirmed'
           });
         }
 
@@ -220,7 +230,15 @@ export const handleSepayWebhook = async (req, res) => {
           const rawPool = await getRawPool();
           const emailQuery = await rawPool.request()
             .input('resId', sql.Int, reservation.reservation_id)
-            .query('SELECT contact_email, contact_name, reservation_start_at, guest_count, deposit_amount, final_total FROM dbo.Reservations WHERE reservation_id = @resId');
+            .query(`
+              SELECT 
+                r.contact_email, r.contact_name, r.contact_phone, 
+                r.reservation_start_at, r.guest_count, r.deposit_amount, r.final_total, r.created_at,
+                (SELECT STRING_AGG(t.table_number, ', ') FROM dbo.ReservationTables rt JOIN dbo.RestaurantTables t ON rt.table_id = t.table_id WHERE rt.reservation_id = r.reservation_id) AS table_names,
+                (SELECT TOP 1 a.area_name FROM dbo.ReservationTables rt JOIN dbo.RestaurantTables t ON rt.table_id = t.table_id JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id WHERE rt.reservation_id = r.reservation_id) AS area_name
+              FROM dbo.Reservations r 
+              WHERE r.reservation_id = @resId
+            `);
             
           const resInfo = emailQuery.recordset[0];
           if (resInfo && resInfo.contact_email) {
@@ -239,11 +257,17 @@ export const handleSepayWebhook = async (req, res) => {
                reservation: {
                  reservation_id: reservation.reservation_id,
                  contact_name: resInfo.contact_name,
+                 contact_phone: resInfo.contact_phone,
+                 contact_email: resInfo.contact_email,
+                 reservation_start_at: resInfo.reservation_start_at,
                  date: resInfo.reservation_start_at ? resInfo.reservation_start_at.toLocaleDateString("vi-VN") : '',
                  time: resInfo.reservation_start_at ? `${String(resInfo.reservation_start_at.getHours()).padStart(2, '0')}:${String(resInfo.reservation_start_at.getMinutes()).padStart(2, '0')}` : '',
                  guest_count: resInfo.guest_count,
                  deposit_amount: resInfo.deposit_amount,
-                 final_total: resInfo.final_total
+                 final_total: resInfo.final_total,
+                 created_at: resInfo.created_at,
+                 table_names: resInfo.table_names,
+                 area_name: resInfo.area_name
                },
                preorderItems: finalPreorderItems,
                totalAmount: transferAmount

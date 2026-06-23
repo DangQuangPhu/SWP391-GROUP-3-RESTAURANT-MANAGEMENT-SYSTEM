@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import './index.css';
 import '@/styles/app.css';
 import App from './App.jsx';
+import { AuthProvider } from '@/features/auth/context/AuthContext';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -13,7 +14,9 @@ createRoot(document.getElementById('root')).render(
         v7_relativeSplatPath: true,
       }}
     >
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </BrowserRouter>
   </StrictMode>,
 );

@@ -4,46 +4,58 @@
  * Here we only map DB tables to a premium visual layout (floors, zones, x/y).
  */
 
-// Visual position (percentage of the floor canvas) keyed by DB table_number.
-export const TABLE_LAYOUT = {
-  // Floor 1 — Main Dining (center)
-  T01: { x: 22, y: 34 },
-  T02: { x: 40, y: 30 },
-  T03: { x: 34, y: 58 },
-  T04: { x: 54, y: 56 },
-  // Floor 1 — VIP Lounge (right)
-  V01: { x: 78, y: 30 },
-  V02: { x: 84, y: 56 },
-  // Floor 1 — Window / Bar (left strip)
-  B01: { x: 9, y: 70 },
-  // Floor 1 — Private Room (top right)
-  P01: { x: 80, y: 84 },
-  // Floor 2 — Rooftop Terrace
-  G01: { x: 34, y: 42 },
-  G02: { x: 62, y: 48 },
+export const SHAPES = {
+  "round2": { shape: 'circle', r: 20, n: 2, gap: 14 },
+  "round4": { shape: 'circle', r: 24, n: 4, gap: 15 },
+  "booth6": { shape: 'ellipse', rx: 50, ry: 30, n: 6, gap: 16 },
+  "booth8": { shape: 'ellipse', rx: 65, ry: 35, n: 8, gap: 16 },
+  "vip6": { shape: 'ellipse', rx: 50, ry: 28, n: 6, gap: 16 },
+  "rect2": { shape: 'rect', w: 46, h: 46, rx: 8, ry: 8, n: 2, gap: 14 },
+  "rect4": { shape: 'rect', w: 66, h: 46, rx: 8, ry: 8, n: 4, gap: 14 },
+  "rect6": { shape: 'rect', w: 90, h: 50, rx: 8, ry: 8, n: 6, gap: 15 },
+  "rect8": { shape: 'rect', w: 110, h: 54, rx: 8, ry: 8, n: 8, gap: 16 }
 };
 
-// Soft zone cards drawn behind the table nodes (percentages: x/y/w/h).
+// Visual position & styling keyed by DB table_number.
+export const TABLE_LAYOUT = {
+  // ---- Dãy Cửa sổ (Tăng dần: 2, 4, 6, 8 ghế) ----
+  "WIN-A": { x: 140, y: 120, type: "round2", fill: "#dceaf5", chair: "#cfe3da" },
+  "WIN-B": { x: 400, y: 120, type: "round4", fill: "#dceaf5", chair: "#cfe3da" },
+  "WIN-C": { x: 880, y: 120, type: "booth6", fill: "#dceaf5", chair: "#cfe3da" },
+  "WIN-D": { x: 1165, y: 120, type: "booth8", fill: "#dceaf5", chair: "#cfe3da" },
+
+  // ---- Dãy Phòng VIP (6 ghế) ----
+  "VIP-1": { x: 140, y: 305, type: "vip6", fill: "#f6d6d6", chair: "#f1c2c2" },
+  "VIP-2": { x: 140, y: 475, type: "vip6", fill: "#f6d6d6", chair: "#f1c2c2" },
+  "VIP-3": { x: 140, y: 645, type: "vip6", fill: "#f6d6d6", chair: "#f1c2c2" },
+
+  // ---- Sảnh Thường (4 cột x 3 hàng = 12 bàn 4 ghế) ----
+  "S-01": { x: 350, y: 300, type: "round4" }, "S-02": { x: 490, y: 300, type: "round4" }, "S-03": { x: 630, y: 300, type: "round4" }, "S-04": { x: 770, y: 300, type: "round4" },
+  "S-05": { x: 350, y: 450, type: "round4" }, "S-06": { x: 490, y: 450, type: "round4" }, "S-07": { x: 630, y: 450, type: "round4" }, "S-08": { x: 770, y: 450, type: "round4" },
+  "S-09": { x: 350, y: 600, type: "round4" }, "S-10": { x: 490, y: 600, type: "round4" }, "S-11": { x: 630, y: 600, type: "round4" }, "S-12": { x: 770, y: 600, type: "round4" },
+
+  // ---- Sảnh Premium (4 bàn 4 ghế xếp dọc) ----
+  "PRE-01": { x: 930, y: 300, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
+  "PRE-02": { x: 930, y: 420, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
+  "PRE-03": { x: 930, y: 540, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
+  "PRE-04": { x: 930, y: 660, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
+
+  // ---- Private Rooms (Tăng dần: 2, 4, 6, 8 ghế hình chữ nhật) ----
+  "PR-01": { x: 1165, y: 320, type: "rect2", fill: "#ece1f0", chair: "#ddc9e6" },
+  "PR-02": { x: 1165, y: 460, type: "rect4", fill: "#ece1f0", chair: "#ddc9e6" },
+  "PR-03": { x: 1165, y: 610, type: "rect6", fill: "#ece1f0", chair: "#ddc9e6" },
+  "PR-04": { x: 1165, y: 790, type: "rect8", fill: "#ece1f0", chair: "#ddc9e6" },
+
+  // ---- Kitchen View (Khu vực sát bếp, 4 bàn) ----
+  "K-01": { x: 330, y: 825, type: "round4" },
+  "K-02": { x: 410, y: 825, type: "round4" },
+  "K-03": { x: 490, y: 825, type: "round4" },
+  "K-04": { x: 570, y: 825, type: "round4" }
+};
+
+// `FLOORS` is no longer used for standard zone rendering as it is baked into the SVG.
 export const FLOORS = [
-  {
-    id: 1,
-    label: "Floor 1",
-    sublabel: "Indoor Fine Dining",
-    zones: [
-      { id: "main", label: "Main Dining", desc: "Center area · 1–6 guests", x: 16, y: 18, w: 50, h: 56 },
-      { id: "vip", label: "VIP Lounge", desc: "Premium booths · 2–10 guests", x: 70, y: 18, w: 26, h: 50 },
-      { id: "window", label: "Window / Bar", desc: "Calm seating · couples", x: 4, y: 58, w: 22, h: 32 },
-      { id: "private", label: "Private Event Room", desc: "Celebrations · 6–12 guests", x: 68, y: 72, w: 28, h: 22 },
-    ],
-  },
-  {
-    id: 2,
-    label: "Floor 2",
-    sublabel: "Rooftop / Outdoor",
-    zones: [
-      { id: "terrace", label: "Rooftop Terrace", desc: "Open-air garden view · 2–8 guests", x: 18, y: 24, w: 64, h: 52 },
-    ],
-  },
+  { id: 1, label: "All Areas", sublabel: "Full Map", zones: [] }
 ];
 
 // DB area_name -> premium label + floor (display only; DB names untouched).

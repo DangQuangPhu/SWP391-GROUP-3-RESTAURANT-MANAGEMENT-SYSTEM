@@ -2,12 +2,12 @@ import sql from 'mssql';
 
 const config = {
   server:   process.env.DB_SERVER   || 'localhost',
-  database: process.env.DB_NAME     || 'System_Restaurant',
+  database: process.env.DB_DATABASE || process.env.DB_NAME || 'System_Restaurant',
   user:     process.env.DB_USER     || 'sa',
-  password: process.env.DB_PASS     || '',
+  password: process.env.DB_PASSWORD || process.env.DB_PASS || '',
   options: {
     encrypt:              process.env.DB_ENCRYPT   === 'true',
-    trustServerCertificate: process.env.DB_TRUST_CERT === 'true',
+    trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE !== 'false' || process.env.DB_TRUST_CERT === 'true',
     enableArithAbort:     true,
   },
   pool: {

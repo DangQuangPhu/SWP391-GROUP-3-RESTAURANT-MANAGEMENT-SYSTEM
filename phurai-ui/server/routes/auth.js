@@ -54,7 +54,6 @@ const PROFILE_SELECT = `
     cp.[language],
     cp.bio,
     cp.loyalty_points,
-    cp.membership_tier,
     cp.preferences
   FROM dbo.UserAccounts ua
   LEFT JOIN dbo.Roles r ON ua.role_id = r.role_id
@@ -241,13 +240,12 @@ router.post("/register", async (req, res) => {
     await pool.query(
       `INSERT INTO dbo.CustomerProfiles
         (user_id, username, date_of_birth, gender, country, [language], bio,
-         loyalty_points, membership_tier, preferences, created_at, updated_at)
-       VALUES (?, ?, ?, NULL, NULL, NULL, NULL, 0, ?, ?, SYSDATETIME(), SYSDATETIME())`,
+         loyalty_points, preferences, created_at, updated_at)
+       VALUES (?, ?, ?, NULL, NULL, NULL, NULL, 0, ?, SYSDATETIME(), SYSDATETIME())`,
       [
         userId,
         normalized.username,
         normalized.dateOfBirth,
-        membership.membership_tier,
         serializePreferences([]),
       ]
     );
@@ -409,9 +407,9 @@ async function upsertGoogleUser(googleProfile, { requireOtp = false } = {}) {
 
   await pool.query(
     `INSERT INTO dbo.CustomerProfiles
-      (user_id, username, loyalty_points, membership_tier, preferences, created_at, updated_at)
-     VALUES (?, ?, 0, ?, ?, SYSDATETIME(), SYSDATETIME())`,
-    [userId, getEmailPrefix(googleProfile.email), membership.membership_tier, serializePreferences([])]
+      (user_id, username, loyalty_points, preferences, created_at, updated_at)
+     VALUES (?, ?, 0, ?, SYSDATETIME(), SYSDATETIME())`,
+    [userId, getEmailPrefix(googleProfile.email), serializePreferences([])]
   );
 
   return fetchProfileByEmail(googleProfile.email);
@@ -419,6 +417,10 @@ async function upsertGoogleUser(googleProfile, { requireOtp = false } = {}) {
 
 router.post("/auth/google", async (req, res) => {
   try {
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      console.warn("WARNING: GOOGLE_CLIENT_ID is not defined in environment variables");
+    }
+
     const { accessToken, credential } = req.body;
     const googleProfile = credential
       ? await verifyGoogleIdToken(credential)
@@ -466,8 +468,8 @@ router.post("/auth/google", async (req, res) => {
     );
     return res.json({ message: "Login successful.", token, user: profile });
   } catch (error) {
-    console.error("Google login failed:", error);
-    return res.status(500).json({ message: error.message || "Google login failed." });
+    console.error("Google Auth Crash:", error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 

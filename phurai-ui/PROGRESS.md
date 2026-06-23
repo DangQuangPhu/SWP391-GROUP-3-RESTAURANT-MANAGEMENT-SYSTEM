@@ -1,34 +1,45 @@
-# BMAD Progress Log
+# PROGRESS.md
 
-## In Progress
-- **Feature 1: Pre-order to KDS Integration** (Security Audited)
-- **Feature 2: Real-time Dashboard Sync (Socket.IO Broadcast)** (Security Audited)
+## 🚀 [BMAD] Smart Reservation Time UX & Auto-Duration 🚀
 
-## Completed
-- **[DONE] Feature 3: Live API Sync, Role-Based FSM Tabs & AuditLog Timeline** (Security Audited)
-  - UI is now fully decoupled from static mock data.
-  - Strictly uses the `@/` path alias globally (resolved 38-file relative import bugs).
-  - Deeply integrated with live `dbo.Reservations` and `dbo.AuditLogs` for full FSM state tracking.
-  - Implemented 5 unified English tabs (Pending, Upcoming, In Progress, Completed, Cancelled/Rejected) in Staff and Manager dashboards.
-  - Disabled Cancel/Reject for Staff roles (only No Show or Reject Check-in is available when checking in).
-  - Implemented AuditLogs timeline with proper role coalescing and JSON parsing for both manager and staff views.
-  - **[Security Audit Passed]** Fixed SQL Injection in cancel reasons, restricted staff routes from Reject/Cancel actions, prevented PII leaks on Timeline.
-- **[COMPLETED & DEPLOYED] Epic: Smart Checkout Engine (SePay Webhook & FSM)**
-  - Fully decoupled Promotion API from Reservation components.
-  - Implemented Apple Wallet styled UI for Receipts.
-- **[COMPLETED & DEPLOYED] Epic: Dine-in QR (Table QR Code Generation & Validation)**
-  - UUID generation using `crypto.randomUUID()` for `static_qr_code` with collision retry loops.
-  - Integrated `qrcode.react` into Manager Table UI for QR code rendering and downloading.
-  - Exposed `GET /api/customer/qr-sessions/scan/:qr_code` public scan endpoint with ghost-order prevention guardrails (ensures table is Occupied and resolves merged tables dynamically).
-- **[COMPLETED & DEPLOYED] Epic: Dine-in QR (Option 2: Pending Approval Flow)**
-  - Updated `System_Restaurant.sql` `QROrderSessions` CHECK constraint to allow `N'Pending'`.
-  - Updated Scan API to insert `Pending` session if table is `Available`, and emit `NEW_QR_REQUEST` Socket.IO event.
-  - Added Staff UI `StaffNotificationListener` globally rendering pending requests as toast-like modals with `Approve` button.
-  - Created `PATCH /api/staff/qr-sessions/:id/approve` (shared for manager/staff) to update session to `Active`, Table to `Occupied`, and broadcast `SESSION_APPROVED`.
-  - Added Customer UI `QrScanPage` with waiting screen tracking `Pending` status and `SESSION_APPROVED` socket hook to redirect to `/menus`.
-  - **Milestone Log:** Global Socket.IO Approval Shell & Customer Waiting Screen synchronized perfectly.
-- **[COMPLETED & DEPLOYED] Epic: Dine-in QR (Bypass Auth for Active QR Guests & Real-time Order Appending)**
-  - Created dedicated `POST /api/public/qr-order/submit` public endpoint for QR Guest Accounts.
-  - Implemented secure Tab Appending SQL Transaction tracking `dbo.Orders` vs `dbo.OrderItems` dynamically natively tracking first round vs subsequent rounds.
-  - Hooked `NEW_DINEIN_ORDER` into `StaffNotificationListener.jsx` to broadcast real-time dish requests directly to the floor staff.
-  - Updated `MenuCartDrawer.jsx` to dynamically switch between Takeout Checkout and Dine-in "Send Order to Kitchen".
+**Status:** DONE
+**Module:** Reservation UX & Validation Layer
+**Methodology:** ECC-VAL (Error-Control & Context - Validation) & ECC-ARCH
+
+### 1. Context & Mission
+Refining the reservation time selection UX by replacing static duration selections with a flexible dining duration logic. The dining duration is fixed at **90 minutes** (1h30m). The Expected End Time is calculated as `Expected End Time = Start Time + 90 minutes + table_hold_min` (grace period). The explicit End Time and Duration selectors are hidden from the customer form, and replaced with a friendly policy notification showing the dining limit and hold duration.
+
+### 2. Implementation & Exact File Paths
+
+**File 1: `src/features/reservations/components/ReservationDetails.jsx`**
+- Hides the End Time input field and the Duration dropdown.
+- Renders a notice banner showing the dining duration and hold limit.
+- Recalculates expected end time when the start time changes.
+- Validates that the start time plus full window does not exceed midnight.
+
+**File 2: `src/features/reservations/pages/ReservationPage.jsx`**
+- Passes the database-derived `table_hold_min` value to `ReservationDetails` prop.
+- Queries availability for the entire reservation window (`90 + table_hold_min`) to prevent overlapping bookings.
+- Maps form fields appropriately on transition to the summary step.
+
+**File 3: `server/middleware/validateReservation.js`**
+- Adjusts `validateReservationCreate` and `validateReservationUpdate` checks to support reservations up to `90 + body.durationMinutes`.
+- Triggers extra fee surcharge logic dynamically if the grace period exceeds 30 minutes.
+
+
+## 🚀 [BMAD] Fix FSM: Reservation Check-in vs Table Status 🚀
+
+**Status:** TESTING
+**Module:** Staff Portal / FSM Seating Flow
+**Methodology:** ECC-STATE & ECC-ARCH
+
+### 1. Context & Mission
+Currently, clicking check-in on a reserved table in the floor map bypasses the customer's reservation details and throws a 409 conflict because table check-in operates on reservations rather than physical tables. The mission is to intercept this action, display customer details first, update the FSM transition paths, and run an atomic SQL transaction to seat the guest, link their active QR session, and process preorders to the KDS queue.
+
+### 2. Proposed File Paths & Scope
+- `server/db.js`: Enable startup database migration patch to update constraints.
+- `server/controllers/staffController.js`: Include `active_reservation_id` and customer name in `/api/staff/tables` endpoint.
+- `server/controllers/staffReservationController.js`: Enhance reservation check-in with table updates, QR session creation, preorder KDS queuing, and check-in emails.
+- `server/routes/staff.js`: Add check-in route aliases to support both hyphenated and non-hyphenated API endpoints.
+- `src/features/staff-dashboard/services/staffApi.js`: Add single reservation detail fetcher.
+- `src/features/staff-dashboard/components/StaffTableTab.jsx`: Intercept check-in on reserved tables, redirecting to the customer verification and seating confirmation modal.

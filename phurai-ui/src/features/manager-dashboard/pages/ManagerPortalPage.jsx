@@ -348,8 +348,7 @@ function ManagerPortalPage({
         // still display the full special_request text.
         notes: rawSpecial,
         // Ensure both aliases for guest count are present.
-        guest_count: payload.guest_count ?? payload.party_size,
-        party_size: payload.party_size ?? payload.guest_count,
+        guest_count: payload.guest_count,
         // Canonical phone and email fields.
         customer_phone: payload.customer_phone || payload.phone || null,
         email: payload.customer_email || payload.email || null,
@@ -361,7 +360,7 @@ function ManagerPortalPage({
       };
 
       toast(
-        `🔔 New Reservation: ${normalizedReservation.customer_name} booked for ${normalizedReservation.party_size} guests at ${normalizedReservation.start_time} on ${normalizedReservation.reservation_date}`,
+        `🔔 New Reservation: ${normalizedReservation.customer_name} booked for ${normalizedReservation.guest_count} guests at ${normalizedReservation.start_time} on ${normalizedReservation.reservation_date}`,
         "info"
       );
       setList("reservations")((prev) => [normalizedReservation, ...prev]);

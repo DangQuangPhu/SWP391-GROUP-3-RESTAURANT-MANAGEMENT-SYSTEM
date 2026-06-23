@@ -1,3 +1,5 @@
+import React, { useState, useEffect } from "react";
+
 function formatDate(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -23,6 +25,19 @@ function formatTime(iso) {
  * Rule: max-width 680px, font-size text-sm, no vertical stacking.
  */
 function ReservationSuccessPanel({ reservation, onReturnHome, onViewReservation }) {
+  const [countdown, setCountdown] = useState(5);
+
+  useEffect(() => {
+    if (countdown <= 0) {
+      onReturnHome();
+      return;
+    }
+    const timer = setTimeout(() => {
+      setCountdown(prev => prev - 1);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [countdown, onReturnHome]);
+
   if (!reservation) return null;
 
   const tables = reservation.tables || [];
@@ -46,197 +61,103 @@ function ReservationSuccessPanel({ reservation, onReturnHome, onViewReservation 
         Thank you for choosing Phūrai. Your table is reserved — a confirmation email will be sent to you shortly.
       </p>
 
-      {/* ── Receipt card ── */}
-      <div
-        className="rzv-success__card"
-        style={{ padding: "16px 20px", textAlign: "left" }}
-      >
-        {/* Header row: reference ID + request time */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            paddingBottom: "12px",
-            borderBottom: "1px solid var(--border-color)",
-            marginBottom: "14px",
-          }}
-        >
-          <div>
-            <span
-              style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--sfx-muted)" }}
-            >
-              Booking Reference
-            </span>
-            <div
-              className="sfx-mono"
-              style={{ fontWeight: 700, fontSize: "1.15rem", color: "var(--sfx-gold)" }}
-            >
-              #{String(reservation.reservation_id).padStart(6, "0")}
-            </div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <span
-              style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--sfx-muted)" }}
-            >
-              Confirmed
-            </span>
-            <div className="sfx-mono" style={{ fontSize: "13px" }}>
-              {reservation.created_at
-                ? new Date(reservation.created_at).toLocaleString("vi-VN", {
-                    day: "2-digit", month: "2-digit", year: "numeric",
-                    hour: "2-digit", minute: "2-digit",
-                  })
-                : new Date().toLocaleString("vi-VN", {
-                    day: "2-digit", month: "2-digit", year: "numeric",
-                    hour: "2-digit", minute: "2-digit",
-                  })}
-            </div>
-          </div>
-        </div>
-
-        {/* ── 2-column grid ── */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "12px 24px",
-            fontSize: "13px",
-          }}
-        >
-          {/* ── Left column: Customer Profile ── */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <span
-              style={{
-                fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.07em",
-                color: "var(--sfx-muted)", fontWeight: 600, marginBottom: "2px",
-              }}
-            >
-              Customer Profile
-            </span>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-              <Row label="Name" value={reservation.customer_name || reservation.guest_name || "—"} />
-              <Row
-                label="Phone"
-                value={reservation.customer_phone || reservation.guest_phone || "—"}
-                mono
-              />
-              <Row
-                label="Email"
-                value={reservation.customer_email || reservation.guest_email || "—"}
-              />
-            </div>
-
-            {/* Voucher — sits under customer info */}
-            {reservation.voucher_code && (
-              <div style={{ marginTop: "6px", paddingTop: "6px", borderTop: "1px dashed var(--border-color)" }}>
-                <Row label="Voucher" value={reservation.voucher_code} accent />
-              </div>
-            )}
-          </div>
-
-          {/* ── Right column: Booking Details ── */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <span
-              style={{
-                fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.07em",
-                color: "var(--sfx-muted)", fontWeight: 600, marginBottom: "2px",
-              }}
-            >
-              Booking Details
-            </span>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-              <Row label="Date" value={formatDate(start)} />
-              <Row
-                label="Time"
-                value={`${formatTime(start)}${end ? ` → ${formatTime(end)}` : ""}`}
-                mono
-              />
-              <Row label="Guests" value={reservation.guest_count ? `${reservation.guest_count} pax` : "—"} />
-              <Row
-                label="Area"
-                value={reservation.area_name || reservation.preferred_area || "—"}
-              />
-              <Row
-                label="Table(s)"
-                value={
-                  tables.length > 0
-                    ? tables.map((t) => t.display_label || t.table_number).join(", ")
-                    : "Assigned"
-                }
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Pre-orders — full width below the grid */}
-        {reservation.preorderItems && reservation.preorderItems.length > 0 && (
-          <div
-            style={{
-              marginTop: "12px",
-              paddingTop: "12px",
-              borderTop: "1px solid var(--border-color)",
-              fontSize: "13px",
-            }}
-          >
-            <span
-              style={{
-                fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.07em",
-                color: "var(--sfx-muted)", fontWeight: 600, display: "block", marginBottom: "6px",
-              }}
-            >
-              Pre-ordered Items
-            </span>
-            <ul style={{ margin: 0, paddingLeft: "18px", lineHeight: 1.7 }}>
-              {reservation.preorderItems.map((item, idx) => (
-                <li key={idx}>
-                  {item.dish_name || `Dish #${item.dish_id}`}{" "}
-                  <strong>× {item.quantity || item.qty}</strong>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Special requests — full width */}
-        {reservation.special_request && (
-          <div
-            style={{
-              marginTop: "10px",
-              paddingTop: "10px",
-              borderTop: "1px solid var(--border-color)",
-              fontSize: "13px",
-            }}
-          >
-            <span
-              style={{
-                fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.07em",
-                color: "var(--sfx-muted)", fontWeight: 600, display: "block", marginBottom: "4px",
-              }}
-            >
-              Special Notes
-            </span>
-            <p
-              style={{
-                margin: 0, padding: "8px 10px",
-                background: "var(--bg-card-alt, #f5f5f5)",
-                borderRadius: "6px", lineHeight: 1.6,
-              }}
-            >
-              {reservation.special_request}
-            </p>
-          </div>
-        )}
+      {/* Elegant auto-redirect countdown badge */}
+      <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#f8fafc", padding: "6px 14px", borderRadius: "999px", border: "1px solid #e2e8f0", marginBottom: "20px" }}>
+        <span className="pulse-dot" style={{ 
+          width: "8px", 
+          height: "8px", 
+          borderRadius: "50%", 
+          background: "var(--rzv-gold, #b89467)", 
+          display: "inline-block"
+        }} />
+        <span style={{ fontSize: "0.8rem", fontWeight: 500, color: "#64748b" }}>
+          Redirecting to home page in <strong style={{ color: "#111" }}>{countdown}s</strong>
+        </span>
       </div>
 
-      <div className="rzv-success__actions">
-        <button type="button" className="rzv-btn rzv-btn--ghost" onClick={onReturnHome}>
-          Return Home
+
+
+      <style>{`
+        .rzv-success-btn-container {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 16px;
+          margin-top: 2.5rem;
+          width: 100%;
+          flex-wrap: wrap;
+        }
+        .rzv-btn-premium {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 14px 32px;
+          font-size: 0.95rem;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+          border-radius: 999px;
+          cursor: pointer;
+          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+          min-width: 220px;
+          text-transform: uppercase;
+        }
+        .rzv-btn-premium-outline {
+          background: transparent;
+          border: 2px solid #111;
+          color: #111;
+        }
+        .rzv-btn-premium-outline:hover {
+          background: #111;
+          color: #fff;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .rzv-btn-premium-solid {
+          background: var(--rzv-gold, #b89467);
+          border: 2px solid var(--rzv-gold, #b89467);
+          color: #fff;
+          box-shadow: 0 4px 14px rgba(184, 148, 103, 0.3);
+        }
+        .rzv-btn-premium-solid:hover {
+          background: #a38056;
+          border-color: #a38056;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(184, 148, 103, 0.4);
+        }
+        .pulse-dot {
+          animation: pulse-ring 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+        }
+        @keyframes pulse-ring {
+          0% {
+            transform: scale(0.8);
+            box-shadow: 0 0 0 0 rgba(184, 148, 103, 0.7);
+          }
+          70% {
+            transform: scale(1.1);
+            box-shadow: 0 0 0 6px rgba(184, 148, 103, 0);
+          }
+          100% {
+            transform: scale(0.8);
+            box-shadow: 0 0 0 0 rgba(184, 148, 103, 0);
+          }
+        }
+        @media (max-width: 640px) {
+          .rzv-success-btn-container {
+            flex-direction: column;
+            gap: 12px;
+          }
+          .rzv-btn-premium {
+            width: 100%;
+          }
+        }
+      `}</style>
+
+      <div className="rzv-success-btn-container">
+        <button type="button" className="rzv-btn-premium rzv-btn-premium-outline" onClick={onReturnHome}>
+          Back to Home
         </button>
-        <button type="button" className="rzv-btn rzv-btn--solid" onClick={onViewReservation}>
-          View Reservation
+        <button type="button" className="rzv-btn-premium rzv-btn-premium-solid" onClick={onViewReservation}>
+          Check your reservation
         </button>
       </div>
     </div>

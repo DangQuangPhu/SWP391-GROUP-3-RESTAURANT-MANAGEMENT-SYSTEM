@@ -34,6 +34,7 @@ DROP TABLE IF EXISTS dbo.OrderItems;
 DROP TABLE IF EXISTS dbo.Orders;
 DROP TABLE IF EXISTS dbo.QROrderSessions;
 DROP TABLE IF EXISTS dbo.PreorderItems;
+DROP TABLE IF EXISTS dbo.ReservationTimelines;
 DROP TABLE IF EXISTS dbo.ReservationTables;
 DROP TABLE IF EXISTS dbo.Reservations;
 DROP TABLE IF EXISTS dbo.DishImages;
@@ -116,7 +117,6 @@ CREATE TABLE dbo.CustomerProfiles (
     [language]        NVARCHAR(80) NULL,
     bio               NVARCHAR(1000) NULL,
     loyalty_points    INT NOT NULL CONSTRAINT DF_CustomerProfiles_loyalty DEFAULT 0,
-    membership_tier   NVARCHAR(20) NOT NULL CONSTRAINT DF_CustomerProfiles_tier DEFAULT N'Bronze',
     preferences       NVARCHAR(1000) NULL,
     created_at        DATETIME2(0) NOT NULL CONSTRAINT DF_CustomerProfiles_created_at DEFAULT SYSDATETIME(),
     updated_at        DATETIME2(0) NOT NULL CONSTRAINT DF_CustomerProfiles_updated_at DEFAULT SYSDATETIME(),
@@ -125,7 +125,6 @@ CREATE TABLE dbo.CustomerProfiles (
     CONSTRAINT UQ_CustomerProfiles_username UNIQUE (username),
     CONSTRAINT FK_CustomerProfiles_UserAccounts FOREIGN KEY (user_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE CASCADE,
     CONSTRAINT CK_CustomerProfiles_loyalty CHECK (loyalty_points >= 0),
-    CONSTRAINT CK_CustomerProfiles_tier CHECK (membership_tier IN (N'Bronze', N'Silver', N'Gold', N'Diamond')),
     CONSTRAINT CK_CustomerProfiles_gender CHECK (gender IS NULL OR gender IN (N'Male', N'Female', N'Other'))
 );
 GO
@@ -344,15 +343,10 @@ CREATE TABLE dbo.Reservations (
     CONSTRAINT FK_Reservations_ResolvedBy FOREIGN KEY (resolved_by) REFERENCES dbo.UserAccounts(user_id),
     CONSTRAINT CK_Reservations_guest_count CHECK (guest_count > 0),
     CONSTRAINT CK_Reservations_time CHECK (reservation_end_at > reservation_start_at),
-    -- ==============================================================================
-    -- 📌 ĐÃ VÁ LỖI TẠI ĐÂY: Mở rộng Rào chắn (Check Constraint) đón toàn bộ dữ liệu mẫu
-    -- ==============================================================================
     CONSTRAINT CK_Reservations_status CHECK (reservation_status IN (
-        N'Pending Request', N'Pending Payment', N'Reserved', N'Confirmed', 
-        N'Cancelled', N'Completed', N'No Show', N'Seated', N'Cleaning', 
-        N'Check-out', N'Reject Check-in', N'Reject Request', N'Reject Check-out', 
-        N'Paid', N'PaymentFailed', N'Pending', 
-        N'Await Check-in', N'Check-in', N'Complete Paid', N'Overdue'
+        N'Pending Request', N'Awaiting Deposit', N'Confirmed', 
+        N'Check-in', N'Seated', N'Payment Pending', 
+        N'Completed', N'Cancelled', N'No Show'
     )),
     CONSTRAINT CK_Reservations_source CHECK (reservation_source IN (N'Online', N'Walk-in', N'Phone')),
     CONSTRAINT CK_Reservations_RequestType CHECK (request_type IN (N'edit', N'cancel') OR request_type IS NULL)
@@ -368,6 +362,19 @@ CREATE TABLE dbo.ReservationTables (
     CONSTRAINT FK_ReservationTables_Reservations FOREIGN KEY (reservation_id) REFERENCES dbo.Reservations(reservation_id) ON DELETE CASCADE,
     CONSTRAINT FK_ReservationTables_RestaurantTables FOREIGN KEY (table_id) REFERENCES dbo.RestaurantTables(table_id) ON DELETE CASCADE,
     CONSTRAINT FK_ReservationTables_AssignedBy FOREIGN KEY (assigned_by_staff_id) REFERENCES dbo.UserAccounts(user_id)
+);
+GO
+
+CREATE TABLE dbo.ReservationTimelines (
+    timeline_id    INT IDENTITY(1,1) NOT NULL,
+    reservation_id INT NOT NULL,
+    event_type     NVARCHAR(50) NOT NULL, -- e.g. 'PAYMENT_FAILED', 'REJECT_CHECKOUT', 'CHECKIN_INITIATED'
+    performed_by   INT NULL,              -- UserAccount ID of customer or staff who did it
+    notes          NVARCHAR(1000) NULL,
+    created_at     DATETIME2(0) NOT NULL CONSTRAINT DF_ReservationTimelines_created_at DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_ReservationTimelines PRIMARY KEY (timeline_id),
+    CONSTRAINT FK_ReservationTimelines_Reservations FOREIGN KEY (reservation_id) REFERENCES dbo.Reservations(reservation_id) ON DELETE CASCADE,
+    CONSTRAINT FK_ReservationTimelines_UserAccounts FOREIGN KEY (performed_by) REFERENCES dbo.UserAccounts(user_id)
 );
 GO
 
@@ -766,15 +773,15 @@ GO
 
 SET IDENTITY_INSERT dbo.CustomerProfiles ON;
 INSERT INTO dbo.CustomerProfiles
-(customer_id, user_id, username, date_of_birth, gender, country, [language], bio, loyalty_points, membership_tier, preferences)
+(customer_id, user_id, username, date_of_birth, gender, country, [language], bio, loyalty_points, preferences)
 VALUES
-(1, 7,  N'minhkhoa',  '2003-02-10', N'Male',   N'Vietnam', N'Vietnamese', N'Likes salmon and quiet seating.', 150,  N'Bronze', N'["Salmon","Quiet seating","Window seat"]'),
-(2, 8,  N'thuhuong',  '2002-09-05', N'Female', N'Vietnam', N'English', N'Prefers VIP area and elegant dining experience.', 520,  N'Silver', N'["VIP area","Desserts","Light spicy"]'),
-(3, 9,  N'baonguyen', '2004-01-20', N'Male',   N'Vietnam', N'Vietnamese', N'Prefers simple food and no spicy dishes.', 80,   N'Bronze', N'["No spicy food","Main dining","Orange juice"]'),
-(4, 10, N'lananh',    '2001-12-15', N'Female', N'Vietnam', N'English', N'Usually books private rooms for business dinners.', 980,  N'Gold', N'["Private room","Business dinner","Chef recommendation"]'),
-(5, 11, N'annguyen',  '2004-01-12', N'Male',   N'Vietnam', N'Vietnamese', N'Enjoys casual dining and signature dishes.', 120,  N'Bronze', N'["Window seat","Mild spicy","Salmon sushi"]'),
-(6, 12, N'linhtran',  '2003-08-21', N'Female', N'Vietnam', N'English', N'Prefers elegant seating and light desserts.', 620,  N'Silver', N'["VIP area","Desserts","No seafood allergy"]'),
-(7, 13, N'baokhanh',  '2001-12-05', N'Other',  N'Vietnam', N'Vietnamese', N'Diamond member who often books private rooms.', 1800, N'Diamond', N'["Private room","Chef recommendation","Premium wine pairing"]');
+(1, 7,  N'minhkhoa',  '2003-02-10', N'Male',   N'Vietnam', N'Vietnamese', N'Likes salmon and quiet seating.', 150,  N'["Salmon","Quiet seating","Window seat"]'),
+(2, 8,  N'thuhuong',  '2002-09-05', N'Female', N'Vietnam', N'English', N'Prefers VIP area and elegant dining experience.', 520,  N'["VIP area","Desserts","Light spicy"]'),
+(3, 9,  N'baonguyen', '2004-01-20', N'Male',   N'Vietnam', N'Vietnamese', N'Prefers simple food and no spicy dishes.', 80,   N'["No spicy food","Main dining","Orange juice"]'),
+(4, 10, N'lananh',    '2001-12-15', N'Female', N'Vietnam', N'English', N'Usually books private rooms for business dinners.', 980,  N'["Private room","Business dinner","Chef recommendation"]'),
+(5, 11, N'annguyen',  '2004-01-12', N'Male',   N'Vietnam', N'Vietnamese', N'Enjoys casual dining and signature dishes.', 120,  N'["Window seat","Mild spicy","Salmon sushi"]'),
+(6, 12, N'linhtran',  '2003-08-21', N'Female', N'Vietnam', N'English', N'Prefers elegant seating and light desserts.', 620,  N'["VIP area","Desserts","No seafood allergy"]'),
+(7, 13, N'baokhanh',  '2001-12-05', N'Other',  N'Vietnam', N'Vietnamese', N'Guest who often books private rooms.', 1800, N'["Private room","Chef recommendation","Premium wine pairing"]');
 SET IDENTITY_INSERT dbo.CustomerProfiles OFF;
 GO
 
@@ -831,36 +838,52 @@ SET IDENTITY_INSERT dbo.RestaurantTables ON;
 INSERT INTO dbo.RestaurantTables
 (table_id, area_id, table_number, capacity, table_status, static_qr_code, is_counter)
 VALUES
-(1,  1, N'W-01',   2, N'Available', N'qr-w-01', 0),
-(2,  1, N'W-02',   2, N'Available', N'qr-w-02', 0),
-(3,  1, N'W-03',   4, N'Reserved',  N'qr-w-03', 0),
-(4,  1, N'W-04',   4, N'Occupied',  N'qr-w-04', 0),
-(5,  1, N'W-05',   2, N'Available', N'qr-w-05', 0),
-(6,  2, N'S-01',   2, N'Available', N'qr-s-01', 0),
-(7,  2, N'S-02',   2, N'Available', N'qr-s-02', 0),
-(8,  2, N'S-03',   4, N'Available', N'qr-s-03', 0),
-(9,  2, N'S-04',   4, N'Occupied',  N'qr-s-04', 0),
-(10, 2, N'S-05',   6, N'Reserved',  N'qr-s-05', 0),
-(11, 2, N'S-06',   6, N'Cleaning',  N'qr-s-06', 0),
-(12, 2, N'S-07',   4, N'Available', N'qr-s-07', 0),
-(13, 2, N'S-08',   6, N'Reserved',  N'qr-s-08', 0),
-(14, 3, N'PRE-01', 2, N'Available', N'qr-pre-01', 0),
-(15, 3, N'PRE-02', 4, N'Available', N'qr-pre-02', 0),
-(16, 3, N'PRE-03', 6, N'Reserved',  N'qr-pre-03', 0),
-(17, 3, N'PRE-04', 4, N'Available', N'qr-pre-04', 0),
-(18, 4, N'VIP-01', 4, N'Available', N'qr-vip-01', 0),
-(19, 4, N'VIP-02', 6, N'Occupied',  N'qr-vip-02', 0),
-(20, 4, N'VIP-03', 8, N'Available', N'qr-vip-03', 0),
-(21, 5, N'PR-01', 10, N'Available', N'qr-pr-01', 0),
-(22, 5, N'PR-02',  8, N'Occupied',  N'qr-pr-02', 0),
-(23, 6, N'K-01',   1, N'Available', N'qr-k-01', 1),
-(24, 6, N'K-02',   2, N'Cleaning',  N'qr-k-02', 1),
-(25, 6, N'K-03',   1, N'Available', N'qr-k-03', 1),
-(26, 7, N'R-01',   4, N'Available', N'qr-r-01', 0),
-(27, 7, N'R-02',   6, N'Reserved',  N'qr-r-02', 0),
-(28, 7, N'R-03',   4, N'Cleaning',  N'qr-r-03', 0);
+-- Area 1: Window Area (Cửa sổ: 2, 4, 6, 8 ghế)
+(1,  1, N'WIN-A', 2, N'Available', N'qr-win-a', 0),
+(2,  1, N'WIN-B', 4, N'Available', N'qr-win-b', 0),
+(3,  1, N'WIN-C', 6, N'Available', N'qr-win-c', 0),
+(4,  1, N'WIN-D', 8, N'Available', N'qr-win-d', 0),
+
+-- Area 4: VIP Lounge (Phòng VIP: 3 phòng x 6 ghế)
+(5,  4, N'VIP-1', 6, N'Available', N'qr-vip-1', 0),
+(6,  4, N'VIP-2', 6, N'Occupied',  N'qr-vip-2', 0), -- Khớp UI: Đang có khách
+(7,  4, N'VIP-3', 6, N'Available', N'qr-vip-3', 0),
+
+-- Area 2: Standard Dining Area (Sảnh thường: 12 bàn x 4 ghế)
+(8,  2, N'S-01',  4, N'Available', N'qr-s-01', 0),
+(9,  2, N'S-02',  4, N'Available', N'qr-s-02', 0),
+(10, 2, N'S-03',  4, N'Occupied',  N'qr-s-03', 0), -- Khớp UI: Đang có khách
+(11, 2, N'S-04',  4, N'Available', N'qr-s-04', 0),
+(12, 2, N'S-05',  4, N'Available', N'qr-s-05', 0),
+(13, 2, N'S-06',  4, N'Available', N'qr-s-06', 0),
+(14, 2, N'S-07',  4, N'Occupied',  N'qr-s-07', 0), -- Khớp UI: Đang có khách
+(15, 2, N'S-08',  4, N'Available', N'qr-s-08', 0),
+(16, 2, N'S-09',  4, N'Available', N'qr-s-09', 0),
+(17, 2, N'S-10',  4, N'Available', N'qr-s-10', 0),
+(18, 2, N'S-11',  4, N'Available', N'qr-s-11', 0),
+(19, 2, N'S-12',  4, N'Available', N'qr-s-12', 0),
+
+-- Area 3: Premium Area (Sảnh Premium: 4 bàn x 4 ghế)
+(20, 3, N'PRE-01',4, N'Available', N'qr-pre-01', 0),
+(21, 3, N'PRE-02',4, N'Available', N'qr-pre-02', 0),
+(22, 3, N'PRE-03',4, N'Available', N'qr-pre-03', 0),
+(23, 3, N'PRE-04',4, N'Available', N'qr-pre-04', 0),
+
+-- Area 5: Private Rooms (Phòng riêng: 2, 4, 6, 8 ghế)
+(24, 5, N'PR-01', 2, N'Occupied',  N'qr-pr-01', 0), -- Khớp UI: Đang có khách
+(25, 5, N'PR-02', 4, N'Available', N'qr-pr-02', 0),
+(26, 5, N'PR-03', 6, N'Available', N'qr-pr-03', 0),
+(27, 5, N'PR-04', 8, N'Available', N'qr-pr-04', 0),
+
+-- Area 6: Kitchen View Area (Khu sát bếp: 4 bàn x 4 ghế)
+(28, 6, N'K-01',  4, N'Available', N'qr-k-01', 1),
+(29, 6, N'K-02',  4, N'Available', N'qr-k-02', 1),
+(30, 6, N'K-03',  4, N'Available', N'qr-k-03', 1),
+(31, 6, N'K-04',  4, N'Available', N'qr-k-04', 1);
 SET IDENTITY_INSERT dbo.RestaurantTables OFF;
 GO
+
+
 
 SET IDENTITY_INSERT dbo.MenuCategories ON;
 INSERT INTO dbo.MenuCategories (category_id, category_name, display_order) VALUES
@@ -932,24 +955,24 @@ INSERT INTO dbo.Reservations
 (reservation_id, customer_id, created_by_staff_id, preferred_area_id, reservation_start_at, reservation_end_at,
  guest_count, special_request, reservation_status, reservation_source, confirmed_by_staff_id, confirmed_at, checked_in_at)
 VALUES
-(1,  7, NULL, 1, '2026-05-20T18:30:00', '2026-05-20T20:30:00', 2, N'Window seat if possible', N'Await Check-in',  N'Online',  3, '2026-05-18T09:15:00', NULL),
-(2,  8, NULL, 4, '2026-05-20T19:00:00', '2026-05-20T21:00:00', 4, N'VIP area requested',       N'Await Check-in',  N'Online',  3, '2026-05-18T10:00:00', NULL),
+(1,  7, NULL, 1, '2026-05-20T18:30:00', '2026-05-20T20:30:00', 2, N'Window seat if possible', N'Confirmed',  N'Online',  3, '2026-05-18T09:15:00', NULL),
+(2,  8, NULL, 4, '2026-05-20T19:00:00', '2026-05-20T21:00:00', 4, N'VIP area requested',       N'Confirmed',  N'Online',  3, '2026-05-18T10:00:00', NULL),
 (3,  9, NULL, 2, '2026-05-21T12:00:00', '2026-05-21T14:00:00', 3, NULL,                        N'Pending Request',     N'Online',  NULL, NULL, NULL),
-(4, 10, NULL, 5, '2026-05-21T20:00:00', '2026-05-21T22:00:00', 6, N'Business dinner',          N'Await Check-in',  N'Online',  4, '2026-05-19T08:00:00', NULL),
+(4, 10, NULL, 5, '2026-05-21T20:00:00', '2026-05-21T22:00:00', 6, N'Business dinner',          N'Confirmed',  N'Online',  4, '2026-05-19T08:00:00', NULL),
 (5, NULL,3,    2, '2026-05-18T18:00:00', '2026-05-18T20:00:00', 2, N'Walk-in guest',            N'Check-in', N'Walk-in', 3, '2026-05-18T17:55:00', '2026-05-18T18:00:00'),
-(6,  7, NULL, 2, '2026-04-10T19:00:00', '2026-04-10T21:00:00', 2, NULL,                        N'Complete Paid',  N'Online',  3, '2026-04-08T10:00:00', '2026-04-10T18:55:00'),
-(7,  8, NULL, 4, '2026-04-15T20:00:00', '2026-04-15T22:00:00', 4, N'VIP birthday dinner',      N'Complete Paid',  N'Online',  4, '2026-04-13T09:30:00', '2026-04-15T19:55:00'),
+(6,  7, NULL, 2, '2026-04-10T19:00:00', '2026-04-10T21:00:00', 2, NULL,                        N'Completed',  N'Online',  3, '2026-04-08T10:00:00', '2026-04-10T18:55:00'),
+(7,  8, NULL, 4, '2026-04-15T20:00:00', '2026-04-15T22:00:00', 4, N'VIP birthday dinner',      N'Completed',  N'Online',  4, '2026-04-13T09:30:00', '2026-04-15T19:55:00'),
 (8, 10, NULL, 1, '2026-06-25T19:00:00', '2026-06-25T21:00:00', 3, N'Customer requested date change', N'Pending Request', N'Online', 3, '2026-06-18T10:00:00', NULL);
 SET IDENTITY_INSERT dbo.Reservations OFF;
 GO
 
 INSERT INTO dbo.ReservationTables (reservation_id, table_id, assigned_by_staff_id) VALUES
-(1, 1, 3),    
-(2, 18, 3),   
-(4, 21, 4),   
-(5, 6, 3),    
-(6, 7, 3),    
-(7, 18, 4);   
+(1, 1, 3),   -- Res 1 gán vào WIN-A (ID 1)
+(2, 5, 3),   -- Res 2 gán vào VIP-1 (ID 5)
+(4, 24, 4),  -- Res 4 gán vào PR-01 (ID 24 - Đang có khách)
+(5, 10, 3),  -- Res 5 gán vào S-03 (ID 10 - Đang có khách)
+(6, 14, 3),  -- Res 6 gán vào S-07 (ID 14 - Đang có khách)
+(7, 6, 4);   -- Res 7 gán vào VIP-2 (ID 6 - Đang có khách)
 GO
 
 SET IDENTITY_INSERT dbo.PreorderItems ON;
@@ -966,8 +989,8 @@ SET IDENTITY_INSERT dbo.QROrderSessions ON;
 INSERT INTO dbo.QROrderSessions
 (qr_session_id, table_id, reservation_id, customer_id, token, session_status, generated_by_staff_id, generated_at, expires_at)
 VALUES
-(1, 3, NULL, NULL, N'qr-session-t03-20260518-1900', N'Active', 3, '2026-05-18T19:00:00', '2026-05-18T22:00:00'),
-(2, 6, 2, 8,    N'qr-session-v02-20260520-1900', N'Active', 3, '2026-05-20T18:50:00', '2026-05-20T22:00:00');
+(1, 10, NULL, NULL, N'qr-session-t03-20260518-1900', N'Active', 3, '2026-05-18T19:00:00', '2026-05-18T22:00:00'), -- Khớp S-03
+(2, 6, 2, 8,    N'qr-session-v02-20260520-1900', N'Active', 3, '2026-05-20T18:50:00', '2026-05-20T22:00:00'); -- Khớp VIP-2
 SET IDENTITY_INSERT dbo.QROrderSessions OFF;
 GO
 
@@ -976,12 +999,12 @@ INSERT INTO dbo.Orders
 (order_id, reservation_id, table_id, customer_id, created_by_staff_id, qr_session_id, order_type, order_status,
  subtotal, discount_amount, service_charge, total_amount, created_at)
 VALUES
-(1, 5, 2, NULL, 3, NULL, N'Dine In',  N'Paid',              444000,     0, 22200,  466200, '2026-05-18T18:10:00'),
-(2, 6, 2, 7,    3, NULL, N'Dine In',  N'Paid',             1316000, 50000, 63300, 1329300, '2026-04-10T19:10:00'),
-(3, 7, 5, 8,    4, NULL, N'Dine In',  N'Paid',             1380000, 50000, 66500, 1396500, '2026-04-15T20:10:00'),
-(4, 1, 1, 7,    3, NULL, N'Dine In',  N'Open',              425000,     0,     0,  425000, '2026-05-20T18:40:00'),
-(5, 2, 6, 8,    3, 2,    N'Preorder', N'Sent To Kitchen', 1567000,     0, 78350, 1645350, '2026-05-20T19:00:00'),
-(6, NULL,3,NULL,NULL,1,  N'QR Self',  N'Sent To Kitchen',  336000,     0,     0,  336000, '2026-05-18T19:05:00');
+(1, 5, 10, NULL, 3, NULL, N'Dine In',  N'Paid',             444000,     0, 22200,  466200, '2026-05-18T18:10:00'), -- Khớp S-03
+(2, 6, 14, 7,    3, NULL, N'Dine In',  N'Paid',            1316000, 50000, 63300, 1329300, '2026-04-10T19:10:00'), -- Khớp S-07
+(3, 7, 6,  8,    4, NULL, N'Dine In',  N'Paid',            1380000, 50000, 66500, 1396500, '2026-04-15T20:10:00'), -- Khớp VIP-2
+(4, 1, 1,  7,    3, NULL, N'Dine In',  N'Open',             425000,     0,     0,  425000, '2026-05-20T18:40:00'), -- Khớp WIN-A
+(5, 2, 5,  8,    3, 2,    N'Preorder', N'Sent To Kitchen', 1567000,     0, 78350, 1645350, '2026-05-20T19:00:00'), -- Khớp VIP-1
+(6, NULL, 10, NULL, NULL, 1,  N'QR Self',  N'Sent To Kitchen',  336000,     0,     0,  336000, '2026-05-18T19:05:00'); -- Khớp S-03
 SET IDENTITY_INSERT dbo.Orders OFF;
 GO
 
@@ -1134,7 +1157,7 @@ SELECT otp_id, user_id, email, purpose, otp_hash, expires_at, verified_at, consu
 GO
 
 -- tiếng việt -- 4. Lấy dữ liệu bảng Hồ sơ Khách hàng (CustomerProfiles)
-SELECT customer_id, user_id, username, date_of_birth, gender, country, [language], bio, loyalty_points, membership_tier, preferences, created_at, updated_at FROM dbo.CustomerProfiles;
+SELECT customer_id, user_id, username, date_of_birth, gender, country, [language], bio, loyalty_points, preferences, created_at, updated_at FROM dbo.CustomerProfiles;
 GO
 
 -- tiếng việt -- 5. Lấy dữ liệu bảng Hồ sơ Nhân viên (StaffProfiles)
@@ -1247,4 +1270,8 @@ GO
 
 -- tiếng việt -- 32. Lấy dữ liệu bảng Lịch sử Gợi ý Món ăn (RecommendationLogs)
 SELECT recommendation_id, customer_id, dish_id, score, reason, shown_at, was_ordered FROM dbo.RecommendationLogs;
+GO
+
+-- tiếng việt -- 33. Lấy dữ liệu bảng Nhật ký Trạng thái Đặt bàn (ReservationTimelines)
+SELECT timeline_id, reservation_id, event_type, performed_by, notes, created_at FROM dbo.ReservationTimelines;
 GO

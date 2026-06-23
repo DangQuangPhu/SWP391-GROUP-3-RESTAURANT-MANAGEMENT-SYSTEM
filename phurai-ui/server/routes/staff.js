@@ -52,8 +52,26 @@ router.get("/shift-mapping", getStaffShiftMapping);
 // Shift-scoped view: only today's reservations within the staff member's scheduled shift
 router.get("/reservations/today-shift", resolveUserId, requireUserId, getTodayShiftReservations);
 router.get("/reservations/:id", resolveUserId, getStaffReservationDetail);
+router.post(
+  "/reservations/:id/check-in",
+  resolveUserId,
+  requireUserId,
+  staffCheckIn
+);
+router.post(
+  "/reservations/:id/checkin",
+  resolveUserId,
+  requireUserId,
+  staffCheckIn
+);
 router.patch(
   "/reservations/:id/check-in",
+  resolveUserId,
+  requireUserId,
+  staffCheckIn
+);
+router.patch(
+  "/reservations/:id/checkin",
   resolveUserId,
   requireUserId,
   staffCheckIn
@@ -76,7 +94,12 @@ router.post(
   requireUserId,
   sendCookingQueue
 );
-router.post("/tables/:tableId/check-in", resolveUserId, requireUserId, checkInTable);
+router.post("/tables/:tableId/check-in", (req, res) => {
+  return res.status(400).json({
+    success: false,
+    message: "Direct table check-in is deprecated. Please check in via the customer's reservation."
+  });
+});
 router.post("/tables/:tableId/reset", resolveUserId, requireUserId, resetTable);
 router.put("/tables/:tableId/mark-clean", resolveUserId, requireUserId, markTableClean);
 router.post("/tables/merge", resolveUserId, requireUserId, mergeTables);

@@ -811,18 +811,7 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
         }
       }
 
-      if (customerId) {
-        const [userRows] = await connection.query(
-          `SELECT membership_tier
-           FROM dbo.CustomerProfiles
-           WHERE user_id = ?`,
-          [customerId]
-        );
-
-        if (userRows.length > 0 && userRows[0].membership_tier) {
-          currentTier = userRows[0].membership_tier;
-        }
-      }
+      // membership_tier removed per Fine-Dining equality architecture
 
       const conflict = kitchenViewBooking
         ? null
@@ -1118,17 +1107,17 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
       const preorderItemsTotal = totalAmount || 0;
 
       // 2. Define the Base Table Deposit
-      const BASE_TABLE_DEPOSIT = 10000;
+      const BASE_TABLE_DEPOSIT = 20000;
 
       // 3. Define the exact money the customer MUST pay upfront via QR right now
-      // Total Advance Payment = Base Table Deposit + Pre-order Total
-      const totalAdvancePaymentRequired = BASE_TABLE_DEPOSIT + preorderItemsTotal;
+      // 30% deposit of food total, remaining 70% paid at checkout. Table deposit 100% upfront.
+      // NOTE: We don't have discount_amount computed here yet in this legacy route.
+      const food_total = preorderItemsTotal;
+      const food_deposit = Math.round(food_total * 0.3);
+      const deposit_amount = BASE_TABLE_DEPOSIT + food_deposit;
+      const final_total = Math.round(food_total * 0.7);
 
-      const deposit_amount = totalAdvancePaymentRequired;
-      const final_total = preorderItemsTotal;
-
-      const baseDeposit = BASE_TABLE_DEPOSIT;
-      console.log(`[AUTOMATION CHECK] Preorder: ${totalAmount} | Deposit: ${baseDeposit} | QR Target: ${deposit_amount}`);
+      console.log(`[AUTOMATION CHECK] Preorder: ${preorderItemsTotal} | Table Deposit: ${BASE_TABLE_DEPOSIT} | Food Deposit (30%): ${food_deposit} | QR Target: ${deposit_amount} | Remaining (70%): ${final_total}`);
       
       const order_code = `RES${reservationId}`;
 

@@ -31,7 +31,6 @@ export async function listReservations(req, res, next) {
          ua.phone            AS customer_phone,
          ua.email            AS customer_email,
          cp.username,
-         cp.membership_tier,
          cp.loyalty_points,
          ar.area_name,
          ar.area_type,
@@ -59,7 +58,7 @@ export async function listReservations(req, res, next) {
          r.confirmed_by_staff_id, r.confirmed_at, r.checked_in_at, r.cancelled_at,
          r.cancel_reason,
          ua.full_name, ua.phone, ua.email,
-         cp.username, cp.membership_tier, cp.loyalty_points,
+         cp.username, cp.loyalty_points,
          ar.area_name, ar.area_type,
          confirmer.full_name
        ORDER BY 
@@ -81,7 +80,7 @@ export async function getReservationDetail(req, res, next) {
       `SELECT r.*,
               COALESCE(ua.full_name, N'Walk-in Guest') AS customer_name,
               ua.phone, ua.email, ua.avatar_url,
-              cp.username, cp.membership_tier, cp.loyalty_points, cp.preferences,
+              cp.username, cp.loyalty_points, cp.preferences,
               ar.area_name, ar.area_type,
               cf.full_name AS confirmed_by_name, cf.email AS confirmed_by_email
        FROM dbo.Reservations r
@@ -225,14 +224,13 @@ export async function confirmReservation(req, res, next) {
       }
 
       const [customer] = await tx(
-        `SELECT ua.full_name, ua.phone, cp.membership_tier
+        `SELECT ua.full_name, ua.phone
          FROM dbo.UserAccounts ua
          LEFT JOIN dbo.CustomerProfiles cp ON ua.user_id = cp.user_id
          WHERE ua.user_id = @CustId`,
         { CustId: existing.customer_id || 0 }
       );
       const custName = customer?.full_name || 'Walk-in Guest';
-      const custTier = customer?.membership_tier || 'N/A';
       const arrivalStr = new Date(existing.reservation_start_at).toLocaleString('en-GB');
 
       for (const staff of shiftStaff) {
@@ -243,7 +241,7 @@ export async function confirmReservation(req, res, next) {
           body:
             `Manager confirmed Reservation #${id}. ` +
             `Customer: ${custName} (${customer?.phone || 'N/A'}). ` +
-            `Tier: ${custTier}. Arrival: ${arrivalStr}. ` +
+            `Arrival: ${arrivalStr}. ` +
             `Guests: ${existing.guest_count}. Tables: ${tableNumbers}. ` +
             `Shift: ${shift.shift_name}. ` +
             `ACTION: Verify identity on walk-in then perform check-in.`,

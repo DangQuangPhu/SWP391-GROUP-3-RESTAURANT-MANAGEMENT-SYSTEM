@@ -41,8 +41,8 @@ function buildDetailLines(item, payload = {}) {
   if (payload.start_time) {
     lines.push(`Time: ${payload.start_time}`);
   }
-  if (payload.party_size) {
-    lines.push(`Party size: ${payload.party_size}`);
+  if (payload.guest_count) {
+    lines.push(`Guests: ${payload.guest_count}`);
   }
   if (payload.dish_name) {
     lines.push(`Dish: ${payload.dish_name}`);
