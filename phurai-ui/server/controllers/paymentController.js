@@ -1,7 +1,7 @@
 import sql from 'mssql';
 import { getRawPool } from '../db.js';
 import { getIO } from '../socket.js';
-import { sendReservationInvoiceEmail } from '../email.js';
+import { sendReservationInvoiceEmail, sendCheckoutReceiptEmail } from '../email.js';
 import { RESERVATION_STATUS } from '../../src/shared/reservationStatus.js';
 
 
@@ -52,13 +52,13 @@ export const handleSepayWebhook = async (req, res) => {
     await transaction.begin();
 
     try {
-    if (prefix === 'PHURAI' || prefix === 'RES') {
+      if (prefix === 'PHURAI' || prefix === 'RES') {
         // --- RESERVATION PAYMENT LOGIC ---
         // Look up using order_code instead of reservation_id since we generated a unique PHURAIxxxxxx code.
         const actualOrderCode = content.match(/(PHURAI|RES)\d+/i)?.[0]?.toUpperCase();
         if (!actualOrderCode) {
-           await transaction.rollback();
-           return res.status(200).json({ success: true, message: 'Webhook received, but no valid order code found' });
+          await transaction.rollback();
+          return res.status(200).json({ success: true, message: 'Webhook received, but no valid order code found' });
         }
 
         const resResult = await transaction.request()
@@ -81,9 +81,9 @@ export const handleSepayWebhook = async (req, res) => {
 
         // Validate Amount — be lenient with floating point
         if (parseFloat(transferAmount) + 0.009 < parseFloat(reservation.deposit_amount)) {
-           await transaction.rollback();
-           console.warn(`[SePay Webhook] Insufficient funds for ${actualOrderCode}. Expected: ${reservation.deposit_amount}, Received: ${transferAmount}`);
-           return res.status(200).json({ success: true, message: 'Insufficient funds received' });
+          await transaction.rollback();
+          console.warn(`[SePay Webhook] Insufficient funds for ${actualOrderCode}. Expected: ${reservation.deposit_amount}, Received: ${transferAmount}`);
+          return res.status(200).json({ success: true, message: 'Insufficient funds received' });
         }
 
         // a. Update reservation to 'Confirmed' (the canonical paid/awaiting-check-in state)
@@ -119,12 +119,12 @@ export const handleSepayWebhook = async (req, res) => {
               INSERT INTO dbo.AuditLogs (action_name, target_table, target_id, new_value_json, created_at)
               VALUES (@actionName, @targetTable, @targetId, @newValue, SYSDATETIME())
             `);
-          
+
           const io = getIO();
           if (io) {
-            io.to('room:manager').emit('table:status_conflict', { 
-               reservationId: reservation.reservation_id, 
-               orderCode: reservation.order_code 
+            io.to('room:manager').emit('table:status_conflict', {
+              reservationId: reservation.reservation_id,
+              orderCode: reservation.order_code
             });
           }
         }
@@ -145,41 +145,41 @@ export const handleSepayWebhook = async (req, res) => {
               @resId, @paymentMethodId, @amountPaid, @paymentStatus, @transactionRef, SYSDATETIME(), SYSDATETIME(), SYSDATETIME()
             )
           `);
-        
+
         const paymentId = paymentResult.recordset[0].payment_id;
 
         // b2. Atomic Voucher Redemption
         if (reservation.applied_promo_code) {
-           const voucherResult = await transaction.request()
-             .input('voucherCode', sql.NVarChar(40), reservation.applied_promo_code)
-             .query('SELECT voucher_id FROM dbo.Vouchers WHERE voucher_code = @voucherCode');
-             
-           if (voucherResult.recordset.length > 0) {
-              const voucherId = voucherResult.recordset[0].voucher_id;
-              const baseDeposit = 20000;
-              const poQuery = await transaction.request()
-                .input('resId', sql.Int, reservation.reservation_id)
-                .query('SELECT SUM(quantity * unit_price) AS preorder_total FROM dbo.PreorderItems WHERE reservation_id = @resId');
-              const preorderTotal = Number(poQuery.recordset[0]?.preorder_total || 0);
-              const net_total = Number(reservation.deposit_amount) + Number(reservation.final_total);
-              const calculatedDiscount = Math.max(0, preorderTotal - (net_total - baseDeposit));
-              
-              // Increment usage
-              await transaction.request()
-                .input('vId', sql.Int, voucherId)
-                .query('UPDATE dbo.Vouchers SET times_used = times_used + 1 WHERE voucher_id = @vId');
-              
-              // Insert redemption record
-              await transaction.request()
-                .input('vId', sql.Int, voucherId)
-                .input('pId', sql.Int, paymentId)
-                .input('cId', sql.Int, reservation.customer_id || null)
-                .input('discount', sql.Decimal(12, 2), calculatedDiscount)
-                .query(`
+          const voucherResult = await transaction.request()
+            .input('voucherCode', sql.NVarChar(40), reservation.applied_promo_code)
+            .query('SELECT voucher_id FROM dbo.Vouchers WHERE voucher_code = @voucherCode');
+
+          if (voucherResult.recordset.length > 0) {
+            const voucherId = voucherResult.recordset[0].voucher_id;
+            const baseDeposit = 20000;
+            const poQuery = await transaction.request()
+              .input('resId', sql.Int, reservation.reservation_id)
+              .query('SELECT SUM(quantity * unit_price) AS preorder_total FROM dbo.PreorderItems WHERE reservation_id = @resId');
+            const preorderTotal = Number(poQuery.recordset[0]?.preorder_total || 0);
+            const net_total = Number(reservation.deposit_amount) + Number(reservation.final_total);
+            const calculatedDiscount = Math.max(0, preorderTotal - (net_total - baseDeposit));
+
+            // Increment usage
+            await transaction.request()
+              .input('vId', sql.Int, voucherId)
+              .query('UPDATE dbo.Vouchers SET times_used = times_used + 1 WHERE voucher_id = @vId');
+
+            // Insert redemption record
+            await transaction.request()
+              .input('vId', sql.Int, voucherId)
+              .input('pId', sql.Int, paymentId)
+              .input('cId', sql.Int, reservation.customer_id || null)
+              .input('discount', sql.Decimal(12, 2), calculatedDiscount)
+              .query(`
                   INSERT INTO dbo.VoucherRedemptions (voucher_id, payment_id, customer_id, discount_amount, redeemed_at)
                   VALUES (@vId, @pId, @cId, @discount, SYSDATETIME())
                 `);
-           }
+          }
         }
 
         // c. Update existing Orders with order_type = 'Preorder' to Paid (if any created from route)
@@ -207,18 +207,18 @@ export const handleSepayWebhook = async (req, res) => {
         // Emit socket event — frontend listens for these to advance to Confirmed step
         const io = getIO();
         if (io) {
-          io.emit('RESERVATION_PAYMENT_SUCCESS', { 
-             reservationId: reservation.reservation_id, 
-             reservation_id: reservation.reservation_id,
-             orderCode: reservation.order_code,
-             status: 'Confirmed',
-             flashCompletePaid: true 
+          io.emit('RESERVATION_PAYMENT_SUCCESS', {
+            reservationId: reservation.reservation_id,
+            reservation_id: reservation.reservation_id,
+            orderCode: reservation.order_code,
+            status: 'Confirmed',
+            flashCompletePaid: true
           });
           io.emit('RESERVATION_STATUS_CHANGED', {
-             id: reservation.reservation_id,
-             reservationId: reservation.reservation_id,
-             reservation_id: reservation.reservation_id,
-             status: 'Confirmed'
+            id: reservation.reservation_id,
+            reservationId: reservation.reservation_id,
+            reservation_id: reservation.reservation_id,
+            status: 'Confirmed'
           });
         }
 
@@ -239,39 +239,39 @@ export const handleSepayWebhook = async (req, res) => {
               FROM dbo.Reservations r 
               WHERE r.reservation_id = @resId
             `);
-            
+
           const resInfo = emailQuery.recordset[0];
           if (resInfo && resInfo.contact_email) {
-             let finalPreorderItems = [];
-             const poQuery = await rawPool.request()
-               .input('resId', sql.Int, reservation.reservation_id)
-               .query('SELECT pi.quantity, pi.unit_price, d.dish_name FROM dbo.PreorderItems pi JOIN dbo.Dishes d ON pi.dish_id = d.dish_id WHERE pi.reservation_id = @resId');
-             finalPreorderItems = poQuery.recordset.map(r => ({
-               name: r.dish_name,
-               qty: r.quantity,
-               price: r.unit_price
-             }));
+            let finalPreorderItems = [];
+            const poQuery = await rawPool.request()
+              .input('resId', sql.Int, reservation.reservation_id)
+              .query('SELECT pi.quantity, pi.unit_price, d.dish_name FROM dbo.PreorderItems pi JOIN dbo.Dishes d ON pi.dish_id = d.dish_id WHERE pi.reservation_id = @resId');
+            finalPreorderItems = poQuery.recordset.map(r => ({
+              name: r.dish_name,
+              qty: r.quantity,
+              price: r.unit_price
+            }));
 
-             await sendReservationInvoiceEmail({
-               to: resInfo.contact_email,
-               reservation: {
-                 reservation_id: reservation.reservation_id,
-                 contact_name: resInfo.contact_name,
-                 contact_phone: resInfo.contact_phone,
-                 contact_email: resInfo.contact_email,
-                 reservation_start_at: resInfo.reservation_start_at,
-                 date: resInfo.reservation_start_at ? resInfo.reservation_start_at.toLocaleDateString("vi-VN") : '',
-                 time: resInfo.reservation_start_at ? `${String(resInfo.reservation_start_at.getHours()).padStart(2, '0')}:${String(resInfo.reservation_start_at.getMinutes()).padStart(2, '0')}` : '',
-                 guest_count: resInfo.guest_count,
-                 deposit_amount: resInfo.deposit_amount,
-                 final_total: resInfo.final_total,
-                 created_at: resInfo.created_at,
-                 table_names: resInfo.table_names,
-                 area_name: resInfo.area_name
-               },
-               preorderItems: finalPreorderItems,
-               totalAmount: transferAmount
-             });
+            await sendReservationInvoiceEmail({
+              to: resInfo.contact_email,
+              reservation: {
+                reservation_id: reservation.reservation_id,
+                contact_name: resInfo.contact_name,
+                contact_phone: resInfo.contact_phone,
+                contact_email: resInfo.contact_email,
+                reservation_start_at: resInfo.reservation_start_at,
+                date: resInfo.reservation_start_at ? resInfo.reservation_start_at.toLocaleDateString("vi-VN") : '',
+                time: resInfo.reservation_start_at ? `${String(resInfo.reservation_start_at.getHours()).padStart(2, '0')}:${String(resInfo.reservation_start_at.getMinutes()).padStart(2, '0')}` : '',
+                guest_count: resInfo.guest_count,
+                deposit_amount: resInfo.deposit_amount,
+                final_total: resInfo.final_total,
+                created_at: resInfo.created_at,
+                table_names: resInfo.table_names,
+                area_name: resInfo.area_name
+              },
+              preorderItems: finalPreorderItems,
+              totalAmount: transferAmount
+            });
           }
         } catch (emailErr) {
           console.error('[SePay Webhook] Failed to send invoice email:', emailErr);
@@ -282,7 +282,7 @@ export const handleSepayWebhook = async (req, res) => {
         const orderId = targetId;
         const orderResult = await transaction.request()
           .input('orderId', sql.Int, orderId)
-          .query('SELECT order_id, order_status, total_amount, amount_paid, table_id, qr_session_id, reservation_id, customer_id, discount_amount, applied_promo_code FROM dbo.Orders WHERE order_id = @orderId');
+          .query('SELECT order_id, order_status, total_amount, amount_paid, table_id, qr_session_id, reservation_id FROM dbo.Orders WHERE order_id = @orderId');
 
         if (orderResult.recordset.length === 0) {
           await transaction.rollback();
@@ -291,7 +291,7 @@ export const handleSepayWebhook = async (req, res) => {
         }
 
         const order = orderResult.recordset[0];
-        
+
         if (order.order_status === 'Paid') {
           await transaction.rollback();
           return res.status(200).json({ success: true, message: 'Webhook received, order is already Paid' });
@@ -353,7 +353,7 @@ export const handleSepayWebhook = async (req, res) => {
                   updated_at = SYSDATETIME()
               WHERE reservation_id = @resId
             `);
-          
+
           await transaction.request()
             .input('resId', sql.Int, order.reservation_id)
             .query(`
@@ -362,42 +362,20 @@ export const handleSepayWebhook = async (req, res) => {
             `);
         }
 
-        const paymentResult = await transaction.request()
+        // Record the payment
+        await transaction.request()
           .input('orderId', sql.Int, orderId)
-          .input('paymentMethodId', sql.TinyInt, 3) 
+          .input('paymentMethodId', sql.TinyInt, 3)
           .input('amountPaid', sql.Decimal(12, 2), transferAmount)
           .input('paymentStatus', sql.VarChar, 'Completed')
           .input('transactionRef', sql.VarChar, referenceCode)
           .query(`
             INSERT INTO dbo.Payments (
               order_id, payment_method_id, amount_paid, payment_status, transaction_ref, paid_at, created_at, updated_at
-            ) 
-            OUTPUT inserted.payment_id
-            VALUES (
+            ) VALUES (
               @orderId, @paymentMethodId, @amountPaid, @paymentStatus, @transactionRef, SYSDATETIME(), SYSDATETIME(), SYSDATETIME()
             )
           `);
-
-        const paymentId = paymentResult.recordset[0].payment_id;
-
-        if (order.applied_promo_code && order.discount_amount > 0) {
-           const voucherResult = await transaction.request()
-             .input('voucherCode', sql.NVarChar(40), order.applied_promo_code)
-             .query('SELECT voucher_id FROM dbo.Vouchers WHERE voucher_code = @voucherCode');
-             
-           if (voucherResult.recordset.length > 0) {
-              const voucherId = voucherResult.recordset[0].voucher_id;
-              await transaction.request()
-                .input('vId', sql.Int, voucherId)
-                .input('pId', sql.Int, paymentId)
-                .input('cId', sql.Int, order.customer_id || null)
-                .input('discount', sql.Decimal(12, 2), order.discount_amount)
-                .query(`
-                  INSERT INTO dbo.VoucherRedemptions (voucher_id, payment_id, customer_id, discount_amount, redeemed_at)
-                  VALUES (@vId, @pId, @cId, @discount, SYSDATETIME())
-                `);
-           }
-        }
 
         // Audit Log
         await transaction.request()
@@ -412,6 +390,62 @@ export const handleSepayWebhook = async (req, res) => {
 
         await transaction.commit();
         console.log(`[SePay Webhook] Order ${orderId} marked as Paid successfully. Ref: ${referenceCode}`);
+
+        // Send email receipt
+        try {
+          const rawPool = await getRawPool();
+          let emailTo = null;
+          let customerName = 'Guest';
+
+          if (order.reservation_id) {
+            const resQuery = await rawPool.request()
+              .input('resId', sql.Int, order.reservation_id)
+              .query('SELECT contact_email, contact_name FROM dbo.Reservations WHERE reservation_id = @resId');
+            if (resQuery.recordset.length > 0) {
+              emailTo = resQuery.recordset[0].contact_email;
+              customerName = resQuery.recordset[0].contact_name || 'Guest';
+            }
+          } else if (order.customer_id) {
+            const userQuery = await rawPool.request()
+              .input('cId', sql.Int, order.customer_id)
+              .query('SELECT email, full_name FROM dbo.UserAccounts WHERE user_id = @cId');
+            if (userQuery.recordset.length > 0) {
+              emailTo = userQuery.recordset[0].email;
+              customerName = userQuery.recordset[0].full_name || 'Guest';
+            }
+          }
+
+          if (emailTo) {
+            const itemQuery = await rawPool.request()
+              .input('orderId', sql.Int, orderId)
+              .query('SELECT d.dish_name as name, oi.quantity as qty, oi.unit_price FROM dbo.OrderItems oi JOIN dbo.Dishes d ON oi.dish_id = d.dish_id WHERE oi.order_id = @orderId');
+            
+            const tableQuery = await rawPool.request()
+              .input('tableId', sql.SmallInt, order.table_id)
+              .query('SELECT table_number FROM dbo.RestaurantTables WHERE table_id = @tableId');
+
+            let discountAmount = 0;
+            const vrQuery = await rawPool.request()
+              .input('orderId', sql.Int, orderId)
+              .query('SELECT SUM(discount_amount) as total_discount FROM dbo.VoucherRedemptions vr JOIN dbo.Payments p ON vr.payment_id = p.payment_id WHERE p.order_id = @orderId');
+            if (vrQuery.recordset.length > 0) {
+              discountAmount = vrQuery.recordset[0].total_discount || 0;
+            }
+
+            await sendCheckoutReceiptEmail({
+              toEmail: emailTo,
+              customerName: customerName,
+              orderId: orderId,
+              items: itemQuery.recordset,
+              discountAmount: discountAmount,
+              totalPaid: transferAmount,
+              tableNumber: tableQuery.recordset[0]?.table_number || 'N/A',
+              dateStr: new Date().toLocaleDateString('vi-VN') + ' ' + new Date().toLocaleTimeString('vi-VN')
+            });
+          }
+        } catch (receiptErr) {
+          console.error('[SePay Webhook] Failed to send checkout receipt email:', receiptErr);
+        }
 
         const io = getIO();
         if (io) {
@@ -431,66 +465,6 @@ export const handleSepayWebhook = async (req, res) => {
             io.to(`session_${order.qr_session_id}`).emit('PAYMENT_STATUS_CHANGED', payload);
             io.to(`session_${order.qr_session_id}`).emit('QR_SESSION_PAYMENT_COMPLETED', payload);
           }
-        }
-
-        // Send Order Receipt Email
-        try {
-          let customerEmail = null;
-          let customerName = 'Guest';
-          const rawPool = await getRawPool();
-          
-          if (order.customer_id) {
-            const userRes = await rawPool.request()
-              .input('cId', sql.Int, order.customer_id)
-              .query('SELECT email, full_name FROM dbo.UserAccounts WHERE user_id = @cId');
-            if (userRes.recordset.length > 0) {
-              customerEmail = userRes.recordset[0].email;
-              customerName = userRes.recordset[0].full_name || 'Guest';
-            }
-          } else if (order.reservation_id) {
-            const resRes = await rawPool.request()
-              .input('rId', sql.Int, order.reservation_id)
-              .query('SELECT contact_email, contact_name FROM dbo.Reservations WHERE reservation_id = @rId');
-            if (resRes.recordset.length > 0) {
-              customerEmail = resRes.recordset[0].contact_email;
-              customerName = resRes.recordset[0].contact_name || 'Guest';
-            }
-          }
-
-          if (customerEmail) {
-            const itemsRes = await rawPool.request()
-              .input('oId', sql.Int, orderId)
-              .query("SELECT oi.quantity, oi.unit_price, d.dish_name FROM dbo.OrderItems oi JOIN dbo.Dishes d ON oi.dish_id = d.dish_id WHERE oi.order_id = @oId AND oi.item_status != N'Cancelled'");
-              
-            const orderItems = itemsRes.recordset.map(r => ({
-              name: r.dish_name,
-              qty: r.quantity,
-              price: r.unit_price
-            }));
-
-            await sendReservationInvoiceEmail({
-              to: customerEmail,
-              reservation: {
-                reservation_id: orderId,
-                contact_name: customerName,
-                contact_phone: '',
-                contact_email: customerEmail,
-                reservation_start_at: new Date(),
-                date: new Date().toLocaleDateString("vi-VN"),
-                time: new Date().toLocaleTimeString("vi-VN"),
-                guest_count: 0,
-                deposit_amount: 0,
-                final_total: outstandingAmount,
-                created_at: new Date(),
-                table_names: `Table ${order.table_id}`,
-                area_name: 'Dine-In'
-              },
-              preorderItems: orderItems,
-              totalAmount: receivedAmount
-            });
-          }
-        } catch (emailErr) {
-          console.error('[SePay Webhook] Failed to send order receipt email:', emailErr);
         }
       }
 

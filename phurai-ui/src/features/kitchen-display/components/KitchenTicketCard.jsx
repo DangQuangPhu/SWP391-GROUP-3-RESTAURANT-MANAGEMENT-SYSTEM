@@ -30,7 +30,7 @@ export default function KitchenTicketCard({ ticket, onStatusUpdated }) {
       <div className="flex justify-between items-start mb-3">
         <div className="flex gap-2 items-center">
           <span className="bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 font-bold px-2 py-1 rounded text-xs">
-            Bàn {ticket.table_number || '?'}
+            Table {ticket.table_number || '?'}
           </span>
           {isPriority && (
             <span className="text-red-500 flex items-center gap-1 text-xs font-bold">

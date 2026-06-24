@@ -34,11 +34,11 @@ export default function PaymentSuccessPage() {
           <table>
             <tbody>
               <tr><td className="rp-receipt-label">Reservation</td><td className="rp-receipt-value">#{reservationId}</td></tr>
-              <tr><td className="rp-receipt-label">Deposit paid</td><td className="rp-receipt-value">200,000 VND via VNPAY</td></tr>
+              <tr><td className="rp-receipt-label">Deposit paid</td><td className="rp-receipt-value">200,000 đ via VNPAY</td></tr>
             </tbody>
           </table>
         </div>
-        
+
         <div style={{ marginTop: '24px' }}>
           <button className="rp-btn rp-btn-primary" onClick={() => navigate("/my-reservations")}>View My Reservations</button>
           <button className="rp-btn" onClick={() => navigate("/")}>Go to Home</button>

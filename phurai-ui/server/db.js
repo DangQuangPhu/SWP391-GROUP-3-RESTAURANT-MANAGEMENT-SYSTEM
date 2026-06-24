@@ -18,8 +18,8 @@ let poolPromise;
 function getPool() {
   if (!poolPromise) {
     poolPromise = sql.connect(config).then(async (pool) => {
+      // 1. Chuẩn hóa trạng thái cho Bàn (RestaurantTables)
       try {
-        // 1. Chuẩn hóa trạng thái cho Bàn (RestaurantTables)
         await pool.request().query(`
           IF OBJECT_ID('dbo.CK_RestaurantTables_status', 'C') IS NOT NULL
           BEGIN
@@ -35,8 +35,13 @@ function getPool() {
               )
           );
         `);
+        console.log("Database RestaurantTables status constraint synchronized.");
+      } catch (err) {
+        console.error("Auto constraint patch (RestaurantTables) failed:", err.message);
+      }
 
-        // 2. Chuẩn hóa trạng thái cho Đơn đặt bàn (Reservations)
+      // 2. Chuẩn hóa trạng thái cho Đơn đặt bàn (Reservations)
+      try {
         await pool.request().query(`
           IF OBJECT_ID('dbo.CK_Reservations_status', 'C') IS NOT NULL
           BEGIN
@@ -61,14 +66,36 @@ function getPool() {
               )
           );
         `);
-        console.log("Database constraints synchronized successfully.");
+        console.log("Database Reservations status constraint synchronized.");
+      } catch (err) {
+        console.error("Auto constraint patch (Reservations) failed:", err.message);
+      }
 
-        // DIAGNOSTIC: Log all tables in the database to see why OrderItems is missing
+      // 3. Ensure applicable_to column exists on Promotions
+      try {
+        await pool.request().query(`
+          IF NOT EXISTS (
+              SELECT * FROM sys.columns 
+              WHERE Name = N'applicable_to' 
+              AND Object_ID = Object_ID(N'dbo.Promotions')
+          )
+          BEGIN
+              ALTER TABLE dbo.Promotions ADD applicable_to NVARCHAR(50) DEFAULT 'Both' NOT NULL;
+          END
+        `);
+        console.log("Database Promotions applicable_to column synchronized.");
+      } catch (err) {
+        console.error("Auto constraint patch (Promotions applicable_to) failed:", err.message);
+      }
+
+      // 4. DIAGNOSTIC: Log all tables in the database to see why OrderItems is missing
+      try {
         const tablesResult = await pool.request().query("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'");
         console.log("Tables in database:", tablesResult.recordset.map(t => t.TABLE_NAME));
       } catch (err) {
-        console.error("Auto constraint patch failed:", err.message);
+        console.error("Diagnostic tables check failed:", err.message);
       }
+
       return pool;
     });
   }

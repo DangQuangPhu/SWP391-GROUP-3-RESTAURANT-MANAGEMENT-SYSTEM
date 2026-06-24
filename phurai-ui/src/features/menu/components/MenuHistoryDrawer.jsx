@@ -23,16 +23,16 @@ function MenuHistoryDrawer({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
-  
+
   const { session } = useTableSession();
-  
+
   // Use the orderId from the first session order (or preorder) as the active order
   const activeOrder = history.sessionOrders[0] || history.preorders[0];
   const orderId = activeOrder?.order_id;
 
   const fetchHistory = useCallback(async () => {
     if (!session?.token) return;
-    
+
     setLoading(true);
     setError(null);
     try {
@@ -130,7 +130,7 @@ function MenuHistoryDrawer({ isOpen, onClose }) {
                 </div>
               ) : (
                 <div className="space-y-6 pb-8">
-                  
+
                   {/* Preorders Section */}
                   {history.preorders.length > 0 && (
                     <section>
@@ -145,9 +145,9 @@ function MenuHistoryDrawer({ isOpen, onClose }) {
                               PRE-PAID 30%
                             </div>
                             <div className="w-16 h-16 shrink-0">
-                              <img 
-                                src={item.image_url} 
-                                alt={item.dish_name} 
+                              <img
+                                src={item.image_url}
+                                alt={item.dish_name}
                                 onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/150x150/f8fafc/94a3b8?text=Ph%C5%ABrai+Dish'; }}
                                 className="w-full h-full object-cover rounded-lg border border-gray-50"
                               />
@@ -161,7 +161,7 @@ function MenuHistoryDrawer({ isOpen, onClose }) {
                               </div>
                             </div>
                             {item.item_status === 'Pending' && (
-                              <button 
+                              <button
                                 onClick={() => handleCancelItem(item.order_item_id)}
                                 className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center font-bold"
                               >
@@ -185,9 +185,9 @@ function MenuHistoryDrawer({ isOpen, onClose }) {
                         {history.sessionOrders.map((item) => (
                           <div key={item.order_item_id} className="bg-white rounded-xl p-3 flex gap-3 shadow-sm border border-gray-100">
                             <div className="w-16 h-16 shrink-0">
-                              <img 
-                                src={item.image_url} 
-                                alt={item.dish_name} 
+                              <img
+                                src={item.image_url}
+                                alt={item.dish_name}
                                 onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/150x150/f8fafc/94a3b8?text=Ph%C5%ABrai+Dish'; }}
                                 className="w-full h-full object-cover rounded-lg border border-gray-50"
                               />
@@ -206,7 +206,7 @@ function MenuHistoryDrawer({ isOpen, onClose }) {
                               </div>
                             </div>
                             {item.item_status === 'Pending' && (
-                              <button 
+                              <button
                                 onClick={() => handleCancelItem(item.order_item_id)}
                                 className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center font-bold"
                               >
@@ -218,7 +218,7 @@ function MenuHistoryDrawer({ isOpen, onClose }) {
                       </div>
                     </section>
                   )}
-                  
+
                 </div>
               )}
             </div>
@@ -242,7 +242,7 @@ function MenuHistoryDrawer({ isOpen, onClose }) {
                   </div>
                 </div>
                 {isReadyToPay && (
-                  <button 
+                  <button
                     onClick={() => {
                       onClose();
                       navigate(`/checkout/${orderId}`, { state: { amount: history.summary.remainingToPay } });

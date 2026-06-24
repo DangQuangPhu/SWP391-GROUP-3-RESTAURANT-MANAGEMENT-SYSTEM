@@ -223,17 +223,6 @@ function Navbar({
       </nav>
 
       <div className="phurai-navbar__actions">
-        {showQrTableAction ? (
-          <button
-            type="button"
-            className={`phurai-navbar__cta phurai-navbar__cta--reservations ${
-              isBlackReservationPage ? "phurai-navbar__cta--black" : ""
-            }`}
-            onClick={() => setQrModalOpen(true)}
-          >
-            View QR Table
-          </button>
-        ) : null}
         {!isAuthenticated ? (
           <button type="button" className="phurai-navbar__auth" onClick={onOpenAuth}>
             SIGN IN

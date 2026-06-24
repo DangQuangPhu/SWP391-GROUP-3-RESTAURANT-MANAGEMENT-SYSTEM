@@ -236,7 +236,7 @@ export async function scanStaticQr(req, res) {
          ORDER BY r.reservation_id DESC`,
         [resolvedTableId]
       );
-      
+
       const reservationId = resRows.length > 0 ? resRows[0].reservation_id : null;
       const customerId = resRows.length > 0 ? resRows[0].customer_id : null;
 
@@ -394,7 +394,7 @@ export async function scanStaticQrCodeUrl(req, res) {
          ORDER BY r.reservation_id DESC`,
         [resolvedTableId]
       );
-      
+
       const reservationId = resRows.length > 0 ? resRows[0].reservation_id : null;
       const customerId = resRows.length > 0 ? resRows[0].customer_id : null;
 
@@ -677,7 +677,7 @@ export async function submitQrOrderPublic(req, res) {
          VALUES (?, ?, ?, ?, ?, N'Pending')`,
         [orderId, dishId, item.quantity, price, item.notes || null]
       );
-      
+
       const orderItemId = insertItem[0][0].order_item_id;
 
       // Automatically create Kitchen Ticket
@@ -981,22 +981,22 @@ export async function applyVoucherToQrSession(req, res) {
     // We also recalculate total_amount: subtotal - discount + service_charge (if any, assuming 0 for now or keeping existing calculation)
     await conn.query(
       `UPDATE dbo.Orders 
-       SET discount_amount = ?, 
-           total_amount = subtotal - ? + ISNULL(service_charge, 0),
-           applied_promo_code = ?
-       WHERE order_id = ?`,
+       SET discount_amount = ?,
+        total_amount = subtotal - ? + ISNULL(service_charge, 0),
+        applied_promo_code = ?
+          WHERE order_id = ? `,
       [discountAmount, discountAmount, voucher_code, order.order_id]
     );
 
     // 6. [CRITICAL FIX] Deduct Quota (times_used) atomically
     await conn.query(
-      `UPDATE dbo.Vouchers SET times_used = times_used + 1 WHERE voucher_code = ?`,
+      `UPDATE dbo.Vouchers SET times_used = times_used + 1 WHERE voucher_code = ? `,
       [voucher_code]
     );
 
     // Also update order details to return
     const [updatedOrders] = await conn.query(
-      `SELECT total_amount FROM dbo.Orders WHERE order_id = ?`,
+      `SELECT total_amount FROM dbo.Orders WHERE order_id = ? `,
       [order.order_id]
     );
 

@@ -1345,7 +1345,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
             onClose={() => setEditReservation(null)}
             onSuccess={() => {
               setEditReservation(null);
-              toast("Đã cập nhật lịch đặt bàn (Admin Override).", "success");
+              toast("Reservation updated (Admin Override).", "success");
               loadReservations();
             }}
           />

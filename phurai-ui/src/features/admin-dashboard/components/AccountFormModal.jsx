@@ -61,7 +61,7 @@ export default function AccountFormModal({ account, onClose, onSave }) {
 
         {!isEdit && (
           <p className="afm-note">
-            Mật khẩu khởi tạo sẽ được hệ thống tự sinh và gửi qua email khi nối API thật — bước frontend-only này chưa xử lý phần đó.
+            The initial password will be automatically generated and sent via email.
           </p>
         )}
 

@@ -33,7 +33,7 @@ export function ManagerChatbot() {
     try {
       const res = await sendChatMessage(userMsg.text);
       setIsTyping(false);
-      
+
       const botMsg = {
         id: Date.now() + 1,
         sender: "bot",
@@ -61,7 +61,7 @@ export function ManagerChatbot() {
                 <p className="text-xs text-white/80">Trực tuyến</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={() => setIsOpen(false)}
               className="text-white/80 hover:text-white transition-colors"
             >
@@ -72,16 +72,15 @@ export function ManagerChatbot() {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
             {messages.map((msg) => (
-              <div 
-                key={msg.id} 
+              <div
+                key={msg.id}
                 className={`flex flex-col ${msg.sender === "user" ? "items-end" : "items-start"}`}
               >
-                <div 
-                  className={`px-4 py-2.5 max-w-[85%] text-sm rounded-2xl ${
-                    msg.sender === "user" 
-                      ? "bg-[#8c764b] text-white rounded-tr-sm" 
+                <div
+                  className={`px-4 py-2.5 max-w-[85%] text-sm rounded-2xl ${msg.sender === "user"
+                      ? "bg-[#8c764b] text-white rounded-tr-sm"
                       : "bg-white border border-gray-100 text-gray-800 rounded-tl-sm shadow-sm"
-                  }`}
+                    }`}
                   dangerouslySetInnerHTML={{
                     __html: msg.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                   }}
@@ -111,7 +110,7 @@ export function ManagerChatbot() {
               onChange={(e) => setInputValue(e.target.value)}
               className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-[#8c764b] focus:ring-1 focus:ring-[#8c764b] rounded-full px-4 py-2 text-sm transition-all"
             />
-            <button 
+            <button
               type="submit"
               disabled={!inputValue.trim() || isTyping}
               className="w-10 h-10 rounded-full bg-[#8c764b] hover:bg-[#7a6741] disabled:opacity-50 disabled:cursor-not-allowed text-white flex items-center justify-center transition-colors shrink-0 shadow-sm"

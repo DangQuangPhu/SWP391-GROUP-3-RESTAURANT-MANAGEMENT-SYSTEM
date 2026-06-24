@@ -19,7 +19,7 @@ export default function LateArrivalBadge({ reservationStartAt, status }) {
       marginLeft: '8px',
       border: '1px solid #ef4444'
     }}>
-      Khách trễ giờ
+      Late Arrival
     </span>
   );
 }

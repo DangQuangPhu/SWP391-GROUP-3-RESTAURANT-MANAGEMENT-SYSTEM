@@ -174,8 +174,8 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                   <th>Discount</th>
                   <th>Min Order</th>
                   <th>Valid Range</th>
-                  <th>Applies To</th>
                   <th>Usage</th>
+                  <th>Scope</th>
                   <th>Status</th>
                   <th className="text-right">Actions</th>
                 </tr>
@@ -207,11 +207,6 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                         <div className="text-gray-500">to {format(parseISO(p.valid_until), "MMM d, yyyy")}</div>
                       </td>
                       <td>
-                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                          {p.applicable_to || 'All'}
-                        </span>
-                      </td>
-                      <td>
                         <div className="flex flex-col gap-1 w-28">
                           <div className="flex justify-between text-xs font-medium text-gray-700">
                             <span>{p.used_count}</span>
@@ -219,14 +214,19 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                           </div>
                           {p.usage_limit ? (
                             <div className="w-full bg-gray-200 rounded-full h-1.5">
-                              <div 
-                                className={`h-1.5 rounded-full ${isExhausted ? 'bg-red-500' : 'bg-emerald-500'}`} 
+                              <div
+                                className={`h-1.5 rounded-full ${isExhausted ? 'bg-red-500' : 'bg-emerald-500'}`}
                                 style={{ width: `${Math.min(100, (p.used_count / p.usage_limit) * 100)}%` }}
                               ></div>
                             </div>
                           ) : null}
                           {isExhausted && <span className="text-[10px] text-red-500 font-semibold uppercase tracking-wider">Exhausted</span>}
                         </div>
+                      </td>
+                      <td>
+                        <span className="text-xs font-semibold bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
+                          {p.applicable_to || 'All'}
+                        </span>
                       </td>
                       <td>
                         {isExpired ? (
@@ -413,14 +413,14 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Usage Limit</label>
+              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Usage Limit (Total uses)</label>
               <input
                 type="number"
                 min="1"
                 className="sfx-input"
                 value={formData.usage_limit}
                 onChange={e => setFormData({ ...formData, usage_limit: e.target.value })}
-                placeholder="Leave empty for unlimited"
+                placeholder="Empty = unlimited"
               />
             </div>
             <div>
@@ -430,9 +430,9 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                 value={formData.applicable_to}
                 onChange={e => setFormData({ ...formData, applicable_to: e.target.value })}
               >
-                <option value="All">All (Reservations & Orders)</option>
-                <option value="Reservation">Reservations Only</option>
-                <option value="Order">On-Site Orders Only</option>
+                <option value="All">All (Reservation & Order)</option>
+                <option value="Reservation">Reservation Only</option>
+                <option value="Order">Order Only</option>
               </select>
             </div>
           </div>

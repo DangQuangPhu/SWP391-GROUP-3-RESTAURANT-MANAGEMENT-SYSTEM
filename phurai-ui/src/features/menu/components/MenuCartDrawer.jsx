@@ -35,12 +35,12 @@ function MenuCartDrawer() {
   const panelRef = useRef(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [activeTab, setActiveTab] = useState('cart'); // 'cart' | 'history'
-  
+
   // History State
   const [history, setHistory] = useState({ preorders: [], sessionOrders: [], summary: null });
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState(null);
-  
+
   const { session } = useTableSession();
   const navigate = useNavigate();
   const isDineInQr = session && session.session_status === 'Active';
@@ -104,33 +104,33 @@ function MenuCartDrawer() {
   };
 
   const handleCheckoutCart = async () => {
-      if (items.length === 0) return;
-      setIsCheckingOut(true);
-      try {
-          const formattedItems = items.map(item => {
-              const realNumericId = typeof item.id === 'number' ? item.id : item.dish_id || item.db_id || item.menu_id || parseInt(item.id); 
-              return { dish_id: realNumericId, quantity: item.quantity || 1, notes: item.notes || "" };
-          });
-          const payload = { items: formattedItems };
+    if (items.length === 0) return;
+    setIsCheckingOut(true);
+    try {
+      const formattedItems = items.map(item => {
+        const realNumericId = typeof item.id === 'number' ? item.id : item.dish_id || item.db_id || item.menu_id || parseInt(item.id);
+        return { dish_id: realNumericId, quantity: item.quantity || 1, notes: item.notes || "" };
+      });
+      const payload = { items: formattedItems };
 
-          if (isDineInQr) {
-              const fullPayload = { table_id: session.table_id, session_id: session.session_id, items: payload.items };
-              const res = await fetch('/api/orders/checkout', {
-                  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fullPayload)
-              });
-              const data = await res.json();
-              if (!res.ok) throw new Error(data.message || 'Failed to send order');
-              toast.success("Order sent to kitchen!");
-              clearCart();
-              setActiveTab('history'); // Switch to history tab after ordering!
-          } else {
-             toast.error("Not supported in Dine-In mode");
-          }
-      } catch (error) {
-          appToastError(error.message);
-      } finally {
-          setIsCheckingOut(false);
+      if (isDineInQr) {
+        const fullPayload = { table_id: session.table_id, session_id: session.session_id, items: payload.items };
+        const res = await fetch('/api/orders/checkout', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fullPayload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to send order');
+        toast.success("Order sent to kitchen!");
+        clearCart();
+        setActiveTab('history'); // Switch to history tab after ordering!
+      } else {
+        toast.error("Not supported in Dine-In mode");
       }
+    } catch (error) {
+      appToastError(error.message);
+    } finally {
+      setIsCheckingOut(false);
+    }
   };
 
   const historyItems = [...history.preorders, ...history.sessionOrders];
@@ -161,13 +161,13 @@ function MenuCartDrawer() {
             <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Your Session</h2>
           </div>
           <div className="flex w-full">
-            <button 
+            <button
               onClick={() => setActiveTab('cart')}
               className={`flex-1 pb-3 text-sm font-bold text-center border-b-2 transition-colors ${activeTab === 'cart' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
             >
               Current Cart {items.length > 0 && <span className="ml-1 bg-emerald-100 text-emerald-700 py-0.5 px-2 rounded-full text-xs">{items.length}</span>}
             </button>
-            <button 
+            <button
               onClick={() => setActiveTab('history')}
               className={`flex-1 pb-3 text-sm font-bold text-center border-b-2 transition-colors flex items-center justify-center gap-1 ${activeTab === 'history' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
             >
@@ -254,12 +254,12 @@ function MenuCartDrawer() {
                 </div>
               ) : (
                 <div className="space-y-6 pb-2">
-                  
+
                   {history.preorders.length > 0 && (
                     <section>
                       <div className="flex justify-between items-end mb-3">
                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Pre-ordered</h3>
-                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Remaining 70%</span>
+                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Còn lại 70%</span>
                       </div>
                       <div className="space-y-3">
                         {history.preorders.map((item) => (
@@ -317,7 +317,7 @@ function MenuCartDrawer() {
                       </div>
                     </section>
                   )}
-                  
+
                 </div>
               )}
             </div>
@@ -331,17 +331,17 @@ function MenuCartDrawer() {
                 <span className="text-gray-500 text-sm">{totalQuantity} item{totalQuantity === 1 ? '' : 's'}</span>
                 <span className="font-bold text-gray-900 text-lg">{formatVND(subtotal)}</span>
               </div>
-              <button 
-                  type="button" 
-                  onClick={handleCheckoutCart} 
-                  disabled={isCheckingOut || items.length === 0}
-                  className={`w-full py-3.5 rounded-xl font-bold text-base transition-all flex justify-center items-center gap-2 ${items.length === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#2f7d4f] text-white hover:bg-[#1f5a37] shadow-md'}`}
+              <button
+                type="button"
+                onClick={handleCheckoutCart}
+                disabled={isCheckingOut || items.length === 0}
+                className={`w-full py-3.5 rounded-xl font-bold text-base transition-all flex justify-center items-center gap-2 ${items.length === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#2f7d4f] text-white hover:bg-[#1f5a37] shadow-md'}`}
               >
-                  {isCheckingOut ? 'Processing...' : (
-                    <>
-                      Send Order to Kitchen
-                    </>
-                  )}
+                {isCheckingOut ? 'Processing...' : (
+                  <>
+                    Send Order to Kitchen
+                  </>
+                )}
               </button>
             </>
           ) : (
@@ -363,7 +363,7 @@ function MenuCartDrawer() {
                       <span className="font-bold text-amber-600 text-lg">{formatVND(history.summary.remainingToPay)}</span>
                     </div>
                   </div>
-                  <button 
+                  <button
                     onClick={() => {
                       closeDrawer();
                       navigate(`/checkout/${orderId}`, { state: { amount: history.summary.remainingToPay } });

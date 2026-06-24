@@ -25,7 +25,7 @@ export default function QrCartSummary({ orderData }) {
       <div className="space-y-3 text-sm">
         {/* Subtotal */}
         <div className="flex justify-between text-gray-600">
-          <span>Subtotal</span>
+          <span>Tổng tiền món (Subtotal)</span>
           <span className="font-medium">{formatCurrency(subtotal)}</span>
         </div>
 
@@ -41,7 +41,7 @@ export default function QrCartSummary({ orderData }) {
 
         {/* Total Amount */}
         <div className="flex justify-between text-gray-800 font-semibold pt-2 border-t border-dashed">
-          <span>Total</span>
+          <span>Tổng hóa đơn (Total)</span>
           <span>{formatCurrency(totalAmount)}</span>
         </div>
 
@@ -56,7 +56,7 @@ export default function QrCartSummary({ orderData }) {
         {/* Remaining Balance (Amount to Pay) */}
         <div className="flex justify-between items-center pt-3 mt-1 border-t border-gray-200">
           <span className="text-gray-900 font-bold text-base">
-            Amount to Pay
+            Amount Due
           </span>
           <span className="text-2xl font-bold text-blue-600">
             {formatCurrency(remainingBalance)}

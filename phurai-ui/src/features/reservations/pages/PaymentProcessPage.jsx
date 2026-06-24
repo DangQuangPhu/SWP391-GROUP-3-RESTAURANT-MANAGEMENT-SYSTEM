@@ -8,9 +8,9 @@ const DEPOSIT_AMOUNT = 200000;
 export default function PaymentProcessPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [status, setStatus] = useState('idle'); 
+  const [status, setStatus] = useState('idle');
   const [errorMsg, setErrorMsg] = useState('');
-  
+
   const reservationId = location.state?.reservationId;
 
   const handlePay = useCallback(async () => {
@@ -32,7 +32,7 @@ export default function PaymentProcessPage() {
     } catch (err) {
       console.error('create_vnpay_url failed', err);
       setStatus('error');
-      setErrorMsg('Failed to connect to VNPAY, please try again.');
+      setErrorMsg('Không thể kết nối tới VNPAY, vui lòng thử lại.');
     }
   }, [reservationId]);
 

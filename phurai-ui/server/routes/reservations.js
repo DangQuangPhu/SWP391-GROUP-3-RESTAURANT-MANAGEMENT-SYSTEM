@@ -1152,14 +1152,13 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
       const BASE_TABLE_DEPOSIT = 20000;
 
       // 3. Define the exact money the customer MUST pay upfront via QR right now
-      // 30% deposit of food total, remaining 70% paid at checkout. Table deposit 100% upfront.
+      // 30% deposit of food + table, remaining 70% paid at checkout.
       // NOTE: We don't have discount_amount computed here yet in this legacy route.
-      const food_total = preorderItemsTotal;
-      const food_deposit = Math.round(food_total * 0.3);
-      const deposit_amount = BASE_TABLE_DEPOSIT + food_deposit;
-      const final_total = Math.round(food_total * 0.7);
+      const net_total = BASE_TABLE_DEPOSIT + preorderItemsTotal;
+      const deposit_amount = Math.round(net_total * 0.3);
+      const final_total = net_total - deposit_amount;
 
-      console.log(`[AUTOMATION CHECK] Preorder: ${preorderItemsTotal} | Table Deposit: ${BASE_TABLE_DEPOSIT} | Food Deposit (30%): ${food_deposit} | QR Target: ${deposit_amount} | Remaining (70%): ${final_total}`);
+      console.log(`[AUTOMATION CHECK] Preorder: ${preorderItemsTotal} | Table Deposit: ${BASE_TABLE_DEPOSIT} | Net Total: ${net_total} | QR Target (30%): ${deposit_amount} | Remaining (70%): ${final_total}`);
       
       const order_code = `RES${reservationId}`;
 

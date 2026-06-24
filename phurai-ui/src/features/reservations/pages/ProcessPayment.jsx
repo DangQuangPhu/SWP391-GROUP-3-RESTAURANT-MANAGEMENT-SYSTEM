@@ -17,7 +17,7 @@ export default function ProcessPayment({ reservationId, onCreatePaymentUrl }) {
     } catch (err) {
       console.error('create_vnpay_url failed', err);
       setStatus('error');
-      setErrorMsg('Failed to connect to VNPAY, please try again.');
+      setErrorMsg('Không thể kết nối tới VNPAY, vui lòng thử lại.');
     }
   }, [reservationId, onCreatePaymentUrl]);
 

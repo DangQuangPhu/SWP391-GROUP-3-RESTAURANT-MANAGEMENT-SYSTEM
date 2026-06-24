@@ -38,8 +38,8 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
 
     // We only care about reservations on the same table that are active
     const activeStatuses = ['await check-in', 'confirmed', 'reserved', 'check-in', 'occupied'];
-    const sameTableRes = allReservations.filter(r => 
-      r.table_id === reservation.table_id && 
+    const sameTableRes = allReservations.filter(r =>
+      r.table_id === reservation.table_id &&
       r.reservation_id !== reservation.reservation_id &&
       activeStatuses.includes((r.status || r.reservation_status || '').toLowerCase()) &&
       r.reservation_date === form.date
@@ -52,7 +52,7 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
     for (const r of sameTableRes) {
       if (!r.start_time) continue;
       const rStartMins = parseInt(r.start_time.split(':')[0]) * 60 + parseInt(r.start_time.split(':')[1]);
-      
+
       let rEndMins = rStartMins + 60; // Default 1 hour if we don't have end time
       if (r.reservation_end_at) {
         const endObj = new Date(r.reservation_end_at);
@@ -77,7 +77,7 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
     }
 
     if (form.date < getTodayString()) {
-      setError('Không thể đặt bàn vào ngày trong quá khứ.');
+      setError('Cannot book a reservation in the past.');
       return;
     }
 
@@ -112,7 +112,7 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
       });
       onSuccess();
     } catch (err) {
-      setError(err.message || 'Lỗi hệ thống khi cập nhật.');
+      setError(err.message || 'System error during update.');
     } finally {
       setLoading(false);
     }
@@ -133,9 +133,9 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Ngày đặt</label>
-            <input 
-              type="date" 
-              value={form.date} 
+            <input
+              type="date"
+              value={form.date}
               min={getTodayString()}
               onChange={e => handleUpdate('date', e.target.value)}
               style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
@@ -145,21 +145,21 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
           <div style={{ display: 'flex', gap: '16px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
               <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Giờ đến</label>
-              <input 
-                type="time" 
+              <input
+                type="time"
                 min="10:00"
                 max="23:30"
-                value={form.startTime} 
+                value={form.startTime}
                 onChange={e => handleUpdate('startTime', e.target.value)}
                 style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
               <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Giờ kết thúc</label>
-              <input 
-                type="time" 
+              <input
+                type="time"
                 max="23:59"
-                value={form.endTime} 
+                value={form.endTime}
                 onChange={e => handleUpdate('endTime', e.target.value)}
                 style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
               />
@@ -167,11 +167,11 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Số lượng khách</label>
-            <input 
-              type="number" 
+            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Number of Guests</label>
+            <input
+              type="number"
               min="1"
-              value={form.guests} 
+              value={form.guests}
               onChange={e => handleUpdate('guests', e.target.value)}
               style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
             />
@@ -180,27 +180,27 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
           {error && <p style={{ color: '#ef4444', fontSize: '13px', margin: 0, fontWeight: 'bold' }}>{error}</p>}
 
           <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={loading || !!error}
-              style={{ 
-                flex: 1, padding: '10px', backgroundColor: '#3b82f6', color: '#fff', 
+              style={{
+                flex: 1, padding: '10px', backgroundColor: '#3b82f6', color: '#fff',
                 border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: loading || !!error ? 'not-allowed' : 'pointer',
                 opacity: loading || !!error ? 0.5 : 1
               }}
             >
               {loading ? 'Đang cập nhật...' : 'Xác nhận (Override)'}
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={onClose}
               disabled={loading}
-              style={{ 
-                flex: 1, padding: '10px', backgroundColor: '#e5e7eb', color: '#374151', 
-                border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' 
+              style={{
+                flex: 1, padding: '10px', backgroundColor: '#e5e7eb', color: '#374151',
+                border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer'
               }}
             >
-              Hủy
+              Cancel
             </button>
           </div>
         </form>

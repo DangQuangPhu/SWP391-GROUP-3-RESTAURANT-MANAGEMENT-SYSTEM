@@ -401,7 +401,7 @@ export async function editStaffReservation(reservationId, userId, payload) {
     payload
   );
   if (!res?.success) {
-    throw new Error(res?.message || "Lỗi cập nhật lịch đặt bàn");
+    throw new Error(res?.message || "Error updating reservation");
   }
   return res;
 }

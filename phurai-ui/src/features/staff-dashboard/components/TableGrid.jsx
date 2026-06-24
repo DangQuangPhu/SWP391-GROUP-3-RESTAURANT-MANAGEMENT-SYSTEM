@@ -8,7 +8,7 @@ export default function TableGrid({ onSelectTable }) {
   if (!tables || tables.length === 0) {
     return (
       <div className="sfx-shell__empty">
-        <p className="sfx-note">Không có dữ liệu bàn.</p>
+        <p className="sfx-note">No table data.</p>
       </div>
     );
   }
@@ -35,8 +35,8 @@ export default function TableGrid({ onSelectTable }) {
             className={`sfx-mtile ${isOccupied ? 'is-occupied' : ''} ${isReserved ? 'is-reserved' : ''}`}
           >
             <div className="sfx-mtile__head">
-              <span className="sfx-mtile__title">Bàn {table.table_number}</span>
-              <span className="sfx-mtile__cap">{table.capacity} ghế</span>
+              <span className="sfx-mtile__title">Table {table.table_number}</span>
+              <span className="sfx-mtile__cap">{table.capacity} seats</span>
             </div>
             <div className="sfx-mtile__body" style={{ marginTop: 'auto' }}>
               <span className={`staff-table-status ${statusClass}`}>

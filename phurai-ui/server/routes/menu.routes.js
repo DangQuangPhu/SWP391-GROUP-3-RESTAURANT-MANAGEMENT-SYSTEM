@@ -23,4 +23,24 @@ router.post('/', requireManagerOrAdmin, createDish);
 router.put('/:id', requireManagerOrAdmin, updateDish);
 router.delete('/:id', requireManagerOrAdmin, deleteDish);
 
+router.get('/fix-404', async (req, res) => {
+    try {
+        const { getRawPool } = await import('../db.js');
+        const pool = await getRawPool();
+        const images = [
+            '/menu/yellowtail-jalapeno.jpg',
+            '/menu/lychee-martini.jpg',
+            '/menu/bento-chocolate-cake.jpg',
+            '/menu/black-cod-miso.jpg'
+        ];
+        for (const img of images) {
+            await pool.query(`UPDATE dbo.DishImages SET image_url = NULL WHERE image_url = '${img}'`);
+            await pool.query(`UPDATE dbo.Dishes SET image_url = NULL WHERE image_url = '${img}'`);
+        }
+        res.json({ success: true, message: 'Removed 404 images' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;

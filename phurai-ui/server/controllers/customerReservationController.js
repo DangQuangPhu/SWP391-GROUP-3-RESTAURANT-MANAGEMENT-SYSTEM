@@ -64,13 +64,12 @@ export const createPreSaveReservation = async (req, res) => {
        discount_amount = result.discount_amount;
     }
 
-    // 3. Deposit Amount & Final Total Calculation (30% cọc món, 70% còn lại, tiền cọc bàn 100%)
-    const food_total = Math.max(0, items_total - discount_amount);
-    const food_deposit = Math.round(food_total * 0.3);
-    const deposit_amount = BASE_TABLE_DEPOSIT + food_deposit;
-    final_total = Math.round(food_total * 0.7);
+    // 3. Deposit Amount & Final Total Calculation (30% deposit, 70% remaining)
+    const net_total = BASE_TABLE_DEPOSIT + Math.max(0, items_total - discount_amount);
+    const deposit_amount = Math.round(net_total * 0.3);
+    final_total = net_total - deposit_amount;
 
-    console.log(`[AUTOMATION CHECK] Preorder: ${items_total} | Discount: ${discount_amount} | Table Deposit: ${BASE_TABLE_DEPOSIT} | Food Deposit (30%): ${food_deposit} | QR Target: ${deposit_amount} | Remaining (70%): ${final_total}`);
+    console.log(`[AUTOMATION CHECK] Preorder: ${items_total} | Discount: ${discount_amount} | Net Total: ${net_total} | QR Target (30%): ${deposit_amount} | Remaining (70%): ${final_total}`);
     // 4. Generate Order Code (e.g. PHURAI123456)
     const order_code = `PHURAI${Math.floor(100000 + Math.random() * 900000)}`;
 
@@ -275,7 +274,7 @@ export const applyPromoCodeToReservation = async (req, res) => {
       return res.status(400).json({ success: false, message: "Voucher can only be applied to reservations with food preorder." });
     }
 
-    const result = await checkVoucherValidity(promo_code, preorderItemsTotal);
+    const result = await checkVoucherValidity(promo_code, preorderItemsTotal, 'Reservation');
 
     if (!result.isValid) {
       return res.status(400).json({ success: false, message: result.message });

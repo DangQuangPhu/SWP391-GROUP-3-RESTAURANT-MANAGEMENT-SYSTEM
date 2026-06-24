@@ -40,7 +40,7 @@ export const applyVoucher = async (req, res) => {
  * @param {number} orderValue - The current cart/order total
  * @returns {object} { isValid: boolean, message?: string, promo?: object, discount_amount?: number }
  */
-export const checkVoucherValidity = async (code, orderValue) => {
+export const checkVoucherValidity = async (code, orderValue, context = 'All') => {
   if (!code) return { isValid: false, message: "No code provided." };
   const val = parseFloat(orderValue) || 0;
 
@@ -53,7 +53,8 @@ export const checkVoucherValidity = async (code, orderValue) => {
       SELECT 
         v.voucher_id, v.voucher_code, v.usage_limit, v.times_used, v.is_active AS voucher_active,
         p.promotion_id, p.promotion_name, p.discount_type, p.discount_value, 
-        p.min_order_value, p.max_discount, p.start_at, p.end_at, p.is_active AS promo_active
+        p.min_order_value, p.max_discount, p.start_at, p.end_at, p.is_active AS promo_active,
+        p.applicable_to
       FROM dbo.Vouchers v
       INNER JOIN dbo.Promotions p ON v.promotion_id = p.promotion_id
       WHERE v.voucher_code = @voucher_code
@@ -68,6 +69,11 @@ export const checkVoucherValidity = async (code, orderValue) => {
   // Stage 2: Check is_active
   if (!data.voucher_active || !data.promo_active) {
     return { isValid: false, message: "This voucher is no longer active." };
+  }
+
+  // Stage 2.5: Scope Check
+  if (context !== 'All' && data.applicable_to !== 'All' && data.applicable_to !== context) {
+    return { isValid: false, message: `This voucher is only applicable to ${data.applicable_to.toLowerCase()}s.` };
   }
 
   // Stage 3: Timeline Check (Current timestamp must be between start_at and end_at)

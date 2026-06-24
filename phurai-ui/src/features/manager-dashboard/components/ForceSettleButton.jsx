@@ -23,7 +23,7 @@ export default function ForceSettleButton({ orderId, onSuccess }) {
       }
     } catch (error) {
       console.error('Force Settle Error:', error);
-      alert('Lỗi hệ thống khi Force Settle');
+      alert('System Error during Force Settle');
     } finally {
       setIsLoading(false);
     }
@@ -45,17 +45,17 @@ export default function ForceSettleButton({ orderId, onSuccess }) {
             <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-red-50 dark:bg-red-900/20">
               <h3 className="font-bold text-red-700 dark:text-red-400 flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5" />
-                CẢNH BÁO: GHI ĐÈ THANH TOÁN
+                WARNING: OVERRIDE PAYMENT
               </h3>
               <button onClick={() => setIsOpen(false)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-6">
               <p className="text-gray-700 dark:text-gray-300 text-sm mb-4">
-                Bạn đang thực hiện thao tác <strong className="text-red-600 dark:text-red-400">Force Settle</strong> cho Order #{orderId}. 
-                Hành động này sẽ ghi đè hệ thống và đánh dấu đơn hàng là đã thanh toán. <br/><br/>
+                Bạn đang thực hiện thao tác <strong className="text-red-600 dark:text-red-400">Force Settle</strong> cho Order #{orderId}.
+                This action will override the system and mark the order as paid. <br /><br />
                 <span className="italic font-medium text-gray-500 dark:text-gray-400">
                   Are you sure? This manual override is permanently recorded in the Audit Logs.
                 </span>
@@ -63,7 +63,7 @@ export default function ForceSettleButton({ orderId, onSuccess }) {
 
               <div className="mb-6">
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  Xác nhận phương thức thanh toán:
+                  Confirm Payment Method:
                 </label>
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600">
@@ -82,13 +82,13 @@ export default function ForceSettleButton({ orderId, onSuccess }) {
               </div>
 
               <div className="flex gap-3 mt-6">
-                <button 
+                <button
                   onClick={() => setIsOpen(false)}
                   className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 font-medium rounded-lg transition-colors"
                 >
-                  Hủy
+                  Cancel
                 </button>
-                <button 
+                <button
                   onClick={handleForceSettle}
                   disabled={isLoading}
                   className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:bg-red-400"

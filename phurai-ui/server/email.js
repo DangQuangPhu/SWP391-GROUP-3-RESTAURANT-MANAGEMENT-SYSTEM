@@ -1098,7 +1098,7 @@ export async function sendReservationInvoiceEmail({ to, reservation, preorderIte
                         `).join('')}
                       ` : ''}
                       <tr>
-                        <td style="padding: 8px 0; color:#4a3f35;">Base Table Deposit:</td>
+                        <td style="padding: 8px 0; color:#4a3f35;">Table Charge:</td>
                         <td align="right" style="padding: 8px 0; font-weight: 600; color:#2c1d0a;">20.000 đ</td>
                       </tr>
                       <tr>
@@ -1164,6 +1164,145 @@ export async function sendReservationInvoiceEmail({ to, reservation, preorderIte
     return { sent: true };
   } catch (err) {
     console.error("[sendReservationInvoiceEmail] Failed:", String(err?.message || err));
+    return { sent: false, error: String(err?.message || err) };
+  }
+}
+
+// ============================================================================
+// sendCheckoutReceiptEmail
+// ============================================================================
+export async function sendCheckoutReceiptEmail({ toEmail, customerName, orderId, items, discountAmount, totalPaid, tableNumber, dateStr }) {
+  const recipient = String(toEmail || "").trim().toLowerCase();
+  if (!recipient) return { sent: false, reason: "no_recipient" };
+  if (!isSmtpConfigured()) return { sent: false, devMode: true };
+  const primaryOrigin = (process.env.APP_URL || "http://localhost:5173").split(",")[0].trim();
+  const formattedId = `#ORD${String(orderId).padStart(6, "0")}`;
+  const safeName = customerName || "Guest";
+  
+  const discountHtml = discountAmount > 0 
+    ? `
+      <tr>
+        <td style="padding: 8px 0; color:#4a3f35; font-weight: 600;">Discount Applied:</td>
+        <td align="right" style="padding: 8px 0; font-weight: 700; color:#c0392b;">-${Number(discountAmount).toLocaleString('vi-VN')} đ</td>
+      </tr>
+    ` : '';
+
+  const itemsHtml = items && items.length > 0 ? items.map(item => `
+    <tr>
+      <td style="padding: 8px 0; border-bottom: 1px solid #eee; color:#4a3f35;">${item.name} x${item.quantity || item.qty}</td>
+      <td align="right" style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600; color:#2c1d0a;">${Number(item.price || item.unit_price || 0).toLocaleString('vi-VN')} đ</td>
+    </tr>
+  `).join('') : '';
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Payment Receipt — Phūrai</title>
+</head>
+<body style="margin:0;padding:0;background:#f8f5ef;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f5ef;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 40px rgba(31,26,23,0.10);">
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#1a1008 0%,#2c1d0a 100%);padding:36px 48px;text-align:center;">
+              <h1 style="margin:0;font-size:32px;letter-spacing:0.14em;color:#c9a96e;font-weight:300;">Phūrai</h1>
+              <p style="margin:6px 0 0;color:#8a7a60;font-size:11px;letter-spacing:0.22em;text-transform:uppercase;">Restaurant &amp; Bar</p>
+            </td>
+          </tr>
+          <!-- Status badge -->
+          <tr>
+            <td style="padding:28px 48px 0;text-align:center;">
+              <span style="display:inline-block;background:#d4edda;color:#155724;font-size:12px;font-weight:700;padding:6px 18px;border-radius:24px;letter-spacing:0.08em;text-transform:uppercase;">
+                ✓ Payment Successful
+              </span>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:28px 48px 36px;">
+              <p style="margin:0 0 24px;font-size:15px;color:#4a3f35;line-height:1.7;">
+                Dear <strong style="color:#2c1d0a;">${safeName}</strong>,<br />
+                Thank you for dining at Phūrai! Here is your final receipt.
+              </p>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border:1px solid #e8dcc8;border-radius:10px;margin:0 0 28px;">
+                <tr>
+                  <td style="padding:24px 28px;">
+                    <p style="margin:0 0 14px;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#a09080;font-weight:600;">
+                      Order Information
+                    </p>
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="padding:8px 0;font-size:13px;color:#8a7a60;width:170px;vertical-align:top;">Order Reference</td>
+                        <td style="padding:8px 0;font-size:14px;color:#2c1d0a;font-weight:600;">${formattedId}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:8px 0;font-size:13px;color:#8a7a60;width:170px;vertical-align:top;">Date</td>
+                        <td style="padding:8px 0;font-size:14px;color:#2c1d0a;font-weight:600;">${dateStr}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:8px 0;font-size:13px;color:#8a7a60;width:170px;vertical-align:top;">Table</td>
+                        <td style="padding:8px 0;font-size:14px;color:#2c1d0a;font-weight:600;">${tableNumber}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Payment summary & Items -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border:1px solid #e8dcc8;border-radius:10px;margin:0 0 28px;">
+                <tr>
+                  <td style="padding:24px 28px;">
+                    <p style="margin:0 0 14px;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#a09080;font-weight:600;">
+                      Receipt Items
+                    </p>
+                    <table width="100%" cellpadding="0" cellspacing="0" style="font-size:14px; line-height: 1.6;">
+                      ${itemsHtml}
+                      ${discountHtml}
+                      <tr>
+                        <td style="padding: 8px 0; color:#4a3f35; font-weight: 600;">Total Paid:</td>
+                        <td align="right" style="padding: 8px 0; font-weight: 700; color:#27ae60; font-size: 16px;">${Number(totalPaid).toLocaleString('vi-VN')} đ</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0;font-size:14px;color:#4a3f35;line-height:1.8;font-style:italic;text-align:center;">
+                We look forward to welcoming you back to Phūrai! 🌸
+              </p>
+            </td>
+          </tr>
+          <tr><td style="height:1px;background:linear-gradient(90deg,transparent,#e8dcc8,transparent);"></td></tr>
+          <!-- Footer -->
+          <tr>
+            <td style="padding:24px 48px;text-align:center;background:#fcfbf9;">
+              <p style="margin:0 0 4px;font-size:12px;color:#a09080;">&copy; 2026 Phūrai Restaurant &amp; Bar. All rights reserved.</p>
+              <p style="margin:0;font-size:11px;color:#b8a898;">This is an automated email. Please do not reply directly to this message.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  try {
+    await getTransporter().sendMail({
+      from: `"Phūrai Restaurant" <${getSmtpFrom()}>`,
+      to: recipient,
+      subject: `[Phūrai] Payment Receipt — ${formattedId}`,
+      html,
+    });
+    console.log(`[sendCheckoutReceiptEmail] Sent to ${recipient} for ${formattedId}`);
+    return { sent: true };
+  } catch (err) {
+    console.error("[sendCheckoutReceiptEmail] Failed:", String(err?.message || err));
     return { sent: false, error: String(err?.message || err) };
   }
 }
