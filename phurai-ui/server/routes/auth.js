@@ -45,6 +45,7 @@ const PROFILE_SELECT = `
     ua.avatar_url,
     ua.is_active,
     ua.email_verified,
+    ua.last_login_at,
     r.role_name,
     cp.customer_id,
     cp.username,
@@ -150,6 +151,25 @@ router.post("/login", async (req, res) => {
       await ensureCustomerProfile(user.user_id, user.email);
       const refreshed = await fetchProfileByEmail(user.email);
       if (refreshed) Object.assign(user, refreshed);
+    }
+
+    if (user.last_login_at == null) {
+      const restrictedToken = jwt.sign(
+        {
+          user_id: user.user_id,
+          email: user.email,
+          firstLogin: true
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: "15m" }
+      );
+      
+      return res.json({
+        requirePasswordReset: true,
+        message: "Please change your default password.",
+        token: restrictedToken,
+        user: { user_id: user.user_id, email: user.email, role_name: user.role_name }
+      });
     }
 
     await pool.query(
@@ -673,6 +693,57 @@ router.post("/auth/forgot-password/reset", async (req, res) => {
   } catch (error) {
     console.error("Forgot password reset failed:", error);
     return res.status(500).json({ message: "Could not reset password." });
+  }
+});
+
+router.post("/first-login-reset", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ message: "No token provided." });
+    
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (!decoded.firstLogin) {
+      return res.status(403).json({ message: "Invalid token for password reset." });
+    }
+    
+    const { newPassword } = req.body;
+    if (!newPassword || !isPasswordStrong(newPassword)) {
+      return res.status(400).json({ message: "Password must meet security requirements." });
+    }
+    
+    const updateResult = await updateUserPasswordHash(decoded.user_id, newPassword);
+    if (!updateResult.ok) {
+       return res.status(500).json({ message: "Failed to update password." });
+    }
+    
+    await pool.query("UPDATE dbo.UserAccounts SET last_login_at = SYSDATETIME(), updated_at = SYSDATETIME() WHERE user_id = ?", [decoded.user_id]);
+    
+    // Fetch user and issue normal token
+    const [users] = await pool.query(`${PROFILE_SELECT} WHERE ua.user_id = ?`, [decoded.user_id]);
+    const user = users[0];
+    
+    const newToken = jwt.sign(
+      {
+        user_id: user.user_id,
+        role_id: user.role_id,
+        role_name: user.role_name,
+        full_name: user.full_name,
+        email: user.email,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+    
+    return res.json({
+      message: "Password reset successful. Login complete.",
+      token: newToken,
+      user: buildLoginUserResponse(user)
+    });
+  } catch(error) {
+    console.error("First login reset failed:", error);
+    return res.status(401).json({ message: "Invalid or expired token." });
   }
 });
 

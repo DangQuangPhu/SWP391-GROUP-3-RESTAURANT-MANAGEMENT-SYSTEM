@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { Filter, ChevronDown, Check, X } from 'lucide-react';
 import FloorPlanSVG from './FloorPlanSVG';
 import { validateTableCapacity } from '../../utils/validateTableCapacity';
 import '../../styles/table-board.css';
@@ -9,7 +10,7 @@ function normalizeStatus(apiTable) {
     const avail = apiTable.availability_at_slot || "";
     const lowerAvail = avail.toLowerCase();
     if (lowerAvail === "occupied") return "Occupied";
-    if (lowerAvail === "cleaning") return "Occupied"; 
+    if (lowerAvail === "cleaning") return "Cleaning"; 
     if (lowerAvail === "inactive") return "Occupied"; 
     return "Reserved"; 
   }
@@ -22,6 +23,22 @@ export default function TableBoard({
   onSelectTable,
   guestCount
 }) {
+  const [activeFilter, setActiveFilter] = useState(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [viewZoneImage, setViewZoneImage] = useState(null);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // We need to map config Table ID (e.g. "S-03") to API Table object
   const apiTableMap = useMemo(() => {
     const map = new Map();
@@ -41,7 +58,7 @@ export default function TableBoard({
     if (!isCapacityValid) return;
 
     const status = normalizeStatus(apiTable);
-    if (status === 'Occupied' || status === 'Reserved') {
+    if (status === 'Occupied' || status === 'Reserved' || status === 'Cleaning') {
       return;
     }
 
@@ -57,25 +74,73 @@ export default function TableBoard({
 
   return (
     <div className="table-board-container">
-      <div className="tb-board__header">
-        <p className="tb-board__hint">
-          Select an available table. Occupied or invalid capacity tables are disabled.
-        </p>
-      </div>
+      <div className="flex justify-between items-start mb-6 relative" ref={dropdownRef}>
+        <div className="tb-board__header m-0 p-0 border-0 bg-transparent">
+          <p className="tb-board__hint">
+            Select an available table. Occupied or invalid capacity tables are disabled.
+          </p>
+        </div>
 
-      <div className="tb-legend" style={{ display: 'flex', gap: '20px', marginBottom: '20px', flexWrap: 'wrap', fontWeight: 600 }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-          <span className="swatch" style={{ width: 16, height: 16, borderRadius: 4, background: '#dceaf5', border: '1.5px solid #5a8bb0' }}></span>
-          Available
-        </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-          <span className="swatch" style={{ width: 16, height: 16, borderRadius: 4, background: '#f6c453', border: '1.5px solid #b8862c' }}></span>
-          Selected
-        </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-          <span className="swatch" style={{ width: 16, height: 16, borderRadius: 4, background: '#dcdcdc', border: '1.5px solid #a3a3a3' }}></span>
-          Occupied / Unavailable
-        </span>
+        <div className="relative">
+          <button
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all focus:outline-none focus:ring-2 focus:ring-[#8c764b]/20 shadow-sm"
+          >
+            <Filter className="w-4 h-4 text-gray-500" />
+            {activeFilter ? (
+              <span className="font-semibold text-gray-900">
+                {activeFilter === 'Occupied' ? 'Occupied / Unavailable' : activeFilter}
+              </span>
+            ) : 'Filter Tables'}
+            {activeFilter ? (
+              <div 
+                className="ml-1 p-0.5 hover:bg-gray-200 rounded-full transition-colors"
+                onClick={(e) => { e.stopPropagation(); setActiveFilter(null); }}
+              >
+                <X className="w-3.5 h-3.5 text-gray-500" />
+              </div>
+            ) : (
+              <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+            )}
+          </button>
+
+          {/* Animated Dropdown Menu */}
+          <div 
+            className={`absolute right-0 mt-2 w-64 bg-white border border-gray-100 rounded-xl shadow-xl transform transition-all duration-200 origin-top-right z-50 ${isDropdownOpen ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'}`}
+          >
+            <div className="p-2 space-y-1">
+              <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Highlight by Status
+              </div>
+              {[
+                { label: 'Available', key: 'Available', color: '#2f7d4f', bg: 'rgba(47, 125, 79, 0.1)' },
+                { label: 'Selected', key: 'Selected', color: '#b8862c', bg: '#f6c453' },
+                { label: 'Reserved', key: 'Reserved', color: '#3a6ea5', bg: 'rgba(58, 110, 165, 0.1)' },
+                { label: 'Cleaning', key: 'Cleaning', color: '#7c5cbf', bg: 'rgba(124, 92, 191, 0.1)' },
+                { label: 'Occupied / Unavailable', key: 'Occupied', color: '#b7791f', bg: 'rgba(183, 121, 31, 0.1)' },
+              ].map(item => {
+                const isActive = activeFilter === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => {
+                      setActiveFilter(isActive ? null : item.key);
+                      setIsDropdownOpen(false);
+                    }}
+                    className={`w-full text-left flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive ? 'bg-gray-50 text-gray-900 font-semibold' : 'text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="swatch" style={{ width: 14, height: 14, borderRadius: 4, background: item.bg, border: `1.5px solid ${item.color}` }}></span>
+                      {item.label}
+                    </div>
+                    {isActive && <Check className="w-4 h-4 text-[#8c764b]" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       </div>
 
       <FloorPlanSVG
@@ -83,11 +148,31 @@ export default function TableBoard({
         selectedTableId={selectedTableId}
         guestCount={guestCount}
         onTableClick={handleTableClick}
+        activeFilter={activeFilter}
+        onViewZone={(img, label) => setViewZoneImage({ src: img, title: label })}
       />
-      
-      {selectedApiTable && (
-        <div className="panel mt-4 p-4 border rounded shadow-sm bg-white">
-          <strong>SELECTED TABLE: </strong> <span className="text-amber-600 ml-2">{selectedApiTable.table_number}</span>
+
+      {/* Zone Image Viewer Modal */}
+      {viewZoneImage && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="text-xl font-bold text-gray-900">{viewZoneImage.title}</h3>
+              <button 
+                onClick={() => setViewZoneImage(null)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 bg-gray-50 flex justify-center">
+              <img 
+                src={viewZoneImage.src} 
+                alt={viewZoneImage.title} 
+                className="max-h-[70vh] object-contain rounded-lg shadow-inner"
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>

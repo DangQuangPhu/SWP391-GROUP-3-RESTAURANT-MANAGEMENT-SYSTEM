@@ -4,4 +4,10 @@ export {
   loadAuthUser,
   clearAuthUser,
   saveAuthToken,
+  request,
+  apiGet,
+  apiPatch,
+  apiPost,
+  apiPut,
+  apiDelete
 } from "./httpClient.js";

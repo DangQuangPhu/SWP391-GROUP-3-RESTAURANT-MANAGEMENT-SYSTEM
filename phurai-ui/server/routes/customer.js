@@ -8,6 +8,7 @@ import {
 } from "../controllers/qrSessionController.js";
 import { resolveUserId, requireUserId } from "../middleware/authMiddleware.js";
 import { requireCustomer } from "../middleware/customerMiddleware.js";
+import { getCustomerPaymentHistory } from "../controllers/customer.controller.js";
 
 const router = express.Router();
 
@@ -53,6 +54,18 @@ router.post(
   requireUserId,
   requireCustomer,
   buyGiftCard
+);
+
+/**
+ * GET /api/customer/payments/history
+ * Auth: X-User-Id header (customer role)
+ */
+router.get(
+  "/payments/history",
+  resolveUserId,
+  requireUserId,
+  requireCustomer,
+  getCustomerPaymentHistory
 );
 
 export default router;

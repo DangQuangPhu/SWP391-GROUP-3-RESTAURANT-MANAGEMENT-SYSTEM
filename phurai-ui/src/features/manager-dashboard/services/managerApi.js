@@ -387,7 +387,7 @@ export async function fetchManager() {
 }
 
 export function fetchPromotions() {
-  return managerGet("/staff/promotions", PROMOTIONS).then((res) => ({
+  return managerGet("/manager/promotions", PROMOTIONS).then((res) => ({
     ...res,
     data: asArray(res.data),
   }));
@@ -496,25 +496,10 @@ export async function updateScheduleAttendance(scheduleId, attendance_status, us
 
 /* ---- JSON staff work-shift assignments (/api/manager/shift-mapping) */
 
-export async function fetchStaffShiftMapping(userId) {
-  try {
-    const res = await managerAuthRequest(
-      "/manager/shift-mapping",
-      { method: "GET" },
-      userId
-    );
-    if (res?.success && res.data && typeof res.data === "object" && !Array.isArray(res.data)) {
-      return { source: "api", data: res.data };
-    }
-  } catch { console.error("fetch API ERROR", arguments);
-    /* fall through */
-  }
-  return { source: "mock", data: {} };
-}
 
 export async function updateStaffShift(staffId, shiftName, userId) {
   const res = await managerAuthRequest(
-    `/manager/shift-mapping/${staffId}`,
+    `/manager/staff/${staffId}/shift`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -636,11 +621,42 @@ export function saveTable() {
 export function deleteTable() {
   return Promise.resolve(NOT_CONNECTED);
 }
-export function saveManager() {
-  return Promise.resolve(NOT_CONNECTED);
+export async function apiCreateStaff(staffData, userId) {
+  const res = await managerAuthRequest(
+    "/manager/staff",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(staffData),
+    },
+    userId
+  );
+  if (!res?.success) throw createApiError(res?.message || "Could not create staff.");
+  return res.data;
 }
-export function deleteManager() {
-  return Promise.resolve(NOT_CONNECTED);
+
+export async function apiUpdateStaff(staffId, staffData, userId) {
+  const res = await managerAuthRequest(
+    `/manager/staff/${staffId}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(staffData),
+    },
+    userId
+  );
+  if (!res?.success) throw createApiError(res?.message || "Could not update staff.");
+  return res.data;
+}
+
+export async function apiDeleteStaff(staffId, userId) {
+  const res = await managerAuthRequest(
+    `/manager/staff/${staffId}`,
+    { method: "DELETE" },
+    userId
+  );
+  if (!res?.success) throw createApiError(res?.message || "Could not delete staff.");
+  return res;
 }
 export function savePromotion() {
   return Promise.resolve(NOT_CONNECTED);
@@ -651,3 +667,11 @@ export function deletePromotion() {
 export function exportReport() {
   return Promise.resolve(NOT_CONNECTED);
 }
+
+/* ---- Chatbot ---------------------------------------------------- */
+export const sendChatMessage = async (message) => {
+  return await managerAuthRequest('/manager/chat', { 
+    method: "POST", 
+    body: JSON.stringify({ message }) 
+  });
+};

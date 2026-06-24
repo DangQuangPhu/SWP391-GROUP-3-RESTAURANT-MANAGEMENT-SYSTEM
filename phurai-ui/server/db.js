@@ -42,12 +42,17 @@ function getPool() {
           BEGIN
               ALTER TABLE dbo.Reservations DROP CONSTRAINT CK_Reservations_status;
           END
+
+          -- Normalize any legacy 'Checked-in' rows to the canonical 'Check-in' value.
+          UPDATE dbo.Reservations SET reservation_status = N'Check-in' WHERE reservation_status = N'Checked-in';
+          UPDATE dbo.Reservations SET reservation_status = N'Cancelled' WHERE reservation_status = N'Reject Check-in';
+
           ALTER TABLE dbo.Reservations ADD CONSTRAINT CK_Reservations_status CHECK (
               reservation_status IN (
                   N'Pending Request',  -- Khách vừa đặt online, chờ duyệt
                   N'Awaiting Deposit', -- Chờ khách cọc tiền
                   N'Confirmed',        -- Đã duyệt/Đã cọc (Bàn sẽ chuyển sang Reserved)
-                  N'Checked-in',       -- Lễ tân đã xác nhận khách đến cửa
+                  N'Check-in',         -- Lễ tân đã xác nhận khách đến cửa
                   N'Seated',           -- Khách đã vào bàn (Bàn sẽ chuyển sang Occupied)
                   N'Payment Pending',  -- Đang chờ thanh toán
                   N'Completed',        -- Đã thanh toán xong
@@ -57,6 +62,10 @@ function getPool() {
           );
         `);
         console.log("Database constraints synchronized successfully.");
+
+        // DIAGNOSTIC: Log all tables in the database to see why OrderItems is missing
+        const tablesResult = await pool.request().query("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'");
+        console.log("Tables in database:", tablesResult.recordset.map(t => t.TABLE_NAME));
       } catch (err) {
         console.error("Auto constraint patch failed:", err.message);
       }

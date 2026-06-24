@@ -123,10 +123,53 @@ async function handleUpdateProfile(req, res, { partial = false } = {}) {
   }
 }
 
+async function handleGetPayments(req, res) {
+  try {
+    const userId = req.userId || Number(req.params.userId);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "User id is required." });
+    }
+
+    const query = `
+      SELECT 
+        p.payment_id,
+        p.amount_paid,
+        p.change_given,
+        p.payment_status,
+        p.transaction_ref,
+        p.paid_at,
+        p.created_at,
+        p.payment_method_id,
+        o.order_id,
+        o.order_type,
+        r.reservation_id,
+        CASE
+          WHEN p.order_id IS NOT NULL AND o.order_type = 'Preorder' THEN 'Pre-ordered Items'
+          WHEN p.order_id IS NOT NULL THEN 'Dine-In Order'
+          WHEN p.reservation_id IS NOT NULL THEN 'Reservation Booking'
+          ELSE 'Other Payment'
+        END AS payment_purpose
+      FROM dbo.Payments p
+      LEFT JOIN dbo.Orders o ON p.order_id = o.order_id
+      LEFT JOIN dbo.Reservations r ON p.reservation_id = r.reservation_id
+      WHERE o.customer_id = ? OR r.customer_id = ?
+      ORDER BY COALESCE(p.paid_at, p.created_at) DESC
+    `;
+
+    const [payments] = await pool.query(query, [userId, userId]);
+    return res.json({ success: true, payments });
+  } catch (error) {
+    console.error("Get payments failed:", error);
+    return res.status(500).json({ success: false, message: "Could not fetch payment history." });
+  }
+}
+
 router.get("/me", resolveUserId, requireUserId, handleGetProfile);
 router.put("/me", resolveUserId, requireUserId, (req, res) => handleUpdateProfile(req, res));
+router.get("/me/payments", resolveUserId, requireUserId, handleGetPayments);
 router.get("/:userId", resolveUserId, handleGetProfile);
 router.put("/:userId", resolveUserId, (req, res) => handleUpdateProfile(req, res));
+router.get("/:userId/payments", resolveUserId, handleGetPayments);
 router.patch("/:userId", resolveUserId, (req, res) =>
   handleUpdateProfile(req, res, { partial: true })
 );

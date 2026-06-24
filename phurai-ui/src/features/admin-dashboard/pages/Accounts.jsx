@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiGet } from '@/core/api/httpClient';
 import AdminPageHeader from '@/features/admin-dashboard/components/AdminPageHeader';
 import AdminDataTable from '@/features/admin-dashboard/components/AdminDataTable';
+import { Edit, Trash2, UserPlus } from 'lucide-react';
 
 export default function Accounts() {
   const [accounts, setAccounts] = useState([]);
@@ -50,11 +51,20 @@ export default function Accounts() {
     {
       header: 'Role',
       key: 'role_name',
-      render: (row) => (
-        <span className="px-2.5 py-1 text-xs font-medium text-amber-800 bg-amber-50 rounded-full border border-amber-100">
-          {row.role_name || 'Customer'}
-        </span>
-      ),
+      render: (row) => {
+        const role = row.role_name || 'Customer';
+        let badgeColor = 'bg-slate-100 text-slate-700 border-slate-200';
+        
+        if (role === 'Admin') badgeColor = 'bg-purple-100 text-purple-700 border-purple-200';
+        else if (role === 'Manager') badgeColor = 'bg-blue-100 text-blue-700 border-blue-200';
+        else if (role === 'Restaurant Staff' || role === 'Kitchen Staff') badgeColor = 'bg-amber-100 text-amber-700 border-amber-200';
+        
+        return (
+          <span className={`px-2.5 py-1 text-xs font-medium rounded-full border ${badgeColor}`}>
+            {role}
+          </span>
+        );
+      },
     },
     {
       header: 'Status',
@@ -77,21 +87,17 @@ export default function Accounts() {
         <div className="flex gap-2">
           <button
             onClick={() => alert(`Edit user: ${row.full_name}`)}
-            className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+            className="p-2 rounded-md hover:bg-gray-100 text-gray-500 hover:text-blue-600 transition-colors"
             title="Edit User"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
+            <Edit className="w-4 h-4" />
           </button>
           <button
             onClick={() => alert(`Delete user: ${row.full_name}`)}
-            className="text-gray-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors"
+            className="p-2 rounded-md hover:bg-rose-50 text-gray-500 hover:text-rose-600 transition-colors"
             title="Delete User"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       ),
@@ -104,7 +110,12 @@ export default function Accounts() {
         title="Accounts"
         description="Manage restaurant user accounts, view active employees, and assign roles."
         primaryAction={{
-          label: '+ Create Account',
+          label: (
+            <span className="flex items-center gap-2">
+              <UserPlus className="w-4 h-4" />
+              Create Account
+            </span>
+          ),
           onClick: handleCreateAccount,
         }}
       />

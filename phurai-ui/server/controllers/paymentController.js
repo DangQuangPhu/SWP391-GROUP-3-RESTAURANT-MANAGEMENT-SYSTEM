@@ -282,7 +282,7 @@ export const handleSepayWebhook = async (req, res) => {
         const orderId = targetId;
         const orderResult = await transaction.request()
           .input('orderId', sql.Int, orderId)
-          .query('SELECT order_id, order_status, total_amount, amount_paid, table_id, qr_session_id FROM dbo.Orders WHERE order_id = @orderId');
+          .query('SELECT order_id, order_status, total_amount, amount_paid, table_id, qr_session_id, reservation_id, customer_id, discount_amount, applied_promo_code FROM dbo.Orders WHERE order_id = @orderId');
 
         if (orderResult.recordset.length === 0) {
           await transaction.rollback();
@@ -344,8 +344,25 @@ export const handleSepayWebhook = async (req, res) => {
             `);
         }
 
-        // Record the payment
-        await transaction.request()
+        if (order.reservation_id) {
+          await transaction.request()
+            .input('resId', sql.Int, order.reservation_id)
+            .query(`
+              UPDATE dbo.Reservations
+              SET reservation_status = N'Completed',
+                  updated_at = SYSDATETIME()
+              WHERE reservation_id = @resId
+            `);
+          
+          await transaction.request()
+            .input('resId', sql.Int, order.reservation_id)
+            .query(`
+              INSERT INTO dbo.ReservationTimelines (reservation_id, status_from, status_to, note, created_at)
+              VALUES (@resId, N'Seated', N'Completed', N'Payment completed, table set to cleaning.', SYSDATETIME())
+            `);
+        }
+
+        const paymentResult = await transaction.request()
           .input('orderId', sql.Int, orderId)
           .input('paymentMethodId', sql.TinyInt, 3) 
           .input('amountPaid', sql.Decimal(12, 2), transferAmount)
@@ -354,10 +371,33 @@ export const handleSepayWebhook = async (req, res) => {
           .query(`
             INSERT INTO dbo.Payments (
               order_id, payment_method_id, amount_paid, payment_status, transaction_ref, paid_at, created_at, updated_at
-            ) VALUES (
+            ) 
+            OUTPUT inserted.payment_id
+            VALUES (
               @orderId, @paymentMethodId, @amountPaid, @paymentStatus, @transactionRef, SYSDATETIME(), SYSDATETIME(), SYSDATETIME()
             )
           `);
+
+        const paymentId = paymentResult.recordset[0].payment_id;
+
+        if (order.applied_promo_code && order.discount_amount > 0) {
+           const voucherResult = await transaction.request()
+             .input('voucherCode', sql.NVarChar(40), order.applied_promo_code)
+             .query('SELECT voucher_id FROM dbo.Vouchers WHERE voucher_code = @voucherCode');
+             
+           if (voucherResult.recordset.length > 0) {
+              const voucherId = voucherResult.recordset[0].voucher_id;
+              await transaction.request()
+                .input('vId', sql.Int, voucherId)
+                .input('pId', sql.Int, paymentId)
+                .input('cId', sql.Int, order.customer_id || null)
+                .input('discount', sql.Decimal(12, 2), order.discount_amount)
+                .query(`
+                  INSERT INTO dbo.VoucherRedemptions (voucher_id, payment_id, customer_id, discount_amount, redeemed_at)
+                  VALUES (@vId, @pId, @cId, @discount, SYSDATETIME())
+                `);
+           }
+        }
 
         // Audit Log
         await transaction.request()
@@ -385,10 +425,72 @@ export const handleSepayWebhook = async (req, res) => {
           };
           io.emit('PAYMENT_STATUS_CHANGED', payload);
           io.emit('QR_SESSION_PAYMENT_COMPLETED', payload);
+          io.to("room:kitchen").emit("kds:clear_order", { orderId: orderId });
+          io.to("room:staff").to("room:manager").emit("table:status_changed", { tableId: order.table_id, status: 'Cleaning' });
           if (order.qr_session_id) {
             io.to(`session_${order.qr_session_id}`).emit('PAYMENT_STATUS_CHANGED', payload);
             io.to(`session_${order.qr_session_id}`).emit('QR_SESSION_PAYMENT_COMPLETED', payload);
           }
+        }
+
+        // Send Order Receipt Email
+        try {
+          let customerEmail = null;
+          let customerName = 'Guest';
+          const rawPool = await getRawPool();
+          
+          if (order.customer_id) {
+            const userRes = await rawPool.request()
+              .input('cId', sql.Int, order.customer_id)
+              .query('SELECT email, full_name FROM dbo.UserAccounts WHERE user_id = @cId');
+            if (userRes.recordset.length > 0) {
+              customerEmail = userRes.recordset[0].email;
+              customerName = userRes.recordset[0].full_name || 'Guest';
+            }
+          } else if (order.reservation_id) {
+            const resRes = await rawPool.request()
+              .input('rId', sql.Int, order.reservation_id)
+              .query('SELECT contact_email, contact_name FROM dbo.Reservations WHERE reservation_id = @rId');
+            if (resRes.recordset.length > 0) {
+              customerEmail = resRes.recordset[0].contact_email;
+              customerName = resRes.recordset[0].contact_name || 'Guest';
+            }
+          }
+
+          if (customerEmail) {
+            const itemsRes = await rawPool.request()
+              .input('oId', sql.Int, orderId)
+              .query("SELECT oi.quantity, oi.unit_price, d.dish_name FROM dbo.OrderItems oi JOIN dbo.Dishes d ON oi.dish_id = d.dish_id WHERE oi.order_id = @oId AND oi.item_status != N'Cancelled'");
+              
+            const orderItems = itemsRes.recordset.map(r => ({
+              name: r.dish_name,
+              qty: r.quantity,
+              price: r.unit_price
+            }));
+
+            await sendReservationInvoiceEmail({
+              to: customerEmail,
+              reservation: {
+                reservation_id: orderId,
+                contact_name: customerName,
+                contact_phone: '',
+                contact_email: customerEmail,
+                reservation_start_at: new Date(),
+                date: new Date().toLocaleDateString("vi-VN"),
+                time: new Date().toLocaleTimeString("vi-VN"),
+                guest_count: 0,
+                deposit_amount: 0,
+                final_total: outstandingAmount,
+                created_at: new Date(),
+                table_names: `Table ${order.table_id}`,
+                area_name: 'Dine-In'
+              },
+              preorderItems: orderItems,
+              totalAmount: receivedAmount
+            });
+          }
+        } catch (emailErr) {
+          console.error('[SePay Webhook] Failed to send order receipt email:', emailErr);
         }
       }
 

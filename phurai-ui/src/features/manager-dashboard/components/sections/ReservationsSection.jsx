@@ -13,7 +13,7 @@ import {
   Button,
   EmptyState,
 } from "../ManagerUI.jsx";
-import { RESERVATION_STATUS_META, RESERVATION_STATUS, FILTER_GROUPS } from "@/shared/reservationStatus.js";
+import { RESERVATION_STATUS_META, RESERVATION_STATUS, FILTER_GROUPS, ALL_RESERVATION_STATUSES } from "@/shared/reservationStatus.js";
 import { getReservationsFilterFromSearch } from "../../config/managerRoutes.js";
 import {
   confirmReservation, rejectReservation, cancelReservation, getReservationDetails, updateReservation, getReservationHistory, resolveEditRequest,
@@ -211,12 +211,10 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
         try {
           const rawIso = r.reservation_start_at;
           if (rawIso) {
-            const dt = new Date(rawIso);
-            const localDateStr = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-            const day = new Date(`${localDateStr}T12:00:00`);
-            const start = new Date(sd); start.setHours(0, 0, 0, 0);
-            const end = new Date(ed); end.setHours(23, 59, 59, 999);
-            matchDate = day >= start && day <= end;
+            const resDateStr = String(rawIso).slice(0, 10);
+            const startStr = format(new Date(sd), "yyyy-MM-dd");
+            const endStr = format(new Date(ed), "yyyy-MM-dd");
+            matchDate = resDateStr >= startStr && resDateStr <= endStr;
           }
         } catch { matchDate = true; }
       }
@@ -246,44 +244,19 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
   }, [reservationList, search, statusFilter, appliedRange]);
 
   /* ── KPI counts ── */
-  const pendingCount = useMemo(
-    () => reservationList.filter((r) => {
-      const s = (r.status || r.reservation_status || "").toLowerCase();
-      return s === "pending payment" || s === "pending request" || s === "pending";
-    }).length,
-    [reservationList]
+  const kpiTotalBookings = filtered.length;
+  const kpiPendingRequests = useMemo(
+    () => filtered.filter((r) => r.reservation_status === "Pending Request").length,
+    [filtered]
   );
-  const confirmedCount = useMemo(
-    () => reservationList.filter((r) => {
-      const s = (r.status || r.reservation_status || "").toLowerCase();
-      return s === "confirmed" || s === "reserved" || s === "paid" || s === "await check-in";
-    }).length,
-    [reservationList]
+  const kpiCompleted = useMemo(
+    () => filtered.filter((r) => r.reservation_status === "Completed").length,
+    [filtered]
   );
-  const seatedCount = useMemo(
-    () => reservationList.filter((r) => {
-      const s = (r.status || r.reservation_status || "").toLowerCase();
-      return s === "seated" || s === "cleaning" || s === "check-in" || s === "occupied" || s === "check-out";
-    }).length,
-    [reservationList]
+  const kpiLostBookings = useMemo(
+    () => filtered.filter((r) => r.reservation_status === "Cancelled" || r.reservation_status === "No Show").length,
+    [filtered]
   );
-  const checkOutCount = useMemo(
-    () => reservationList.filter((r) => {
-      const s = (r.status || r.reservation_status || "").toLowerCase();
-      return s === "completed" || s === "complete paid";
-    }).length,
-    [reservationList]
-  );
-  const todayCount = useMemo(() => {
-    const today = new Date();
-    return reservationList.filter((r) => {
-      const rawIso = r.reservation_start_at;
-      const dateRaw = r.reservation_date || (rawIso ? String(rawIso).slice(0, 10) : null);
-      if (!dateRaw) return false;
-      const rDate = new Date(dateRaw.includes("T") ? dateRaw : `${dateRaw}T12:00:00`);
-      return rDate.getDate() === today.getDate() && rDate.getMonth() === today.getMonth() && rDate.getFullYear() === today.getFullYear();
-    }).length;
-  }, [reservationList]);
 
   /* ════════════════════════════════════════════════════════════
      STATE MACHINE HANDLERS (Manager-Only Actions)
@@ -308,7 +281,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
         customer_email: full.customer_email || full.email || "",
         guest_count: full.guest_count || 1,
         table_id: full.table_id || "",
-        occasion: full.occasion || "",
+        occasion: full.dining_purpose || full.occasion || parseSpecialRequest(full.special_request || full.notes || "").diningPurpose || "",
         promotions: full.promotions || "",
         notes: parseSpecialRequest(full.special_request || full.notes || "").notes || "",
         status: (full.status || full.reservation_status || "").toLowerCase(),
@@ -326,7 +299,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
         customer_email: row.customer_email || row.email || "",
         guest_count: row.guest_count || 1,
         table_id: row.table_id || "",
-        occasion: row.occasion || "",
+        occasion: row.dining_purpose || row.occasion || parseSpecialRequest(row.special_request || row.notes || "").diningPurpose || "",
         promotions: row.promotions || "",
         notes: parseSpecialRequest(row.special_request || row.notes || "").notes || "",
         status: (row.status || row.reservation_status || "").toLowerCase(),
@@ -463,12 +436,17 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
     }
     const editId = active.reservation_id || active.id;
     try {
+      let reconstructedNotes = editForm.notes || "";
+      if (editForm.occasion) {
+        reconstructedNotes = `[Dining Purpose: ${editForm.occasion}]\n${reconstructedNotes}`.trim();
+      }
+
       const payload = {
         contact_name: editForm.customer_name,
         contact_phone: editForm.customer_phone,
         contact_email: editForm.customer_email,
         guest_count: editForm.guest_count,
-        special_request: editForm.notes,
+        special_request: reconstructedNotes,
         reservation_status: editForm.status === "reject check-in" ? RESERVATION_STATUS.REJECT_CHECK_IN : (editForm.status === "await check-in" ? RESERVATION_STATUS.AWAIT_CHECK_IN : editForm.status),
         preferred_area_id: active.preferred_area_id,
         reservation_start_at: new Date(editForm.reservation_start_at).toISOString(),
@@ -585,6 +563,39 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
   return (
     <div className="sfx-stack">
 
+      <div className="staff-reservation-kpis sfx-kpis mb-2" aria-label="Reservation summary">
+        <article className="sfx-kpi sfx-kpi--blue">
+          <div className="sfx-kpi__top">
+            <span className="sfx-kpi__icon" aria-hidden="true"><Icon name="calendar" size={18} /></span>
+          </div>
+          <p className="sfx-kpi__value">{kpiTotalBookings}</p>
+          <p className="sfx-kpi__label">Total Bookings</p>
+        </article>
+
+        <article className="sfx-kpi sfx-kpi--amber">
+          <div className="sfx-kpi__top">
+            <span className="sfx-kpi__icon" aria-hidden="true"><Icon name="bell" size={18} /></span>
+          </div>
+          <p className="sfx-kpi__value">{kpiPendingRequests}</p>
+          <p className="sfx-kpi__label">Pending Requests</p>
+        </article>
+
+        <article className="sfx-kpi sfx-kpi--green">
+          <div className="sfx-kpi__top">
+            <span className="sfx-kpi__icon" aria-hidden="true"><Icon name="check" size={18} /></span>
+          </div>
+          <p className="sfx-kpi__value">{kpiCompleted}</p>
+          <p className="sfx-kpi__label">Completed</p>
+        </article>
+
+        <article className="sfx-kpi sfx-kpi--red">
+          <div className="sfx-kpi__top">
+            <span className="sfx-kpi__icon" aria-hidden="true"><Icon name="close" size={18} /></span>
+          </div>
+          <p className="sfx-kpi__value">{kpiLostBookings}</p>
+          <p className="sfx-kpi__label">Lost Bookings</p>
+        </article>
+      </div>
 
       <div className="sfx-card sfx-card--overflow-visible staff-reservations-card" style={{ background: "#ffffff", padding: "24px", borderRadius: "14px", boxShadow: "0 6px 32px rgba(31,26,23,0.04)" }}>
         <header className="sfx-card__head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
@@ -614,8 +625,8 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
               style={{
                 padding: "8px 32px 8px 12px",
                 borderRadius: "8px",
-                border: "1px solid #e2dcd0",
-                background: "#f8f5ef",
+                border: "1px solid #e5e7eb",
+                background: "#ffffff",
                 color: "#1a1a1a",
                 fontSize: "14px",
                 fontWeight: "500",
@@ -629,9 +640,9 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
               }}
             >
               <option value="all">All statuses</option>
-              {Object.keys(FILTER_GROUPS).map((groupName) => (
-                <option key={groupName} value={groupName}>
-                  {groupName}
+              {ALL_RESERVATION_STATUSES.map((statusVal) => (
+                <option key={statusVal} value={statusVal}>
+                  {RESERVATION_STATUS_META[statusVal]?.label || statusVal}
                 </option>
               ))}
             </select>
@@ -695,18 +706,20 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
           </div>
 
           <div className={`staff-reservations-toolbar__date${pickerOpen ? " is-open" : ""}`} style={{ marginLeft: "auto", position: "relative" }}>
-            <span className="staff-reservations-toolbar__date-label" style={{ marginRight: 8, fontSize: 13, color: "#1a1a1a", fontWeight: 500 }}>
-              {selectedDateLabel}
-            </span>
             <button
               type="button"
-              className="sfx-kpi__icon sfx-kpi__icon--trigger staff-reservations-date-trigger"
+              className="staff-reservations-date-trigger"
               onClick={() => (pickerOpen ? closePicker() : openPicker())}
               aria-label="Select date"
               aria-expanded={pickerOpen}
-              style={{ position: "relative", zIndex: 20, background: "#f8f5ef", border: "1px solid #e2dcd0", borderRadius: 8, width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#b09460" }}
+              style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
             >
-              <Icon name="calendar" size={16} style={{ pointerEvents: "none" }} />
+              <span className="staff-reservations-toolbar__date-label" style={{ fontSize: 13, color: "#1a1a1a", fontWeight: 500 }}>
+                {selectedDateLabel}
+              </span>
+              <span className="sfx-kpi__icon sfx-kpi__icon--trigger" style={{ position: "relative", zIndex: 20, background: "#f8f5ef", border: "1px solid #e2dcd0", borderRadius: 8, width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#b09460" }}>
+                <Icon name="calendar" size={16} style={{ pointerEvents: "none" }} />
+              </span>
             </button>
             {pickerOpen && (
               <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", zIndex: 1000 }}>

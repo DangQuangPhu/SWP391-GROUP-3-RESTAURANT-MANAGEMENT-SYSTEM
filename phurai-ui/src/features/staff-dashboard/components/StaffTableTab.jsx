@@ -1,4 +1,5 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   SectionHead,
   SearchField,
@@ -379,7 +380,7 @@ function TableManagementFloorMap() {
                       {!isJiggling ? (
                         meta.slug === "cleaning" ? (
                           <Button size="sm" variant="soft" onClick={(e) => { e.stopPropagation(); actions.handleMarkClean(table); }}>
-                            Đã dọn xong (Mark as Available)
+                            Mark as Cleaned
                           </Button>
                         ) : (
                           <Button size="sm" onClick={() => setSelectedTable(table)}>
@@ -427,20 +428,20 @@ function TableManagementTableModal() {
   const showViewReservation = status === "Reserved";
   const showCheckOut = status === "Occupied" || status === "Cleaning";
 
-  return (
+  return createPortal(
     <div
-      className="staff-table-modal"
+      className="staff-table-modal fixed inset-0 z-[100] w-screen h-screen flex items-center justify-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="staff-table-modal-title"
     >
       <button
         type="button"
-        className="staff-table-modal__backdrop"
+        className="staff-table-modal__backdrop fixed inset-0 z-[100] w-screen h-screen bg-black/50"
         aria-label="Close table actions"
         onClick={onClose}
       />
-      <div className="staff-table-modal__panel">
+      <div className="staff-table-modal__panel relative z-[101]">
         <header className="staff-table-modal__head">
           <div>
             <p className="staff-table-modal__eyebrow">{table.area_name}</p>
@@ -536,7 +537,8 @@ function TableManagementTableModal() {
           Tip: Long-press any table card to drag and merge it.
         </p>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -601,20 +603,20 @@ function TableManagementReservationModal() {
   const email = reservation.customer_email || reservation.email;
   const contactLine = [phone, email].filter(Boolean).join(" · ");
 
-  return (
+  return createPortal(
     <div
-      className="staff-table-modal staff-table-modal--light staff-table-modal--briefing"
+      className="staff-table-modal staff-table-modal--light staff-table-modal--briefing fixed inset-0 z-[100] w-screen h-screen flex items-center justify-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="staff-reservation-checkin-title"
     >
       <button
         type="button"
-        className="staff-table-modal__backdrop"
+        className="staff-table-modal__backdrop fixed inset-0 z-[100] w-screen h-screen bg-black/50"
         aria-label="Close check-in"
         onClick={onClose}
       />
-      <div className="staff-table-modal__panel staff-checkin-brief">
+      <div className="staff-table-modal__panel staff-checkin-brief relative z-[101]">
         <header className="staff-checkin-brief__head">
           <div>
             <p className="staff-checkin-brief__eyebrow">Reservation check-in</p>
@@ -733,7 +735,8 @@ function TableManagementReservationModal() {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

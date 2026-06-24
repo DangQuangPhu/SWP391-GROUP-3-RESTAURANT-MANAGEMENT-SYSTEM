@@ -68,16 +68,23 @@ function KitchenDashboard() {
       loadQueue(true);
     };
 
+    const handleClearOrder = (payload) => {
+      toast?.(`Order #${payload.orderId} was paid. Related tickets cleared.`, "success");
+      loadQueue(true);
+    };
+
     socket.on("kitchen:new_preorder", handleNewPreorder);
     socket.on("kitchen:dish_ready", handleItemUpdate);
     socket.on("kitchen:dish_cancelled", handleItemUpdate);
     socket.on("kitchen:dish_preparing", handleItemUpdate);
+    socket.on("kds:clear_order", handleClearOrder);
 
     return () => {
       socket.off("kitchen:new_preorder", handleNewPreorder);
       socket.off("kitchen:dish_ready", handleItemUpdate);
       socket.off("kitchen:dish_cancelled", handleItemUpdate);
       socket.off("kitchen:dish_preparing", handleItemUpdate);
+      socket.off("kds:clear_order", handleClearOrder);
     };
   }, [socket, loadQueue, toast]);
 

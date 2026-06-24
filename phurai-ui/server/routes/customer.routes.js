@@ -6,5 +6,6 @@ const router = express.Router();
 
 // Customer endpoints
 router.post('/reservations', authMiddleware, requireCustomer, ctrl.submitReservation);
+router.get('/payments/history', authMiddleware, requireCustomer, ctrl.getCustomerPaymentHistory);
 
 export default router;

@@ -37,7 +37,7 @@ export const RESERVATION_STATUS_META = {
   'Awaiting Deposit': { label: 'Awaiting Deposit', tone: 'amber', color: 'bg-orange-100 text-orange-800 border-orange-200' },
   'Payment Pending': { label: 'Payment Pending', tone: 'amber', color: 'bg-orange-100 text-orange-800 border-orange-200' },
   'Confirmed': { label: 'Confirmed', tone: 'blue', color: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
-  'Check-in': { label: 'Checked In', tone: 'purple', color: 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200' },
+  'Check-in': { label: 'Check-in', tone: 'purple', color: 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200' },
   'Seated': { label: 'Seated', tone: 'purple', color: 'bg-pink-100 text-pink-800 border-pink-200' },
   'Completed': { label: 'Completed', tone: 'muted', color: 'bg-green-100 text-green-800 border-green-200' },
   'Cancelled': { label: 'Cancelled', tone: 'red', color: 'bg-red-100 text-red-800 border-red-200' },
@@ -69,6 +69,26 @@ export const FILTER_GROUPS = {
     RESERVATION_STATUS.NO_SHOW,
   ],
 };
+
+export const ALL_RESERVATION_STATUSES = [
+  RESERVATION_STATUS.PENDING_REQUEST,
+  RESERVATION_STATUS.AWAITING_DEPOSIT,
+  RESERVATION_STATUS.CONFIRMED,
+  RESERVATION_STATUS.CHECK_IN,
+  RESERVATION_STATUS.SEATED,
+  RESERVATION_STATUS.PAYMENT_PENDING,
+  RESERVATION_STATUS.COMPLETED,
+  RESERVATION_STATUS.CANCELLED,
+  RESERVATION_STATUS.NO_SHOW,
+];
+
+export const STAFF_VISIBLE_STATUSES = [
+  RESERVATION_STATUS.CONFIRMED,
+  RESERVATION_STATUS.CHECK_IN,
+  RESERVATION_STATUS.SEATED,
+  RESERVATION_STATUS.PAYMENT_PENDING,
+  RESERVATION_STATUS.COMPLETED
+];
 
 // Finite state machine validating status transitions
 export const ALLOWED_TRANSITIONS = {

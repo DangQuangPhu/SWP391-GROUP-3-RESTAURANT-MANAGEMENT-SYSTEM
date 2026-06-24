@@ -70,7 +70,7 @@ export function matchesReservationQueueFilter(reservation, filterId) {
     return status === "pending" || status === "confirmed";
   }
   if (filterId === "checked_in") {
-    return status === "checked_in" || status === "completed";
+    return status === "checked_in" || status === "completed" || status === "seated" || status === "occupied";
   }
   if (filterId === "rejected") {
     return isRejectedReservation(reservation);

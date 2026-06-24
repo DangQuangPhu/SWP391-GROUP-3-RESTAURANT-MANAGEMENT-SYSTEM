@@ -53,7 +53,7 @@ export default function PaymentSuccess({ onComplete }) {
           transition={{ delay: 0.6 }}
           className="text-2xl font-bold text-gray-900 dark:text-white mb-2"
         >
-          Thanh toán thành công!
+          Payment Successful!
         </motion.h2>
         
         <motion.div 
@@ -62,8 +62,8 @@ export default function PaymentSuccess({ onComplete }) {
           transition={{ delay: 0.7 }}
           className="text-gray-500 dark:text-gray-400 mb-8 flex flex-col space-y-2"
         >
-          <p>Cảm ơn quý khách. Chúc quý khách ngon miệng.</p>
-          <p className="text-sm">Hoá đơn đã được gửi tới email của bạn — vui lòng kiểm tra hộp thư.</p>
+          <p>Thank you. Enjoy your meal.</p>
+          <p className="text-sm">Your receipt has been sent to your email — please check your inbox.</p>
         </motion.div>
         
         <motion.button
@@ -73,7 +73,7 @@ export default function PaymentSuccess({ onComplete }) {
           onClick={onComplete}
           className="w-full bg-green-500 hover:bg-green-600 text-white font-medium py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-[1.02] shadow-lg shadow-green-500/30"
         >
-          Hoàn tất
+          Done
         </motion.button>
       </motion.div>
     </div>

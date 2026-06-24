@@ -266,6 +266,13 @@ function StaffReservationDetail({ reservation, userId, checkedInAt: checkedInAtP
           #{String(reservation_id).padStart(6, "0")}
         </h2>
         <ReservationStatusBadge status={reservation_status} size="md" />
+        {diningPurpose && (
+          <div style={{ marginTop: 12 }}>
+            <span style={{ display: "inline-block", background: "rgba(201,169,110,0.15)", color: "#b09460", padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 600, border: "1px solid rgba(201,169,110,0.3)" }}>
+              ★ {diningPurpose}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── Info grid ── */}

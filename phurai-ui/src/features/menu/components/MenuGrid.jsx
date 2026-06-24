@@ -74,11 +74,11 @@ function MenuAddButton({ onClick, label }) {
   return (
     <button
       type="button"
-      className="menu-card__add-btn"
+      className="menu-card__add-btn absolute bottom-3 right-3 w-10 h-10 bg-amber-500 hover:bg-amber-600 text-white rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(245,158,11,0.3)] active:scale-95 transition-all z-10 border-2 border-white"
       onClick={onClick}
       aria-label={label}
     >
-      +
+      <span className="text-2xl leading-none font-light mb-0.5">+</span>
     </button>
   );
 }

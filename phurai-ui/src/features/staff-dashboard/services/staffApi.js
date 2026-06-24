@@ -261,6 +261,14 @@ export async function fetchReservationQueue(userId) {
   return { source: res.source, data };
 }
 
+export async function assignStaffTable(reservationId, userId, payload) {
+  const res = await staffPost(`/staff/reservations/${reservationId}/assign-table`, userId, payload);
+  if (!res?.success) {
+    throw new Error(res?.message || "Failed to assign table");
+  }
+  return res;
+}
+
 /** Unwrap reservation array from API / service response shapes. */
 export function unwrapReservationList(res) {
   if (Array.isArray(res)) return res;
@@ -411,11 +419,12 @@ export async function resetStaffTable(tableId, userId) {
 }
 
 export async function markStaffTableClean(tableId, userId) {
-  const res = await request(`/staff/tables/${tableId}/mark-clean`, {
-    method: "PUT",
+  const res = await request(`/staff/tables/${tableId}/status`, {
+    method: "PATCH",
     headers: profileRequestHeaders(userId, {
       "Content-Type": "application/json",
-    })
+    }),
+    body: JSON.stringify({ status: "Available" })
   });
   if (!res?.success) throw new Error(res?.message || "Failed to mark table clean");
   return res;

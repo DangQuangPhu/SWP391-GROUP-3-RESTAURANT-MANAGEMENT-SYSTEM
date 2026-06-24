@@ -167,13 +167,207 @@ export {
     clearTestReservations
 } from './managerReservationController.js';
 
-export const getShifts = (req, res) => res.status(200).json({ success: true, data: [] });
-export const getSchedules = (req, res) => res.status(200).json({ success: true, data: [] });
-export const assignSchedule = (req, res) => res.status(200).json({ success: true, data: {} });
-export const updateScheduleAttendance = (req, res) => res.status(200).json({ success: true, data: {} });
+export const getShifts = async (req, res) => {
+    try {
+        const pool = await getRawPool();
+        const result = await pool.request()
+            .query('SELECT shift_id, shift_name, CONVERT(VARCHAR(5), start_time, 108) AS start_time, CONVERT(VARCHAR(5), end_time, 108) AS end_time FROM dbo.Shifts WHERE is_active = 1 ORDER BY start_time');
+        return res.json({ success: true, data: result.recordset });
+    } catch (error) {
+        console.error('[managerController] getShifts error:', error);
+        return res.status(500).json({ success: false, message: 'Internal server error fetching shifts.' });
+    }
+};
 
-export const getShiftMapping = (req, res) => res.status(200).json({ success: true, data: {} });
-export const updateShiftMapping = (req, res) => res.status(200).json({ success: true, data: {} });
+export const getSchedules = async (req, res) => {
+    try {
+        const { date } = req.query;
+        if (!date) {
+            return res.status(400).json({ success: false, message: 'Date is required.' });
+        }
+        const pool = await getRawPool();
+        const result = await pool.request()
+            .input('workDate', sql.Date, date)
+            .query(`
+                SELECT 
+                    ss.schedule_id, ss.user_id, ss.shift_id, ss.work_date, ss.attendance_status,
+                    u.full_name, r.role_name, u.base_salary,
+                    s.shift_name, CONVERT(VARCHAR(5), s.start_time, 108) AS start_time, CONVERT(VARCHAR(5), s.end_time, 108) AS end_time
+                FROM dbo.StaffSchedules ss
+                JOIN dbo.Users u ON ss.user_id = u.user_id
+                JOIN dbo.Roles r ON u.role_id = r.role_id
+                JOIN dbo.Shifts s ON ss.shift_id = s.shift_id
+                WHERE ss.work_date = @workDate
+                ORDER BY s.start_time, u.full_name
+            `);
+        return res.json({ success: true, data: result.recordset });
+    } catch (error) {
+        console.error('[managerController] getSchedules error:', error);
+        return res.status(500).json({ success: false, message: 'Internal server error fetching schedules.' });
+    }
+};
+
+export const assignSchedule = async (req, res) => {
+    try {
+        const { work_date, user_id, shift_id } = req.body;
+        const manager_id = req.user?.user_id;
+
+        if (!work_date || !user_id || !shift_id) {
+            return res.status(400).json({ success: false, message: 'Missing required fields.' });
+        }
+
+        const pool = await getRawPool();
+        
+        // Check if schedule already exists
+        const checkResult = await pool.request()
+            .input('userId', sql.Int, user_id)
+            .input('shiftId', sql.TinyInt, shift_id)
+            .input('workDate', sql.Date, work_date)
+            .query('SELECT schedule_id FROM dbo.StaffSchedules WHERE user_id = @userId AND shift_id = @shiftId AND work_date = @workDate');
+            
+        if (checkResult.recordset.length > 0) {
+            return res.status(409).json({ success: false, message: 'Staff is already assigned to this shift on this date.' });
+        }
+
+        const result = await pool.request()
+            .input('userId', sql.Int, user_id)
+            .input('shiftId', sql.TinyInt, shift_id)
+            .input('workDate', sql.Date, work_date)
+            .input('assignedBy', sql.Int, manager_id || null)
+            .query(`
+                INSERT INTO dbo.StaffSchedules (user_id, shift_id, work_date, attendance_status, assigned_by)
+                OUTPUT inserted.schedule_id
+                VALUES (@userId, @shiftId, @workDate, N'Scheduled', @assignedBy)
+            `);
+            
+        return res.json({ success: true, data: { schedule_id: result.recordset[0].schedule_id } });
+    } catch (error) {
+        console.error('[managerController] assignSchedule error:', error);
+        return res.status(500).json({ success: false, message: 'Internal server error assigning schedule.' });
+    }
+};
+
+export const updateScheduleAttendance = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!id || !status) {
+            return res.status(400).json({ success: false, message: 'Missing schedule ID or status.' });
+        }
+
+        const validStatuses = ["Scheduled", "Present", "Absent", "On Leave"];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ success: false, message: 'Invalid attendance status.' });
+        }
+
+        const pool = await getRawPool();
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .input('status', sql.NVarChar(20), status)
+            .query(`
+                UPDATE dbo.StaffSchedules 
+                SET attendance_status = @status, updated_at = SYSDATETIME()
+                WHERE schedule_id = @id
+            `);
+
+        if (result.rowsAffected[0] === 0) {
+            return res.status(404).json({ success: false, message: 'Schedule not found.' });
+        }
+
+        return res.json({ success: true, message: 'Status updated successfully.' });
+    } catch (error) {
+        console.error('[managerController] updateScheduleAttendance error:', error);
+        return res.status(500).json({ success: false, message: 'Internal server error updating attendance.' });
+    }
+};
+
+import fs from 'fs';
+
+export const getShiftMapping = async (req, res) => {
+    try {
+        const pool = await getRawPool();
+        const result = await pool.request()
+            .query("SELECT setting_value FROM dbo.RestaurantSettings WHERE setting_key = 'shift_mapping'");
+            
+        let mapping = {};
+        if (result.recordset.length > 0) {
+            try {
+                mapping = JSON.parse(result.recordset[0].setting_value);
+            } catch (e) {
+                console.error("Failed to parse shift mapping JSON", e);
+            }
+        }
+        
+        fs.writeFileSync('/Users/phu/.gemini/antigravity-ide/brain/4f85d582-51c9-42b3-b311-de3c3d6b74b0/scratch/getShiftMappingLog.json', JSON.stringify({
+            recordset: result.recordset,
+            mapping: mapping
+        }));
+        
+        return res.json({ success: true, data: mapping });
+    } catch (error) {
+        fs.writeFileSync('/Users/phu/.gemini/antigravity-ide/brain/4f85d582-51c9-42b3-b311-de3c3d6b74b0/scratch/getShiftMappingLog.json', JSON.stringify({ error: error.message }));
+        console.error('[managerController] getShiftMapping error:', error);
+        return res.status(500).json({ success: false, message: 'Internal server error fetching shift mapping.' });
+    }
+};
+
+export const updateShiftMapping = async (req, res) => {
+    try {
+        const { id: staffId } = req.params;
+        const { shift } = req.body;
+        
+        fs.appendFileSync('/Users/phu/.gemini/antigravity-ide/brain/4f85d582-51c9-42b3-b311-de3c3d6b74b0/scratch/updateShiftMappingLog.json', JSON.stringify({ event: 'start', staffId, shift }) + '\\n');
+
+        if (!staffId || !shift) {
+            return res.status(400).json({ success: false, message: 'Staff ID and shift are required' });
+        }
+
+        const pool = await getRawPool();
+        const transaction = new sql.Transaction(pool);
+        await transaction.begin();
+        
+        try {
+            // Get current mapping with UPDLOCK
+            const result = await transaction.request()
+                .query("SELECT setting_value FROM dbo.RestaurantSettings WITH (UPDLOCK) WHERE setting_key = 'shift_mapping'");
+                
+            let mapping = {};
+            if (result.recordset.length > 0) {
+                try {
+                    mapping = JSON.parse(result.recordset[0].setting_value);
+                } catch (e) {
+                    mapping = {};
+                }
+            }
+            
+            // Update mapping
+            mapping[staffId] = shift;
+            const newJson = JSON.stringify(mapping);
+            
+            if (result.recordset.length > 0) {
+                await transaction.request()
+                    .input('val', sql.NVarChar(sql.MAX), newJson)
+                    .query("UPDATE dbo.RestaurantSettings SET setting_value = @val, updated_at = SYSDATETIME() WHERE setting_key = 'shift_mapping'");
+            } else {
+                await transaction.request()
+                    .input('val', sql.NVarChar(sql.MAX), newJson)
+                    .query("INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description) VALUES ('shift_mapping', @val, 'Staff default shift mapping')");
+            }
+            
+            await transaction.commit();
+            fs.appendFileSync('/Users/phu/.gemini/antigravity-ide/brain/4f85d582-51c9-42b3-b311-de3c3d6b74b0/scratch/updateShiftMappingLog.json', JSON.stringify({ event: 'success', mapping }) + '\\n');
+            return res.json({ success: true, data: mapping });
+        } catch (innerError) {
+            await transaction.rollback();
+            throw innerError;
+        }
+    } catch (error) {
+        fs.appendFileSync('/Users/phu/.gemini/antigravity-ide/brain/4f85d582-51c9-42b3-b311-de3c3d6b74b0/scratch/updateShiftMappingLog.json', JSON.stringify({ event: 'error', error: error.message }) + '\\n');
+        console.error('[managerController] updateShiftMapping error:', error);
+        return res.status(500).json({ success: false, message: 'Internal server error updating shift mapping.' });
+    }
+};
 
 export const createTable = (req, res) => res.status(200).json({ success: true, data: {} });
 export const getNextTableNumber = (req, res) => res.status(200).json({ success: true, data: {} });

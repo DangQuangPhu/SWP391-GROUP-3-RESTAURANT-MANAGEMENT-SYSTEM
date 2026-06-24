@@ -438,6 +438,7 @@ CREATE TABLE dbo.Orders (
     service_charge      DECIMAL(12,2) NOT NULL CONSTRAINT DF_Orders_service DEFAULT 0,
     total_amount        DECIMAL(12,2) NOT NULL CONSTRAINT DF_Orders_total DEFAULT 0,
     amount_paid         DECIMAL(12,2) NOT NULL CONSTRAINT DF_Orders_paid DEFAULT 0,
+    applied_promo_code  NVARCHAR(40) NULL,
     created_at          DATETIME2(0) NOT NULL CONSTRAINT DF_Orders_created_at DEFAULT SYSDATETIME(),
     updated_at          DATETIME2(0) NOT NULL CONSTRAINT DF_Orders_updated_at DEFAULT SYSDATETIME(),
     CONSTRAINT PK_Orders PRIMARY KEY (order_id),
@@ -553,6 +554,7 @@ CREATE TABLE dbo.Promotions (
     start_at            DATETIME2(0) NOT NULL,
     end_at              DATETIME2(0) NOT NULL,
     is_active           BIT NOT NULL CONSTRAINT DF_Promotions_is_active DEFAULT 1,
+    applicable_to       NVARCHAR(20) NOT NULL CONSTRAINT DF_Promotions_applicable DEFAULT N'All',
     created_by_staff_id INT NULL,
     created_at          DATETIME2(0) NOT NULL CONSTRAINT DF_Promotions_created_at DEFAULT SYSDATETIME(),
     updated_at          DATETIME2(0) NOT NULL CONSTRAINT DF_Promotions_updated_at DEFAULT SYSDATETIME(),
@@ -565,7 +567,8 @@ CREATE TABLE dbo.Promotions (
     ),
     CONSTRAINT CK_Promotions_min_order CHECK (min_order_value >= 0),
     CONSTRAINT CK_Promotions_max_discount CHECK (max_discount IS NULL OR max_discount >= 0),
-    CONSTRAINT CK_Promotions_date CHECK (end_at > start_at)
+    CONSTRAINT CK_Promotions_date CHECK (end_at > start_at),
+    CONSTRAINT CK_Promotions_applicable CHECK (applicable_to IN (N'Reservation', N'Order', N'All'))
 );
 GO
 
@@ -638,8 +641,9 @@ GO
 
 CREATE TABLE dbo.CustomerReviews (
     review_id        INT IDENTITY(1,1) NOT NULL,
-    customer_id      INT NOT NULL,
-    order_id         INT NOT NULL,
+    customer_id      INT NULL,
+    reservation_id   INT NULL,
+    order_id         INT NULL,
     food_rating      TINYINT NOT NULL,
     service_rating   TINYINT NOT NULL,
     ambiance_rating  TINYINT NULL,
@@ -651,8 +655,8 @@ CREATE TABLE dbo.CustomerReviews (
     is_visible       BIT NOT NULL CONSTRAINT DF_CustomerReviews_is_visible DEFAULT 1,
     created_at       DATETIME2(0) NOT NULL CONSTRAINT DF_CustomerReviews_created_at DEFAULT SYSDATETIME(),
     CONSTRAINT PK_CustomerReviews PRIMARY KEY (review_id),
-    CONSTRAINT UQ_CustomerReviews_customer_order UNIQUE (customer_id, order_id),
     CONSTRAINT FK_CustomerReviews_Customer FOREIGN KEY (customer_id) REFERENCES dbo.UserAccounts(user_id),
+    CONSTRAINT FK_CustomerReviews_Reservations FOREIGN KEY (reservation_id) REFERENCES dbo.Reservations(reservation_id) ON DELETE SET NULL,
     CONSTRAINT FK_CustomerReviews_Orders FOREIGN KEY (order_id) REFERENCES dbo.Orders(order_id) ON DELETE CASCADE,
     CONSTRAINT CK_CustomerReviews_food CHECK (food_rating BETWEEN 1 AND 5),
     CONSTRAINT CK_CustomerReviews_service CHECK (service_rating BETWEEN 1 AND 5),
@@ -696,7 +700,7 @@ GO
 
 CREATE TABLE dbo.RecommendationLogs (
     recommendation_id INT IDENTITY(1,1) NOT NULL,
-    customer_id       INT NOT NULL,
+    customer_id       INT NULL,
     dish_id           INT NOT NULL,
     score             DECIMAL(5,4) NOT NULL CONSTRAINT DF_RecommendationLogs_score DEFAULT 0,
     reason            NVARCHAR(255) NULL,
@@ -728,6 +732,8 @@ CREATE INDEX IX_KitchenTickets_status_sent ON dbo.KitchenTickets(kitchen_status,
 CREATE INDEX IX_Payments_paid_at ON dbo.Payments(paid_at);
 CREATE INDEX IX_Payments_order ON dbo.Payments(order_id);
 CREATE INDEX IX_Vouchers_promotion ON dbo.Vouchers(promotion_id);
+CREATE UNIQUE INDEX UQ_CustomerReviews_order ON dbo.CustomerReviews(order_id) WHERE order_id IS NOT NULL;
+CREATE UNIQUE INDEX UQ_CustomerReviews_reservation ON dbo.CustomerReviews(reservation_id) WHERE reservation_id IS NOT NULL;
 CREATE INDEX IX_CustomerReviews_order ON dbo.CustomerReviews(order_id);
 CREATE INDEX IX_Notifications_user_read ON dbo.Notifications(user_id, is_read);
 CREATE INDEX IX_OtpTokens_email_purpose_created ON dbo.OtpTokens(email, purpose, created_at DESC);
@@ -962,7 +968,17 @@ VALUES
 (5, NULL,3,    2, '2026-05-18T18:00:00', '2026-05-18T20:00:00', 2, N'Walk-in guest',            N'Check-in', N'Walk-in', 3, '2026-05-18T17:55:00', '2026-05-18T18:00:00'),
 (6,  7, NULL, 2, '2026-04-10T19:00:00', '2026-04-10T21:00:00', 2, NULL,                        N'Completed',  N'Online',  3, '2026-04-08T10:00:00', '2026-04-10T18:55:00'),
 (7,  8, NULL, 4, '2026-04-15T20:00:00', '2026-04-15T22:00:00', 4, N'VIP birthday dinner',      N'Completed',  N'Online',  4, '2026-04-13T09:30:00', '2026-04-15T19:55:00'),
-(8, 10, NULL, 1, '2026-06-25T19:00:00', '2026-06-25T21:00:00', 3, N'Customer requested date change', N'Pending Request', N'Online', 3, '2026-06-18T10:00:00', NULL);
+(8, 10, NULL, 1, '2026-06-25T19:00:00', '2026-06-25T21:00:00', 3, N'Customer requested date change', N'Pending Request', N'Online', 3, '2026-06-18T10:00:00', NULL),
+(9,  7, NULL, 1, '2026-06-24T18:30:00', '2026-06-24T20:30:00', 2, N'[Dining Purpose: Casual Date]', N'Confirmed',  N'Online',  3, '2026-06-20T09:15:00', NULL),
+(10, 8, NULL, 4, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 4, N'[Dining Purpose: Business] window seat', N'Pending Request', N'Online', NULL, NULL, NULL),
+(11, 9, NULL, 2, '2026-06-24T12:00:00', '2026-06-24T14:00:00', 3, N'[Dining Purpose: Casual Dining]', N'Awaiting Deposit', N'Online', NULL, NULL, NULL),
+(12, 10, NULL, 5, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 6, N'[Dining Purpose: Birthday] extra cake', N'Check-in', N'Online', 4, '2026-06-24T08:00:00', '2026-06-24T19:55:00'),
+(13, NULL, 3, 2, '2026-06-24T18:00:00', '2026-06-24T20:00:00', 2, N'[Dining Purpose: Anniversary]', N'Seated', N'Walk-in', 3, '2026-06-24T17:55:00', '2026-06-24T18:00:00'),
+(14, 7, NULL, 2, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 2, N'[Dining Purpose: Casual Dining]', N'Payment Pending', N'Online', 3, '2026-06-20T10:00:00', '2026-06-24T18:55:00'),
+(15, 8, NULL, 4, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 4, N'[Dining Purpose: Celebration]', N'Completed', N'Online', 4, '2026-06-20T09:30:00', '2026-06-24T19:55:00'),
+(16, 10, NULL, 1, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 3, N'[Dining Purpose: Casual Date]', N'Cancelled', N'Online', 3, '2026-06-20T10:00:00', NULL),
+(17, 9, NULL, 2, '2026-06-24T18:30:00', '2026-06-24T20:30:00', 2, N'[Dining Purpose: Business]', N'No Show', N'Online', 3, '2026-06-20T11:00:00', NULL),
+(18, 7, NULL, 1, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 2, N'[Dining Purpose: Casual Dining]', N'Confirmed', N'Online', 3, '2026-06-20T12:00:00', NULL);
 SET IDENTITY_INSERT dbo.Reservations OFF;
 GO
 
@@ -990,7 +1006,8 @@ INSERT INTO dbo.QROrderSessions
 (qr_session_id, table_id, reservation_id, customer_id, token, session_status, generated_by_staff_id, generated_at, expires_at)
 VALUES
 (1, 10, NULL, NULL, N'qr-session-t03-20260518-1900', N'Active', 3, '2026-05-18T19:00:00', '2026-05-18T22:00:00'), -- Khớp S-03
-(2, 6, 2, 8,    N'qr-session-v02-20260520-1900', N'Active', 3, '2026-05-20T18:50:00', '2026-05-20T22:00:00'); -- Khớp VIP-2
+(2, 6, 2, 8,    N'qr-session-v02-20260520-1900', N'Active', 3, '2026-05-20T18:50:00', '2026-05-20T22:00:00'), -- Khớp VIP-2
+(3, 1, 9, NULL, N'qr-session-wina-live-demo', N'Active', 3, SYSDATETIME(), DATEADD(hour, 4, SYSDATETIME())); -- Live QR Session cho Bàn WIN-A (Res 9)
 SET IDENTITY_INSERT dbo.QROrderSessions OFF;
 GO
 
@@ -1004,7 +1021,8 @@ VALUES
 (3, 7, 6,  8,    4, NULL, N'Dine In',  N'Paid',            1380000, 50000, 66500, 1396500, '2026-04-15T20:10:00'), -- Khớp VIP-2
 (4, 1, 1,  7,    3, NULL, N'Dine In',  N'Open',             425000,     0,     0,  425000, '2026-05-20T18:40:00'), -- Khớp WIN-A
 (5, 2, 5,  8,    3, 2,    N'Preorder', N'Sent To Kitchen', 1567000,     0, 78350, 1645350, '2026-05-20T19:00:00'), -- Khớp VIP-1
-(6, NULL, 10, NULL, NULL, 1,  N'QR Self',  N'Sent To Kitchen',  336000,     0,     0,  336000, '2026-05-18T19:05:00'); -- Khớp S-03
+(6, NULL, 10, NULL, NULL, 1,  N'QR Self',  N'Sent To Kitchen',  336000,     0,     0,  336000, '2026-05-18T19:05:00'), -- Khớp S-03
+(7, 9, 1, NULL, NULL, 3,  N'QR Self',  N'Sent To Kitchen',  747000,     0,     0,  747000, SYSDATETIME()); -- Live QR Order cho Bàn WIN-A (KDS Test)
 SET IDENTITY_INSERT dbo.Orders OFF;
 GO
 
@@ -1026,7 +1044,9 @@ VALUES
 (12, 5,  9, 1, 499000, NULL,             N'Preparing'),
 (13, 5, 18, 2,  89000, NULL,             N'Ready'),
 (14, 6,  7, 1, 188000, NULL,             N'Preparing'),
-(15, 6,  6, 1, 148000, N'No mushrooms', N'Pending');
+(15, 6,  6, 1, 148000, N'No mushrooms', N'Pending'),
+(16, 7,  9, 1, 499000, N'QR Món 1 (Live)', N'Sent To Kitchen'),
+(17, 7, 12, 1, 248000, N'QR Món 2 (Live)', N'Sent To Kitchen');
 SET IDENTITY_INSERT dbo.OrderItems OFF;
 GO
 
@@ -1038,7 +1058,9 @@ VALUES
 (2, 12, N'Preparing', 2, 5, '2026-05-20T19:00:00', '2026-05-20T19:02:00', NULL),
 (3, 13, N'Ready',   3, 6, '2026-05-20T19:00:00', '2026-05-20T19:01:00', '2026-05-20T19:08:00'),
 (4, 14, N'Preparing', 3, 5, '2026-05-18T19:05:00', '2026-05-18T19:07:00', NULL),
-(5, 15, N'Pending',   3, NULL,'2026-05-18T19:05:00', NULL, NULL);
+(5, 15, N'Pending',   3, NULL,'2026-05-18T19:05:00', NULL, NULL),
+(6, 16, N'Pending',   3, NULL, SYSDATETIME(), NULL, NULL),
+(7, 17, N'Pending',   3, NULL, SYSDATETIME(), NULL, NULL);
 SET IDENTITY_INSERT dbo.KitchenTickets OFF;
 GO
 
@@ -1127,7 +1149,11 @@ VALUES
 (2, 4, N'MANAGER_RESOLVE_REQUEST',    N'Reservations', 8,
  N'{"reservation_status":"Request"}',
  N'{"reservation_status":"Confirmed"}',
- '127.0.0.1', '2026-06-18T10:05:00');
+ '127.0.0.1', '2026-06-18T10:05:00'),
+(3, 4, N'ASSIGN_TABLE',               N'Reservations', 12,
+ N'{"reservation_status":"Check-in","table_id":null}',
+ N'{"reservation_status":"Seated","table_id":10}',
+ '127.0.0.1', '2026-06-24T19:55:00');
 SET IDENTITY_INSERT dbo.AuditLogs OFF;
 GO
 
@@ -1274,4 +1300,81 @@ GO
 
 -- tiếng việt -- 33. Lấy dữ liệu bảng Nhật ký Trạng thái Đặt bàn (ReservationTimelines)
 SELECT timeline_id, reservation_id, event_type, performed_by, notes, created_at FROM dbo.ReservationTimelines;
+GO
+
+-- ====================================================================================
+-- SCRIPT TỰ ĐỘNG TẠO DỮ LIỆU GIẢ LẬP (MOCK DATA) CHO 60 NGÀY QUA DÀNH CHO BẢNG ĐIỀU KHIỂN
+-- ====================================================================================
+
+-- 1. Xóa dữ liệu giả lập cũ (nếu có) để tránh trùng lặp
+DELETE FROM dbo.KitchenTickets WHERE order_item_id IN (SELECT order_item_id FROM dbo.OrderItems WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE order_note = N'AutoMock'));
+DELETE FROM dbo.Payments WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE order_note = N'AutoMock');
+DELETE FROM dbo.OrderItems WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE order_note = N'AutoMock');
+DELETE FROM dbo.Orders WHERE order_note = N'AutoMock';
+DELETE FROM dbo.Reservations WHERE contact_name LIKE N'AutoMock%';
+
+-- 2. Khai báo biến vòng lặp
+DECLARE @days_ago INT = 60;
+DECLARE @current_date DATETIME2;
+DECLARE @daily_orders INT;
+DECLARE @random_rev DECIMAL(12,2);
+DECLARE @res_count INT;
+DECLARE @i INT;
+DECLARE @order_id INT;
+DECLARE @order_item_id INT;
+
+WHILE @days_ago >= 0
+BEGIN
+    SET @current_date = DATEADD(day, -@days_ago, SYSDATETIME());
+    
+    -- Tạo 10-20 đơn hàng mỗi ngày
+    SET @daily_orders = FLOOR(RAND() * 11) + 10;
+    
+    -- Tạo 2-5 đặt bàn mỗi ngày
+    SET @res_count = FLOOR(RAND() * 4) + 2;
+    
+    SET @i = 0;
+    WHILE @i < @res_count
+    BEGIN
+        INSERT INTO dbo.Reservations (contact_name, contact_phone, reservation_start_at, guest_count, reservation_status, created_at, updated_at)
+        VALUES (N'AutoMock ' + CAST(@days_ago AS NVARCHAR) + '-' + CAST(@i AS NVARCHAR), '0900000000', 
+                DATEADD(hour, 19, CAST(CAST(@current_date AS DATE) AS DATETIME2)), 
+                FLOOR(RAND() * 4) + 2, 
+                CASE WHEN @days_ago > 0 THEN N'Completed' ELSE N'Seated' END, 
+                @current_date, @current_date);
+        SET @i = @i + 1;
+    END
+
+    SET @i = 0;
+    WHILE @i < @daily_orders
+    BEGIN
+        SET @random_rev = FLOOR(RAND() * 1500000) + 500000;
+        
+        INSERT INTO dbo.Orders (table_id, order_type, order_status, order_note, subtotal, discount_amount, service_charge, total_amount, amount_paid, created_at, updated_at)
+        VALUES (1, N'Dine In', CASE WHEN @days_ago > 0 THEN N'Paid' ELSE N'Sent To Kitchen' END, N'AutoMock', @random_rev, 0, 0, @random_rev, @random_rev, @current_date, @current_date);
+        
+        SET @order_id = SCOPE_IDENTITY();
+
+        INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, item_status, created_at, updated_at)
+        VALUES (@order_id, FLOOR(RAND() * 5) + 1, FLOOR(RAND() * 3) + 1, 100000, N'Served', @current_date, @current_date);
+        
+        SET @order_item_id = SCOPE_IDENTITY();
+
+        IF @days_ago > 0
+        BEGIN
+            INSERT INTO dbo.Payments (order_id, payment_method_id, amount_paid, change_given, payment_status, paid_at, created_at, updated_at)
+            VALUES (@order_id, 1, @random_rev, 0, N'Completed', @current_date, @current_date, @current_date);
+        END
+        ELSE
+        BEGIN
+            -- Nếu là ngày hôm nay, giả lập có bếp đang làm
+            INSERT INTO dbo.KitchenTickets (order_item_id, kitchen_status, priority_level, sent_at)
+            VALUES (@order_item_id, N'Preparing', 2, @current_date);
+        END
+
+        SET @i = @i + 1;
+    END
+
+    SET @days_ago = @days_ago - 1;
+END
 GO

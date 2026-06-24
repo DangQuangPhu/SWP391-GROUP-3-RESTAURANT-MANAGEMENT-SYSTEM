@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "./StaffUI.jsx";
 import { asArray } from "@/utils/asArray.js";
 import "../styles/staff-order-tab.css";
@@ -42,15 +43,15 @@ function StaffAddItemModal({ open, dishes, onClose, onSubmit, busy }) {
     });
   };
 
-  return (
-    <div className="staff-order-modal" role="dialog" aria-modal="true">
+  return createPortal(
+    <div className="staff-order-modal fixed inset-0 z-[100] w-screen h-screen flex items-center justify-center" role="dialog" aria-modal="true">
       <button
         type="button"
-        className="staff-order-modal__backdrop"
+        className="staff-order-modal__backdrop fixed inset-0 z-[100] w-screen h-screen bg-black/50"
         aria-label="Close"
         onClick={onClose}
       />
-      <div className="staff-order-modal__panel">
+      <div className="staff-order-modal__panel relative z-[101]">
         <header className="staff-order-modal__head">
           <div>
             <h3 id="staff-add-item-title">Add Item</h3>
@@ -126,7 +127,8 @@ function StaffAddItemModal({ open, dishes, onClose, onSubmit, busy }) {
           </footer>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

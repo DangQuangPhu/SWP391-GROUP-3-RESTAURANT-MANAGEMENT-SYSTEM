@@ -20,6 +20,13 @@ export const createPromotion = async (promotionData) => {
   });
 };
 
+export const updatePromotion = async (id, promotionData) => {
+  return await managerAuthRequest(`/manager/promotions/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(promotionData),
+  });
+};
+
 export const togglePromotionStatus = async (id) => {
   return await managerAuthRequest(`/manager/promotions/${id}/toggle`, {
     method: 'PATCH',

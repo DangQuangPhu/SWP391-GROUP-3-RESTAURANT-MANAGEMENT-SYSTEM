@@ -871,6 +871,51 @@ export async function markTableClean(req, res) {
   }
 }
 
+/**
+ * PATCH /api/staff/tables/:tableId/status
+ * Updates a table's status (e.g., from Cleaning to Available) and emits a socket update.
+ */
+export async function updateTableStatus(req, res) {
+  const tableId = Number(req.params.tableId);
+  const { status } = req.body;
+
+  if (!Number.isFinite(tableId) || tableId <= 0) {
+    return jsonError(res, "Invalid table id.", 400);
+  }
+
+  if (status !== 'Available') {
+    return jsonError(res, "Only 'Available' status update is currently supported via this endpoint.", 400);
+  }
+
+  try {
+    const [result] = await pool.query(
+      `UPDATE dbo.RestaurantTables
+       SET table_status = N'Available',
+           updated_at = SYSDATETIME()
+       WHERE table_id = ? AND table_status = N'Cleaning';`,
+      [tableId]
+    );
+
+    if (result.rowsAffected === 0) {
+      return jsonError(res, "Table not found or not in Cleaning state.", 404);
+    }
+
+    // Emit socket event to update clients
+    const io = req.app.get("io");
+    if (io) {
+      io.to("room:manager").to("room:staff").emit("table:status_changed", {
+        table_id: tableId,
+        table_status: "Available"
+      });
+    }
+
+    return jsonOk(res, { table_id: tableId, table_status: "Available" });
+  } catch (error) {
+    console.error("PATCH /api/staff/tables/:tableId/status failed:", error);
+    return jsonError(res, "Could not update table status.");
+  }
+}
+
 function mapDisplayStatus(itemStatus) {
   const status = String(itemStatus || "").trim();
   if (status === "Pending") return "Pending";
@@ -1069,7 +1114,7 @@ export async function getActiveOccupiedOrders(_req, res) {
     return jsonOk(res, { tables });
   } catch (error) {
     console.error("GET /api/staff/orders/active failed:", error);
-    return jsonError(res, "Could not load active orders.");
+    return jsonError(res, `Could not load active orders: ${error.message} - ${error.stack}`);
   }
 }
 

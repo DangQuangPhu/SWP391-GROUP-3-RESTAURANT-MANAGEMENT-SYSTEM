@@ -20,8 +20,10 @@ import { asArray } from "@/utils/asArray.js";
 import { getStaffTabFromSearch, STAFF_TAB_IDS } from "../../config/managerRoutes.js";
 import { useManagerPortal } from "../../context/ManagerPortalContext.jsx";
 import {
-  fetchStaffShiftMapping,
   updateStaffShift,
+  apiCreateStaff,
+  apiUpdateStaff,
+  apiDeleteStaff,
 } from "../../services/managerApi.js";
 import {
   getStaffMemberKey,
@@ -47,13 +49,8 @@ const STAFF_TABS = [
   { id: "shifts", label: "Shift Management" },
 ];
 
-function resolveStaffShiftValue(member, shiftMapping) {
-  const memberKey = getStaffMemberKey(member);
-  const mappedShift =
-    memberKey && shiftMapping && typeof shiftMapping === "object"
-      ? shiftMapping[String(memberKey)]
-      : undefined;
-  const shift = mappedShift || member?.shift || WORK_SHIFT_OPTIONS[0];
+function resolveStaffShiftValue(member) {
+  const shift = member?.shift || WORK_SHIFT_OPTIONS[0];
   return WORK_SHIFT_OPTIONS.includes(shift) ? shift : WORK_SHIFT_OPTIONS[0];
 }
 
@@ -65,7 +62,6 @@ function StaffListPanel({
   onRoleFilter,
   onEdit,
   onDelete,
-  shiftMapping,
   onShiftChange,
   shiftSavingId,
 }) {
@@ -136,7 +132,7 @@ function StaffListPanel({
                   <td>
                     {(() => {
                       const memberKey = getStaffMemberKey(s);
-                      const currentShift = resolveStaffShiftValue(s, shiftMapping);
+                      const currentShift = resolveStaffShiftValue(s);
                       return (
                         <select
                           className="sfx-select staff-shift-select"
@@ -207,7 +203,6 @@ function StaffSection({ staff, setStaff, pendingAction, toast }) {
   const [editing, setEditing] = useState(null);
   const [isNew, setIsNew] = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
-  const [shiftMapping, setShiftMapping] = useState({});
   const [shiftSavingId, setShiftSavingId] = useState(null);
 
   const selectTab = (nextTab) => {
@@ -226,27 +221,7 @@ function StaffSection({ staff, setStaff, pendingAction, toast }) {
     }
   }, [pendingAction, tab]);
 
-  useEffect(() => {
-    if (!managerUserId) return undefined;
-
-    let cancelled = false;
-
-    async function loadShiftMapping() {
-      try {
-        const res = await fetchStaffShiftMapping(managerUserId);
-        if (!cancelled) {
-          setShiftMapping(res.data && typeof res.data === "object" ? res.data : {});
-        }
-      } catch {
-        if (!cancelled) setShiftMapping({});
-      }
-    }
-
-    loadShiftMapping();
-    return () => {
-      cancelled = true;
-    };
-  }, [managerUserId]);
+  // Removed JSON shift mapping hook
 
   const handleShiftChange = async (member, memberKey, nextShift) => {
     const staffKey = String(memberKey ?? "").trim();
@@ -260,11 +235,10 @@ function StaffSection({ staff, setStaff, pendingAction, toast }) {
       return;
     }
 
-    const previousShift = shiftMapping[staffKey] ?? member?.shift ?? WORK_SHIFT_OPTIONS[0];
+    const previousShift = member?.shift || WORK_SHIFT_OPTIONS[0];
     if (nextShift === previousShift) return;
 
     setShiftSavingId(staffKey);
-    setShiftMapping((prev) => ({ ...prev, [staffKey]: nextShift }));
     setStaff((prev) =>
       asArray(prev).map((row) => {
         const rowKey = getStaffMemberKey(row);
@@ -276,7 +250,6 @@ function StaffSection({ staff, setStaff, pendingAction, toast }) {
       await updateStaffShift(staffKey, nextShift, managerUserId);
       toast(`${member.full_name} assigned to ${nextShift} shift`, "success");
     } catch (err) {
-      setShiftMapping((prev) => ({ ...prev, [staffKey]: previousShift }));
       setStaff((prev) =>
         asArray(prev).map((row) => {
           const rowKey = getStaffMemberKey(row);
@@ -299,7 +272,9 @@ function StaffSection({ staff, setStaff, pendingAction, toast }) {
     setIsNew(false);
   };
 
-  const save = () => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const save = async () => {
     if (!editing.full_name.trim()) {
       toast("Staff name is required", "error");
       return;
@@ -308,29 +283,46 @@ function StaffSection({ staff, setStaff, pendingAction, toast }) {
       toast("Only Restaurant Staff and Kitchen Staff can be managed here.", "error");
       return;
     }
-    if (isNew) {
-      setStaff((prev) => [
-        ...prev.filter(isSubordinateStaff),
-        { ...editing, manager_id: Date.now() },
-      ]);
-      toast("Staff member added to this view (not persisted — API not connected)", "info");
-    } else {
-      setStaff((prev) =>
-        prev
-          .filter(isSubordinateStaff)
-          .map((s) => (s.manager_id === editing.manager_id ? editing : s))
-      );
-      toast("Staff member updated locally (API not connected)", "info");
+    
+    setIsSaving(true);
+    try {
+      if (isNew) {
+        const result = await apiCreateStaff(editing, managerUserId);
+        setStaff((prev) => [
+          ...prev.filter(isSubordinateStaff),
+          result,
+        ]);
+        toast("Staff member created successfully.", "success");
+      } else {
+        const staffKey = getStaffMemberKey(editing);
+        const result = await apiUpdateStaff(staffKey, editing, managerUserId);
+        setStaff((prev) =>
+          prev
+            .filter(isSubordinateStaff)
+            .map((s) => (getStaffMemberKey(s) === staffKey ? result : s))
+        );
+        toast("Staff member updated successfully.", "success");
+      }
+      setEditing(null);
+    } catch (err) {
+      toast(err.message || "Failed to save staff member", "error");
+    } finally {
+      setIsSaving(false);
     }
-    setEditing(null);
   };
 
-  const remove = () => {
-    setStaff((prev) =>
-      prev.filter(isSubordinateStaff).filter((s) => s.manager_id !== confirmDel.manager_id)
-    );
-    toast("Staff member removed from view (delete API not connected)", "info");
-    setConfirmDel(null);
+  const remove = async () => {
+    try {
+      const staffKey = getStaffMemberKey(confirmDel);
+      await apiDeleteStaff(staffKey, managerUserId);
+      setStaff((prev) =>
+        prev.filter(isSubordinateStaff).filter((s) => getStaffMemberKey(s) !== staffKey)
+      );
+      toast("Staff member deleted successfully", "success");
+      setConfirmDel(null);
+    } catch (err) {
+      toast(err.message || "Failed to delete staff member", "error");
+    }
   };
 
   const sectionSubtitle =
@@ -384,7 +376,6 @@ function StaffSection({ staff, setStaff, pendingAction, toast }) {
           onRoleFilter={setRoleFilter}
           onEdit={openEdit}
           onDelete={setConfirmDel}
-          shiftMapping={shiftMapping}
           onShiftChange={handleShiftChange}
           shiftSavingId={shiftSavingId}
         />
@@ -418,8 +409,8 @@ function StaffSection({ staff, setStaff, pendingAction, toast }) {
               <Button variant="ghost" onClick={() => setEditing(null)}>
                 Cancel
               </Button>
-              <Button variant="gold" onClick={save}>
-                {isNew ? "Add staff" : "Save changes"}
+              <Button variant="gold" onClick={save} disabled={isSaving}>
+                {isSaving ? "Saving..." : (isNew ? "Add staff" : "Save changes")}
               </Button>
             </div>
           </>
@@ -493,9 +484,6 @@ function StaffSection({ staff, setStaff, pendingAction, toast }) {
                 ))}
               </div>
             </label>
-            <NotConnectedNote>
-              Staff write/delete API not connected — changes stay in this view.
-            </NotConnectedNote>
           </div>
         ) : null}
       </ManagerModal>
@@ -517,8 +505,7 @@ function StaffSection({ staff, setStaff, pendingAction, toast }) {
         }
       >
         <p className="sfx-confirm-text">
-          Remove <strong>{confirmDel?.full_name}</strong> from the staff list? This is a local
-          change only.
+          Remove <strong>{confirmDel?.full_name}</strong> from the staff list?
         </p>
       </ManagerModal>
     </div>

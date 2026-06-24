@@ -2,6 +2,18 @@
   --rd-brand: #8a7445;
   --rd-brand-dark: #2b2620;
   --rd-bg: #f8f8f8;
+
+  /* Provide variables for rzv components (like PromotionModal) rendered inside rd-page */
+  --rzv-bg: #f8f5ef;
+  --rzv-panel: rgba(255, 255, 255, 0.86);
+  --rzv-text: #1f1a17;
+  --rzv-muted: #8a8175;
+  --rzv-gold: #9f8655;
+  --rzv-gold-soft: rgba(159, 134, 85, 0.16);
+  --rzv-dark: #111111;
+  --rzv-line: rgba(31, 26, 23, 0.1);
+  --rzv-shadow: 0 4px 20px rgba(31, 26, 23, 0.08);
+
   background: var(--rd-bg);
   min-height: 100vh;
 }

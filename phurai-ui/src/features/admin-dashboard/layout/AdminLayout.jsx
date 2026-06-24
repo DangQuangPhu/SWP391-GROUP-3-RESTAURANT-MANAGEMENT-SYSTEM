@@ -29,6 +29,7 @@ const NAV_GROUPS = [
     items: [
       { to: '/admin/settings/restaurant', icon: 'ti-building-store', label: 'Restaurant info' },
       { to: '/admin/settings/system', icon: 'ti-adjustments', label: 'System settings' },
+      { to: '/admin/settings/floor-plan', icon: 'ti-layout-grid', label: 'Floor Plan Config' },
     ],
   },
 ];

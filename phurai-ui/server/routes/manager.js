@@ -71,6 +71,10 @@ router.post("/tables/merge", mergeTables);
 router.post("/tables/unmerge", unmergeTable);
 router.get("/tables/:tableId/timeline", getTableTimeline);
 
+// Floor Plan Config
+import { getFloorPlanData } from "../controllers/floorPlanController.js";
+router.get("/floor-plan", getFloorPlanData);
+
 // Reservations
 router.get("/reservations/pending", getPendingReservations);
 router.get("/reservations/all", getAllReservations);

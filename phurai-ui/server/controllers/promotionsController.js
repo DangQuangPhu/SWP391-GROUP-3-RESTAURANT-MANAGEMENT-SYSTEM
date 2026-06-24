@@ -6,12 +6,26 @@ export const getAllPromotions = async (req, res) => {
     const pool = await getRawPool();
     const result = await pool.request().query(`
       SELECT 
-        promotion_id, promo_code, discount_type, discount_value, 
-        max_discount_amount, min_order_value, valid_from, 
-        valid_until, usage_limit, used_count, is_active, 
-        created_at, updated_at
-      FROM dbo.Promotions
-      ORDER BY created_at DESC
+        p.promotion_id, 
+        p.promotion_name,
+        p.description,
+        v.voucher_code AS promo_code, 
+        v.voucher_id,
+        UPPER(p.discount_type) AS discount_type, 
+        p.discount_value, 
+        p.max_discount AS max_discount_amount, 
+        p.min_order_value, 
+        p.start_at AS valid_from, 
+        p.end_at AS valid_until, 
+        v.usage_limit, 
+        v.times_used AS used_count, 
+        v.is_active, 
+        p.applicable_to,
+        p.created_at, 
+        p.updated_at
+      FROM dbo.Promotions p
+      LEFT JOIN dbo.Vouchers v ON p.promotion_id = v.promotion_id
+      ORDER BY p.created_at DESC
     `);
     
     res.json({
@@ -20,18 +34,22 @@ export const getAllPromotions = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching promotions:", error);
-    res.status(500).json({ success: false, message: "Failed to fetch promotions" });
+    res.status(500).json({ success: false, message: "Failed to fetch promotions", error: error.message });
   }
 };
 
 export const createPromotion = async (req, res) => {
+  let transaction;
   try {
     const { 
-      promo_code, discount_type, discount_value, max_discount_amount, 
-      min_order_value, valid_from, valid_until, usage_limit 
+      promotion_name, description, promo_code, discount_type, discount_value, max_discount_amount, 
+      min_order_value, valid_from, valid_until, usage_limit, applicable_to 
     } = req.body;
+    
+    // Auth info for audit logging
+    const managerId = req.user?.userId || req.user?.id || 1; 
 
-    if (!promo_code || !discount_type || discount_value === undefined || !valid_from || !valid_until) {
+    if (!promo_code || !discount_type || discount_value === undefined || !valid_from || !valid_until || !promotion_name) {
       return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
@@ -39,72 +57,284 @@ export const createPromotion = async (req, res) => {
       return res.status(400).json({ success: false, message: "Discount value must be a positive number" });
     }
 
-    if (discount_type === 'PERCENT' && discount_value > 100) {
+    const normalizedDiscountType = discount_type.toUpperCase() === 'PERCENT' ? 'Percent' : 'Fixed';
+
+    if (normalizedDiscountType === 'Percent' && discount_value > 100) {
       return res.status(400).json({ success: false, message: "Percentage discount cannot exceed 100%" });
+    }
+    
+    if (new Date(valid_until) <= new Date(valid_from)) {
+      return res.status(400).json({ success: false, message: "End date must be after start date" });
+    }
+    
+    const parsedUsageLimit = parseInt(usage_limit, 10);
+    if (!isNaN(parsedUsageLimit) && parsedUsageLimit <= 0) {
+      return res.status(400).json({ success: false, message: "Usage limit must be greater than 0" });
     }
 
     const pool = await getRawPool();
 
-    // Check uniqueness
-    const checkResult = await pool.request()
-      .input('promo_code', sql.VarChar(50), promo_code)
-      .query(`SELECT promotion_id FROM dbo.Promotions WHERE promo_code = @promo_code`);
+    // Check uniqueness of promo_code in Vouchers
+    let checkResult;
+    try {
+      checkResult = await pool.request()
+        .input('promo_code', sql.NVarChar(40), promo_code)
+        .query(`SELECT voucher_id FROM dbo.Vouchers WHERE voucher_code = @promo_code`);
+    } catch(err) {
+      console.error("DEBUG ERR in Check:", err.message);
+      throw err;
+    }
       
     if (checkResult.recordset.length > 0) {
       return res.status(409).json({ success: false, message: "Promotion code already exists" });
     }
 
-    const result = await pool.request()
-      .input('promo_code', sql.VarChar(50), promo_code)
-      .input('discount_type', sql.VarChar(20), discount_type)
-      .input('discount_value', sql.Decimal(12, 2), discount_value)
-      .input('max_discount_amount', sql.Decimal(12, 2), max_discount_amount || null)
-      .input('min_order_value', sql.Decimal(12, 2), min_order_value || 0)
-      .input('valid_from', sql.DateTime2, valid_from)
-      .input('valid_until', sql.DateTime2, valid_until)
-      .input('usage_limit', sql.Int, usage_limit || null)
-      .query(`
-        INSERT INTO dbo.Promotions (
-          promo_code, discount_type, discount_value, max_discount_amount, 
-          min_order_value, valid_from, valid_until, usage_limit, is_active, 
-          used_count, created_at, updated_at
-        )
-        OUTPUT inserted.*
-        VALUES (
-          @promo_code, @discount_type, @discount_value, @max_discount_amount,
-          @min_order_value, @valid_from, @valid_until, @usage_limit, 1,
-          0, SYSDATETIME(), SYSDATETIME()
-        )
-      `);
+    transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    // 1. Insert into Promotions
+    let promoResult;
+    try {
+      promoResult = await transaction.request()
+        .input('promotion_name', sql.NVarChar(150), promotion_name)
+        .input('description', sql.NVarChar(500), description || null)
+        .input('discount_type', sql.NVarChar(20), normalizedDiscountType)
+        .input('discount_value', sql.Decimal(12, 2), discount_value)
+        .input('max_discount', sql.Decimal(12, 2), max_discount_amount || null)
+        .input('min_order_value', sql.Decimal(12, 2), min_order_value || 0)
+        .input('start_at', sql.DateTime2, valid_from)
+        .input('end_at', sql.DateTime2, valid_until)
+        .input('is_active', sql.Bit, 1)
+        .input('applicable_to', sql.NVarChar(20), applicable_to || 'All')
+        .query(`
+          INSERT INTO dbo.Promotions (
+            promotion_name, description, discount_type, discount_value, max_discount, 
+            min_order_value, start_at, end_at, is_active, applicable_to,
+            created_at, updated_at
+          )
+          OUTPUT inserted.promotion_id
+          VALUES (
+            @promotion_name, @description, @discount_type, @discount_value, @max_discount,
+            @min_order_value, @start_at, @end_at, @is_active, @applicable_to,
+            SYSDATETIME(), SYSDATETIME()
+          )
+        `);
+    } catch(err) {
+      console.error("DEBUG ERR in Insert Promotions:", err.message);
+      throw err;
+    }
+
+    const promotionId = promoResult.recordset[0].promotion_id;
+
+    // 2. Insert into Vouchers
+    let voucherResult;
+    try {
+      voucherResult = await transaction.request()
+        .input('promotion_id', sql.Int, promotionId)
+        .input('voucher_code', sql.NVarChar(40), promo_code)
+        .input('usage_limit', sql.Int, parsedUsageLimit || 999999)
+        .input('times_used', sql.Int, 0)
+        .input('is_active', sql.Bit, 1)
+        .query(`
+          INSERT INTO dbo.Vouchers (
+            promotion_id, voucher_code, usage_limit, times_used, is_active, 
+            created_at, updated_at
+          )
+          OUTPUT inserted.*
+          VALUES (
+            @promotion_id, @voucher_code, @usage_limit, @times_used, @is_active,
+            SYSDATETIME(), SYSDATETIME()
+          )
+        `);
+    } catch(err) {
+      console.error("DEBUG ERR in Insert Vouchers:", err.message);
+      throw err;
+    }
+    
+    // 3. Insert Audit Log
+    const auditPayload = {
+      promotion_id: promotionId,
+      promotion_name: promotion_name,
+      description: description || null,
+      discount_type: normalizedDiscountType,
+      discount_value: discount_value,
+      max_discount: max_discount_amount || null,
+      min_order_value: min_order_value || 0,
+      start_at: valid_from,
+      end_at: valid_until,
+      voucher_code: promo_code,
+      usage_limit: parsedUsageLimit || 999999
+    };
+    
+    try {
+      await transaction.request()
+        .input('user_id', sql.Int, managerId)
+        .input('action_name', sql.VarChar(100), 'CREATE_PROMOTION_VOUCHER')
+        .input('target_table', sql.VarChar(100), 'Promotions/Vouchers')
+        .input('target_id', sql.Int, promotionId)
+        .input('new_value_json', sql.NVarChar(sql.MAX), JSON.stringify(auditPayload))
+        .input('ip_address', sql.VarChar(50), req.ip || 'unknown')
+        .input('user_agent', sql.NVarChar(500), req.get('user-agent') || 'system')
+        .query(`
+          INSERT INTO dbo.AuditLogs (
+            user_id, action_name, target_table, target_id, 
+            new_value_json, ip_address, user_agent, created_at
+          ) VALUES (
+            @user_id, @action_name, @target_table, @target_id, 
+            @new_value_json, @ip_address, @user_agent, SYSDATETIME()
+          )
+        `);
+    } catch(err) {
+      console.error("DEBUG ERR in Insert AuditLogs:", err.message);
+      throw err;
+    }
+
+    await transaction.commit();
+
+    const newVoucher = voucherResult.recordset[0];
 
     res.status(201).json({
       success: true,
       message: "Promotion created successfully",
-      data: result.recordset[0]
+      data: {
+        promotion_id: newVoucher.voucher_id,
+        promo_code: newVoucher.voucher_code,
+        discount_type,
+        discount_value,
+        max_discount_amount,
+        min_order_value: min_order_value || 0,
+        valid_from,
+        valid_until,
+        usage_limit: usage_limit || 999999,
+        used_count: 0,
+        is_active: 1,
+        applicable_to: applicable_to || 'All'
+      }
     });
   } catch (error) {
     console.error("Error creating promotion:", error);
+    if (transaction) {
+      try { await transaction.rollback(); } catch (err) {}
+    }
     res.status(500).json({ success: false, message: "Failed to create promotion" });
+  }
+};
+
+export const updatePromotion = async (req, res) => {
+  let transaction;
+  try {
+    const { id } = req.params; // voucher_id
+    const { 
+      promo_code, discount_type, discount_value, max_discount_amount, 
+      min_order_value, valid_from, valid_until, usage_limit, applicable_to 
+    } = req.body;
+
+    if (!promo_code || !discount_type || discount_value === undefined || !valid_from || !valid_until) {
+      return res.status(400).json({ success: false, message: "Missing required fields" });
+    }
+
+    if (discount_value <= 0) {
+      return res.status(400).json({ success: false, message: "Discount value must be a positive number" });
+    }
+
+    const normalizedDiscountType = discount_type.toUpperCase() === 'PERCENT' ? 'Percent' : 'Fixed';
+    if (normalizedDiscountType === 'Percent' && discount_value > 100) {
+      return res.status(400).json({ success: false, message: "Percentage discount cannot exceed 100%" });
+    }
+
+    const pool = await getRawPool();
+
+    // Find the voucher and promotion
+    const voucherRes = await pool.request()
+      .input('voucher_id', sql.Int, id)
+      .query('SELECT promotion_id, voucher_code FROM dbo.Vouchers WHERE voucher_id = @voucher_id');
+      
+    if (voucherRes.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: "Promotion/Voucher not found" });
+    }
+    const promotionId = voucherRes.recordset[0].promotion_id;
+    const currentCode = voucherRes.recordset[0].voucher_code;
+
+    // Check code uniqueness if changed
+    if (currentCode !== promo_code) {
+      const checkResult = await pool.request()
+        .input('promo_code', sql.NVarChar(40), promo_code)
+        .query(`SELECT voucher_id FROM dbo.Vouchers WHERE voucher_code = @promo_code`);
+      if (checkResult.recordset.length > 0) {
+        return res.status(409).json({ success: false, message: "Promotion code already exists" });
+      }
+    }
+
+    transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    await transaction.request()
+      .input('promotion_id', sql.Int, promotionId)
+      .input('promotion_name', sql.NVarChar(150), `Promo: ${promo_code}`)
+      .input('discount_type', sql.NVarChar(20), normalizedDiscountType)
+      .input('discount_value', sql.Decimal(12, 2), discount_value)
+      .input('max_discount', sql.Decimal(12, 2), max_discount_amount || null)
+      .input('min_order_value', sql.Decimal(12, 2), min_order_value || 0)
+      .input('start_at', sql.DateTime2, valid_from)
+      .input('end_at', sql.DateTime2, valid_until)
+      .input('applicable_to', sql.NVarChar(20), applicable_to || 'All')
+      .query(`
+        UPDATE dbo.Promotions SET 
+          promotion_name = @promotion_name,
+          discount_type = @discount_type,
+          discount_value = @discount_value,
+          max_discount = @max_discount,
+          min_order_value = @min_order_value,
+          start_at = @start_at,
+          end_at = @end_at,
+          applicable_to = @applicable_to,
+          updated_at = SYSDATETIME()
+        WHERE promotion_id = @promotion_id
+      `);
+
+    await transaction.request()
+      .input('voucher_id', sql.Int, id)
+      .input('voucher_code', sql.NVarChar(40), promo_code)
+      .input('usage_limit', sql.Int, usage_limit || 999999)
+      .query(`
+        UPDATE dbo.Vouchers SET
+          voucher_code = @voucher_code,
+          usage_limit = @usage_limit,
+          updated_at = SYSDATETIME()
+        WHERE voucher_id = @voucher_id
+      `);
+
+    await transaction.commit();
+
+    res.json({
+      success: true,
+      message: "Promotion updated successfully"
+    });
+  } catch (error) {
+    console.error("Error updating promotion:", error);
+    if (transaction) {
+      try { await transaction.rollback(); } catch (err) {}
+    }
+    res.status(500).json({ success: false, message: "Failed to update promotion" });
   }
 };
 
 export const togglePromotionStatus = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params; // this is voucher_id from the UI
     const pool = await getRawPool();
     
-    // Toggle logic: is_active = is_active ^ 1
     const result = await pool.request()
       .input('id', sql.Int, id)
       .query(`
-        UPDATE dbo.Promotions 
+        UPDATE dbo.Vouchers 
         SET is_active = is_active ^ 1, updated_at = SYSDATETIME()
         OUTPUT inserted.is_active
-        WHERE promotion_id = @id
+        WHERE voucher_id = @id
       `);
 
     if (result.rowsAffected[0] === 0) {
-      return res.status(404).json({ success: false, message: "Promotion not found" });
+      return res.status(404).json({ success: false, message: "Promotion/Voucher not found" });
     }
 
     res.json({
@@ -120,18 +350,19 @@ export const togglePromotionStatus = async (req, res) => {
 
 export const deletePromotion = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params; // this is voucher_id
     const pool = await getRawPool();
     
+    // Deleting the voucher. The promotion will remain, which is fine since promotions can have multiple vouchers.
     const result = await pool.request()
       .input('id', sql.Int, id)
       .query(`
-        DELETE FROM dbo.Promotions
-        WHERE promotion_id = @id
+        DELETE FROM dbo.Vouchers
+        WHERE voucher_id = @id
       `);
 
     if (result.rowsAffected[0] === 0) {
-      return res.status(404).json({ success: false, message: "Promotion not found" });
+      return res.status(404).json({ success: false, message: "Promotion/Voucher not found" });
     }
 
     res.json({
@@ -141,8 +372,7 @@ export const deletePromotion = async (req, res) => {
   } catch (error) {
     console.error("Error deleting promotion:", error);
     if (error.number === 547) {
-      // Foreign key constraint violation
-      return res.status(409).json({ success: false, message: "Cannot delete promotion because it is referenced in other records." });
+      return res.status(409).json({ success: false, message: "Cannot delete promotion because it has been used in reservations." });
     }
     res.status(500).json({ success: false, message: "Failed to delete promotion" });
   }
@@ -185,14 +415,19 @@ export const checkPromoValidity = async (code, orderValue) => {
 
   const pool = await getRawPool();
   const result = await pool.request()
-    .input('promo_code', sql.VarChar(50), code)
+    .input('voucher_code', sql.NVarChar(40), code)
     .query(`
-      SELECT promotion_id, promo_code, discount_type, discount_value, max_discount_amount, min_order_value, usage_limit, used_count
-      FROM dbo.Promotions 
-      WHERE promo_code = @promo_code 
-        AND is_active = 1 
-        AND valid_from <= SYSDATETIME() 
-        AND valid_until >= SYSDATETIME()
+      SELECT 
+        p.promotion_id, v.voucher_id, v.voucher_code AS promo_code, 
+        p.discount_type, p.discount_value, p.max_discount AS max_discount_amount, 
+        p.min_order_value, p.applicable_to, v.usage_limit, v.times_used AS used_count
+      FROM dbo.Vouchers v
+      JOIN dbo.Promotions p ON v.promotion_id = p.promotion_id
+      WHERE v.voucher_code = @voucher_code 
+        AND v.is_active = 1 
+        AND p.is_active = 1
+        AND p.start_at <= SYSDATETIME() 
+        AND p.end_at >= SYSDATETIME()
     `);
 
   if (result.recordset.length === 0) {
@@ -206,7 +441,7 @@ export const checkPromoValidity = async (code, orderValue) => {
   }
 
   if (val < parseFloat(promo.min_order_value)) {
-    return { isValid: false, message: `Order minimum of ${promo.min_order_value} required.` };
+    return { isValid: false, message: `Order minimum of ${promo.min_order_value.toLocaleString()} required.` };
   }
 
   return { isValid: true, promo };

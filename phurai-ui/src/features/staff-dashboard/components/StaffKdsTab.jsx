@@ -126,12 +126,14 @@ function StaffKdsTab({ user, toast, onRefresh, refreshing }) {
     socket.on("NEW_KITCHEN_TICKET", handleNewKitchenOrder);
     socket.on("kitchen:new_preorder", handleNewKitchenOrder);
     socket.on("kitchen:new_ticket", handleNewKitchenOrder);
+    socket.on("kds:clear_order", handleNewKitchenOrder);
 
     return () => {
       socket.off("NEW_KITCHEN_ORDER", handleNewKitchenOrder);
       socket.off("NEW_KITCHEN_TICKET", handleNewKitchenOrder);
       socket.off("kitchen:new_preorder", handleNewKitchenOrder);
       socket.off("kitchen:new_ticket", handleNewKitchenOrder);
+      socket.off("kds:clear_order", handleNewKitchenOrder);
     };
   }, [socket, loadQueues, toast, onRefresh]);
 

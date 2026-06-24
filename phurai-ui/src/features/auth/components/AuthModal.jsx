@@ -4,6 +4,7 @@ import AuthCard from "./AuthCard";
 import OtpVerification from "./OtpVerification";
 import ForgotPasswordForm from "./ForgotPasswordForm";
 import ResetPasswordForm from "./ResetPasswordForm";
+import FirstLoginResetForm from "./FirstLoginResetForm";
 import { blurActiveElement } from "../utils/authHelpers.js";
 import "@/styles/auth.css";
 import "@/styles/authModal.css";
@@ -13,6 +14,7 @@ const VIEWS = {
   OTP: "otp",
   FORGOT: "forgot",
   RESET: "reset",
+  FIRST_LOGIN: "first_login",
 };
 
 function AuthModal({
@@ -69,6 +71,10 @@ function AuthModal({
 
   const handleProceedToOtp = (user) => {
     setPendingUser(user);
+    if (user?.verificationMode === "first-login-reset") {
+      setView(VIEWS.FIRST_LOGIN);
+      return;
+    }
     setView(VIEWS.OTP);
   };
 
@@ -80,6 +86,10 @@ function AuthModal({
         email: result.email ?? pendingUser.email,
       });
       setView(VIEWS.RESET);
+      return;
+    }
+    if (pendingUser?.verificationMode === "first-login-reset") {
+      setView(VIEWS.FIRST_LOGIN);
       return;
     }
     onAuthSuccess?.(result, { showWelcome: true });
@@ -151,6 +161,22 @@ function AuthModal({
         email={resetSession.email}
         onSuccess={handleResetSuccess}
         onBack={() => setView(VIEWS.FORGOT)}
+      />
+    );
+  } else if (view === VIEWS.FIRST_LOGIN && pendingUser?.resetToken) {
+    content = (
+      <FirstLoginResetForm
+        email={pendingUser.email}
+        token={pendingUser.resetToken}
+        onSuccess={(user) => {
+          setView(VIEWS.AUTH);
+          setPendingUser(null);
+          onAuthSuccess?.(user, { showWelcome: true });
+        }}
+        onBack={() => {
+          setView(VIEWS.AUTH);
+          setPendingUser(null);
+        }}
       />
     );
   } else {

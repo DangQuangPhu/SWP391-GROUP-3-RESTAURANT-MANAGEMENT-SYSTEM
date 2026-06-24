@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
 import { SHAPES, getChairPositions } from '../../config/floorPlanConfig';
 
-export default function TableUnit({ tableData, status, isSelected, onClick }) {
+export default function TableUnit({ tableData, status, isSelected, isDimmed, onClick }) {
   const profile = SHAPES[tableData.type];
 
   const handleTableClick = () => {
-    if (status === 'Occupied' || status === 'Reserved') return;
+    if (status === 'Occupied' || status === 'Reserved' || status === 'Cleaning') return;
     onClick(tableData.id);
   };
 
@@ -34,8 +34,12 @@ export default function TableUnit({ tableData, status, isSelected, onClick }) {
   }
 
   let statusClass = 'available';
-  if (status === 'Occupied' || status === 'Reserved') {
-    statusClass = 'occupied'; // Using existing 'occupied' class in CSS for both visually
+  if (status === 'Occupied') {
+    statusClass = 'occupied';
+  } else if (status === 'Reserved') {
+    statusClass = 'reserved';
+  } else if (status === 'Cleaning') {
+    statusClass = 'cleaning';
   } else if (isSelected) {
     statusClass = 'selected';
   }
@@ -43,6 +47,9 @@ export default function TableUnit({ tableData, status, isSelected, onClick }) {
   const style = {
     '--table-fill': tableData.fill || '#dceaf5',
     '--chair-fill': tableData.chair || '#cfe3da',
+    opacity: isDimmed ? 0.25 : 1,
+    pointerEvents: isDimmed ? 'none' : 'auto',
+    transition: 'opacity 0.2s ease'
   };
 
   return (

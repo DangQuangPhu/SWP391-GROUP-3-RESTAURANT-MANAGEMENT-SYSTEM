@@ -1,16 +1,19 @@
 import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
-import Icon from "../ManagerIcons.jsx";
-import { SectionHead, ContentPanel, Toolbar, SearchField, Button, StatusBadge, EmptyState } from "../ManagerUI.jsx";
+import { SectionHead, ContentPanel, Toolbar, SearchField, Button, EmptyState } from "../ManagerUI.jsx";
 import { ManagerModal } from "../ManagerOverlay.jsx";
-import { fetchPromotions, createPromotion, togglePromotionStatus, deletePromotion } from "../../services/promotionsApi.js";
+import { fetchPromotions, createPromotion, updatePromotion, togglePromotionStatus, deletePromotion } from "../../services/promotionsApi.js";
+import { Copy, Edit2, Trash2, Play, Pause } from "lucide-react";
 
 export default function PromotionsSection({ promotions, setPromotions, toast }) {
   const [search, setSearch] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [editingPromoId, setEditingPromoId] = useState(null);
 
   const [formData, setFormData] = useState({
+    promotion_name: "",
+    description: "",
     promo_code: "",
     discount_type: "PERCENT",
     discount_value: "",
@@ -19,6 +22,7 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
     valid_from: "",
     valid_until: "",
     usage_limit: "",
+    applicable_to: "All",
   });
 
   const loadData = async () => {
@@ -26,11 +30,19 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
       const res = await fetchPromotions();
       if (res.success) {
         setPromotions(res.data || []);
+      } else {
+        toast(res.error || res.message || "Failed to load promotions", "error");
       }
     } catch (err) {
-      toast("Failed to refresh promotions", "error");
+      toast(err.data?.error || err.data?.message || err.message || "Failed to refresh promotions", "error");
     }
   };
+
+  useEffect(() => {
+    if (!promotions || promotions.length === 0) {
+      loadData();
+    }
+  }, []);
 
   const handleToggleStatus = async (id) => {
     try {
@@ -53,8 +65,44 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
         toast("Promotion deleted", "success");
       }
     } catch (err) {
-      toast(err.response?.data?.message || "Failed to delete promotion", "error");
+      const errorMessage = err.data?.message || err.message || "Failed to delete promotion";
+      toast(errorMessage, "error");
     }
+  };
+
+  const handleEdit = (promo) => {
+    setFormData({
+      promotion_name: promo.promotion_name || "",
+      description: promo.description || "",
+      promo_code: promo.promo_code || "",
+      discount_type: promo.discount_type || "PERCENT",
+      discount_value: promo.discount_value?.toString() || "",
+      max_discount_amount: promo.max_discount_amount?.toString() || "",
+      min_order_value: promo.min_order_value?.toString() || "0",
+      valid_from: promo.valid_from ? format(parseISO(promo.valid_from), "yyyy-MM-dd'T'HH:mm") : "",
+      valid_until: promo.valid_until ? format(parseISO(promo.valid_until), "yyyy-MM-dd'T'HH:mm") : "",
+      usage_limit: promo.usage_limit?.toString() || "",
+      applicable_to: promo.applicable_to || "All",
+    });
+    setEditingPromoId(promo.promotion_id);
+    setShowAddModal(true);
+  };
+
+  const resetForm = () => {
+    setFormData({
+      promotion_name: "",
+      description: "",
+      promo_code: "",
+      discount_type: "PERCENT",
+      discount_value: "",
+      max_discount_amount: "",
+      min_order_value: "0",
+      valid_from: "",
+      valid_until: "",
+      usage_limit: "",
+      applicable_to: "All",
+    });
+    setEditingPromoId(null);
   };
 
   const handleSubmit = async (e) => {
@@ -69,24 +117,22 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
         usage_limit: formData.usage_limit ? parseInt(formData.usage_limit, 10) : null,
       };
 
-      const res = await createPromotion(payload);
+      let res;
+      if (editingPromoId) {
+        res = await updatePromotion(editingPromoId, payload);
+      } else {
+        res = await createPromotion(payload);
+      }
+
       if (res.success) {
-        toast("Promotion created successfully", "success");
+        toast(`Promotion ${editingPromoId ? 'updated' : 'created'} successfully`, "success");
         setShowAddModal(false);
-        setFormData({
-          promo_code: "",
-          discount_type: "PERCENT",
-          discount_value: "",
-          max_discount_amount: "",
-          min_order_value: "0",
-          valid_from: "",
-          valid_until: "",
-          usage_limit: "",
-        });
+        resetForm();
         loadData();
       }
     } catch (err) {
-      toast(err.response?.data?.message || "Failed to create promotion", "error");
+      const errorMessage = err.data?.message || err.message || `Failed to ${editingPromoId ? 'update' : 'create'} promotion`;
+      toast(errorMessage, "error");
     } finally {
       setSubmitting(false);
     }
@@ -102,7 +148,7 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
         title="Promotions & Vouchers"
         subtitle="Manage discount codes, vouchers and their lifecycle rules"
         actions={
-          <Button variant="primary" icon="plus" onClick={() => setShowAddModal(true)}>
+          <Button variant="primary" icon="plus" onClick={() => { resetForm(); setShowAddModal(true); }}>
             Add Promotion
           </Button>
         }
@@ -128,6 +174,7 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                   <th>Discount</th>
                   <th>Min Order</th>
                   <th>Valid Range</th>
+                  <th>Applies To</th>
                   <th>Usage</th>
                   <th>Status</th>
                   <th className="text-right">Actions</th>
@@ -141,8 +188,10 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
 
                   return (
                     <tr key={p.promotion_id} className={inactive ? "opacity-60 grayscale-[50%]" : ""}>
-                      <td className="font-semibold text-gray-900 dark:text-white">
-                        {p.promo_code}
+                      <td className="font-semibold">
+                        <div className="inline-flex items-center gap-2 bg-slate-100 border border-dashed border-slate-300 rounded px-3 py-1 font-mono text-slate-900 text-sm">
+                          {p.promo_code}
+                        </div>
                       </td>
                       <td>
                         <span className="font-medium text-emerald-600 dark:text-emerald-400">
@@ -158,33 +207,74 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                         <div className="text-gray-500">to {format(parseISO(p.valid_until), "MMM d, yyyy")}</div>
                       </td>
                       <td>
-                        {p.used_count} / {p.usage_limit || '∞'}
-                        {isExhausted && <div className="text-xs text-red-500">Exhausted</div>}
+                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                          {p.applicable_to || 'All'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="flex flex-col gap-1 w-28">
+                          <div className="flex justify-between text-xs font-medium text-gray-700">
+                            <span>{p.used_count}</span>
+                            <span className="text-gray-400">/ {p.usage_limit || '∞'}</span>
+                          </div>
+                          {p.usage_limit ? (
+                            <div className="w-full bg-gray-200 rounded-full h-1.5">
+                              <div 
+                                className={`h-1.5 rounded-full ${isExhausted ? 'bg-red-500' : 'bg-emerald-500'}`} 
+                                style={{ width: `${Math.min(100, (p.used_count / p.usage_limit) * 100)}%` }}
+                              ></div>
+                            </div>
+                          ) : null}
+                          {isExhausted && <span className="text-[10px] text-red-500 font-semibold uppercase tracking-wider">Exhausted</span>}
+                        </div>
                       </td>
                       <td>
                         {isExpired ? (
-                          <StatusBadge tone="danger">Expired</StatusBadge>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Expired
+                          </span>
                         ) : p.is_active ? (
-                          <StatusBadge tone="success">Active</StatusBadge>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                            Active
+                          </span>
                         ) : (
-                          <StatusBadge tone="muted">Disabled</StatusBadge>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            Disabled
+                          </span>
                         )}
                       </td>
                       <td className="text-right">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-1">
                           <button
-                            className="sfx-iconbtn"
+                            className="p-1.5 text-gray-500 rounded-md hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                            title="Copy Code"
+                            onClick={() => {
+                              navigator.clipboard.writeText(p.promo_code);
+                              toast("Promo code copied", "success");
+                            }}
+                          >
+                            <Copy size={16} />
+                          </button>
+                          <button
+                            className="p-1.5 text-gray-500 rounded-md hover:bg-gray-100 hover:text-gray-700 transition-colors"
                             title={p.is_active ? "Disable" : "Enable"}
                             onClick={() => handleToggleStatus(p.promotion_id)}
                           >
-                            <Icon name={p.is_active ? "pause" : "play"} size={16} />
+                            {p.is_active ? <Pause size={16} /> : <Play size={16} />}
                           </button>
                           <button
-                            className="sfx-iconbtn text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            className="p-1.5 text-blue-500 rounded-md hover:bg-blue-50 transition-colors"
+                            title="Edit"
+                            onClick={() => handleEdit(p)}
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button
+                            className="p-1.5 text-red-500 rounded-md hover:bg-red-50 transition-colors"
                             title="Delete"
                             onClick={() => handleDelete(p.promotion_id)}
                           >
-                            <Icon name="trash" size={16} />
+                            <Trash2 size={16} />
                           </button>
                         </div>
                       </td>
@@ -199,12 +289,39 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
 
       <ManagerModal
         open={showAddModal}
-        onClose={() => !submitting && setShowAddModal(false)}
-        title="Create Promotion"
+        onClose={() => {
+          if (!submitting) {
+            setShowAddModal(false);
+            resetForm();
+          }
+        }}
+        title={editingPromoId ? "Edit Promotion" : "Create Promotion"}
       >
         <form id="addPromoForm" onSubmit={handleSubmit} className="space-y-4 p-1">
           <div>
-            <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Promo Code *</label>
+            <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Promotion Name *</label>
+            <input
+              type="text"
+              required
+              className="sfx-input"
+              value={formData.promotion_name}
+              onChange={e => setFormData({ ...formData, promotion_name: e.target.value })}
+              placeholder="e.g. Summer Sale 2026"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Description</label>
+            <textarea
+              className="sfx-input min-h-[80px]"
+              value={formData.description}
+              onChange={e => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Brief description of the promotion"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Voucher Code *</label>
             <input
               type="text"
               required
@@ -294,16 +411,30 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Usage Limit (Total uses allowed)</label>
-            <input
-              type="number"
-              min="1"
-              className="sfx-input"
-              value={formData.usage_limit}
-              onChange={e => setFormData({ ...formData, usage_limit: e.target.value })}
-              placeholder="Leave empty for unlimited"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Usage Limit</label>
+              <input
+                type="number"
+                min="1"
+                className="sfx-input"
+                value={formData.usage_limit}
+                onChange={e => setFormData({ ...formData, usage_limit: e.target.value })}
+                placeholder="Leave empty for unlimited"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Applicable To *</label>
+              <select
+                className="sfx-select w-full"
+                value={formData.applicable_to}
+                onChange={e => setFormData({ ...formData, applicable_to: e.target.value })}
+              >
+                <option value="All">All (Reservations & Orders)</option>
+                <option value="Reservation">Reservations Only</option>
+                <option value="Order">On-Site Orders Only</option>
+              </select>
+            </div>
           </div>
 
           <div className="pt-4 flex justify-end gap-3">

@@ -89,6 +89,19 @@ export const useStaffStore = create((set, get) => ({
     socket.on('table:status_updated', () => {
       get().refreshAll(false);
     });
+
+    socket.on('table:sync', () => {
+      get().refreshAll(false);
+    });
+
+    socket.on('table:status_changed', (data) => {
+      const { table_id, table_status } = data;
+      set((state) => ({
+        tables: state.tables.map(t => 
+          t.table_id === table_id ? { ...t, table_status, status: table_status } : t
+        )
+      }));
+    });
   },
 
   disconnectSocket: () => {

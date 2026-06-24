@@ -277,7 +277,7 @@ export async function submitReservation(req, res, next) {
           // Cancel it
           await query(
             `UPDATE dbo.Reservations SET reservation_status = @Status, updated_at = SYSDATETIME() WHERE reservation_id = @ResId`,
-            { ResId: reservationId, Status: RESERVATION_STATUS.CANCELLED }
+            { Status: RESERVATION_STATUS.CANCELLED, ResId: reservationId }
           );
 
           // Free the table
@@ -317,3 +317,39 @@ export async function submitReservation(req, res, next) {
 
   } catch (err) { next(err); }
 }
+
+export const getCustomerPaymentHistory = async (req, res) => {
+    try {
+        const userId = req.userId || req.user?.id || req.user?.user_id;
+        
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "User not authenticated." });
+        }
+
+        const queryStr = `
+            SELECT 
+                p.payment_id, p.amount_paid, p.payment_status, p.paid_at, p.transaction_ref, p.created_at,
+                pm.method_name,
+                CASE 
+                    WHEN p.order_id IS NOT NULL THEN 'Order Payment'
+                    WHEN p.reservation_id IS NOT NULL THEN 'Reservation Deposit'
+                    ELSE 'Payment'
+                END AS payment_purpose,
+                o.order_id, o.order_type,
+                r.reservation_id, r.reservation_start_at
+            FROM dbo.Payments p
+            LEFT JOIN dbo.PaymentMethods pm ON p.payment_method_id = pm.payment_method_id
+            LEFT JOIN dbo.Orders o ON p.order_id = o.order_id
+            LEFT JOIN dbo.Reservations r ON p.reservation_id = r.reservation_id
+            WHERE o.customer_id = @userId OR r.customer_id = @userId
+            ORDER BY p.created_at DESC;
+        `;
+
+        const result = await query(queryStr, { userId });
+
+        return res.json({ success: true, payments: result || [] });
+    } catch (err) {
+        console.error('Error fetching customer payment history:', err);
+        res.status(500).json({ success: false, message: 'Internal server error.' });
+    }
+};

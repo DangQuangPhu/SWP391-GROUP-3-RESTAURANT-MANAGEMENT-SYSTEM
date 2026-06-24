@@ -1,4 +1,4 @@
-import pool from "./db.js";
+import pool, { getRawPool } from "./db.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -7,9 +7,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function run() {
+  const rawPool = await getRawPool();
   console.log("Dropping all tables forcibly...");
   try {
-    await pool.query(`
+    await rawPool.query(`
       WHILE(EXISTS(SELECT 1 FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_TYPE = 'FOREIGN KEY'))
       BEGIN
           DECLARE @sql NVARCHAR(2000)
@@ -19,7 +20,7 @@ async function run() {
           EXEC(@sql)
       END
     `);
-    await pool.query(`
+    await rawPool.query(`
       EXEC sp_MSforeachtable 'DROP TABLE ?'
     `);
     console.log("All tables dropped.");
@@ -37,7 +38,7 @@ async function run() {
     const batch = batches[i].trim();
     if (!batch) continue;
     try {
-      await pool.query(batch);
+      await rawPool.query(batch);
     } catch (e) {
       console.error(`\n[ERROR IN BATCH ${i+1}]:\n${e.message}`);
       process.exit(1);

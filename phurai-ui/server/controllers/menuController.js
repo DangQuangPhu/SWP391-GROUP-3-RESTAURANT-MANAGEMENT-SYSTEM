@@ -64,6 +64,11 @@ export async function createDish(req, res) {
       `, [newDishId, image_url]);
     }
 
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('menu:updated');
+    }
+
     res.status(201).json({ success: true, message: "Dish created successfully", dish_id: newDishId });
   } catch (error) {
     console.error("POST /api/manager/menu Error:", error);
@@ -108,6 +113,11 @@ export async function updateDish(req, res) {
       }
     }
 
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('menu:updated');
+    }
+
     res.json({ success: true, message: "Dish updated successfully" });
   } catch (error) {
     console.error("PUT /api/manager/menu/:id Error:", error);
@@ -127,6 +137,11 @@ export async function deleteDish(req, res) {
 
     await pool.query(`DELETE FROM dbo.Dishes WHERE dish_id = ?`, [id]);
     
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('menu:updated');
+    }
+
     res.json({ success: true, message: "Dish deleted successfully" });
   } catch (error) {
     console.error("DELETE /api/manager/menu/:id Error:", error);

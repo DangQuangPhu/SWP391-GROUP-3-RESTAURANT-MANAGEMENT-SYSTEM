@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { format } from "date-fns";
+import { MonitorSmartphone, CreditCard } from "lucide-react";
+import { getProfilePayments } from "../services/profileApi.js";
 import {
   getDisplayName,
   isValidVietnamPhone,
@@ -152,25 +155,13 @@ const PasswordIcon = () => (
   </svg>
 );
 
-const SessionsIcon = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path
-      d="M12 3v3M12 18v3M3 12h3M18 12h3M5.64 5.64l2.12 2.12M16.24 16.24l2.12 2.12M18.36 5.64l-2.12 2.12M7.76 16.24l-2.12 2.12"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
 const DASHBOARD_ITEMS = [
   { key: "profile", label: "Profile", icon: ProfileIcon },
   { key: "appearance", label: "Appearance", icon: AppearanceIcon },
   { key: "accessibility", label: "Accessibility", icon: AccessibilityIcon },
   { key: "password", label: "Password & Authentication", icon: PasswordIcon },
-  { key: "sessions", label: "Sessions", icon: SessionsIcon },
+  { key: "sessions", label: "Sessions", icon: MonitorSmartphone },
+  { key: "payments", label: "Payment History", icon: CreditCard },
 ];
 
 const SIDEBAR_ITEMS = DASHBOARD_ITEMS;
@@ -524,6 +515,78 @@ function SessionsPanel() {
   );
 }
 
+function PaymentHistoryPanel({ profile }) {
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    const loadPayments = async () => {
+      try {
+        setLoading(true);
+        setError("");
+        const data = await getProfilePayments(profile?.user_id || profile?.id);
+        if (active) {
+          setPayments(data);
+        }
+      } catch (err) {
+        if (active) {
+          setError("Failed to load payment history.");
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+    if (profile?.user_id || profile?.id) {
+      loadPayments();
+    }
+    return () => {
+      active = false;
+    };
+  }, [profile]);
+
+  return (
+    <div className="profile-dashboard__panel">
+      <h3>Payment History</h3>
+      {loading ? (
+        <p className="profile-dashboard__panel-desc">Loading your payments...</p>
+      ) : error ? (
+        <p className="profile-dashboard__panel-desc profile-dashboard__message--error">{error}</p>
+      ) : payments.length === 0 ? (
+        <div className="profile-dashboard__session-card">
+          <p className="profile-dashboard__session-title">No recent payments</p>
+          <p className="profile-dashboard__session-meta">Your payment history will appear here.</p>
+        </div>
+      ) : (
+        <div className="profile-dashboard__payments-list" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {payments.map((p) => (
+            <div key={p.payment_id} className="profile-dashboard__session-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p className="profile-dashboard__session-title">{p.payment_purpose}</p>
+                <p className="profile-dashboard__session-meta">
+                  {p.paid_at || p.created_at ? format(new Date(p.paid_at || p.created_at), "MMM d, yyyy h:mm a") : "—"}
+                  {p.transaction_ref ? ` • Ref: ${p.transaction_ref}` : ""}
+                </p>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <p className="profile-dashboard__session-title" style={{ color: "var(--rzv-gold)" }}>
+                  ${Number(p.amount_paid).toFixed(2)}
+                </p>
+                <p className="profile-dashboard__session-meta">
+                  {p.payment_status}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProfilePage({
   profile,
   profileLoading = false,
@@ -784,6 +847,9 @@ function ProfilePage({
     }
     if (activePanel === "sessions") {
       return <SessionsPanel />;
+    }
+    if (activePanel === "payments") {
+      return <PaymentHistoryPanel profile={profile} />;
     }
 
     return (

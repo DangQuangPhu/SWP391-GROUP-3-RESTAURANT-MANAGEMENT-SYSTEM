@@ -292,6 +292,30 @@ export async function createTable(req, res) {
       return jsonError(res, "Area not found or inactive.", 404);
     }
 
+    // --- Capacity Limit Check ---
+    const limitRequest = await createDbRequest();
+    limitRequest.input("areaId", sql.SmallInt, areaId);
+    const limitResult = await limitRequest.query(
+      `SELECT COUNT(*) as table_count
+       FROM dbo.RestaurantTables
+       WHERE area_id = @areaId;`
+    );
+    const currentTableCount = limitResult.recordset[0]?.table_count || 0;
+
+    const maxTablesSettingResult = await createDbRequest().query(
+      `SELECT setting_value FROM dbo.RestaurantSettings WHERE setting_key = 'max_tables_per_area'`
+    );
+    const maxTablesPerArea = Number(maxTablesSettingResult.recordset[0]?.setting_value) || 15;
+
+    if (currentTableCount >= maxTablesPerArea) {
+      return res.status(403).json({
+        success: false,
+        code: 'SPACE_LIMIT_REACHED',
+        message: 'Floor plan capacity reached.'
+      });
+    }
+    // ----------------------------
+
     const duplicateRequest = await createDbRequest();
     duplicateRequest.input("tableNumber", sql.NVarChar(20), tableNumber);
     duplicateRequest.input("areaId", sql.SmallInt, areaId);
@@ -410,6 +434,11 @@ export async function updateTable(req, res) {
       return jsonError(res, `Table ${tableNumber} already exists in this area.`, 400);
     }
 
+    const oldTableRequest = await createDbRequest();
+    oldTableRequest.input("tableId", sql.SmallInt, tableId);
+    const oldTableResult = await oldTableRequest.query(`SELECT table_status FROM dbo.RestaurantTables WHERE table_id = @tableId`);
+    const oldTableStatus = oldTableResult.recordset[0]?.table_status || "Unknown";
+
     const updateRequest = await createDbRequest();
     updateRequest.input("tableId", sql.SmallInt, tableId);
     updateRequest.input("areaId", sql.SmallInt, areaId);
@@ -430,11 +459,30 @@ export async function updateTable(req, res) {
     if (updateResult.rowsAffected[0] === 0) {
       return jsonError(res, "Table not found.", 404);
     }
+    
+    // Insert Audit Log
+    const managerId = req.user?.userId || req.user?.id || 1;
+    const auditRequest = await createDbRequest();
+    auditRequest.input("managerId", sql.Int, managerId);
+    auditRequest.input("tableId", sql.SmallInt, tableId);
+    auditRequest.input("oldVal", sql.NVarChar(sql.MAX), JSON.stringify({ status: oldTableStatus }));
+    auditRequest.input("newVal", sql.NVarChar(sql.MAX), JSON.stringify({ status: tableStatus }));
+    
+    await auditRequest.query(
+      `INSERT INTO dbo.AuditLogs (
+         user_id, action_name, target_table, target_id, old_value_json, new_value_json, 
+         ip_address, user_agent, created_at
+       ) VALUES (
+         @managerId, 'UPDATE_TABLE_STATUS', 'RestaurantTables', @tableId, @oldVal, @newVal,
+         'system', 'system', SYSDATETIME()
+       );`
+    );
 
     // Emit socket event to sync frontend
     const io = req.app.get("io");
     if (io) {
       io.to("room:manager").to("room:staff").emit("table:sync", { action: "update", table_id: tableId });
+      io.emit("table:status_changed", { table_id: tableId, table_status: tableStatus });
     }
 
     return res.json({

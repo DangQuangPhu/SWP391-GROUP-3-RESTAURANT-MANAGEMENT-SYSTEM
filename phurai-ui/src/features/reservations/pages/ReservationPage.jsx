@@ -19,6 +19,7 @@ import {
   getAvailability,
 } from "../services/reservationApi.js";
 import { createPreSaveReservation } from "../services/reservationPreSaveApi.js";
+import { useSocket } from "@/core/socket/SocketContext.jsx";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[+]?[\d\s().-]{7,}$/;
@@ -83,9 +84,35 @@ function ReservationPage({
   }), []);
 
   const [settings, setSettings] = useState(null);
-  const [form, setForm] = useState(INITIAL_FORM);
+  const [form, setForm] = useState(() => {
+    try {
+      const stored = localStorage.getItem("phurai_reservation_form");
+      return stored ? JSON.parse(stored) : INITIAL_FORM;
+    } catch (e) {
+      return INITIAL_FORM;
+    }
+  });
   const [tables, setTables] = useState([]);
-  const [selectedTableId, setSelectedTableId] = useState(null);
+  
+  const { socket } = useSocket();
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleTableStatusChanged = (data) => {
+      const { table_id, table_status } = data;
+      setTables(prevTables => prevTables.map(t => 
+        t.table_id === table_id ? { ...t, table_status, availability_at_slot: table_status } : t
+      ));
+    };
+
+    socket.on("table:status_changed", handleTableStatusChanged);
+    return () => {
+      socket.off("table:status_changed", handleTableStatusChanged);
+    };
+  }, [socket]);
+  const [selectedTableId, setSelectedTableId] = useState(() => {
+    return localStorage.getItem("phurai_reservation_table") || null;
+  });
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -107,8 +134,18 @@ function ReservationPage({
     return null;
   });
 
-  const [preorderItems, setPreorderItems] = useState({});
-  const [preorderTotal, setPreorderTotal] = useState(0);
+  const [preorderItems, setPreorderItems] = useState(() => {
+    try {
+      const stored = localStorage.getItem("phurai_reservation_preorder_items");
+      return stored ? JSON.parse(stored) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+  const [preorderTotal, setPreorderTotal] = useState(() => {
+    const stored = localStorage.getItem("phurai_reservation_preorder_total");
+    return stored ? Number(stored) : 0;
+  });
   const [promoCode, setPromoCode] = useState(() => localStorage.getItem("phurai_applied_promo") || "");
   const [promoDiscount, setPromoDiscount] = useState(() => {
     try {
@@ -134,6 +171,26 @@ function ReservationPage({
       localStorage.removeItem("phurai_applied_promo_discount");
     }
   }, [promoDiscount]);
+
+  useEffect(() => {
+    localStorage.setItem("phurai_reservation_form", JSON.stringify(form));
+  }, [form]);
+
+  useEffect(() => {
+    if (selectedTableId) {
+      localStorage.setItem("phurai_reservation_table", selectedTableId);
+    } else {
+      localStorage.removeItem("phurai_reservation_table");
+    }
+  }, [selectedTableId]);
+
+  useEffect(() => {
+    localStorage.setItem("phurai_reservation_preorder_items", JSON.stringify(preorderItems));
+  }, [preorderItems]);
+
+  useEffect(() => {
+    localStorage.setItem("phurai_reservation_preorder_total", preorderTotal.toString());
+  }, [preorderTotal]);
 
   const { step: urlStep } = useParams();
 
@@ -355,6 +412,10 @@ function ReservationPage({
   const handlePaymentSuccess = useCallback(() => {
     localStorage.removeItem("phurai_applied_promo");
     localStorage.removeItem("phurai_applied_promo_discount");
+    localStorage.removeItem("phurai_reservation_form");
+    localStorage.removeItem("phurai_reservation_table");
+    localStorage.removeItem("phurai_reservation_preorder_items");
+    localStorage.removeItem("phurai_reservation_preorder_total");
     setIsPaymentSuccess(true);
     transitionTo("success");
   }, [transitionTo]);
@@ -458,7 +519,7 @@ function ReservationPage({
                     setField("fullName", localForm.fullName);
                     setField("email", localForm.email);
                     setField("phone", localForm.phone);
-                    setTimeout(() => transitionTo("summary"), 0);
+                    transitionTo("summary");
                   }}
                 />
               </motion.div>

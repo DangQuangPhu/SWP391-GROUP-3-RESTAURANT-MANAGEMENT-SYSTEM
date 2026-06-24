@@ -218,6 +218,29 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
       );
     };
 
+    const handleSystemAlert = (payload = {}) => {
+      const message = payload.message || payload.title || "System Alert";
+      toast.error(message, { duration: 6000, icon: '⚠️' });
+      const notificationId = `live-${Date.now()}`;
+      setNotifications((prev) =>
+        mergeNotifications(
+          [
+            {
+              notification_id: notificationId,
+              title: payload.title || "System Alert",
+              message_body: message,
+              notification_type: "System",
+              is_read: false,
+              sent_at: new Date().toISOString(),
+              _live: true,
+              _payload: payload,
+            },
+          ],
+          prev
+        )
+      );
+    };
+
     const handleQrRequest = (data = {}) => {
       const qrNotification = buildQrNotification(data);
       setNotifications((prev) =>
@@ -229,9 +252,11 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
     };
 
     socket.on("NEW_CUSTOMER_ACTION", handleIncoming);
+    socket.on("notification:new", handleSystemAlert);
     socket.on("NEW_QR_SESSION_PENDING", handleQrRequest);
     return () => {
       socket.off("NEW_CUSTOMER_ACTION", handleIncoming);
+      socket.off("notification:new", handleSystemAlert);
       socket.off("NEW_QR_SESSION_PENDING", handleQrRequest);
     };
   }, [socket, listenForStaffEvents]);

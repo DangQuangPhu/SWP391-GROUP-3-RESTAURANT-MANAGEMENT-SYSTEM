@@ -32,6 +32,7 @@ import { ManagerPortalPage } from "@/features/manager-dashboard";
 import { GiftCardPage } from "@/features/gift-cards";
 import ScrollToTop from "@/components/common/ScrollToTop.jsx";
 import { StaffDashboardPage as StaffDashboard } from "@/features/staff-dashboard";
+import { KitchenLayout, KitchenDashboardPage } from "@/features/kitchen-dashboard";
 import AdminLayout from '@/features/admin-dashboard/layout/AdminLayout';
 import AdminDashboardPage from '@/features/admin-dashboard/pages/AdminDashboardPage';
 import AdminAccountsPage from '@/pages/admin/Accounts';
@@ -40,6 +41,8 @@ import AdminSystemSettingsPage from '@/pages/admin/SystemSettings';
 import AdminRolesPage from '@/pages/admin/Roles';
 import AdminAnalyticsPage from '@/pages/admin/Analytics';
 import AdminRestaurantInfoPage from '@/pages/admin/RestaurantInfo';
+import AdminFloorPlanConfigPage from '@/features/admin-dashboard/pages/FloorPlanSetup';
+import RequireRole from "@/features/auth/components/RequireRole";
 import NotFound from "@/pages/NotFound";
 import LandingPage from "@/pages/public/LandingPage";
 import QrScanPage from "@/pages/public/QrScanPage.jsx";
@@ -49,6 +52,8 @@ import FloatingActionButtons from "@/components/common/FloatingActionButtons";
 import { ProfileModal, Register, VerifyEmail } from "@/features/auth";
 import { saveAuthUser } from "@/core/api";
 import { useAuth } from "@/features/auth/context/AuthContext";
+import CustomerReview from "@/features/reviews/pages/CustomerReview.jsx";
+import CustomerCheckout from "@/features/payment/pages/CustomerCheckout.jsx";
 
 const PAGE_PATHS = {
   home: "/",
@@ -223,7 +228,8 @@ function App() {
   const isAccountPage =
     pathname.startsWith("/profile") || pathname.startsWith("/settings");
   const isReservationPage = pathname === "/reservations" || pathname.startsWith("/reservations/");
-  const isPortalPage = isAccountPage || isManagerPage || isStaffPage || isAdminPage || isReservationPage;
+  const isKdsPage = pathname === "/kds" || pathname.startsWith("/kds/");
+  const isPortalPage = isAccountPage || isManagerPage || isStaffPage || isAdminPage || isReservationPage || isKdsPage;
 
   if (!authReady) {
     return null; // Or a loading spinner
@@ -261,6 +267,8 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/landing" element={<LandingPage />} />
           <Route path="/scan/:qr_code" element={<QrScanPage />} />
+          <Route path="/review/:orderId" element={<CustomerReview />} />
+          <Route path="/checkout/:orderId" element={<CustomerCheckout />} />
           <Route path="/menu" element={<MenuRouteRedirect />} />
           <Route path="/take-out" element={<TakeOut />} />
           <Route path="/catering" element={<Catering />} />
@@ -342,49 +350,61 @@ function App() {
               />
             }
           />
-          <Route path="/admin" element={<AdminLayout currentUser={currentUser} />}>
-            <Route index element={<AdminDashboardPage />} />
-            
-            {/* Accounts Group */}
-            <Route path="accounts" element={<AdminAccountsPage />} />
-            <Route path="roles" element={<AdminRolesPage />} />
-            <Route path="audit-logs" element={<AdminAuditLogsPage />} />
-            
-            {/* Analytics Group */}
-            <Route path="analytics/reservations" element={<AdminAnalyticsPage type="reservations" title="Reservations Analytics" description="Status distribution of reservations" />} />
-            <Route path="analytics/revenue" element={<AdminAnalyticsPage type="revenue" title="Revenue Analytics" description="30-day revenue trends" />} />
-            <Route path="analytics/orders" element={<AdminAnalyticsPage type="orders" title="Orders Analytics" description="Order status and average values" />} />
-            <Route path="analytics/reviews" element={<AdminAnalyticsPage type="reviews" title="Customer Reviews" description="Overall rating distribution" />} />
-            <Route path="analytics/staff-performance" element={<AdminAnalyticsPage type="staff-performance" title="Staff Performance" description="Total shifts handled per staff member" />} />
-            
-            {/* Settings Group */}
-            <Route path="settings/restaurant" element={<AdminRestaurantInfoPage />} />
-            <Route path="settings/system" element={<AdminSystemSettingsPage />} />
+          <Route element={<RequireRole allowedRoles={['Admin']} />}>
+            <Route path="/admin" element={<AdminLayout currentUser={currentUser} />}>
+              <Route index element={<AdminDashboardPage />} />
+              
+              {/* Accounts Group */}
+              <Route path="accounts" element={<AdminAccountsPage />} />
+              <Route path="roles" element={<AdminRolesPage />} />
+              <Route path="audit-logs" element={<AdminAuditLogsPage />} />
+              
+              {/* Analytics Group */}
+              <Route path="analytics/reservations" element={<AdminAnalyticsPage type="reservations" title="Reservations Analytics" description="Status distribution of reservations" />} />
+              <Route path="analytics/revenue" element={<AdminAnalyticsPage type="revenue" title="Revenue Analytics" description="30-day revenue trends" />} />
+              <Route path="analytics/orders" element={<AdminAnalyticsPage type="orders" title="Orders Analytics" description="Order status and average values" />} />
+              <Route path="analytics/reviews" element={<AdminAnalyticsPage type="reviews" title="Customer Reviews" description="Overall rating distribution" />} />
+              <Route path="analytics/staff-performance" element={<AdminAnalyticsPage type="staff-performance" title="Staff Performance" description="Total shifts handled per staff member" />} />
+              
+              {/* Settings Group */}
+              <Route path="settings/restaurant" element={<AdminRestaurantInfoPage />} />
+              <Route path="settings/system" element={<AdminSystemSettingsPage />} />
+              <Route path="settings/floor-plan" element={<AdminFloorPlanConfigPage />} />
+            </Route>
           </Route>
-          <Route path="/manager" element={<Navigate to="/manager/dashboard" replace />} />
-          <Route
-            path="/manager/*"
-            element={
-              <ManagerPortalPage
-                isAuthenticated={isAuthenticated}
-                currentUser={currentUser}
-                onSignOut={handleSignOut}
-                onNavigate={handleNavigate}
-              />
-            }
-          />
-          <Route
-            path="/staff/*"
-            element={
-              <StaffDashboard
-                authReady={authReady}
-                isAuthenticated={isAuthenticated}
-                currentUser={currentUser}
-                onSignOut={handleSignOut}
-                onNavigate={handleNavigate}
-              />
-            }
-          />
+          <Route element={<RequireRole allowedRoles={['Manager', 'Admin']} />}>
+            <Route path="/manager" element={<Navigate to="/manager/dashboard" replace />} />
+            <Route
+              path="/manager/*"
+              element={
+                <ManagerPortalPage
+                  isAuthenticated={isAuthenticated}
+                  currentUser={currentUser}
+                  onSignOut={handleSignOut}
+                  onNavigate={handleNavigate}
+                />
+              }
+            />
+          </Route>
+          <Route element={<RequireRole allowedRoles={['Restaurant Staff']} />}>
+            <Route
+              path="/staff/*"
+              element={
+                <StaffDashboard
+                  authReady={authReady}
+                  isAuthenticated={isAuthenticated}
+                  currentUser={currentUser}
+                  onSignOut={handleSignOut}
+                  onNavigate={handleNavigate}
+                />
+              }
+            />
+          </Route>
+          <Route element={<RequireRole allowedRoles={['Kitchen Staff', 'Restaurant Staff', 'Manager', 'Admin']} />}>
+            <Route path="/kds" element={<KitchenLayout currentUser={currentUser} onSignOut={handleSignOut} />}>
+              <Route index element={<KitchenDashboardPage currentUser={currentUser} />} />
+            </Route>
+          </Route>
           <Route
             path="*"
             element={

@@ -222,20 +222,45 @@ export const getReservationHistory = async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT
-          al.audit_log_id AS history_id,
-          al.action_name,
-          al.target_id    AS reservation_id,
-          COALESCE(ua.full_name, N'System') AS performed_by,
-          r.role_name,
-          al.new_value_json AS notes,
-          al.created_at
-       FROM dbo.AuditLogs al
-       LEFT JOIN dbo.UserAccounts ua ON al.user_id = ua.user_id
-       LEFT JOIN dbo.Roles r ON ua.role_id = r.role_id
-       WHERE al.target_table = N'Reservations'
-         AND al.target_id = ?
-       ORDER BY al.created_at ASC`,
-      [reservationId]
+          history_id,
+          action_name,
+          reservation_id,
+          performed_by,
+          role_name,
+          notes,
+          created_at
+       FROM (
+           SELECT
+              'AL-' + CAST(al.audit_log_id AS VARCHAR) AS history_id,
+              al.action_name,
+              al.target_id    AS reservation_id,
+              COALESCE(ua.full_name, N'System') AS performed_by,
+              r.role_name,
+              al.new_value_json AS notes,
+              al.created_at
+           FROM dbo.AuditLogs al
+           LEFT JOIN dbo.UserAccounts ua ON al.user_id = ua.user_id
+           LEFT JOIN dbo.Roles r ON ua.role_id = r.role_id
+           WHERE al.target_table = N'Reservations'
+             AND al.target_id = ?
+
+           UNION ALL
+
+           SELECT
+              'RT-' + CAST(rt.timeline_id AS VARCHAR) AS history_id,
+              rt.event_type AS action_name,
+              rt.reservation_id,
+              COALESCE(ua.full_name, N'System') AS performed_by,
+              r.role_name,
+              rt.notes,
+              rt.created_at
+           FROM dbo.ReservationTimelines rt
+           LEFT JOIN dbo.UserAccounts ua ON rt.performed_by = ua.user_id
+           LEFT JOIN dbo.Roles r ON ua.role_id = r.role_id
+           WHERE rt.reservation_id = ?
+       ) AS CombinedHistory
+       ORDER BY created_at ASC`,
+      [reservationId, reservationId]
     );
     
     // Parse JSON

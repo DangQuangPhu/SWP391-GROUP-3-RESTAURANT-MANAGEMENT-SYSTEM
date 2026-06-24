@@ -397,3 +397,55 @@ export const cancelPendingPayment = async (req, res) => {
   }
 };
 
+export const submitReservationReview = async (req, res) => {
+  try {
+    const reservationId = parseInt(req.params.id, 10);
+    const { rating, notes } = req.body;
+    
+    if (isNaN(reservationId) || reservationId <= 0 || !rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ success: false, message: "Invalid input" });
+    }
+
+    const { getRawPool } = await import("../db.js");
+    const sql = (await import("mssql")).default;
+    const pool = await getRawPool();
+    
+    // Attempt to find the customer_id associated with the reservation
+    const resResult = await pool.request()
+      .input('resId', sql.Int, reservationId)
+      .query(`SELECT customer_id FROM dbo.Reservations WHERE reservation_id = @resId`);
+      
+    if (resResult.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: "Reservation not found" });
+    }
+    
+    const customer_id = resResult.recordset[0].customer_id;
+    
+    // Attempt to find an order_id if it exists for this reservation (Preorder order)
+    const orderResult = await pool.request()
+      .input('resId', sql.Int, reservationId)
+      .query(`SELECT TOP 1 order_id FROM dbo.Orders WHERE reservation_id = @resId ORDER BY created_at DESC`);
+      
+    const order_id = orderResult.recordset.length > 0 ? orderResult.recordset[0].order_id : null;
+
+    await pool.request()
+      .input('customerId', sql.Int, customer_id || null)
+      .input('resId', sql.Int, reservationId)
+      .input('orderId', sql.Int, order_id || null)
+      .input('rating', sql.TinyInt, rating)
+      .input('notes', sql.NVarChar(1000), notes || '')
+      .query(`
+        INSERT INTO dbo.CustomerReviews (
+          customer_id, reservation_id, order_id, food_rating, service_rating, ambiance_rating, comment, is_visible, created_at
+        ) VALUES (
+          @customerId, @resId, @orderId, @rating, @rating, @rating, @notes, 1, SYSDATETIME()
+        )
+      `);
+
+    return res.json({ success: true, message: "Review submitted successfully" });
+
+  } catch (error) {
+    console.error("Error submitting reservation review:", error);
+    res.status(500).json({ success: false, message: "Internal server error." });
+  }
+};

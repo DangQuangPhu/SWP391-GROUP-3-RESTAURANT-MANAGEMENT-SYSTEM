@@ -117,3 +117,11 @@ export function requestCancel(reservationId, userId, cancelReason) {
     body: JSON.stringify({ cancel_reason: cancelReason || null }),
   });
 }
+
+export function submitReview(reservationId, payload, userId) {
+  return request(`/reservations/${reservationId}/review`, {
+    method: "POST",
+    headers: profileRequestHeaders(userId),
+    body: JSON.stringify(payload),
+  });
+}

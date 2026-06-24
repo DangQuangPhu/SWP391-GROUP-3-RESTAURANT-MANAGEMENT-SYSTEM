@@ -53,7 +53,7 @@ function ManagerSidebar({
         }`}
       >
         <div className="sfx-brand sfx-brand--manager">
-          <span className="sfx-brand__mark">P</span>
+          <span className="sfx-brand__mark"><img src="/logo.png" alt="Phūrai" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 'inherit' }} /></span>
           <span className="sfx-brand__text">
             <strong>Phūrai</strong>
             <small>MANAGER PORTAL</small>

@@ -31,7 +31,7 @@ export const getKitchenQueue = async (req, res) => {
             LEFT JOIN dbo.UserAccounts c ON o.customer_id = c.user_id
             LEFT JOIN dbo.UserAccounts chef ON kt.assigned_to_staff_id = chef.user_id
             WHERE kt.kitchen_status IN (N'Pending', N'Preparing', N'Ready')
-            ORDER BY kt.priority_level ASC, kt.sent_at ASC;
+            ORDER BY kt.sent_at ASC, kt.kitchen_ticket_id ASC;
         `);
 
         res.json({ success: true, data: result.recordset });
@@ -150,6 +150,7 @@ export const processTicketStatusUpdate = async (pool, ticketId, new_status, trig
                 tableId,
                 readyAt: now.toISOString()
             });
+            io.to('room:kitchen').emit('kds:ticket_updated', { ticketId: parseInt(ticketId), status: new_status });
         } else if (new_status === 'Cancelled') {
             io.to('room:staff').emit('kitchen:dish_cancelled', {
                 ticketId: parseInt(ticketId),
@@ -157,6 +158,7 @@ export const processTicketStatusUpdate = async (pool, ticketId, new_status, trig
                 tableId,
                 cancelReason: cancel_reason.trim()
             });
+            io.to('room:kitchen').emit('kds:ticket_updated', { ticketId: parseInt(ticketId), status: new_status });
         } else if (new_status === 'Preparing') {
             io.to('room:staff').emit('kitchen:dish_preparing', {
                 ticketId: parseInt(ticketId),
@@ -164,6 +166,7 @@ export const processTicketStatusUpdate = async (pool, ticketId, new_status, trig
                 tableId,
                 startedAt: now.toISOString()
             });
+            io.to('room:kitchen').emit('kds:ticket_updated', { ticketId: parseInt(ticketId), status: new_status });
         }
     }
 

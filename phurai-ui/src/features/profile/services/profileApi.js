@@ -25,6 +25,13 @@ export async function getProfileMe(userId) {
   return data;
 }
 
+export async function getProfilePayments(userId) {
+  const data = await request(`/customer/payments/history`, {
+    headers: profileRequestHeaders(userId),
+  });
+  return data.payments || [];
+}
+
 export async function updateProfile(userId, payload) {
   const {
     firstName,

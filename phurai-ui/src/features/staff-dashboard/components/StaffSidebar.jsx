@@ -36,12 +36,11 @@ function StaffSidebar({ role, collapsed, mobileOpen, onCloseMobile, onSignOut })
         aria-hidden="true"
       />
       <aside
-        className={`sfx-sidebar ${collapsed ? "is-collapsed" : ""} ${
-          mobileOpen ? "is-mobile-open" : ""
-        }`}
+        className={`sfx-sidebar ${collapsed ? "is-collapsed" : ""} ${mobileOpen ? "is-mobile-open" : ""
+          }`}
       >
         <div className="sfx-brand sfx-brand--staff">
-          <span className="sfx-brand__mark">P</span>
+          <span className="sfx-brand__mark"><img src="/logo.png" alt="Phūrai" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 'inherit' }} /></span>
           <span className="sfx-brand__text">
             <strong>Phūrai</strong>
             <small>{role === "kitchen_staff" ? "Kitchen Portal" : "Staff Portal"}</small>

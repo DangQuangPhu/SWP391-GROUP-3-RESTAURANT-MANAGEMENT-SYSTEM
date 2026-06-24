@@ -16,9 +16,11 @@ const RESTAURANT_STAFF_ROLE_ID = 2;
  * Clients authenticate via handshake.auth: { userId, roleId, sessionId? }
  */
 export function initSocket(httpServer, { allowedOrigins = [] } = {}) {
+  const corsOrigin = allowedOrigins.length > 0 ? allowedOrigins : "*";
   io = new Server(httpServer, {
     cors: {
-      origin: "*",
+      origin: corsOrigin,
+      credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
   });
@@ -74,6 +76,10 @@ export function initSocket(httpServer, { allowedOrigins = [] } = {}) {
 
     if (roleId === CUSTOMER_ROLE_ID && Number.isFinite(userId) && userId > 0) {
       socket.join(`customer_${userId}`);
+    }
+
+    if (Number.isFinite(userId) && userId > 0) {
+      socket.join(`user_${userId}`);
     }
 
     if (Number.isFinite(sessionId) && sessionId > 0) {

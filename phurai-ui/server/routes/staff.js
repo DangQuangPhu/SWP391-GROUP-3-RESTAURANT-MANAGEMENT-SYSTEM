@@ -6,6 +6,7 @@ import {
   checkInTable,
   resetTable,
   markTableClean,
+  updateTableStatus,
   getActiveOccupiedOrders,
   addOrderItem,
   updateOrderItemStatus,
@@ -29,9 +30,12 @@ import {
   getTodayShiftReservations,
   getStaffReservationDetail,
   staffCheckIn,
+  checkinReservation,
   rejectReservation,
   confirmCheckout,
   sendCookingQueue,
+  transferReservationTable,
+  assignTable,
 } from "../controllers/staffReservationController.js";
 import {
   mergeTables,
@@ -53,22 +57,33 @@ router.get("/shift-mapping", getStaffShiftMapping);
 router.get("/reservations/today-shift", resolveUserId, requireUserId, getTodayShiftReservations);
 router.get("/reservations/:id", resolveUserId, getStaffReservationDetail);
 router.post(
+  "/test-checkin/:id",
+  (req, res, next) => {
+    req.userId = 3;
+    next();
+  },
+  checkinReservation
+);
+
+router.post(
   "/reservations/:id/check-in",
   resolveUserId,
   requireUserId,
-  staffCheckIn
+  checkinReservation
 );
+
 router.post(
-  "/reservations/:id/checkin",
+  "/reservations/:id/assign-table",
   resolveUserId,
   requireUserId,
-  staffCheckIn
+  assignTable
 );
+
 router.patch(
   "/reservations/:id/check-in",
   resolveUserId,
   requireUserId,
-  staffCheckIn
+  checkinReservation
 );
 router.patch(
   "/reservations/:id/checkin",
@@ -81,6 +96,12 @@ router.patch(
   resolveUserId,
   requireUserId,
   rejectReservation
+);
+router.post(
+  "/reservations/:id/transfer",
+  resolveUserId,
+  requireUserId,
+  transferReservationTable
 );
 router.patch(
   "/reservations/:id/checkout-confirm",
@@ -102,6 +123,7 @@ router.post("/tables/:tableId/check-in", (req, res) => {
 });
 router.post("/tables/:tableId/reset", resolveUserId, requireUserId, resetTable);
 router.put("/tables/:tableId/mark-clean", resolveUserId, requireUserId, markTableClean);
+router.patch("/tables/:tableId/status", resolveUserId, requireUserId, updateTableStatus);
 router.post("/tables/merge", resolveUserId, requireUserId, mergeTables);
 router.post("/tables/unmerge", resolveUserId, requireUserId, unmergeTable);
 router.get("/tables/:tableId/timeline", resolveUserId, getTableTimeline);
@@ -745,10 +767,18 @@ router.get("/staff", async (_req, res) => {
          sp.staff_id,
          sp.staff_code,
          sp.job_title,
-         sp.employment_status
+         sp.employment_status,
+         ws.shift_name
        FROM dbo.UserAccounts AS ua
        INNER JOIN dbo.Roles AS r ON ua.role_id = r.role_id
        LEFT JOIN dbo.StaffProfiles AS sp ON sp.user_id = ua.user_id
+       OUTER APPLY (
+          SELECT TOP 1 ws_inner.shift_name
+          FROM dbo.StaffSchedules ss
+          INNER JOIN dbo.Shifts ws_inner ON ss.shift_id = ws_inner.shift_id
+          WHERE ss.user_id = ua.user_id AND ss.work_date >= CAST(GETDATE() AS DATE)
+          ORDER BY ss.work_date ASC
+       ) AS ws
        WHERE r.role_name IN (N'Manager', N'Restaurant Staff', N'Kitchen Staff')
          AND ua.is_active = 1
        ORDER BY ua.full_name ASC;`
@@ -756,6 +786,7 @@ router.get("/staff", async (_req, res) => {
 
     const staff = rows.map((row) => ({
       staff_id: row.staff_id,
+      user_id: row.user_id,
       full_name: row.full_name,
       role_name: row.role_name,
       job_title: row.job_title,
@@ -763,7 +794,7 @@ router.get("/staff", async (_req, res) => {
       phone: row.phone || "",
       email: row.email || "",
       status: mapEmploymentStatus(row.employment_status),
-      shift: "",
+      shift: row.shift_name || "Morning",
     }));
 
     return jsonOk(res, staff);

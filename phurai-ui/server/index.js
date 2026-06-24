@@ -57,6 +57,16 @@ app.use((_req, res, next) => {
 });
 app.use(express.json({ limit: "3mb" }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/menu", (req, res, next) => {
+  console.log('[Image Proxy] Incoming URL:', req.url);
+  if (req.url.startsWith('/') && req.url.endsWith('.jpg') && !req.url.startsWith('/menu-')) {
+    req.url = '/menu-' + req.url.slice(1);
+    console.log('[Image Proxy] Rewritten URL:', req.url);
+  }
+  const checkPath = path.join(__dirname, "../src/assets/images/menu", req.url);
+  console.log('[Image Proxy] Looking for file:', checkPath, 'Exists:', fs.existsSync(checkPath));
+  next();
+}, express.static(path.join(__dirname, "../src/assets/images/menu")));
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "phurai-api", port });
@@ -83,6 +93,11 @@ app.use("/api/public", publicRoutes);
 
 import paymentRoutes from "./routes/paymentRoutes.js";
 app.use("/api/payments", paymentRoutes);
+
+app.use((req, res, next) => {
+  console.log('Unmatched route hit 404 handler:', req.method, req.originalUrl);
+  next();
+});
 
 app.use((req, res) => {
   res.status(404).json({
@@ -144,8 +159,8 @@ server.on("error", (err) => {
   }
 });
 
-server.listen(port, () => {
-  console.log(`Backend server listening on http://localhost:${port}`);
+server.listen(port, "0.0.0.0", () => {
+  console.log(`Backend server listening on http://127.0.0.1:${port}`);
   console.log("SMTP configured:", isSmtpConfigured());
   console.log("Socket.IO enabled");
 });

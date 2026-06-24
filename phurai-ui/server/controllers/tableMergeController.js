@@ -233,7 +233,7 @@ export async function unmergeTable(req, res) {
 }
 
 export async function getTableTimeline(req, res) {
-  const { tableId } = req.params;
+  const tableId = req.params.tableId || req.params.id;
 
   if (!tableId) {
     return res.status(400).json({ success: false, message: "tableId is required." });
@@ -244,7 +244,7 @@ export async function getTableTimeline(req, res) {
     const result = await pool.request()
       .input("tableId", sql.Int, tableId)
       .query(`
-        SELECT al.audit_id, al.action_name, al.created_at, u.full_name, u.username
+        SELECT al.audit_log_id as audit_id, al.action_name, al.created_at, u.full_name, u.email as username
         FROM dbo.AuditLogs al
         LEFT JOIN dbo.UserAccounts u ON al.user_id = u.user_id
         WHERE al.target_table = 'RestaurantTables' 

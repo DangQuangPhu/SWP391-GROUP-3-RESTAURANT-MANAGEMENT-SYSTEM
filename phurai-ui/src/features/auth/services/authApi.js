@@ -303,3 +303,12 @@ export function resetProfilePassword(payload) {
 }
 
 export const changePasswordReset = resetProfilePassword;
+
+export function firstLoginReset({ newPassword, token }) {
+  return request("/first-login-reset", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ newPassword }),
+  });
+}
+

@@ -18,17 +18,75 @@ import {
   confirmCheckoutReservation,
   sendReservationToKitchenQueue,
   fetchReservationTimeline,
+  fetchStaffTables,
+  assignStaffTable,
 } from "../services/staffApi.js";
 import {
   getReservationDateIso,
   getReservationStatusKey,
   formatReservationTimeDisplay,
 } from "../utils/reservationQueueHelpers.js";
+import TableBoard from "../../reservations/components/choose-table/TableBoard.jsx";
 import { useSocket } from "@/core/socket/SocketContext.jsx";
-import { FILTER_GROUPS, RESERVATION_STATUS } from "@/shared/reservationStatus.js";
+import { FILTER_GROUPS, RESERVATION_STATUS, RESERVATION_STATUS_META, STAFF_VISIBLE_STATUSES } from "@/shared/reservationStatus.js";
 
 import LateArrivalBadge from "./LateArrivalBadge.jsx";
 import StaffEditReservationModal from "./StaffEditReservationModal.jsx";
+
+
+
+const getSelectStyle = (status) => {
+  if (status === "all") {
+    return {
+      background: "#ffffff",
+      color: "#1a1a1a",
+      borderColor: "#e5e7eb"
+    };
+  }
+  const meta = RESERVATION_STATUS_META[status] || {};
+  const tone = meta.tone || "muted";
+  
+  if (tone === "amber") {
+    return {
+      background: "#fef3c7",
+      color: "#b45309",
+      borderColor: "#fde68a"
+    };
+  }
+  if (tone === "blue") {
+    return {
+      background: "#dbeafe",
+      color: "#1d4ed8",
+      borderColor: "#bfdbfe"
+    };
+  }
+  if (tone === "purple") {
+    return {
+      background: "#f3e8ff",
+      color: "#6b21a8",
+      borderColor: "#e9d5ff"
+    };
+  }
+  if (tone === "green" || status === "Completed") {
+    return {
+      background: "#d1fae5",
+      color: "#065f46",
+      borderColor: "#a7f3d0"
+    };
+  }
+  if (tone === "red") {
+    return {
+      background: "#fee2e2",
+      color: "#991b1b",
+      borderColor: "#fecaca"
+    };
+  }
+  return {
+    background: "#f3f4f6",
+    color: "#374151",
+    borderColor: "#e5e7eb"
+  };
+};
 
 /* ── Date filter ── */
 function matchesSelectedDate(reservation, selectedDate) {
@@ -68,6 +126,13 @@ const CONFIRM_ACTIONS = {
     title: "Reject Check-in",
     desc: (r) => `Reject check-in for ${r.customer_name}? Please provide a reason.`,
     btnLabel: "Reject",
+    btnVariant: "danger",
+    needsReason: true,
+  },
+  reject_checkin: {
+    title: "Reject Check-in",
+    desc: (r) => `Reject check-in for ${r.customer_name} (Booking #${String(r.reservation_id).padStart(6, "0")})? Please state the reason.`,
+    btnLabel: "Reject & Release",
     btnVariant: "danger",
     needsReason: true,
   },
@@ -154,8 +219,12 @@ function ReservationManagement({ user, toast, refreshKey }) {
   const [checkoutReadyIds, setCheckoutReadyIds] = useState(new Set());
   const [checkoutDoneIds, setCheckoutDoneIds] = useState(new Set());
 
+  const [assignDialog, setAssignDialog] = useState(null); // holds reservation obj
+  const [tables, setTables] = useState([]);
+  const [loadingTables, setLoadingTables] = useState(false);
+
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("Upcoming");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [selectedDate, setSelectedDate] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -367,13 +436,25 @@ function ReservationManagement({ user, toast, refreshKey }) {
       );
     }
 
+    const sd = appliedRange?.startDate;
+    const ed = appliedRange?.endDate;
+    if (sd && ed && sd !== "all" && sd !== "All Dates" && String(sd).trim() !== "") {
+      base = base.filter(r => {
+        try {
+          const rawIso = r.reservation_start_at;
+          if (rawIso) {
+            const resDateStr = String(rawIso).slice(0, 10);
+            const startStr = format(new Date(sd), "yyyy-MM-dd");
+            const endStr = format(new Date(ed), "yyyy-MM-dd");
+            return resDateStr >= startStr && resDateStr <= endStr;
+          }
+          return true;
+        } catch { return true; }
+      });
+    }
+
     if (statusFilter !== "all") {
-      if (FILTER_GROUPS[statusFilter]) {
-        const groupStatuses = FILTER_GROUPS[statusFilter].map(s => s.toLowerCase());
-        base = base.filter((row) => groupStatuses.includes((row.status || row.reservation_status || "").toLowerCase()));
-      } else {
-        base = base.filter((row) => (row.status || row.reservation_status || "").toLowerCase() === statusFilter.toLowerCase());
-      }
+      base = base.filter((row) => (row.status || row.reservation_status || "").toLowerCase() === statusFilter.toLowerCase());
     }
 
     const STAFF_STATUS_ORDER = {
@@ -399,24 +480,15 @@ function ReservationManagement({ user, toast, refreshKey }) {
   }, [dateScopedQueue, search, statusFilter]);
 
   const kpiConfirmed = useMemo(
-    () => dateScopedQueue.filter((r) => {
-      const s = getReservationStatusKey(r);
-      return s === "await check-in" || s === "confirmed" || s === "reserved" || s === "paid";
-    }).length,
+    () => dateScopedQueue.filter((r) => r.reservation_status === "Confirmed").length,
     [dateScopedQueue]
   );
-  const kpiOccupied = useMemo(
-    () => dateScopedQueue.filter((r) => {
-      const s = getReservationStatusKey(r);
-      return s === "occupied" || s === "seated" || s === "cleaning" || s === "check-in";
-    }).length,
+  const kpiSeated = useMemo(
+    () => dateScopedQueue.filter((r) => r.reservation_status === "Seated").length,
     [dateScopedQueue]
   );
-  const kpiCheckedOut = useMemo(
-    () => dateScopedQueue.filter((r) => {
-      const s = getReservationStatusKey(r);
-      return s === "check-out" || s === "completed" || s === "complete paid";
-    }).length,
+  const kpiCompleted = useMemo(
+    () => dateScopedQueue.filter((r) => r.reservation_status === "Completed").length,
     [dateScopedQueue]
   );
 
@@ -444,6 +516,25 @@ function ReservationManagement({ user, toast, refreshKey }) {
     try {
       await rejectStaffReservation(target.reservation_id, userId, { reason: "Customer No-Show", new_status: "No Show" });
       toast("Marked as No Show. Table released.", "info");
+      setRejectedIds((prev) => new Set([...prev, target.reservation_id]));
+      loadReservations();
+      setConfirmDialog(null);
+    } catch (err) {
+      toast(err.message || "Operation failed.", "error");
+    }
+  }, [confirmDialog, toast, loadReservations, user]);
+
+  const handleRejectCheckin = useCallback(async () => {
+    if (!confirmDialog?.target) return;
+    const target = confirmDialog.target;
+    const reason = confirmDialog.reason?.trim();
+    if (!reason) {
+      toast("A reason is required to reject check-in.", "error");
+      return;
+    }
+    try {
+      await rejectStaffReservation(target.reservation_id, userId, { reason, new_status: "Check-in Rejected" });
+      toast("Check-in rejected. Table released.", "info");
       setRejectedIds((prev) => new Set([...prev, target.reservation_id]));
       loadReservations();
       setConfirmDialog(null);
@@ -508,6 +599,28 @@ function ReservationManagement({ user, toast, refreshKey }) {
     }
   }, [confirmDialog, toast, loadReservations, user]);
 
+  useEffect(() => {
+    if (assignDialog) {
+      setLoadingTables(true);
+      fetchStaffTables()
+        .then(res => setTables(res.data || res))
+        .catch(err => toast("Failed to load tables: " + err.message, "error"))
+        .finally(() => setLoadingTables(false));
+    }
+  }, [assignDialog, toast]);
+
+  const handleAssignTable = useCallback(async (tableId) => {
+    if (!assignDialog) return;
+    try {
+      await assignStaffTable(assignDialog.reservation_id, userId, { tableId });
+      toast("Table assigned and guests seated!", "success");
+      loadReservations();
+      setAssignDialog(null);
+    } catch (err) {
+      toast(err.message || "Failed to assign table.", "error");
+    }
+  }, [assignDialog, userId, toast, loadReservations]);
+
   const handleSendToKitchen = useCallback(async (reservationId) => {
     try {
       const res = await sendReservationToKitchenQueue(reservationId, userId);
@@ -524,7 +637,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
   function RowActions({ reservation }) {
     const resId = reservation.reservation_id;
     const statusKey = getReservationStatusKey(reservation);
-    const isOccupied = statusKey === "occupied" || checkedInIds.has(resId);
+    const isOccupied = statusKey === "occupied" || statusKey === "seated" || checkedInIds.has(resId);
     const isCheckedOut = statusKey === "check-out" || checkoutDoneIds.has(resId);
     const isCheckoutReady = checkoutReadyIds.has(resId);
 
@@ -542,6 +655,27 @@ function ReservationManagement({ user, toast, refreshKey }) {
     if (isCheckedOut) {
       return (
         <div className="sfx-rowacts" style={{ justifyContent: "center" }}>
+          {viewBtn}
+        </div>
+      );
+    }
+
+    if (statusKey === "check-in") {
+      return (
+        <div className="sfx-rowacts" style={{ justifyContent: "center", gap: 8, display: "flex", alignItems: "center" }}>
+          <Button
+            size="sm"
+            variant="soft"
+            style={{ 
+              color: "#fff", 
+              background: "linear-gradient(135deg, #3b82f6, #2563eb)", 
+              fontWeight: 600,
+              border: "none"
+            }}
+            onClick={() => setAssignDialog(reservation)}
+          >
+            Assign Table
+          </Button>
           {viewBtn}
         </div>
       );
@@ -593,12 +727,11 @@ function ReservationManagement({ user, toast, refreshKey }) {
 
     if (statusKey === "await check-in" || statusKey === "confirmed") {
       const isToday = isSameDay(new Date(reservation.reservation_start_at), new Date());
-      const hasTable = Boolean(reservation.table_id);
 
       return (
         <div className="sfx-rowacts" style={{ justifyContent: "center", gap: 8, display: "flex", alignItems: "center" }}>
           {isToday && (
-            hasTable ? (
+            <>
               <Button
                 size="sm"
                 variant="soft"
@@ -612,36 +745,29 @@ function ReservationManagement({ user, toast, refreshKey }) {
               >
                 Check-in
               </Button>
-            ) : (
               <Button
                 size="sm"
                 variant="soft"
                 style={{ 
                   color: "#fff", 
-                  backgroundColor: "#f59e0b", 
+                  background: "linear-gradient(135deg, #3b82f6, #2563eb)", 
                   fontWeight: 600,
                   border: "none"
                 }}
-                onClick={() => toast("Please assign a table from the Floor Plan first.", "info")}
+                onClick={() => setAssignDialog(reservation)}
               >
                 Assign Table
               </Button>
-            )
+            </>
           )}
           <Button
             size="sm"
-            variant="soft"
-            style={{ 
-              color: "#fff", 
-              backgroundColor: "#ef4444", 
-              fontWeight: 600,
-              border: "none"
-            }}
-            onClick={() => setConfirmDialog({ action: "noshow", target: reservation })}
+            variant="ghost"
+            style={{ color: "#000" }}
+            onClick={() => setConfirmDialog({ action: "view", target: reservation })}
           >
-            Hủy bàn (No-Show)
+            View
           </Button>
-          {viewBtn}
         </div>
       );
     }
@@ -773,7 +899,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
                   )}
                 </p>
                 {/* Send to Kitchen button — only if there are unsent items and reservation is Occupied */}
-                {unsentItems.length > 0 && (getReservationStatusKey(target) === 'occupied' || getReservationStatusKey(target) === 'check-in') && (
+                {unsentItems.length > 0 && (getReservationStatusKey(target) === 'occupied' || getReservationStatusKey(target) === 'seated' || getReservationStatusKey(target) === 'check-in') && (
                   <button
                     type="button"
                     onClick={() => handleSendToKitchen(target.reservation_id)}
@@ -882,23 +1008,23 @@ function ReservationManagement({ user, toast, refreshKey }) {
                   <span className="sfx-kpi__icon" aria-hidden="true"><Icon name="bell" size={18} /></span>
                 </div>
                 <p className="sfx-kpi__value">{kpiConfirmed}</p>
-                <p className="sfx-kpi__label">Awaiting check-in</p>
+                <p className="sfx-kpi__label">Confirmed</p>
               </article>
 
               <article className="sfx-kpi sfx-kpi--green">
                 <div className="sfx-kpi__top">
                   <span className="sfx-kpi__icon" aria-hidden="true"><Icon name="check" size={18} /></span>
                 </div>
-                <p className="sfx-kpi__value">{kpiOccupied}</p>
-                <p className="sfx-kpi__label">Occupied</p>
+                <p className="sfx-kpi__value">{kpiSeated}</p>
+                <p className="sfx-kpi__label">Seated</p>
               </article>
 
               <article className="sfx-kpi" style={{ borderTop: "3px solid #7c5cbf" }}>
                 <div className="sfx-kpi__top">
                   <span className="sfx-kpi__icon" aria-hidden="true"><Icon name="logout" size={18} /></span>
                 </div>
-                <p className="sfx-kpi__value">{kpiCheckedOut}</p>
-                <p className="sfx-kpi__label">Checked out</p>
+                <p className="sfx-kpi__value">{kpiCompleted}</p>
+                <p className="sfx-kpi__label">Completed</p>
               </article>
             </div>
 
@@ -940,24 +1066,30 @@ function ReservationManagement({ user, toast, refreshKey }) {
                     style={{
                       padding: "8px 32px 8px 12px",
                       borderRadius: "8px",
-                      border: "1px solid #e2dcd0",
-                      background: "#f8f5ef",
-                      color: "#1a1a1a",
+                      border: "1px solid",
                       fontSize: "14px",
-                      fontWeight: "500",
+                      fontWeight: "600",
                       cursor: "pointer",
                       minWidth: "160px",
                       appearance: "none",
-                      backgroundImage: "url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%231a1a1a%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')",
                       backgroundRepeat: "no-repeat",
                       backgroundPosition: "right 12px top 50%",
-                      backgroundSize: "10px auto"
+                      backgroundSize: "10px auto",
+                      transition: "all 0.2s ease",
+                      ...(() => {
+                        const style = getSelectStyle(statusFilter);
+                        const arrowColor = encodeURIComponent(style.color);
+                        return {
+                          ...style,
+                          backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22${arrowColor}%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")`
+                        };
+                      })()
                     }}
                   >
-                    <option value="all">All statuses</option>
-                    {Object.keys(FILTER_GROUPS).map((groupName) => (
-                      <option key={groupName} value={groupName}>
-                        {groupName}
+                    <option value="all" style={{ background: "#ffffff", color: "#1a1a1a" }}>All statuses</option>
+                    {STAFF_VISIBLE_STATUSES.map((statusVal) => (
+                      <option key={statusVal} value={statusVal} style={{ background: "#ffffff", color: "#1a1a1a" }}>
+                        {RESERVATION_STATUS_META[statusVal]?.label || statusVal}
                       </option>
                     ))}
                   </select>
@@ -969,18 +1101,20 @@ function ReservationManagement({ user, toast, refreshKey }) {
                   className={`staff-reservations-toolbar__date${pickerOpen ? " is-open" : ""}`}
                   style={{ marginLeft: "auto", position: "relative", display: "flex", alignItems: "center" }}
                 >
-                  <span className="staff-reservations-toolbar__date-label" style={{ marginRight: 8, fontSize: 13, color: "#1a1a1a", fontWeight: 500 }}>
-                    {selectedDateLabel}
-                  </span>
                   <button
                     type="button"
-                    className="sfx-kpi__icon sfx-kpi__icon--trigger staff-reservations-date-trigger"
+                    className="staff-reservations-date-trigger"
                     onClick={() => (pickerOpen ? closePicker() : openPicker())}
                     aria-label="Select date"
                     aria-expanded={pickerOpen}
-                    style={{ position: "relative", zIndex: 20, background: "#f8f5ef", border: "1px solid #e2dcd0", borderRadius: 8, width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#b09460" }}
+                    style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
                   >
-                    <Icon name="calendar" size={16} style={{ pointerEvents: "none" }} />
+                    <span className="staff-reservations-toolbar__date-label" style={{ fontSize: 13, color: "#1a1a1a", fontWeight: 500 }}>
+                      {selectedDateLabel}
+                    </span>
+                    <span className="sfx-kpi__icon sfx-kpi__icon--trigger" style={{ position: "relative", zIndex: 20, background: "#f8f5ef", border: "1px solid #e2dcd0", borderRadius: 8, width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#b09460" }}>
+                      <Icon name="calendar" size={16} style={{ pointerEvents: "none" }} />
+                    </span>
                   </button>
                   {pickerOpen && (
                     <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", zIndex: 1000 }}>
@@ -1015,7 +1149,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
                     >
                       <thead>
                         <tr style={{ background: "#ffffff" }}>
-                          <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Booking ID</th>
+                          <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Reservation ID</th>
                           <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Date</th>
                           <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Customer</th>
                           <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Phone</th>
@@ -1098,27 +1232,18 @@ function ReservationManagement({ user, toast, refreshKey }) {
                   if (!target) return null;
                   const sk = getReservationStatusKey(target);
                   const isConfirmedState = sk === "confirmed" && !checkedInIds.has(target.reservation_id);
-                  const isOccupiedState = sk === "occupied" || checkedInIds.has(target.reservation_id);
+                  const isOccupiedState = sk === "occupied" || sk === "seated" || checkedInIds.has(target.reservation_id);
                   const isFutureDate = new Date(target.reservation_start_at).setHours(0, 0, 0, 0) > new Date().setHours(0, 0, 0, 0);
 
                   return (
                     <div className="sfx-drawer__acts" style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                       {isConfirmedState && !isFutureDate && <>
-                        <Button variant="danger" onClick={() => setConfirmDialog({ action: "noshow", target, reason: "" })}>
-                          No Show
+                        <Button variant="danger" onClick={() => setConfirmDialog({ action: "reject_checkin", target, reason: "" })}>
+                          Reject Check-in
                         </Button>
-                        {target.table_id ? (
-                          <Button variant="gold" onClick={() => setConfirmDialog({ action: "checkin", target, reason: "" })}>
-                            Confirm Check-in
-                          </Button>
-                        ) : (
-                          <Button 
-                            style={{ background: "#f59e0b", color: "#fff", border: "none" }}
-                            onClick={() => toast("Please assign a table from the Floor Plan first.", "info")}
-                          >
-                            Assign Table
-                          </Button>
-                        )}
+                        <Button variant="gold" onClick={() => setConfirmDialog({ action: "checkin", target, reason: "" })}>
+                          Confirm Check-in
+                        </Button>
                       </>}
                       {isOccupiedState && !isFutureDate && checkoutReadyIds.has(target.reservation_id) && (
                         <>
@@ -1193,6 +1318,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
                             onClick={() => {
                               if (confirmDialog.action === "checkin") handleCheckIn();
                               else if (confirmDialog.action === "noshow") handleRejectWalkin();
+                              else if (confirmDialog.action === "reject_checkin") handleRejectCheckin();
                               else if (confirmDialog.action === "walkin_noshow") handleRejectWalkin();
                               else if (confirmDialog.action === "reject") handleRejectMismatch();
                               else if (confirmDialog.action === "reject_checkout") handleRejectCheckout();
@@ -1223,6 +1349,63 @@ function ReservationManagement({ user, toast, refreshKey }) {
               loadReservations();
             }}
           />
+        )}
+
+        {assignDialog && (
+          <div
+            style={{
+              position: "fixed", inset: 0, zIndex: 1100,
+              background: "rgba(0,0,0,0.55)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+            onClick={() => setAssignDialog(null)}
+          >
+            <div
+              style={{
+                background: "#f9fafb", borderRadius: 16,
+                padding: 0, width: "95vw", maxWidth: "1200px", height: "85vh",
+                boxShadow: "0 24px 64px rgba(0,0,0,0.35)",
+                display: "flex", flexDirection: "column",
+                overflow: "hidden",
+                animation: "sfx-drawer-in 0.22s ease",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ padding: "20px 24px", borderBottom: "1px solid #e5e7eb", background: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h3 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: "#111827" }}>
+                    Assign Table for {assignDialog.customer_name}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>
+                    Guests: <strong>{assignDialog.guest_count}</strong>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAssignDialog(null)}
+                  style={{ border: "none", background: "transparent", cursor: "pointer", color: "#9ca3af" }}
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div style={{ flex: 1, overflow: "auto", padding: "24px", position: "relative" }}>
+                {loadingTables ? (
+                  <p style={{ textAlign: "center", marginTop: 40, color: "#6b7280" }}>Loading floor plan...</p>
+                ) : (
+                  <TableBoard
+                    tables={tables}
+                    guestCount={assignDialog.guest_count}
+                    onSelectTable={(tableId) => {
+                      if (window.confirm("Assign this table to " + assignDialog.customer_name + "?")) {
+                        handleAssignTable(tableId);
+                      }
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </>

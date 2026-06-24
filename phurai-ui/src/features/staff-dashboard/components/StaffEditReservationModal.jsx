@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { editStaffReservation } from '../services/staffApi';
 
 export default function StaffEditReservationModal({ reservation, userId, onClose, onSuccess, allReservations }) {
@@ -117,10 +118,10 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
     }
   };
 
-  return (
-    <div className="staff-table-modal" style={{ zIndex: 9999 }}>
-      <button type="button" className="staff-table-modal__backdrop" onClick={onClose} />
-      <div className="staff-table-modal__panel" style={{ padding: '24px', maxWidth: '400px' }}>
+  return createPortal(
+    <div className="staff-table-modal fixed inset-0 z-[100] w-screen h-screen flex items-center justify-center" style={{ zIndex: 9999 }}>
+      <button type="button" className="staff-table-modal__backdrop fixed inset-0 w-screen h-screen bg-black/50" onClick={onClose} />
+      <div className="staff-table-modal__panel relative z-[101]" style={{ padding: '24px', maxWidth: '400px' }}>
         <header className="staff-table-modal__head" style={{ marginBottom: '20px' }}>
           <div>
             <h2 className="staff-table-modal__title">Admin Override: Chỉnh sửa lịch</h2>
@@ -204,6 +205,7 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

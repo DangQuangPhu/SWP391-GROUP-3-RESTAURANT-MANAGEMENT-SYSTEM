@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import '../styles/menu.css';
 import MenuGrid from '../components/MenuGrid.jsx';
 import MenuImagePreview from '../components/MenuImagePreview.jsx';
@@ -10,9 +11,11 @@ import MenuCartFab from '../components/MenuCartFab.jsx';
 import { MenuCartProvider, useMenuCart } from '../context/MenuCartContext.jsx';
 import { useTableSession } from '@/features/table-session';
 import '@/features/table-session/styles/table-session.css';
+import { useSocket } from '@/core/socket/SocketContext.jsx';
+
 import { flattenMenuDishes, menuCategories } from '../data/menuData.js';
 import { menuImages } from '../data/menuAssets.js';
-import { normalizePrice } from '@/utils/formatCurrency';
+import { normalizePrice, formatVND } from '@/utils/formatCurrency';
 import { isMenuCustomer } from '../utils/menuCustomer.js';
 
 function filterDishes(dishes, searchTerm) {
@@ -61,8 +64,11 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
   const pendingCategoryRef = useRef(null);
   const isTransitioningRef = useRef(false);
   const [apiDishes, setApiDishes] = useState([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isSendingOrder, setIsSendingOrder] = useState(false);
+  const { socket } = useSocket();
 
-  useEffect(() => {
+  const fetchMenu = useCallback(() => {
     fetch('/api/menu')
       .then(r => r.json())
       .then(res => {
@@ -73,8 +79,46 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
       .catch(err => console.error('Failed to fetch menu:', err));
   }, []);
 
-  const { addItem, isDrawerOpen } = useMenuCart();
+  useEffect(() => {
+    fetchMenu();
+  }, [fetchMenu]);
+
+  useEffect(() => {
+    if (!socket) return;
+    socket.on('menu:updated', fetchMenu);
+    return () => {
+      socket.off('menu:updated', fetchMenu);
+    };
+  }, [socket, fetchMenu]);
+
+  const { items, addItem, isDrawerOpen, clearCart, totalQuantity, subtotal, openDrawer } = useMenuCart();
   const canAddToCart = isMenuCustomer(isAuthenticated, currentUser) || hasActiveSession;
+
+  const handleSendToKitchen = async () => {
+    if (!tableSession?.session_id || items.length === 0) return;
+    setIsSendingOrder(true);
+    try {
+      const res = await fetch('/api/public/qr-order/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: tableSession.session_id,
+          cartItems: items
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        clearCart();
+        setIsHistoryOpen(true);
+      } else {
+        alert(data.message || 'Failed to send order');
+      }
+    } catch (err) {
+      alert('Network error while sending order');
+    } finally {
+      setIsSendingOrder(false);
+    }
+  };
 
   const allDishes = useMemo(
     () =>
@@ -294,7 +338,11 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
         </main>
       </div>
 
-      {canAddToCart ? <MenuCartFab ref={cartFabRef} /> : null}
+      {canAddToCart ? (
+        <>
+          <MenuCartFab ref={cartFabRef} />
+        </>
+      ) : null}
 
       <MenuImagePreview dish={previewDish} onClose={() => setPreviewDish(null)} />
     </div>

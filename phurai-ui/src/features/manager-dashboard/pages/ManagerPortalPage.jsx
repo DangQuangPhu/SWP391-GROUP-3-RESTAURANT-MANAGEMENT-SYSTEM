@@ -17,6 +17,7 @@ import OrdersSection from "../components/sections/OrdersSection.jsx";
 import StaffSection from "../components/sections/StaffSection.jsx";
 import PromotionsSection from "../components/sections/PromotionsSection.jsx";
 import ReportsSection from "../components/sections/ReportsSection.jsx";
+import { ManagerChatbot } from "../components/ManagerChatbot.jsx";
 
 import {
   fetchKpis,
@@ -529,6 +530,7 @@ function ManagerPortalPage({
           <Route path="*" element={<Navigate to="dashboard" replace />} />
         </Route>
       </Routes>
+      <ManagerChatbot />
     </ManagerPortalContext.Provider>
   );
 }

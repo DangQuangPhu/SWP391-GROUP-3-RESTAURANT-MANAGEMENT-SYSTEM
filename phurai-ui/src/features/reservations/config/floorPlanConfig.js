@@ -14,13 +14,13 @@ export const TABLES = [
   // ---- Dãy Cửa sổ (Tăng dần: 2, 4, 6, 8 ghế) ----
   { id: "WIN-A", x: 140, y: 120, type: "round2", fill: "#dceaf5", chair: "#cfe3da" },
   { id: "WIN-B", x: 400, y: 120, type: "round4", fill: "#dceaf5", chair: "#cfe3da" },
-  { id: "WIN-C", x: 880, y: 120, type: "booth6", fill: "#dceaf5", chair: "#cfe3da" },
-  { id: "WIN-D", x: 1165, y: 120, type: "booth8", fill: "#dceaf5", chair: "#cfe3da" },
+  { id: "WIN-C", x: 880, y: 115, type: "booth6", fill: "#dceaf5", chair: "#cfe3da" },
+  { id: "WIN-D", x: 1165, y: 115, type: "booth8", fill: "#dceaf5", chair: "#cfe3da" },
 
   // ---- Dãy Phòng VIP (6 ghế) ----
-  { id: "VIP-1", x: 140, y: 305, type: "vip6", fill: "#f6d6d6", chair: "#f1c2c2" },
-  { id: "VIP-2", x: 140, y: 475, type: "vip6", fill: "#f6d6d6", chair: "#f1c2c2" },
-  { id: "VIP-3", x: 140, y: 645, type: "vip6", fill: "#f6d6d6", chair: "#f1c2c2" },
+  { id: "VIP-1", x: 140, y: 290, type: "vip6", fill: "#f6d6d6", chair: "#f1c2c2" },
+  { id: "VIP-2", x: 140, y: 455, type: "vip6", fill: "#f6d6d6", chair: "#f1c2c2" },
+  { id: "VIP-3", x: 140, y: 630, type: "vip6", fill: "#f6d6d6", chair: "#f1c2c2" },
 
   // ---- Sảnh Thường (4 cột x 3 hàng = 12 bàn 4 ghế) ----
   // Cột X: 350, 490, 630, 770 | Hàng Y: 300, 450, 600
@@ -29,22 +29,22 @@ export const TABLES = [
   { id: "S-09", x: 350, y: 600, type: "round4" }, { id: "S-10", x: 490, y: 600, type: "round4" }, { id: "S-11", x: 630, y: 600, type: "round4" }, { id: "S-12", x: 770, y: 600, type: "round4" },
 
   // ---- Sảnh Premium (4 bàn 4 ghế xếp dọc) ----
-  { id: "PRE-01", x: 930, y: 300, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
-  { id: "PRE-02", x: 930, y: 420, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
-  { id: "PRE-03", x: 930, y: 540, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
-  { id: "PRE-04", x: 930, y: 660, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
+  { id: "PRE-01", x: 930, y: 290, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
+  { id: "PRE-02", x: 930, y: 405, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
+  { id: "PRE-03", x: 930, y: 520, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
+  { id: "PRE-04", x: 930, y: 640, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
 
   // ---- Private Rooms (Tăng dần: 2, 4, 6, 8 ghế hình chữ nhật) ----
-  { id: "PR-01", x: 1165, y: 320, type: "rect2", fill: "#ece1f0", chair: "#ddc9e6" },
+  { id: "PR-01", x: 1165, y: 290, type: "rect2", fill: "#ece1f0", chair: "#ddc9e6" },
   { id: "PR-02", x: 1165, y: 460, type: "rect4", fill: "#ece1f0", chair: "#ddc9e6" },
-  { id: "PR-03", x: 1165, y: 610, type: "rect6", fill: "#ece1f0", chair: "#ddc9e6" },
-  { id: "PR-04", x: 1165, y: 790, type: "rect8", fill: "#ece1f0", chair: "#ddc9e6" },
+  { id: "PR-03", x: 1165, y: 630, type: "rect6", fill: "#ece1f0", chair: "#ddc9e6" },
+  { id: "PR-04", x: 1165, y: 820, type: "rect8", fill: "#ece1f0", chair: "#ddc9e6" },
 
   // ---- Kitchen View (Khu vực sát bếp, 4 bàn) ----
   { id: "K-01", x: 330, y: 825, type: "round4" },
-  { id: "K-02", x: 410, y: 825, type: "round4" },
-  { id: "K-03", x: 490, y: 825, type: "round4" },
-  { id: "K-04", x: 570, y: 825, type: "round4" }
+  { id: "K-02", x: 440, y: 825, type: "round4" },
+  { id: "K-03", x: 545, y: 825, type: "round4" },
+  { id: "K-04", x: 650, y: 825, type: "round4" }
 ];
 
 export function getChairPositions(profile) {

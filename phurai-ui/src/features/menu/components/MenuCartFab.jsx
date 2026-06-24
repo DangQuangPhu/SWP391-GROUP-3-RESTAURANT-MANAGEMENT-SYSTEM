@@ -1,9 +1,13 @@
 import { forwardRef } from 'react';
 import { useMenuCart } from '../context/MenuCartContext.jsx';
+import { useTableSession } from '@/features/table-session';
 
 const MenuCartFab = forwardRef(function MenuCartFab(_props, ref) {
   const { totalQuantity, badgePop, openDrawer, isDrawerOpen } = useMenuCart();
-  const isVisible = totalQuantity > 0 && !isDrawerOpen;
+  const { session } = useTableSession();
+  
+  // Show if there are items in cart OR if user is in an active session (might have history)
+  const isVisible = (totalQuantity > 0 || (session && session.session_status === 'Active')) && !isDrawerOpen;
 
   return (
     <button

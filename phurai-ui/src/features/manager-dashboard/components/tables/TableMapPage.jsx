@@ -275,7 +275,7 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
     }
 
     try {
-      const apiStatus = STATUS_SLUG_TO_API[editing.status] || "Available";
+      const apiStatus = STATUS_SLUG_TO_API[String(editing.status).toLowerCase()] || "Available";
       const payload = {
         table_number: editing.table_number.trim(),
         area_id: editing.area_id || (areas.find(a => a.area_name === editing.area_name)?.area_id) || 1,
@@ -295,7 +295,7 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
 
   const quickStatus = async (t, status) => {
     try {
-      const apiStatus = STATUS_SLUG_TO_API[status] || "Available";
+      const apiStatus = STATUS_SLUG_TO_API[String(status).toLowerCase()] || "Available";
       const payload = {
         table_number: t.table_number,
         area_id: t.area_id || (areas.find(a => a.area_name === t.area_name)?.area_id) || 1,

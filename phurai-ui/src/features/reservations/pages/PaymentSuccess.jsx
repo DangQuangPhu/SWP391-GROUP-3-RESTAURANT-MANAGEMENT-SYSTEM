@@ -28,7 +28,7 @@ export default function PaymentSuccess({ reservation }) {
             <tr><td className="rp-receipt-label">Table</td><td className="rp-receipt-value">{reservation.table || 'Assigned by staff'}</td></tr>
             <tr><td className="rp-receipt-label">Date &amp; time</td><td className="rp-receipt-value">{reservation.date}, {reservation.time}</td></tr>
             <tr><td className="rp-receipt-label">Guests</td><td className="rp-receipt-value">{reservation.guests}</td></tr>
-            <tr><td className="rp-receipt-label">Deposit paid</td><td className="rp-receipt-value">{(reservation.depositAmount || 200000).toLocaleString('vi-VN')} đ via VNPAY</td></tr>
+            <tr><td className="rp-receipt-label">Deposit paid</td><td className="rp-receipt-value">{(reservation.depositAmount || 200000).toLocaleString('vi-VN')} VND via VNPAY</td></tr>
           </tbody>
         </table>
       </div>

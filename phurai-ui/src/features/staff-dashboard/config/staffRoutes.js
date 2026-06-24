@@ -17,7 +17,7 @@ const ROLE_NAME_MAP = {
 
 export const STAFF_DEFAULT_PATH = {
   [STAFF_ROLE.RESTAURANT]: `${STAFF_BASE}/reservations`,
-  [STAFF_ROLE.KITCHEN]:    `${STAFF_BASE}/kds`,
+  [STAFF_ROLE.KITCHEN]:    `/kds`,
 };
 
 // Role 2 = Restaurant Staff: all floor ops, NOT kds

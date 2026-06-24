@@ -20,11 +20,17 @@ import {
   createPreSaveReservation,
   cancelPendingPayment,
   applyPromoCodeToReservation,
+  submitReservationReview
 } from "../controllers/customerReservationController.js";
 import { validateReservationCreate, validateReservationUpdate } from "../middleware/validateReservation.js";
 import { getReservationTimeline } from "../utils/timelineLogger.js";
 
 const router = express.Router();
+
+/* ------------------------------------------------------------------ */
+/* POST /api/reservations/:id/review                                   */
+/* ------------------------------------------------------------------ */
+router.post("/:id/review", submitReservationReview);
 
 /* ------------------------------------------------------------------ */
 /* POST /api/reservations/pre-save                                     */
@@ -675,6 +681,42 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
 
     try {
       await connection.beginTransaction();
+
+      // [BMAD EXECUTE] Strict Time-Slot Overlap Prevention
+      if (effective_preferred_area_id && !kitchenViewBooking) {
+        const bufferMinutes = Number(settings.table_hold_min) || 15;
+
+        // Fetch total capacity of the requested area
+        const [areaCapacityRows] = await connection.query(
+          `SELECT ISNULL(SUM(capacity), 0) AS total_capacity 
+           FROM dbo.RestaurantTables 
+           WHERE area_id = ? AND table_status != N'Inactive'`,
+          [effective_preferred_area_id]
+        );
+        const areaTotalCapacity = Number(areaCapacityRows[0]?.total_capacity || 0);
+
+        // Calculate overlaps
+        const [overlapRows] = await connection.query(
+          `SELECT ISNULL(SUM(guest_count), 0) AS total_overlapping_guests
+           FROM dbo.Reservations WITH (UPDLOCK, HOLDLOCK)
+           WHERE preferred_area_id = ?
+             AND reservation_status NOT IN (N'Cancelled', N'No Show', N'Reject Check-in', N'Completed')
+             AND ? < DATEADD(minute, ?, reservation_end_at)
+             AND ? > reservation_start_at`,
+          [effective_preferred_area_id, slotStart, bufferMinutes, slotEnd]
+        );
+        
+        const sumOverlappingGuests = Number(overlapRows[0]?.total_overlapping_guests || 0);
+
+        if (sumOverlappingGuests + guestCount > areaTotalCapacity) {
+          await connection.rollback();
+          connection.release();
+          return res.status(409).json({
+            success: false,
+            message: "The selected time slot is fully booked. Please choose a different time."
+          });
+        }
+      }
 
       let checkRows = [];
       let effectiveTableIds = tableIds;

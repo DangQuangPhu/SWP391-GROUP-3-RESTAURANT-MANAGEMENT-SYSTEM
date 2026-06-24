@@ -4,7 +4,11 @@ import PaymentSuccess from './PaymentSuccess';
 import PaymentFailed from './PaymentFailed';
 import usePaymentPolling from '../hooks/usePaymentPolling';
 
-export default function CheckoutQR({ orderId, amount, onComplete, onRetry }) {
+export default function CheckoutQR({ 
+  orderId, amount, originalAmount, 
+  voucherCode, setVoucherCode, appliedVoucher, applying, voucherError, onApplyVoucher,
+  onComplete, onRetry 
+}) {
   const [timeLeft, setTimeLeft] = useState(15 * 60); // 15 minutes in seconds
   const { status, isLoading } = usePaymentPolling(orderId);
   const [showFailed, setShowFailed] = useState(false);
@@ -53,9 +57,9 @@ export default function CheckoutQR({ orderId, amount, onComplete, onRetry }) {
         
         {/* Left Column - QR Code */}
         <div className="md:w-1/2 p-8 flex flex-col items-center justify-center bg-gradient-to-b from-blue-50 to-white dark:from-gray-800 dark:to-gray-900 border-r border-gray-100 dark:border-gray-700">
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Quét mã thanh toán</h2>
+          <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">Scan to Pay</h2>
           <p className="text-gray-500 dark:text-gray-400 mb-8 text-center text-sm">
-            Sử dụng ứng dụng ngân hàng để quét mã QR này
+            Use your banking app to scan this QR code
           </p>
           
           <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 mb-6">
@@ -70,13 +74,13 @@ export default function CheckoutQR({ orderId, amount, onComplete, onRetry }) {
             <Clock className="w-5 h-5 animate-pulse" />
             <span className="text-xl">{formatTime(timeLeft)}</span>
           </div>
-          <p className="text-xs text-gray-400 mt-1">thời gian chờ thanh toán</p>
+          <p className="text-xs text-gray-400 mt-1">waiting for payment</p>
         </div>
 
         {/* Right Column - Transfer Details */}
         <div className="md:w-1/2 p-8 flex flex-col justify-center">
           <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-6 border-b border-gray-100 dark:border-gray-700 pb-4">
-            Thông tin chuyển khoản
+            Transfer Details
           </h3>
 
           <div className="space-y-6">
@@ -87,7 +91,7 @@ export default function CheckoutQR({ orderId, amount, onComplete, onRetry }) {
                   <Banknote className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Ngân hàng</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Bank</p>
                   <p className="font-semibold text-gray-900 dark:text-white">TPBank</p>
                 </div>
               </div>
@@ -103,7 +107,7 @@ export default function CheckoutQR({ orderId, amount, onComplete, onRetry }) {
                   <CreditCard className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Số tài khoản</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Account Number</p>
                   <p className="font-semibold text-gray-900 dark:text-white text-lg tracking-wider">{ACCOUNT_NO}</p>
                 </div>
               </div>
@@ -119,7 +123,7 @@ export default function CheckoutQR({ orderId, amount, onComplete, onRetry }) {
                   <User className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Chủ tài khoản</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Account Name</p>
                   <p className="font-semibold text-gray-900 dark:text-white uppercase">{ACCOUNT_NAME}</p>
                 </div>
               </div>
@@ -128,10 +132,67 @@ export default function CheckoutQR({ orderId, amount, onComplete, onRetry }) {
               </button>
             </div>
 
+            {/* Promo / Voucher Section */}
+            <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Promo Code</p>
+              {!appliedVoucher ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg className="w-5 h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                        </svg>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Enter promo code..."
+                        value={voucherCode}
+                        onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                        className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all font-mono text-gray-900 dark:text-white placeholder-gray-400"
+                        disabled={applying}
+                      />
+                    </div>
+                    <button
+                      onClick={onApplyVoucher}
+                      disabled={applying || !voucherCode.trim()}
+                      className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                      {applying ? "..." : "Apply"}
+                    </button>
+                  </div>
+                  {voucherError && <p className="text-sm text-red-500 mt-1">{voucherError}</p>}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-800 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                        Code {appliedVoucher.code} applied
+                      </p>
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                        Discount {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(appliedVoucher.discount_amount)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Amount */}
             <div className="flex items-center justify-between group pt-4 border-t border-gray-100 dark:border-gray-700">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Số tiền thanh toán</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Payment Amount</p>
+                {appliedVoucher && (
+                  <p className="text-sm text-gray-400 line-through mb-0.5">
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(originalAmount || 0)}
+                  </p>
+                )}
                 <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
                   {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0)}
                 </p>
@@ -144,7 +205,7 @@ export default function CheckoutQR({ orderId, amount, onComplete, onRetry }) {
             {/* Content */}
             <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl flex items-center justify-between group">
               <div>
-                <p className="text-sm text-blue-600 dark:text-blue-300 mb-1 font-medium">Nội dung chuyển khoản (Bắt buộc)</p>
+                <p className="text-sm text-blue-600 dark:text-blue-300 mb-1 font-medium">Transfer Content (Required)</p>
                 <p className="font-mono text-lg font-bold text-gray-900 dark:text-white tracking-widest">{ADD_INFO}</p>
               </div>
               <button onClick={() => handleCopy(ADD_INFO)} className="text-blue-500 hover:text-blue-700 dark:hover:text-blue-300 transition-colors p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
