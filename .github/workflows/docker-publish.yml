@@ -50,8 +50,8 @@ jobs:
       - name: Build and push Backend Docker image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: backend.Dockerfile
+          context: phurai-ui
+          file: phurai-ui/backend.Dockerfile
           push: true
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}
@@ -73,8 +73,8 @@ jobs:
       - name: Build and push Frontend Docker image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: frontend.Dockerfile
+          context: phurai-ui
+          file: phurai-ui/frontend.Dockerfile
           push: true
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
