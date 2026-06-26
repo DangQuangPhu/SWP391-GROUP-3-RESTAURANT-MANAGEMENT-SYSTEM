@@ -118,7 +118,7 @@ runOtpLifecycleCleanup().catch((err) => {
   console.warn("OTP lifecycle cleanup:", err.message);
 });
 
-const OTP_CLEANUP_INTERVAL_MS = 60 * 1000;
+const OTP_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
 // Run auto seed on startup
 runAutoSeed();
@@ -136,7 +136,7 @@ setInterval(() => {
   });
 }, REMINDER_INTERVAL_MS);
 
-const NO_SHOW_INTERVAL_MS = 60 * 1000; // 1 min
+const NO_SHOW_INTERVAL_MS = 5 * 60 * 1000; // 5 mins
 setInterval(() => {
   sweepNoShows().catch((err) => {
     console.warn("No show sweeper cron:", err.message);

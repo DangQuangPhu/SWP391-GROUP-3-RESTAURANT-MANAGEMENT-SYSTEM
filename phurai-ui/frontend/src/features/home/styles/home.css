@@ -369,12 +369,18 @@
   font-weight: 500;
   color: var(--gold-dark);
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
+  transition: background 0.2s, color 0.2s, transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
+  will-change: transform;
 }
 
 .phurai-btn-outline:hover {
   background: var(--gold-dark);
   color: #fff;
+}
+
+.phurai-btn-outline:active {
+  transform: scale(0.95);
+  opacity: 0.8;
 }
 
 .phurai-gallery__cta,
@@ -589,7 +595,7 @@
 .phurai-kitchen__expand {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 0.55s ease;
+  transition: grid-template-rows 0.8s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .phurai-kitchen__expand.is-open {
@@ -599,6 +605,19 @@
 .phurai-kitchen__expand-inner {
   overflow: hidden;
   min-height: 0;
+  opacity: 0;
+  transform: translateY(-24px) scale(0.98);
+  transition:
+    opacity 0.5s cubic-bezier(0.25, 1, 0.5, 1),
+    transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.phurai-kitchen__expand.is-open .phurai-kitchen__expand-inner {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity 0.7s cubic-bezier(0.25, 1, 0.5, 1) 0.1s,
+    transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .phurai-kitchen-rec {
