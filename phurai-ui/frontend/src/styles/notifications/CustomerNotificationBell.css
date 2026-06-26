@@ -1,0 +1,5 @@
+@keyframes sfx-pulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(224, 108, 108, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(224, 108, 108, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(224, 108, 108, 0); }
+}

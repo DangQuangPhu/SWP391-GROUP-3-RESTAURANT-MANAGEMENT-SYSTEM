@@ -1,0 +1,214 @@
+.payment-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.payment-modal__panel {
+  background-color: var(--phurai-bg, #fff);
+  border-radius: 20px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.15);
+  padding: 32px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.payment-modal__close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--phurai-text-muted, #86868b);
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.payment-modal__close:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: var(--phurai-text, #1d1d1f);
+}
+
+.payment-modal__title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--phurai-text, #1d1d1f);
+  text-align: center;
+}
+
+.payment-modal__loading,
+.payment-modal__error {
+  text-align: center;
+  padding: 32px 0;
+  color: var(--phurai-text-muted, #86868b);
+}
+
+.payment-modal__error {
+  color: var(--phurai-error, #ff3b30);
+}
+
+.payment-modal__details {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.payment-modal__header-info {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.payment-modal__amount {
+  font-size: 2.5rem;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.payment-modal__status {
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--phurai-text-muted, #86868b);
+}
+
+.payment-modal__date {
+  font-size: 0.9rem;
+  color: var(--phurai-text-muted, #86868b);
+}
+
+.payment-modal__section {
+  background-color: rgba(0, 0, 0, 0.02);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.payment-modal__section-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--phurai-text-muted, #86868b);
+  margin: 0 0 8px 0;
+}
+
+.payment-modal__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.95rem;
+}
+
+.payment-modal__row span:first-child {
+  color: var(--phurai-text-muted, #86868b);
+}
+
+.payment-modal__row span:last-child {
+  color: var(--phurai-text, #1d1d1f);
+  font-weight: 500;
+  text-align: right;
+}
+
+.payment-modal__row--bold span {
+  color: var(--phurai-text, #1d1d1f) !important;
+  font-weight: 600 !important;
+  font-size: 1.05rem;
+}
+
+.payment-modal__items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.payment-modal__item-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.95rem;
+}
+
+.payment-modal__item-row span:first-child {
+  color: var(--phurai-text, #1d1d1f);
+  max-width: 70%;
+}
+
+.payment-modal__item-row span:last-child {
+  color: var(--phurai-text-muted, #86868b);
+  font-weight: 500;
+}
+
+.payment-modal__totals {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .payment-modal__panel {
+    background-color: var(--phurai-bg-dark, #1c1c1e);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+  }
+  
+  .payment-modal__close {
+    color: var(--phurai-text-muted-dark, #98989d);
+  }
+  
+  .payment-modal__close:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--phurai-text-dark, #f5f5f7);
+  }
+  
+  .payment-modal__title,
+  .payment-modal__row span:last-child,
+  .payment-modal__row--bold span,
+  .payment-modal__item-row span:first-child {
+    color: var(--phurai-text-dark, #f5f5f7) !important;
+  }
+  
+  .payment-modal__status,
+  .payment-modal__date,
+  .payment-modal__section-title,
+  .payment-modal__row span:first-child,
+  .payment-modal__item-row span:last-child {
+    color: var(--phurai-text-muted-dark, #98989d);
+  }
+  
+  .payment-modal__section {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+  
+  .payment-modal__items {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+}

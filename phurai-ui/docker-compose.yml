@@ -14,7 +14,7 @@ services:
       context: .
       dockerfile: backend.Dockerfile
     env_file:
-      - ./server/.env
+      - ./backend/.env
     environment:
       - DB_SERVER=db
     ports:
