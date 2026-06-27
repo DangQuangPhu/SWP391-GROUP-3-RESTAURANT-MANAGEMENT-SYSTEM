@@ -1,45 +1,39 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export function useCountUp(value, duration = 0.8, formatFn = (v) => Math.round(v)) {
   const [displayValue, setDisplayValue] = useState(formatFn(0));
-  const prevValue = useRef(0);
+  const prevValue = React.useRef(0);
 
   useEffect(() => {
-    let start = prevValue.current;
+    const start = prevValue.current;
     const end = Number(value) || 0;
     
-    if (start === end) {
-      setDisplayValue(formatFn(end));
-      return;
-    }
-
     const durationMs = duration * 1000;
-    const stepTime = 16; // ~60fps
-    const totalSteps = Math.max(1, durationMs / stepTime);
+    const startTime = performance.now();
 
-    // Quadratic easing out: starts smooth and decelerates gracefully
-    const easeOutQuad = (t, b, c, d) => {
-      t /= d;
-      return -c * t * (t - 2) + b;
+    let rAF;
+    const tick = (now) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / durationMs, 1);
+      
+      // Smooth easeOutQuad function: f(t) = t * (2 - t)
+      const easeProgress = progress * (2 - progress);
+      
+      const currentVal = start + (end - start) * easeProgress;
+      setDisplayValue(formatFn(currentVal));
+
+      if (progress < 1) {
+        rAF = requestAnimationFrame(tick);
+      } else {
+        setDisplayValue(formatFn(end));
+      }
     };
 
-    let currentStep = 0;
-
-    const timer = setInterval(() => {
-      currentStep++;
-      if (currentStep >= totalSteps) {
-        clearInterval(timer);
-        setDisplayValue(formatFn(end));
-        prevValue.current = end;
-      } else {
-        const val = easeOutQuad(currentStep, start, end - start, totalSteps);
-        setDisplayValue(formatFn(val));
-      }
-    }, stepTime);
+    rAF = requestAnimationFrame(tick);
+    prevValue.current = end;
 
     return () => {
-      clearInterval(timer);
-      prevValue.current = end;
+      if (rAF) cancelAnimationFrame(rAF);
     };
   }, [value, duration, formatFn]);
 

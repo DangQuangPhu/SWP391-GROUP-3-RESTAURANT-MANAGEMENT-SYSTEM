@@ -1047,71 +1047,69 @@ function ProfilePage({
                 className="profile-dashboard__profile-header"
                 style={{ background: `linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.85) 100%)` }}
               >
-                <div className="profile-dashboard__header-inner">
-                  <div className="profile-dashboard__avatar-block">
+                <div className="profile-dashboard__avatar-block">
+                <button
+                  type="button"
+                  className="profile-dashboard__avatar-btn profile-dashboard__avatar-btn--preview"
+                  onClick={handleAvatarPreviewClick}
+                  aria-label="View profile avatar"
+                >
+                  <ProfileAvatar user={profile} />
+                </button>
+                {isEditing ? (
+                  <button
+                    type="button"
+                    className="profile-dashboard__avatar-edit"
+                    onClick={handleEditAvatarClick}
+                  >
+                    Edit avatar
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="profile-dashboard__identity mac-animate animate-up" style={{ "--delay": "200ms" }}>
+                <h1 className="profile-dashboard__name">
+                  {welcomeName}
+                </h1>
+              </div>
+
+              {activePanel === "profile" ? (
+                <div className="profile-dashboard__header-actions">
+                  {!isEditing ? (
                     <button
                       type="button"
-                      className="profile-dashboard__avatar-btn profile-dashboard__avatar-btn--preview"
-                      onClick={handleAvatarPreviewClick}
-                      aria-label="View profile avatar"
+                      className="profile-dashboard__btn profile-dashboard__btn--primary"
+                      onClick={() => setIsEditing(true)}
                     >
-                      <ProfileAvatar user={profile} />
+                      Edit
                     </button>
-                    {isEditing ? (
+                  ) : (
+                    <>
                       <button
                         type="button"
-                        className="profile-dashboard__avatar-edit"
-                        onClick={handleEditAvatarClick}
+                        className="profile-dashboard__btn profile-dashboard__btn--ghost"
+                        onClick={handleCancel}
+                        disabled={saving}
                       >
-                        Edit avatar
+                        Cancel
                       </button>
-                    ) : null}
-                  </div>
-
-                  <div className="profile-dashboard__identity mac-animate animate-up" style={{ "--delay": "200ms" }}>
-                    <h1 className="profile-dashboard__name">
-                      {welcomeName}
-                    </h1>
-                  </div>
-
-                  {activePanel === "profile" ? (
-                    <div className="profile-dashboard__header-actions">
-                      {!isEditing ? (
-                        <button
-                          type="button"
-                          className="profile-dashboard__btn profile-dashboard__btn--primary"
-                          onClick={() => setIsEditing(true)}
-                        >
-                          Edit
-                        </button>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            className="profile-dashboard__btn profile-dashboard__btn--ghost"
-                            onClick={handleCancel}
-                            disabled={saving}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            className="profile-dashboard__btn profile-dashboard__btn--primary"
-                            onClick={handleSave}
-                            disabled={saving}
-                          >
-                            {saving ? "Saving…" : "Save changes"}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  ) : null}
+                      <button
+                        type="button"
+                        className="profile-dashboard__btn profile-dashboard__btn--primary"
+                        onClick={handleSave}
+                        disabled={saving}
+                      >
+                        {saving ? "Saving…" : "Save changes"}
+                      </button>
+                    </>
+                  )}
                 </div>
-              </div>
+              ) : null}
+            </div>
             )}
 
             <div className={`profile-dashboard__card-body ${activePanel === "dashboard" ? "p-0 flex-1 flex flex-col min-h-0 overflow-hidden" : ""}`}>
-              <div key={activePanel} className={`profile-content-panel mac-animate animate-up ${activePanel === "dashboard" ? "flex-1 flex flex-col min-h-0 overflow-hidden profile-content-panel--full" : ""}`} style={{ "--delay": "250ms" }}>
+              <div key={activePanel} className={`profile-content-panel mac-animate animate-up ${activePanel === "dashboard" ? "flex-1 flex flex-col min-h-0 overflow-hidden" : ""}`} style={{ "--delay": "250ms" }}>
                 {showSkeleton ? <ProfileContentSkeleton /> : renderPanelContent()}
               </div>
             </div>
