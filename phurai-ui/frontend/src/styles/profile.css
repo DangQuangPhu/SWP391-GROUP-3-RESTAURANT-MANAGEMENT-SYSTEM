@@ -1,13 +1,22 @@
 :root {
-  --color-bg: #FAF7F2;            /* nền tổng thể, kem ấm */
-  --color-surface: #FFFFFF;       /* nền card */
-  --color-primary: #7A2E2E;       /* burgundy - rượu vang, dùng cho heading/active */
-  --color-primary-light: #FDF3E7; /* nền active/hover nhạt */
-  --color-accent-gold: #C9A227;   /* vàng gold - Loyalty Points, highlight */
-  --color-accent-olive: #8B7355;  /* nâu olive - đồng bộ avatar có sẵn */
-  --color-success: #5B8C5A;       /* sage green - tăng trưởng dương */
-  --color-danger: #C1440E;        /* terracotta - giảm/âm */
-  --color-text-main: #2B2118;     /* chữ chính, nâu đen ấm */
+  --color-bg: #FAF7F2;
+  /* nền tổng thể, kem ấm */
+  --color-surface: #FFFFFF;
+  /* nền card */
+  --color-primary: #7A2E2E;
+  /* burgundy - rượu vang, dùng cho heading/active */
+  --color-primary-light: #FDF3E7;
+  /* nền active/hover nhạt */
+  --color-accent-gold: #C9A227;
+  /* vàng gold - Loyalty Points, highlight */
+  --color-accent-olive: #8B7355;
+  /* nâu olive - đồng bộ avatar có sẵn */
+  --color-success: #5B8C5A;
+  /* sage green - tăng trưởng dương */
+  --color-danger: #C1440E;
+  /* terracotta - giảm/âm */
+  --color-text-main: #2B2118;
+  /* chữ chính, nâu đen ấm */
   --color-text-muted: #8A7F73;
   --color-border: #ECE5DA;
   --gradient-banner: linear-gradient(135deg, #F3E5C8 0%, #EFD9D2 100%);
@@ -27,7 +36,7 @@
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0,0,0,0.05);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.05);
   transform-origin: top right;
 }
 
@@ -44,6 +53,7 @@
     opacity: 0;
     transform: scale(0.95) translateY(-10px);
   }
+
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
@@ -55,6 +65,7 @@
     opacity: 1;
     transform: scale(1) translateY(0);
   }
+
   to {
     opacity: 0;
     transform: scale(0.95) translateY(-10px);
@@ -165,9 +176,17 @@
   animation: revealText 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.profile-dropdown.is-opening .profile-dropdown__name { animation-delay: 0.05s; }
-.profile-dropdown.is-opening .profile-dropdown__username { animation-delay: 0.1s; }
-.profile-dropdown.is-opening .profile-dropdown__email { animation-delay: 0.15s; }
+.profile-dropdown.is-opening .profile-dropdown__name {
+  animation-delay: 0.05s;
+}
+
+.profile-dropdown.is-opening .profile-dropdown__username {
+  animation-delay: 0.1s;
+}
+
+.profile-dropdown.is-opening .profile-dropdown__email {
+  animation-delay: 0.15s;
+}
 
 @keyframes avatarFadeIn {
   from {
@@ -175,6 +194,7 @@
     filter: blur(6px);
     transform: scale(0.9);
   }
+
   to {
     opacity: 1;
     filter: blur(0);
@@ -571,18 +591,33 @@
     grid-template-columns: 1fr;
   }
 }
+
 /* ================================
    Apple Mac-Style Choreography
 ================================ */
 
 @keyframes mac-scale-reveal {
-  0% { opacity: 0; transform: scale(0.98); }
-  100% { opacity: 1; transform: scale(1); }
+  0% {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes mac-fade-up {
-  0% { opacity: 0; transform: translateY(20px); }
-  100% { opacity: 1; transform: translateY(0); }
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .mac-animate {
@@ -592,8 +627,13 @@
   animation-delay: var(--delay, 0ms);
 }
 
-.animate-scale { animation-name: mac-scale-reveal; }
-.animate-up { animation-name: mac-fade-up; }
+.animate-scale {
+  animation-name: mac-scale-reveal;
+}
+
+.animate-up {
+  animation-name: mac-fade-up;
+}
 
 
 /* ================================
@@ -877,6 +917,7 @@ body.profile-page-open {
   /* hide scrollbar */
   scrollbar-width: none;
 }
+
 .dashboard-view-container::-webkit-scrollbar {
   display: none;
 }
@@ -953,8 +994,16 @@ body.profile-page-open {
 
 /* Pulse animation */
 @keyframes ping-soft {
-  0% { transform: scale(1); opacity: 1; }
-  75%, 100% { transform: scale(2); opacity: 0; }
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  75%,
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
 }
 
 .live-pulse {
@@ -1138,7 +1187,7 @@ body.profile-page-open {
   border: 1px solid #bbf7d0;
   background: #ecfdf5;
   color: #166534;
-  
+
 }
 
 .profile-dashboard__message--error {
@@ -1146,6 +1195,7 @@ body.profile-page-open {
   background: #fef2f2;
   color: #991b1b;
 }
+
 .profile-dashboard__message {
   position: fixed;
   top: 96px;
@@ -1200,7 +1250,7 @@ body.profile-page-open {
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 16px;
 
-  background: #ffffff;
+  background: #f3f4f6;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 
@@ -1826,6 +1876,7 @@ body.profile-page-open {
 ================================ */
 
 @media (max-width: 1024px) {
+
   body:has(.profile-page),
   body.profile-page-open {
     overflow: auto;
@@ -1947,7 +1998,7 @@ body.profile-page-open {
   border-top: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-.profile-dashboard__contact-block + .profile-dashboard__contact-block {
+.profile-dashboard__contact-block+.profile-dashboard__contact-block {
   margin-top: 1rem;
 }
 
@@ -2139,6 +2190,7 @@ body.profile-page-open {
     opacity: 0;
     transform: translateY(12px) scale(0.96);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -2262,6 +2314,7 @@ body.profile-page-open {
     opacity: 0;
     transform: translateY(8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -2278,6 +2331,7 @@ body.profile-page-open {
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -2333,6 +2387,7 @@ body.profile-page-open {
   0% {
     background-position: 200% 0;
   }
+
   100% {
     background-position: -200% 0;
   }
@@ -2355,6 +2410,7 @@ body.profile-page-open {
     opacity: 0;
     transform: translateY(12px) scale(0.98);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -2449,6 +2505,7 @@ body.profile-page-open {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .profile-shell-enter,
   .profile-content-panel,
   .collapsible-panel,
@@ -2476,7 +2533,9 @@ body.profile-page-open {
     -webkit-background-clip: unset;
     background-clip: unset;
   }
-}.account-page__back-home {
+}
+
+.account-page__back-home {
   position: fixed;
   top: 30px;
   left: 30px;
