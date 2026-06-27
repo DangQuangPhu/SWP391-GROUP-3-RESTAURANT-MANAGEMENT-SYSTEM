@@ -1,33 +1,33 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { motion } from 'framer-motion';
+import React, { useEffect, useState } from 'react';
 import { useCountUp } from '@/hooks/useCountUp';
 
+// Module-level cache to persist previous values across component unmounts/remounts
+const prevValuesCache = {};
+
 export default function StatCard({ label, value, icon: Icon, deltaPercent, formatValue, theme }) {
-  const prevValue = useRef(0);
   const [flash, setFlash] = useState(false);
   const [trendDirection, setTrendDirection] = useState('none'); // 'up' | 'down' | 'none'
 
-  console.warn(`[StatCard RENDER: ${label}] value: ${value} (${typeof value}), prev: ${prevValue.current}, flash: ${flash}, trend: ${trendDirection}`);
+  const endValue = Number(value) || 0;
+
+  // Initialize the cache for this card to 0 on first render so it flashes on initial mount
+  if (prevValuesCache[label] === undefined) {
+    prevValuesCache[label] = 0;
+  }
 
   useEffect(() => {
-    const endValue = Number(value) || 0;
-    console.warn(`[StatCard: ${label}] useEffect run. value: ${value}, prev: ${prevValue.current}`);
-    if (prevValue.current !== endValue) {
-      console.warn(`[StatCard: ${label}] Starting flash. ${prevValue.current} -> ${endValue}`);
-      setTrendDirection(endValue > prevValue.current ? 'up' : 'down');
+    const cachedValue = prevValuesCache[label];
+    if (cachedValue !== endValue) {
+      setTrendDirection(endValue > cachedValue ? 'up' : 'down');
       setFlash(true);
       const timer = setTimeout(() => {
-        console.warn(`[StatCard: ${label}] Timer fired. Setting flash to false.`);
         setFlash(false);
         setTrendDirection('none');
       }, 1200);
-      prevValue.current = endValue;
-      return () => {
-        console.warn(`[StatCard: ${label}] Cleanup. Clearing timer.`);
-        clearTimeout(timer);
-      };
+      prevValuesCache[label] = endValue;
+      return () => clearTimeout(timer);
     }
-  }, [value]);
+  }, [value, label, endValue]);
 
   const animatedValue = useCountUp(value, 1.2, formatValue);
 
