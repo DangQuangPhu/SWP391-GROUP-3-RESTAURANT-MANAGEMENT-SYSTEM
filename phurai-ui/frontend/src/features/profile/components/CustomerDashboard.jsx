@@ -218,7 +218,7 @@ const CustomerDashboard = () => {
             value={summary?.totalExpenditure?.value || 0}
             icon={Wallet}
             deltaPercent={summary?.totalExpenditure?.deltaPercent ?? null}
-            formatValue={(v) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v)}
+            formatValue={(v) => `${Math.round(v).toLocaleString('vi-VN')} VND`}
             theme="red"
           />
           <StatCard
@@ -316,7 +316,7 @@ const CustomerDashboard = () => {
                   </div>
                   <div className="text-right">
                     <p className="font-bold text-sm text-gray-900">
-                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(item.amount)}
+                      {`${Math.round(item.amount).toLocaleString('vi-VN')} VND`}
                     </p>
                     <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${item.status === 'Completed' || item.status === 'Paid' || item.status === 'Served'
                         ? 'bg-green-100 text-green-700'

@@ -176,7 +176,7 @@ export default function CheckoutQR({
                         Code {appliedVoucher.code} applied
                       </p>
                       <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                        Discount {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(appliedVoucher.discount_amount)}
+                        Discount {`${Math.round(appliedVoucher.discount_amount).toLocaleString('vi-VN')} VND`}
                       </p>
                     </div>
                   </div>
@@ -191,11 +191,11 @@ export default function CheckoutQR({
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Payment Amount</p>
                 {appliedVoucher && (
                   <p className="text-sm text-gray-400 line-through mb-0.5">
-                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(originalAmount || 0)}
+                    {`${Math.round(originalAmount || 0).toLocaleString('vi-VN')} VND`}
                   </p>
                 )}
                 <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(amount || 0)}
+                  {`${Math.round(amount || 0).toLocaleString('vi-VN')} VND`}
                 </p>
               </div>
               <button onClick={() => handleCopy(amount?.toString())} className="text-gray-400 hover:text-blue-500 transition-colors p-2 opacity-0 group-hover:opacity-100">
