@@ -1442,9 +1442,9 @@ body.profile-page-open {
 
 .profile-dashboard__field input,
 .profile-dashboard__field select {
-  border: 0;
+  border: 1px solid #e2e8f0;
   outline: 0;
-  background: #f7f7f7;
+  background: #ffffff;
 }
 
 .profile-dashboard__field input:focus,
@@ -1457,7 +1457,8 @@ body.profile-page-open {
   display: flex;
   align-items: center;
 
-  background: #f7f7f7;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
 }
 
 .profile-dashboard__field-value--bio {
@@ -1472,13 +1473,13 @@ body.profile-page-open {
   min-height: 110px;
 
   padding: 0.875rem 18px;
-  border: 0;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
   outline: 0;
 
   resize: vertical;
 
-  background: #f7f7f7;
+  background: #ffffff;
   color: #334155;
 
   font-family: var(--font-body);

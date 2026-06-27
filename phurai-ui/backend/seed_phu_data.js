@@ -9,7 +9,12 @@ BEGIN TRANSACTION;
 -- Create a temporary table to store the user IDs of "Dang Quang Phu"
 DECLARE @PhuUsers TABLE (user_id INT);
 INSERT INTO @PhuUsers (user_id)
-SELECT user_id FROM dbo.UserAccounts WHERE full_name = N'Dang Quang Phu';
+SELECT user_id FROM dbo.UserAccounts WHERE full_name LIKE N'Dang%Quang%Phu';
+
+-- Clean up and normalize the name in the database to exactly one space
+UPDATE dbo.UserAccounts
+SET full_name = N'Dang Quang Phu'
+WHERE user_id IN (SELECT user_id FROM @PhuUsers);
 
 -- CLEAN UP previous seed data to avoid duplicates or index errors
 DELETE FROM dbo.OrderItems WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE customer_id IN (SELECT user_id FROM @PhuUsers));
