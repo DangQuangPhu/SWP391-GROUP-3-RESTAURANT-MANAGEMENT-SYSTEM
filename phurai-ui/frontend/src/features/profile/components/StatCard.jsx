@@ -3,21 +3,22 @@ import { motion } from 'framer-motion';
 import { useCountUp } from '@/hooks/useCountUp';
 
 export default function StatCard({ label, value, icon: Icon, deltaPercent, formatValue, theme }) {
-  const prevValue = useRef(value);
+  const prevValue = useRef(0);
   const [flash, setFlash] = useState(false);
   const [trendDirection, setTrendDirection] = useState('none'); // 'up' | 'down' | 'none'
 
   useEffect(() => {
-    if (prevValue.current !== undefined && prevValue.current !== value) {
-      setTrendDirection(value > prevValue.current ? 'up' : 'down');
+    const endValue = Number(value) || 0;
+    if (prevValue.current !== endValue) {
+      setTrendDirection(endValue > prevValue.current ? 'up' : 'down');
       setFlash(true);
       const timer = setTimeout(() => {
         setFlash(false);
         setTrendDirection('none');
       }, 1200);
+      prevValue.current = endValue;
       return () => clearTimeout(timer);
     }
-    prevValue.current = value;
   }, [value]);
 
   const animatedValue = useCountUp(value, 1.2, formatValue);
@@ -47,7 +48,9 @@ export default function StatCard({ label, value, icon: Icon, deltaPercent, forma
     <div
       className={`rounded-2xl bg-white p-5 shadow-sm border border-gray-100 flex flex-col justify-between border-t-[3px] ${currentTheme.border} transition-all duration-300 ${
         flash 
-          ? (trendDirection === 'up' ? 'shadow-[0_4px_20px_rgba(16,185,129,0.15)] bg-emerald-50/20' : 'shadow-[0_4px_20px_rgba(239,68,68,0.15)] bg-rose-50/20') 
+          ? (trendDirection === 'up' 
+              ? 'shadow-[0_4px_25px_rgba(16,185,129,0.2)] bg-emerald-50 border-emerald-300' 
+              : 'shadow-[0_4px_25px_rgba(239,68,68,0.2)] bg-rose-50 border-rose-300') 
           : ''
       }`}
     >
