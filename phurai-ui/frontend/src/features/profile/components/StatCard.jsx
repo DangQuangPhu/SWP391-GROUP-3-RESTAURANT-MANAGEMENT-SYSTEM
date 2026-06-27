@@ -3,18 +3,28 @@ import { motion } from 'framer-motion';
 import { useCountUp } from '@/hooks/useCountUp';
 
 export default function StatCard({ label, value, icon: Icon, deltaPercent, formatValue, theme }) {
-  const prevValue = useRef(value);
+  const prevValue = useRef(null);
   const [flash, setFlash] = useState(false);
   const [trendDirection, setTrendDirection] = useState('none'); // 'up' | 'down' | 'none'
 
   useEffect(() => {
-    if (prevValue.current !== undefined && prevValue.current !== value) {
+    if (prevValue.current !== null && prevValue.current !== value) {
       setTrendDirection(value > prevValue.current ? 'up' : 'down');
       setFlash(true);
       const timer = setTimeout(() => {
         setFlash(false);
         setTrendDirection('none');
       }, 1200);
+      return () => clearTimeout(timer);
+    } else if (prevValue.current === null && value > 0) {
+      // Trigger green flash and count-up on initial page load
+      setTrendDirection('up');
+      setFlash(true);
+      const timer = setTimeout(() => {
+        setFlash(false);
+        setTrendDirection('none');
+      }, 1200);
+      prevValue.current = value;
       return () => clearTimeout(timer);
     }
     prevValue.current = value;
