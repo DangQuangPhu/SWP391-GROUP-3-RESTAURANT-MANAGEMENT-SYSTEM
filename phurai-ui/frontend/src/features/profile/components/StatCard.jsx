@@ -9,15 +9,21 @@ export default function StatCard({ label, value, icon: Icon, deltaPercent, forma
 
   useEffect(() => {
     const endValue = Number(value) || 0;
+    console.warn(`[StatCard: ${label}] useEffect run. value: ${value}, prev: ${prevValue.current}`);
     if (prevValue.current !== endValue) {
+      console.warn(`[StatCard: ${label}] Starting flash. ${prevValue.current} -> ${endValue}`);
       setTrendDirection(endValue > prevValue.current ? 'up' : 'down');
       setFlash(true);
       const timer = setTimeout(() => {
+        console.warn(`[StatCard: ${label}] Timer fired. Setting flash to false.`);
         setFlash(false);
         setTrendDirection('none');
       }, 1200);
       prevValue.current = endValue;
-      return () => clearTimeout(timer);
+      return () => {
+        console.warn(`[StatCard: ${label}] Cleanup. Clearing timer.`);
+        clearTimeout(timer);
+      };
     }
   }, [value]);
 
