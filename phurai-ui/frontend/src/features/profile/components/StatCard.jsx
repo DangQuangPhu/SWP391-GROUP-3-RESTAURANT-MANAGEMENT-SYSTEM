@@ -20,7 +20,7 @@ export default function StatCard({ label, value, icon: Icon, deltaPercent, forma
     prevValue.current = value;
   }, [value]);
 
-  const animatedValue = useCountUp(value, 1.2, formatValue);
+  const animatedValue = useCountUp(value, 0.8, formatValue);
 
   const themeClasses = {
     blue: {
