@@ -1045,7 +1045,7 @@ function ProfilePage({
             {activePanel !== "dashboard" && (
               <div
                 className="profile-dashboard__profile-header"
-                style={{ background: `linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.85) 100%)` }}
+                style={{ background: `linear-gradient(180deg, transparent 0%, #ffffff 100%)` }}
               >
                 <div className="profile-dashboard__avatar-block">
                 <button
