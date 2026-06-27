@@ -100,8 +100,8 @@ export const OrderCategoryChart = ({ data }) => {
   return (
     <div className="flex flex-col sm:flex-row items-center gap-6 w-full h-full">
       {/* Doughnut Chart */}
-      <div className="w-full sm:w-1/2 flex-1 flex items-center justify-center relative min-h-0">
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="w-full sm:w-1/2 flex-1 flex items-center justify-center relative min-h-[180px]">
+        <ResponsiveContainer width="100%" height={180}>
           <PieChart>
             <Tooltip 
               contentStyle={{ borderRadius: '8px', border: '1px solid #f3f4f6', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}
