@@ -37,7 +37,7 @@ export default function OrderPanel({ onSelectOrder }) {
               <div className="sfx-card__body" style={{ padding: '0 16px 16px' }}>
                 <div className="staff-order-field">
                   <span>Bắt đầu: {new Date(order.created_at).toLocaleTimeString('vi-VN')}</span>
-                  <span>Tổng tiền: <strong style={{ color: 'var(--sfx-text)' }}>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.total_amount)}</strong></span>
+                  <span>Tổng tiền: <strong style={{ color: 'var(--sfx-text)' }}>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(order.total_amount)}</strong></span>
                 </div>
 
                 <div className="staff-order-actions" style={{ marginTop: '16px' }}>

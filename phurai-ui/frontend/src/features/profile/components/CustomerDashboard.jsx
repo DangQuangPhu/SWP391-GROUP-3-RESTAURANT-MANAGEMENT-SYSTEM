@@ -211,6 +211,7 @@ const CustomerDashboard = () => {
             icon={CalendarCheck}
             deltaPercent={summary?.totalReservations?.deltaPercent ?? null}
             formatValue={(v) => Math.round(v)}
+            theme="blue"
           />
           <StatCard
             label="Total Expenditure"
@@ -218,6 +219,7 @@ const CustomerDashboard = () => {
             icon={Wallet}
             deltaPercent={summary?.totalExpenditure?.deltaPercent ?? null}
             formatValue={(v) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v)}
+            theme="red"
           />
           <StatCard
             label="Total Orders"
@@ -225,6 +227,7 @@ const CustomerDashboard = () => {
             icon={ShoppingBag}
             deltaPercent={summary?.totalOrders?.deltaPercent ?? null}
             formatValue={(v) => Math.round(v)}
+            theme="green"
           />
           <StatCard
             label="Loyalty Points"
@@ -232,6 +235,7 @@ const CustomerDashboard = () => {
             icon={Gem}
             deltaPercent={summary?.totalLoyaltyPoints?.deltaPercent ?? null}
             formatValue={(v) => Math.round(v)}
+            theme="gold"
           />
         </div>
       </div>
@@ -312,7 +316,7 @@ const CustomerDashboard = () => {
                   </div>
                   <div className="text-right">
                     <p className="font-bold text-sm text-gray-900">
-                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.amount)}
+                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(item.amount)}
                     </p>
                     <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${item.status === 'Completed' || item.status === 'Paid' || item.status === 'Served'
                         ? 'bg-green-100 text-green-700'

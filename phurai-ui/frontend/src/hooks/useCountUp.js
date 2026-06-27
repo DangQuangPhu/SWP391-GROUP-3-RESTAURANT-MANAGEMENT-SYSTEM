@@ -10,7 +10,7 @@ export function useCountUp(value, duration = 0.9, formatFn = (v) => Math.round(v
     const startValue = prevValue.current;
     const controls = animate(startValue, value, {
       duration,
-      ease: [0.215, 0.61, 0.355, 1], // easeOutCubic
+      ease: [0.16, 1, 0.3, 1], // easeOutExpo
       onUpdate(v) {
         setDisplayValue(formatFn(v));
       },

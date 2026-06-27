@@ -71,7 +71,7 @@ function PaymentDetailsModal({ isOpen, onClose, userId, paymentId }) {
   if (!isOpen) return null;
 
   const formatVND = (amount) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(amount);
   };
 
   const renderContent = () => {

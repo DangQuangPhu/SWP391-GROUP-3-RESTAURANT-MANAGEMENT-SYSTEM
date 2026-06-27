@@ -14,7 +14,7 @@ const CustomTooltip = ({ active, payload, label }) => {
       <div className="bg-white border border-gray-100 p-3 rounded-lg shadow-sm text-sm font-sans">
         <p className="m-0 mb-1 font-semibold text-gray-500">{label}</p>
         <p className="m-0 font-bold text-gray-900 text-base">
-          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(payload[0].value)}
+          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(payload[0].value)}
         </p>
       </div>
     );
@@ -67,8 +67,8 @@ export const ExpenditureTrendChart = ({ data }) => {
             axisLine={false} 
             tickLine={false} 
             tick={{ fontSize: 12, fill: '#9ca3af', fontWeight: 500 }}
-            tickFormatter={(value) => value >= 1000 ? `$${(value/1000).toFixed(0)}k` : `$${value}`}
-            width={50}
+            tickFormatter={(value) => value >= 1000000 ? `${(value/1000000).toFixed(1)}M đ` : value >= 1000 ? `${(value/1000).toFixed(0)}k đ` : `${value} đ`}
+            width={65}
           />
           <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#8c764b', strokeWidth: 1, strokeDasharray: '4 4' }} />
           <Area 

@@ -2,32 +2,71 @@ import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useCountUp } from '@/hooks/useCountUp';
 
-export default function StatCard({ label, value, icon: Icon, deltaPercent, formatValue }) {
+export default function StatCard({ label, value, icon: Icon, deltaPercent, formatValue, theme }) {
   const prevValue = useRef(value);
   const [flash, setFlash] = useState(false);
+  const [trendDirection, setTrendDirection] = useState('none'); // 'up' | 'down' | 'none'
 
   useEffect(() => {
     if (prevValue.current !== undefined && prevValue.current !== value) {
+      setTrendDirection(value > prevValue.current ? 'up' : 'down');
       setFlash(true);
-      const timer = setTimeout(() => setFlash(false), 400);
+      const timer = setTimeout(() => {
+        setFlash(false);
+        setTrendDirection('none');
+      }, 1200);
       return () => clearTimeout(timer);
     }
     prevValue.current = value;
   }, [value]);
 
-  const animatedValue = useCountUp(value, 0.9, formatValue);
+  const animatedValue = useCountUp(value, 1.2, formatValue);
+
+  const themeClasses = {
+    blue: {
+      border: 'border-t-[#4a7b9d]',
+      iconBg: 'bg-[#4a7b9d]/10 text-[#4a7b9d]'
+    },
+    red: {
+      border: 'border-t-[#a95a3f]',
+      iconBg: 'bg-[#a95a3f]/10 text-[#a95a3f]'
+    },
+    green: {
+      border: 'border-t-[#4e9d73]',
+      iconBg: 'bg-[#4e9d73]/10 text-[#4e9d73]'
+    },
+    gold: {
+      border: 'border-t-[#d4a373]',
+      iconBg: 'bg-[#d4a373]/10 text-[#d4a373]'
+    }
+  };
+
+  const currentTheme = themeClasses[theme] || themeClasses.blue;
 
   return (
     <div
-      className={`rounded-2xl bg-white p-5 shadow-sm border border-gray-100 flex flex-col justify-between ${flash ? 'opacity-80' : ''}`}
-      style={{ transition: 'background-color 0.4s ease' }}
+      className={`rounded-2xl bg-white p-5 shadow-sm border border-gray-100 flex flex-col justify-between border-t-[3px] ${currentTheme.border} transition-all duration-300 ${
+        flash 
+          ? (trendDirection === 'up' ? 'shadow-[0_4px_20px_rgba(16,185,129,0.15)] bg-emerald-50/20' : 'shadow-[0_4px_20px_rgba(239,68,68,0.15)] bg-rose-50/20') 
+          : ''
+      }`}
     >
       <div className="flex items-center gap-4 mb-4">
-        <div className="w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center text-[#8c764b]">
+        <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${
+          flash 
+            ? (trendDirection === 'up' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500') 
+            : currentTheme.iconBg
+        }`}>
           <Icon size={24} strokeWidth={2} />
         </div>
         <div>
-          <h3 className="text-2xl font-bold text-gray-900">{animatedValue}</h3>
+          <h3 className={`text-2xl font-bold transition-all duration-500 ${
+            flash 
+              ? (trendDirection === 'up' ? 'text-emerald-600 scale-105 drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'text-rose-600 scale-95 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)]') 
+              : 'text-gray-900'
+          }`}>
+            {animatedValue}
+          </h3>
           <p className="text-sm font-semibold text-gray-500">{label}</p>
         </div>
       </div>
