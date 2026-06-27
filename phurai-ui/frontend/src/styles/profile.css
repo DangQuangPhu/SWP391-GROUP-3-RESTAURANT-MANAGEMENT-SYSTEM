@@ -1260,12 +1260,17 @@ body.profile-page-open {
 }
 
 .profile-dashboard__profile-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-
   margin-top: -34px;
   padding: 0 32px 24px;
+}
+
+.profile-dashboard__header-inner {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
 }
 
 .profile-dashboard__avatar-block {
@@ -1953,8 +1958,11 @@ body.profile-page-open {
   }
 
   .profile-dashboard__profile-header {
-    flex-wrap: wrap;
     padding: 0 1rem 1.25rem;
+  }
+
+  .profile-dashboard__header-inner {
+    flex-wrap: wrap;
   }
 
   .profile-dashboard__identity,
@@ -2324,6 +2332,12 @@ body.profile-page-open {
 .profile-content-panel {
   animation: profile-panel-enter 0.28s ease both;
   will-change: opacity, transform;
+}
+
+.profile-content-panel:not(.profile-content-panel--full) {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 @keyframes profile-panel-enter {
