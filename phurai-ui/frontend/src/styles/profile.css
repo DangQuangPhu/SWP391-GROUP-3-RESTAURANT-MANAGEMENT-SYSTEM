@@ -2556,3 +2556,72 @@ body.profile-page-open {
   opacity: 0.75;
   text-decoration: underline;
 }
+
+/* ================================
+   Payment History Enhanced Cards & Ripple Wave
+================================ */
+
+.profile-dashboard__payment-card {
+  width: 100%;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.profile-dashboard__payment-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+  border-color: rgba(140, 118, 75, 0.2);
+}
+
+/* Ripple water-wave status indicator */
+.ripple-dot {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.ripple-dot::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.ripple-dot--success {
+  background-color: #10b981;
+}
+
+.ripple-dot--success::after {
+  border: 1px solid #10b981;
+  animation: ripple-wave-anim 1.8s infinite cubic-bezier(0.25, 0, 0, 1);
+}
+
+.ripple-dot--failed {
+  background-color: #ef4444;
+}
+
+.ripple-dot--failed::after {
+  border: 1px solid #ef4444;
+  animation: ripple-wave-anim 1.8s infinite cubic-bezier(0.25, 0, 0, 1);
+}
+
+@keyframes ripple-wave-anim {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(3.5);
+    opacity: 0;
+  }
+}

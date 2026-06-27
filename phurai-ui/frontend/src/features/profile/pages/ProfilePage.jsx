@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { MonitorSmartphone, CreditCard, LayoutDashboard, Gem } from "lucide-react";
+import { MonitorSmartphone, CreditCard, LayoutDashboard, Gem, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import CustomerDashboard from "../components/CustomerDashboard";
 import LoyaltyPointsPage from "@/features/loyalty/pages/LoyaltyPointsPage";
 import { getProfilePayments } from "../services/profileApi.js";
@@ -518,6 +518,22 @@ function PaymentHistoryPanel({ profile }) {
     return `${Math.round(amount).toLocaleString('vi-VN')} VND`;
   };
 
+  const getStatusBadge = (status) => {
+    const isSuccess = status === "Completed" || status === "Paid" || status === "Successful" || status === "Served";
+    const label = isSuccess ? "Successful" : "Failed";
+    const badgeClass = isSuccess 
+      ? "bg-emerald-50 text-emerald-700 border-emerald-100" 
+      : "bg-rose-50 text-rose-700 border-rose-100";
+    const dotClass = isSuccess ? "ripple-dot--success" : "ripple-dot--failed";
+
+    return (
+      <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${badgeClass}`}>
+        <span className={`ripple-dot ${dotClass}`} />
+        <span>{label}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="profile-dashboard__panel">
       <h3>Payment History</h3>
@@ -531,34 +547,48 @@ function PaymentHistoryPanel({ profile }) {
           <p className="profile-dashboard__session-meta">Your payment history will appear here.</p>
         </div>
       ) : (
-        <div className="profile-dashboard__payments-list" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="profile-dashboard__payments-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {payments.map((p) => {
             const isRefund = p.payment_status === "Refunded";
-            const amountColor = isRefund ? "var(--phurai-success, #34c759)" : "var(--phurai-text, #1d1d1f)";
+            const amountColor = isRefund ? "var(--phurai-success, #10b981)" : "var(--phurai-text, #1d1d1f)";
             const sign = isRefund ? "+" : "-";
             
             return (
               <div 
                 key={p.payment_id} 
-                className="profile-dashboard__session-card" 
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', transition: 'all 0.2s' }}
+                className="profile-dashboard__payment-card" 
+                style={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: 'auto 1fr auto auto', 
+                  alignItems: 'center', 
+                  gap: '16px', 
+                  cursor: 'pointer'
+                }}
                 onClick={() => setSelectedPaymentId(p.payment_id)}
-                onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-                onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
               >
-                <div>
-                  <p className="profile-dashboard__session-title">{p.payment_purpose}</p>
-                  <p className="profile-dashboard__session-meta">
+                {/* Icon Column */}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-none ${isRefund ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-50 text-gray-500'}`}>
+                  {isRefund ? <ArrowDownLeft size={20} strokeWidth={2.5} /> : <ArrowUpRight size={20} strokeWidth={2.5} />}
+                </div>
+
+                {/* Purpose & Date Column */}
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-gray-900 truncate m-0">{p.payment_purpose || "Order Payment"}</p>
+                  <p className="text-xs text-gray-500 m-0 mt-1">
                     {p.paid_at || p.created_at ? format(new Date(p.paid_at || p.created_at), "MMM d, yyyy h:mm a") : "—"}
                     {p.transaction_ref ? ` • Ref: ${p.transaction_ref}` : ""}
                   </p>
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <p className="profile-dashboard__session-title" style={{ color: amountColor, fontWeight: 600 }}>
+
+                {/* Status Badge Column */}
+                <div className="flex items-center flex-none">
+                  {getStatusBadge(p.payment_status)}
+                </div>
+
+                {/* Amount Column */}
+                <div className="text-right pl-4 flex-none min-w-[120px]">
+                  <p className="text-base font-bold m-0" style={{ color: amountColor }}>
                     {sign}{formatVND(p.amount_paid)}
-                  </p>
-                  <p className="profile-dashboard__session-meta">
-                    {p.payment_status}
                   </p>
                 </div>
               </div>
