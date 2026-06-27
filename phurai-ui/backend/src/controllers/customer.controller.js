@@ -368,14 +368,14 @@ export const getCustomerPaymentDetails = async (req, res) => {
             SELECT 
                 p.payment_id, p.amount_paid, p.change_given, p.payment_status, p.paid_at, p.transaction_ref, p.created_at,
                 pm.method_name,
-                o.order_id, o.order_status, o.total_amount, o.tax_amount, o.discount_amount, o.net_amount, o.order_type,
-                r.reservation_id, r.reservation_status, r.reservation_start_at, r.guest_count, r.special_requests,
+                o.order_id, o.order_status, o.subtotal AS total_amount, o.service_charge AS tax_amount, o.discount_amount, o.total_amount AS net_amount, o.order_type,
+                r.reservation_id, r.reservation_status, r.reservation_start_at, r.guest_count, r.special_request,
                 t.table_number, t.seating_capacity
             FROM dbo.Payments p
             LEFT JOIN dbo.PaymentMethods pm ON p.payment_method_id = pm.payment_method_id
             LEFT JOIN dbo.Orders o ON p.order_id = o.order_id
             LEFT JOIN dbo.Reservations r ON p.reservation_id = r.reservation_id
-            LEFT JOIN dbo.Tables t ON r.table_id = t.table_id
+            LEFT JOIN dbo.RestaurantTables t ON r.table_id = t.table_id
             WHERE p.payment_id = @paymentId AND (o.customer_id = @userId OR r.customer_id = @userId)
         `;
         const payments = await query(paymentQuery, { paymentId, userId });
@@ -390,10 +390,11 @@ export const getCustomerPaymentDetails = async (req, res) => {
         if (payment.order_id) {
             const itemsQuery = `
                 SELECT 
-                    oi.order_item_id, oi.quantity, oi.unit_price, oi.subtotal, oi.note,
-                    mi.item_name, mi.image_url
+                    oi.order_item_id, oi.quantity, oi.unit_price, oi.line_total AS subtotal, oi.notes AS note,
+                    d.dish_name AS item_name,
+                    (SELECT TOP 1 image_url FROM dbo.DishImages di WHERE di.dish_id = d.dish_id AND di.is_primary = 1) AS image_url
                 FROM dbo.OrderItems oi
-                JOIN dbo.MenuItems mi ON oi.menu_item_id = mi.item_id
+                JOIN dbo.Dishes d ON oi.dish_id = d.dish_id
                 WHERE oi.order_id = @orderId
             `;
             items = await query(itemsQuery, { orderId: payment.order_id });
