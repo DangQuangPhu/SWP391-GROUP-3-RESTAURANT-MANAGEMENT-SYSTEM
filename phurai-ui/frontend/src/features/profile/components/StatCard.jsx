@@ -46,17 +46,29 @@ export default function StatCard({ label, value, icon: Icon, deltaPercent, forma
   const flashIconClass = flashKey > 0 ? (trend === 'up' ? 'animate-flash-icon-up' : 'animate-flash-icon-down') : '';
   const flashTextClass = flashKey > 0 ? (trend === 'up' ? 'animate-flash-text-up' : 'animate-flash-text-down') : '';
 
+  // Calculate exact delay to perfectly synchronize flash with count-up completion
+  // Initial load (flashKey === 1): useCountUp has 0.6s start delay + 1.2s duration = 1.8s total
+  // Subsequent (flashKey > 1): useCountUp starts immediately and takes 1.2s total
+  const flashDelay = flashKey <= 1 ? 1.8 : 1.2;
+
   return (
     <div
       key={`card-${flashKey}`}
       className={`rounded-2xl bg-white p-5 shadow-sm border border-gray-100 flex flex-col justify-between border-t-[3px] ${currentTheme.border} ${flashCardClass}`}
+      style={flashKey > 0 ? { animationDelay: `${flashDelay}s` } : {}}
     >
       <div className="flex items-center gap-4 mb-4">
-        <div className={`w-14 h-14 rounded-full flex items-center justify-center ${currentTheme.iconBg} ${flashIconClass}`}>
+        <div 
+          className={`w-14 h-14 rounded-full flex items-center justify-center ${currentTheme.iconBg} ${flashIconClass}`}
+          style={flashKey > 0 ? { animationDelay: `${flashDelay}s` } : {}}
+        >
           <Icon size={24} strokeWidth={2} />
         </div>
         <div>
-          <h3 className={`text-2xl font-bold text-gray-900 ${flashTextClass}`}>
+          <h3 
+            className={`text-2xl font-bold text-gray-900 ${flashTextClass}`}
+            style={flashKey > 0 ? { animationDelay: `${flashDelay}s` } : {}}
+          >
             {animatedValue}
           </h3>
           <p className="text-sm font-semibold text-gray-500">{label}</p>
