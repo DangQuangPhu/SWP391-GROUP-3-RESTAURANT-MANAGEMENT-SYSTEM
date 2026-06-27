@@ -37,7 +37,7 @@ async function managerGet(path, fallback) {
     if (res?.success) {
       return { source: "api", data: res.data ?? fallback };
     }
-  } catch { console.error("fetch API ERROR", arguments);
+  } catch (err) { console.error("fetch API ERROR:", err?.message || String(err));
     /* fall through to mock */
   }
   return mock(fallback);
@@ -90,7 +90,7 @@ export async function fetchPendingReservations(userId) {
     if (res?.success) {
       return { source: "api", data: sortReservationsChronologically(res.reservations ?? []) };
     }
-  } catch { console.error("fetch API ERROR", arguments);
+  } catch (err) { console.error("fetch API ERROR:", err?.message || String(err));
     /* fall through */
   }
   return mock(RESERVATIONS.filter(r => r.reservation_status === 'Pending'));
@@ -102,7 +102,7 @@ export async function fetchAllReservations(userId) {
     if (res?.success) {
       return { source: "api", data: sortReservationsChronologically(res.reservations ?? []) };
     }
-  } catch { console.error("fetch API ERROR", arguments);
+  } catch (err) { console.error("fetch API ERROR:", err?.message || String(err));
     /* fall through */
   }
   return mock(RESERVATIONS);
@@ -387,10 +387,27 @@ export async function fetchManager() {
 }
 
 export function fetchPromotions() {
-  return managerGet("/manager/promotions", PROMOTIONS).then((res) => ({
-    ...res,
-    data: asArray(res.data),
-  }));
+  return managerGet("/manager/promotions", PROMOTIONS).then((res) => {
+    const data = asArray(res.data).map((p) => ({
+      ...p,
+      promotion_id: p.promotion_id ?? p.promo_id,
+      promotion_name: p.promotion_name ?? p.name,
+      promo_code: p.promo_code ?? p.code,
+      discount_type: (p.discount_type ?? 'PERCENT').toUpperCase(),
+      discount_value: p.discount_value ?? 0,
+      min_order_value: p.min_order_value ?? p.min_order ?? 0,
+      valid_from: p.valid_from ?? p.start_date,
+      valid_until: p.valid_until ?? p.end_date,
+      is_active: p.is_active ?? (p.status !== 'disabled'),
+      used_count: p.used_count ?? p.usage_count ?? 0,
+      usage_limit: p.usage_limit ?? null,
+      max_discount_amount: p.max_discount_amount ?? null,
+    }));
+    return {
+      ...res,
+      data,
+    };
+  });
 }
 
 export async function fetchReservationStats() {
@@ -441,7 +458,7 @@ export async function fetchShifts(userId) {
     if (res?.success) {
       return { source: "api", data: res.data ?? [] };
     }
-  } catch { console.error("fetch API ERROR", arguments);
+  } catch (err) { console.error("fetch API ERROR:", err?.message || String(err));
     /* fall through */
   }
   return mock([]);
@@ -458,7 +475,7 @@ export async function fetchSchedules(date, userId) {
     if (res?.success) {
       return { source: "api", data: res.data ?? [] };
     }
-  } catch { console.error("fetch API ERROR", arguments);
+  } catch (err) { console.error("fetch API ERROR:", err?.message || String(err));
     /* fall through */
   }
   return mock([]);
@@ -521,7 +538,7 @@ export async function fetchAreas(userId) {
     if (res?.success) {
       return { source: "api", data: res.data ?? [] };
     }
-  } catch { console.error("fetch API ERROR", arguments);
+  } catch (err) { console.error("fetch API ERROR:", err?.message || String(err));
     /* fall through */
   }
   return mock([]);
@@ -567,7 +584,7 @@ export async function fetchFilteredTables(filters, userId) {
     if (res?.success) {
       return { source: "api", data: res.data ?? [] };
     }
-  } catch { console.error("fetch API ERROR", arguments);
+  } catch (err) { console.error("fetch API ERROR:", err?.message || String(err));
     /* fall through */
   }
 

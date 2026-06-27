@@ -226,7 +226,7 @@ function App() {
   const isStaffPage = pathname === "/staff" || pathname.startsWith("/staff/");
   const isAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
   const isAccountPage =
-    pathname.startsWith("/profile") || pathname.startsWith("/settings");
+    pathname.startsWith("/profile") || pathname.startsWith("/settings") || pathname.startsWith("/dashboard");
   const isReservationPage = pathname === "/reservations" || pathname.startsWith("/reservations/");
   const isKdsPage = pathname === "/kds" || pathname.startsWith("/kds/");
   const isPortalPage = isAccountPage || isManagerPage || isStaffPage || isAdminPage || isReservationPage || isKdsPage;
@@ -314,6 +314,27 @@ function App() {
           />
           <Route path="/register" element={<Register />} />
           <Route path="/verify" element={<VerifyEmail />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProfilePage
+                profile={profile}
+                profileLoading={profileLoading}
+                profileError={profileLoadError}
+                onRetryProfile={refetchProfile}
+                isAuthenticated={isAuthenticated}
+                initialEditMode={profileEditMode}
+                onSaveProfile={saveProfileFields}
+                onSavePhone={savePhoneNumber}
+                onSavePreferences={persistExtended}
+                onApplyAvatar={applyAvatarUpdate}
+                onOpenChangePassword={openChangePassword}
+                onPasswordReset={handlePasswordReset}
+                onNavigateLogin={() => openAuthModal("login")}
+                onNavigateHome={() => handleNavigate("home")}
+              />
+            }
+          />
           <Route
             path="/profile/*"
             element={

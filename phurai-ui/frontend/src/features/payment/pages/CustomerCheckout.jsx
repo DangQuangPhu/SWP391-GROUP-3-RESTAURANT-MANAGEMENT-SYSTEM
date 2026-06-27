@@ -3,18 +3,46 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import CheckoutQR from '../components/CheckoutQR';
 import usePaymentPolling from '../hooks/usePaymentPolling';
 import { useTableSession } from '@/features/table-session';
+import { useAuth } from '@/features/auth/context/AuthContext';
+import { getMyVouchers, applyVoucher } from '@/features/loyalty/services/loyaltyApi.js';
 
 export default function CustomerCheckout() {
   const { orderId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const { session } = useTableSession();
+  const { currentUser } = useAuth();
+  const userId = currentUser?.user_id || currentUser?.userId || currentUser?.id;
 
   // Try to use location state first for instant loading
   const [amount, setAmount] = useState(location.state?.amount || null);
   const [isLoading, setIsLoading] = useState(!location.state?.amount);
 
   const { status } = usePaymentPolling(orderId);
+
+  // Voucher states
+  const [voucherCode, setVoucherCode] = useState('');
+  const [appliedVoucher, setAppliedVoucher] = useState(null);
+  const [applying, setApplying] = useState(false);
+  const [voucherError, setVoucherError] = useState('');
+  const [originalAmount, setOriginalAmount] = useState(null);
+  const [myActiveVouchers, setMyActiveVouchers] = useState([]);
+
+  // Fetch active vouchers for the user
+  useEffect(() => {
+    async function fetchVouchers() {
+      if (!userId) return;
+      try {
+        const res = await getMyVouchers(userId, 'active');
+        if (res?.success) {
+          setMyActiveVouchers(res.vouchers || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch customer vouchers for checkout:", err);
+      }
+    }
+    fetchVouchers();
+  }, [userId]);
 
   // Fetch true amount from backend history API if not passed or just to verify
   useEffect(() => {
@@ -50,6 +78,42 @@ export default function CustomerCheckout() {
     }
   }, [status, orderId, navigate]);
 
+  const handleApplyVoucher = async () => {
+    if (!voucherCode.trim() || !userId) return;
+    setApplying(true);
+    setVoucherError('');
+    try {
+      const match = myActiveVouchers.find(
+        (v) => v.voucher_code.toUpperCase() === voucherCode.toUpperCase().trim()
+      );
+      if (!match) {
+        setVoucherError('Voucher code not found in your wallet. Redeem it first!');
+        setApplying(false);
+        return;
+      }
+
+      const res = await applyVoucher(userId, {
+        customerVoucherId: match.customer_voucher_id,
+        orderId: Number(orderId)
+      });
+
+      if (res?.success) {
+        setAppliedVoucher({
+          code: match.voucher_code,
+          discount_amount: res.discountAmount
+        });
+        setOriginalAmount(amount);
+        setAmount(res.newTotalAmount);
+      } else {
+        setVoucherError(res?.message || 'Failed to apply voucher.');
+      }
+    } catch (err) {
+      setVoucherError(err?.message || 'Error applying voucher.');
+    } finally {
+      setApplying(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
@@ -79,6 +143,13 @@ export default function CustomerCheckout() {
     <CheckoutQR
       orderId={orderId}
       amount={amount}
+      originalAmount={originalAmount}
+      voucherCode={voucherCode}
+      setVoucherCode={setVoucherCode}
+      appliedVoucher={appliedVoucher}
+      applying={applying}
+      voucherError={voucherError}
+      onApplyVoucher={handleApplyVoucher}
       onComplete={() => {
         alert("Payment Successful!");
         navigate(`/review/${orderId}`);

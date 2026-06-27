@@ -9,27 +9,19 @@ services:
     volumes:
       - mssql_data:/var/opt/mssql
 
-  backend:
+  app:
     build:
       context: .
-      dockerfile: backend.Dockerfile
+      dockerfile: Dockerfile
     env_file:
-      - ./backend/.env
+      - ./.env
     environment:
       - DB_SERVER=db
     ports:
+      - "80:5001"
       - "5001:5001"
     depends_on:
       - db
-
-  frontend:
-    build:
-      context: .
-      dockerfile: frontend.Dockerfile
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
 
 volumes:
   mssql_data:

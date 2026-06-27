@@ -21,14 +21,21 @@ async function run() {
       END
     `);
     await rawPool.query(`
-      EXEC sp_MSforeachtable 'DROP TABLE ?'
+      DECLARE @dropSql NVARCHAR(MAX) = N'';
+      SELECT @dropSql += 'DROP TABLE ' + QUOTENAME(TABLE_SCHEMA) + '.' + QUOTENAME(TABLE_NAME) + ';'
+      FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_TYPE = 'BASE TABLE';
+      IF @dropSql <> ''
+      BEGIN
+          EXEC sp_executesql @dropSql;
+      END
     `);
     console.log("All tables dropped.");
   } catch(e) {
     console.error("Force drop failed:", e);
   }
 
-  const sqlFile = path.join(__dirname, "database/System_Restaurant.sql");
+  const sqlFile = path.join(__dirname, "../../database/System_Restaurant.sql");
   const content = fs.readFileSync(sqlFile, "utf-8");
   const batches = content.split(/^\s*GO\s*$/im);
   

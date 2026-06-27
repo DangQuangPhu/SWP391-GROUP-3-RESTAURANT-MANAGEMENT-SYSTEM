@@ -131,6 +131,20 @@ export const startCronJobs = () => {
     try {
       const pool = await getRawPool();
       
+      // Sweep expired active customer vouchers
+      try {
+        const sweepVouchersResult = await pool.request().query(`
+          UPDATE dbo.CustomerVouchers
+          SET status = N'expired'
+          WHERE status = N'active' AND expires_at <= SYSDATETIME()
+        `);
+        if (sweepVouchersResult.rowsAffected[0] > 0) {
+          console.log(`[CronService] Swept ${sweepVouchersResult.rowsAffected[0]} expired vouchers.`);
+        }
+      } catch (voucherSweepErr) {
+        console.error('[CronService] Error sweeping expired vouchers:', voucherSweepErr.message);
+      }
+      
       // Find all "Payment Pending" reservations older than 16 minutes (1 min buffer after 15 min window)
       const selectResult = await pool.request().query(`
         SELECT reservation_id, order_code

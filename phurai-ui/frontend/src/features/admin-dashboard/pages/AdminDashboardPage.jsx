@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet } from '@/core/api/httpClient';
+import { KpiSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import {
   Users, UserCheck, ShieldAlert, List, Calendar, Banknote, MessageSquare, AlertTriangle,
   UserPlus, Settings, FileText, Sliders, Plus
@@ -64,14 +65,6 @@ export default function AdminDashboardPage() {
     { label: "System settings", icon: Sliders, path: "/admin/settings/system" },
   ];
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
-        <div className="text-gray-500 font-medium">Loading admin dashboard...</div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
@@ -91,11 +84,15 @@ export default function AdminDashboardPage() {
 
       <div className="p-8 max-w-7xl mx-auto">
         {/* KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {kpis.map((card, i) => (
-            <AdminKpiCard key={i} {...card} />
-          ))}
-        </div>
+        {loading ? (
+          <KpiSkeleton count={8} />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {kpis.map((card, i) => (
+              <AdminKpiCard key={i} {...card} />
+            ))}
+          </div>
+        )}
 
         {/* Central Panel & Quick Actions Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -111,36 +108,45 @@ export default function AdminDashboardPage() {
               </button>
             </div>
             <div className="p-0 overflow-x-auto">
-              <table className="w-full text-left text-sm text-gray-600">
-                <thead className="bg-gray-50/50 text-gray-500 font-medium">
-                  <tr>
-                    <th className="px-6 py-3 border-b border-gray-100">Time</th>
-                    <th className="px-6 py-3 border-b border-gray-100">Action</th>
-                    <th className="px-6 py-3 border-b border-gray-100">User</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {logs.length > 0 ? logs.map((log, i) => (
-                    <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td className="px-6 py-4 font-medium text-gray-900">
-                        {log.action_name}
-                      </td>
-                      <td className="px-6 py-4">
-                        {log.full_name}
-                      </td>
-                    </tr>
-                  )) : (
+              {loading ? (
+                <div className="p-6 space-y-4">
+                  <Skeleton className="w-full h-8" />
+                  <Skeleton className="w-full h-8" />
+                  <Skeleton className="w-full h-8" />
+                  <Skeleton className="w-full h-8" />
+                </div>
+              ) : (
+                <table className="w-full text-left text-sm text-gray-600">
+                  <thead className="bg-gray-50/50 text-gray-500 font-medium">
                     <tr>
-                      <td colSpan="3" className="px-6 py-8 text-center text-gray-500">
-                        No recent audit logs.
-                      </td>
+                      <th className="px-6 py-3 border-b border-gray-100">Time</th>
+                      <th className="px-6 py-3 border-b border-gray-100">Action</th>
+                      <th className="px-6 py-3 border-b border-gray-100">User</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {logs.length > 0 ? logs.map((log, i) => (
+                      <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="px-6 py-4 font-medium text-gray-900">
+                          {log.action_name}
+                        </td>
+                        <td className="px-6 py-4">
+                          {log.full_name}
+                        </td>
+                      </tr>
+                    )) : (
+                      <tr>
+                        <td colSpan="3" className="px-6 py-8 text-center text-gray-500">
+                          No recent audit logs.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
 

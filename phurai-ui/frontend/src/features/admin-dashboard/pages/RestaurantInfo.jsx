@@ -3,6 +3,7 @@ import { apiGet, apiPut } from '@/core/api/httpClient';
 import AdminPageHeader from '@/features/admin-dashboard/components/AdminPageHeader';
 import { toast } from 'react-hot-toast';
 import { Store, MapPin, Phone, Mail, Clock } from 'lucide-react';
+import { FormSkeleton } from '@/components/ui/Skeleton';
 
 export default function RestaurantInfo() {
   const [settings, setSettings] = useState([]);
@@ -90,9 +91,7 @@ export default function RestaurantInfo() {
       />
 
       {loading ? (
-        <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#8c764b]"></div>
-        </div>
+        <FormSkeleton items={5} />
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-6 space-y-6">

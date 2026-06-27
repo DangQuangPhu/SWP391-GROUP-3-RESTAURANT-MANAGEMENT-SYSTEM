@@ -120,11 +120,7 @@ export default function Accounts() {
         }}
       />
 
-      {loading ? (
-        <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#8c764b]"></div>
-        </div>
-      ) : error ? (
+      {error ? (
         <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-red-700 text-sm">
           {error}
         </div>
@@ -132,6 +128,7 @@ export default function Accounts() {
         <AdminDataTable
           columns={columns}
           data={accounts}
+          loading={loading}
           emptyMessage="No user accounts found."
         />
       )}

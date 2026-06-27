@@ -1,10 +1,13 @@
 import { useEffect, useRef } from 'react';
 
 export function useScrollReveal(options = {}, externalRef = null) {
+  const { enabled = true, ...observerOptions } = options;
   const internalRef = useRef(null);
   const ref = externalRef || internalRef;
 
   useEffect(() => {
+    if (!enabled) return undefined;
+    
     const el = ref.current;
     if (!el) return undefined;
 
@@ -22,12 +25,12 @@ export function useScrollReveal(options = {}, externalRef = null) {
           observer.disconnect();
         }
       },
-      { threshold: 0.15, rootMargin: '0px 0px -10% 0px', ...options }
+      { threshold: 0.15, rootMargin: '0px 0px -10% 0px', ...observerOptions }
     );
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [options.threshold, options.rootMargin]);
+  }, [enabled, observerOptions.threshold, observerOptions.rootMargin]);
 
   return ref;
 }

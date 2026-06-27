@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, Route, Routes, useOutletContext } from "react-router-dom";
+import { Navigate, Route, Routes, useOutletContext, useLocation } from "react-router-dom";
 import "../styles/manager-dashboard.css";
+import { KpiSkeleton, TableSkeleton, CardGridSkeleton } from "@/components/ui/Skeleton";
 
 import NotFound from "@/pages/NotFound.jsx";
 import { KPI_CARDS } from "@/shared/constants.js";
@@ -48,6 +49,51 @@ function resolveRole(roleName) {
 }
 
 function LoadingState() {
+  const location = useLocation();
+  const path = location.pathname;
+
+  if (path.includes("/manager/today") || path.endsWith("/manager/dashboard") || path.endsWith("/manager")) {
+    return (
+      <div className="space-y-8 p-6">
+        <KpiSkeleton count={4} />
+        <TableSkeleton cols={4} rows={3} />
+      </div>
+    );
+  }
+
+  if (
+    path.includes("/manager/reservations") ||
+    path.includes("/manager/orders") ||
+    path.includes("/manager/staff") ||
+    path.includes("/manager/promotions")
+  ) {
+    return (
+      <div className="p-6">
+        <TableSkeleton cols={5} rows={6} />
+      </div>
+    );
+  }
+
+  if (path.includes("/manager/tables") || path.includes("/manager/menu")) {
+    return (
+      <div className="p-6">
+        <CardGridSkeleton count={6} />
+      </div>
+    );
+  }
+
+  if (path.includes("/manager/reports")) {
+    return (
+      <div className="space-y-8 p-6">
+        <KpiSkeleton count={4} />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <TableSkeleton cols={3} rows={4} />
+          <TableSkeleton cols={3} rows={4} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="sfx-loading">
       <span className="sfx-spinner" />

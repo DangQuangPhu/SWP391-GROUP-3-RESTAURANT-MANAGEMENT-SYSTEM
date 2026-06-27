@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { MonitorSmartphone, CreditCard } from "lucide-react";
+import { MonitorSmartphone, CreditCard, LayoutDashboard, Gem } from "lucide-react";
+import CustomerDashboard from "../components/CustomerDashboard";
+import LoyaltyPointsPage from "@/features/loyalty/pages/LoyaltyPointsPage";
 import { getProfilePayments } from "../services/profileApi.js";
 import {
   getDisplayName,
@@ -159,6 +161,8 @@ const PasswordIcon = () => (
 );
 
 const DASHBOARD_ITEMS = [
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "loyalty", label: "Loyalty Points", icon: Gem },
   { key: "profile", label: "Profile", icon: ProfileIcon },
   { key: "appearance", label: "Appearance", icon: AppearanceIcon },
   { key: "accessibility", label: "Accessibility", icon: AccessibilityIcon },
@@ -600,7 +604,12 @@ function ProfilePage({
   const location = useLocation();
   const navigate = useNavigate();
   const pathParts = location.pathname.split("/").filter(Boolean);
-  const activePanel = pathParts.length > 1 ? pathParts[1] : "profile";
+  let activePanel = "profile";
+  if (pathParts[0] === "dashboard") {
+    activePanel = "dashboard";
+  } else if (pathParts.length > 1 && pathParts[1]) {
+    activePanel = pathParts[1];
+  }
 
   const [fieldErrors, setFieldErrors] = useState({});
 
@@ -615,7 +624,9 @@ function ProfilePage({
   };
 
   const handlePanelChange = useCallback((panelKey) => {
-    if (panelKey === "profile") {
+    if (panelKey === "dashboard") {
+      navigate("/dashboard");
+    } else if (panelKey === "profile") {
       navigate("/profile");
     } else {
       navigate(`/profile/${panelKey}`);
@@ -813,6 +824,14 @@ function ProfilePage({
       return <ProfileContentSkeleton />;
     }
 
+    if (activePanel === "dashboard") {
+      return <CustomerDashboard />;
+    }
+
+    if (activePanel === "loyalty") {
+      return <LoyaltyPointsPage />;
+    }
+
     if (activePanel === "appearance") {
       return (
         <AppearancePanel coverTheme={effectiveDraft.coverTheme} onSelectTheme={handleSelectTheme} />
@@ -947,10 +966,11 @@ function ProfilePage({
 
   return (
     <main className="profile-page profile-shell-enter">
-      <AccountBackHome onNavigateHome={onNavigateHome} className="profile-page__back-home" />
-
       <div className="profile-dashboard profile-sticky-card">
-        <aside className="profile-dashboard__sidebar mac-animate animate-up" style={{ "--delay": "0ms" }} aria-label="Profile navigation">
+        <aside className="profile-dashboard__sidebar mac-animate animate-up sticky top-0 h-screen overflow-y-auto" style={{ "--delay": "0ms" }} aria-label="Profile navigation">
+          <div className="profile-sidebar__home-wrapper">
+            <AccountBackHome onNavigateHome={onNavigateHome} className="profile-page__back-home" />
+          </div>
           {SIDEBAR_ITEMS.map((item, index) => {
             const Icon = item.icon;
             return (
@@ -1012,19 +1032,22 @@ function ProfilePage({
             />
           ) : null}
 
-          <div className="profile-dashboard__content">
-            <article className="profile-dashboard__card mac-animate animate-scale" style={{ "--delay": "100ms" }}>
-            <div
-              className="profile-dashboard__cover"
-              style={{ background: coverGradient }}
-              aria-hidden="true"
-            />
+          <div className={`profile-dashboard__content ${activePanel === "dashboard" ? "flex flex-col h-full overflow-hidden" : ""}`}>
+            <article className={`profile-dashboard__card mac-animate animate-scale ${activePanel === "dashboard" ? "flex flex-col h-full overflow-hidden flex-1 min-h-0" : ""}`} style={{ "--delay": "100ms" }}>
+            {activePanel !== "dashboard" && (
+              <div
+                className="profile-dashboard__cover"
+                style={{ background: coverGradient }}
+                aria-hidden="true"
+              />
+            )}
 
-            <div
-              className="profile-dashboard__profile-header"
-              style={{ background: `linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.85) 100%)` }}
-            >
-              <div className="profile-dashboard__avatar-block">
+            {activePanel !== "dashboard" && (
+              <div
+                className="profile-dashboard__profile-header"
+                style={{ background: `linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.85) 100%)` }}
+              >
+                <div className="profile-dashboard__avatar-block">
                 <button
                   type="button"
                   className="profile-dashboard__avatar-btn profile-dashboard__avatar-btn--preview"
@@ -1083,9 +1106,10 @@ function ProfilePage({
                 </div>
               ) : null}
             </div>
+            )}
 
-            <div className="profile-dashboard__card-body">
-              <div key={activePanel} className="profile-content-panel mac-animate animate-up" style={{ "--delay": "250ms" }}>
+            <div className={`profile-dashboard__card-body ${activePanel === "dashboard" ? "p-0 flex-1 flex flex-col min-h-0 overflow-hidden" : ""}`}>
+              <div key={activePanel} className={`profile-content-panel mac-animate animate-up ${activePanel === "dashboard" ? "flex-1 flex flex-col min-h-0 overflow-hidden" : ""}`} style={{ "--delay": "250ms" }}>
                 {showSkeleton ? <ProfileContentSkeleton /> : renderPanelContent()}
               </div>
             </div>

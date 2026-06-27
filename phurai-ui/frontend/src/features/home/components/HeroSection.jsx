@@ -1,16 +1,47 @@
+import { useEffect, useRef, useState } from 'react';
 import { Link } from "react-router-dom";
 import { homeImages } from "../data/homeAssets.js";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 
-function HeroSection() {
-  const revealRef = useScrollReveal();
+function HeroSection({ isRevealReady = true, isVideoPlaying = true }) {
+  const revealRef = useScrollReveal({ enabled: isRevealReady });
+  const videoRef = useRef(null);
+
+  // Track if this is a new session on mount (before hasSeenIntro is set to true)
+  const isNewSession = useRef(!sessionStorage.getItem('hasSeenIntro'));
+
+  // A state to control when the video source is loaded and allowed to play
+  const [allowVideo, setAllowVideo] = useState(!isNewSession.current);
+
+  useEffect(() => {
+    if (isNewSession.current) {
+      // For new sessions, delay loading/playing the video by 4.3 seconds
+      const timer = setTimeout(() => {
+        setAllowVideo(true);
+      }, 3520);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (allowVideo && isVideoPlaying) {
+      if (!video.src) {
+        video.src = homeImages.heroVideo;
+      }
+      video.play().catch(e => console.log("Video playback failed/prevented:", e));
+    } else {
+      video.pause();
+    }
+  }, [allowVideo, isVideoPlaying]);
 
   return (
     <section className="phurai-hero" aria-label="Welcome">
       <video
+        ref={videoRef}
         className="phurai-hero__bg"
-        src={homeImages.heroVideo}
-        autoPlay
         muted
         loop
         playsInline

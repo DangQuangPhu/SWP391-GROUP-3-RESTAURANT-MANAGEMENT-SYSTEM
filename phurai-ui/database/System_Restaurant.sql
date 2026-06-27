@@ -334,6 +334,7 @@ CREATE TABLE dbo.Reservations (
     resolved_by           INT NULL,
     created_at            DATETIME2(0) NOT NULL CONSTRAINT DF_Reservations_created_at DEFAULT SYSDATETIME(),
     updated_at            DATETIME2(0) NOT NULL CONSTRAINT DF_Reservations_updated_at DEFAULT SYSDATETIME(),
+    applied_voucher_id    INT NULL,
     CONSTRAINT PK_Reservations PRIMARY KEY (reservation_id),
     CONSTRAINT FK_Reservations_Customer FOREIGN KEY (customer_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE SET NULL,
     CONSTRAINT FK_Reservations_CreatedByStaff FOREIGN KEY (created_by_staff_id) REFERENCES dbo.UserAccounts(user_id),
@@ -441,6 +442,7 @@ CREATE TABLE dbo.Orders (
     applied_promo_code  NVARCHAR(40) NULL,
     created_at          DATETIME2(0) NOT NULL CONSTRAINT DF_Orders_created_at DEFAULT SYSDATETIME(),
     updated_at          DATETIME2(0) NOT NULL CONSTRAINT DF_Orders_updated_at DEFAULT SYSDATETIME(),
+    applied_voucher_id  INT NULL,
     CONSTRAINT PK_Orders PRIMARY KEY (order_id),
     CONSTRAINT FK_Orders_Reservations FOREIGN KEY (reservation_id) REFERENCES dbo.Reservations(reservation_id) ON DELETE SET NULL,
     CONSTRAINT FK_Orders_RestaurantTables FOREIGN KEY (table_id) REFERENCES dbo.RestaurantTables(table_id) ON DELETE CASCADE,
@@ -554,7 +556,11 @@ CREATE TABLE dbo.Promotions (
     start_at            DATETIME2(0) NOT NULL,
     end_at              DATETIME2(0) NOT NULL,
     is_active           BIT NOT NULL CONSTRAINT DF_Promotions_is_active DEFAULT 1,
-    applicable_to       NVARCHAR(20) NOT NULL CONSTRAINT DF_Promotions_applicable DEFAULT N'All',
+    applicable_to       NVARCHAR(20) NOT NULL CONSTRAINT DF_Promotions_applicable DEFAULT N'Both',
+    points_required     INT NULL,
+    validity_duration_hours INT NOT NULL CONSTRAINT DF_Promotions_validity DEFAULT 24,
+    total_quantity      INT NULL,
+    remaining_quantity  INT NULL,
     created_by_staff_id INT NULL,
     created_at          DATETIME2(0) NOT NULL CONSTRAINT DF_Promotions_created_at DEFAULT SYSDATETIME(),
     updated_at          DATETIME2(0) NOT NULL CONSTRAINT DF_Promotions_updated_at DEFAULT SYSDATETIME(),
@@ -568,7 +574,7 @@ CREATE TABLE dbo.Promotions (
     CONSTRAINT CK_Promotions_min_order CHECK (min_order_value >= 0),
     CONSTRAINT CK_Promotions_max_discount CHECK (max_discount IS NULL OR max_discount >= 0),
     CONSTRAINT CK_Promotions_date CHECK (end_at > start_at),
-    CONSTRAINT CK_Promotions_applicable CHECK (applicable_to IN (N'Reservation', N'Order', N'All'))
+    CONSTRAINT CK_Promotions_applicable CHECK (applicable_to IN (N'Reservation', N'Order', N'Both'))
 );
 GO
 
@@ -602,6 +608,59 @@ CREATE TABLE dbo.VoucherRedemptions (
     CONSTRAINT FK_VoucherRedemptions_Customer FOREIGN KEY (customer_id) REFERENCES dbo.UserAccounts(user_id),
     CONSTRAINT CK_VoucherRedemptions_discount CHECK (discount_amount >= 0)
 );
+GO
+
+CREATE TABLE dbo.CustomerVouchers (
+    customer_voucher_id INT IDENTITY(1,1) NOT NULL,
+    customer_id         INT NOT NULL,
+    promotion_id        INT NOT NULL,
+    points_spent        INT NOT NULL,
+    voucher_code        NVARCHAR(50) NOT NULL,
+    status              NVARCHAR(20) NOT NULL CONSTRAINT DF_CustomerVouchers_status DEFAULT N'active', -- 'active', 'used', 'expired'
+    redeemed_at         DATETIME2(0) NOT NULL CONSTRAINT DF_CustomerVouchers_redeemed DEFAULT SYSDATETIME(),
+    expires_at          DATETIME2(0) NOT NULL,
+    used_at             DATETIME2(0) NULL,
+    used_in_order_id    INT NULL,
+    used_in_reservation_id INT NULL,
+    CONSTRAINT PK_CustomerVouchers PRIMARY KEY (customer_voucher_id),
+    CONSTRAINT UQ_CustomerVouchers_code UNIQUE (voucher_code),
+    CONSTRAINT FK_CustomerVouchers_Customer FOREIGN KEY (customer_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE CASCADE,
+    CONSTRAINT FK_CustomerVouchers_Promotions FOREIGN KEY (promotion_id) REFERENCES dbo.Promotions(promotion_id) ON DELETE CASCADE,
+    CONSTRAINT FK_CustomerVouchers_Orders FOREIGN KEY (used_in_order_id) REFERENCES dbo.Orders(order_id) ON DELETE SET NULL,
+    CONSTRAINT FK_CustomerVouchers_Reservations FOREIGN KEY (used_in_reservation_id) REFERENCES dbo.Reservations(reservation_id) ON DELETE SET NULL,
+    CONSTRAINT CK_CustomerVouchers_status CHECK (status IN (N'active', N'used', N'expired'))
+);
+GO
+
+CREATE INDEX IX_CustomerVouchers_StatusExpiry ON dbo.CustomerVouchers (status, expires_at);
+GO
+
+CREATE TABLE dbo.LoyaltyTransactions (
+    transaction_id   INT IDENTITY(1,1) NOT NULL,
+    customer_id      INT NOT NULL,
+    points           INT NOT NULL,
+    transaction_type NVARCHAR(20) NOT NULL,
+    reference_type   NVARCHAR(50) NOT NULL,
+    reference_id     INT NULL,
+    description      NVARCHAR(255) NULL,
+    created_at       DATETIME2(0) NOT NULL CONSTRAINT DF_LoyaltyTransactions_created DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_LoyaltyTransactions PRIMARY KEY (transaction_id),
+    CONSTRAINT FK_LoyaltyTransactions_Customer FOREIGN KEY (customer_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE CASCADE,
+    CONSTRAINT CK_LoyaltyTransactions_type CHECK (transaction_type IN (N'Earn', N'Redeem')),
+    CONSTRAINT CK_LoyaltyTransactions_refType CHECK (reference_type IN (N'Order', N'Reservation', N'Payment', N'VoucherRedeem'))
+);
+GO
+
+CREATE INDEX IX_LoyaltyTransactions_Customer ON dbo.LoyaltyTransactions (customer_id);
+GO
+
+-- Add constraints for applied_voucher_id
+ALTER TABLE dbo.Orders
+ADD CONSTRAINT FK_Orders_AppliedVoucher FOREIGN KEY (applied_voucher_id) REFERENCES dbo.CustomerVouchers(customer_voucher_id);
+GO
+
+ALTER TABLE dbo.Reservations
+ADD CONSTRAINT FK_Reservations_AppliedVoucher FOREIGN KEY (applied_voucher_id) REFERENCES dbo.CustomerVouchers(customer_voucher_id);
 GO
 
 CREATE TABLE dbo.BillSplits (
@@ -742,6 +801,80 @@ CREATE INDEX IX_ShiftLogs_staff_time ON dbo.ShiftLogs(staff_user_id, check_in_ti
 CREATE INDEX IX_BillSplits_order_status ON dbo.BillSplits(order_id, payment_status);
 GO
 
+CREATE TRIGGER dbo.TR_Payments_Loyalty
+ON dbo.Payments
+AFTER INSERT, UPDATE
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  -- 1. EARN: payment transitioned to 'Completed', credit only if not previously credited
+  INSERT INTO dbo.LoyaltyTransactions (customer_id, points, transaction_type, reference_type, reference_id, description)
+  SELECT 
+      COALESCE(o.customer_id, r.customer_id) AS customer_id,
+      FLOOR(i.amount_paid / 10000) AS points,
+      N'Earn' AS transaction_type,
+      N'Payment' AS reference_type,
+      i.payment_id AS reference_id,
+      N'Earned from payment' AS description
+  FROM inserted i
+  LEFT JOIN deleted d ON d.payment_id = i.payment_id
+  LEFT JOIN dbo.Orders o ON o.order_id = i.order_id
+  LEFT JOIN dbo.Reservations r ON r.reservation_id = i.reservation_id
+  WHERE i.payment_status = N'Completed' 
+    AND (d.payment_status IS NULL OR d.payment_status <> N'Completed')
+    AND COALESCE(o.customer_id, r.customer_id) IS NOT NULL
+    AND FLOOR(i.amount_paid / 10000) > 0
+    AND NOT EXISTS (
+      SELECT 1 FROM dbo.LoyaltyTransactions lt
+      WHERE lt.reference_type = N'Payment' AND lt.reference_id = i.payment_id AND lt.transaction_type = N'Earn'
+    );
+
+  -- 2. CLAWBACK: payment was Completed, but now changed to Refunded or Failed
+  INSERT INTO dbo.LoyaltyTransactions (customer_id, points, transaction_type, reference_type, reference_id, description)
+  SELECT 
+      COALESCE(o.customer_id, r.customer_id) AS customer_id,
+      -FLOOR(i.amount_paid / 10000) AS points,
+      N'Redeem' AS transaction_type,
+      N'Payment' AS reference_type,
+      i.payment_id AS reference_id,
+      N'Clawback - payment reversed' AS description
+  FROM inserted i
+  JOIN deleted d ON d.payment_id = i.payment_id
+  LEFT JOIN dbo.Orders o ON o.order_id = i.order_id
+  LEFT JOIN dbo.Reservations r ON r.reservation_id = i.reservation_id
+  WHERE d.payment_status = N'Completed' 
+    AND i.payment_status IN (N'Refunded', N'Failed')
+    AND COALESCE(o.customer_id, r.customer_id) IS NOT NULL
+    AND FLOOR(i.amount_paid / 10000) > 0
+    AND EXISTS (
+      SELECT 1 FROM dbo.LoyaltyTransactions lt 
+      WHERE lt.reference_type = N'Payment' AND lt.reference_id = i.payment_id AND lt.transaction_type = N'Earn'
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM dbo.LoyaltyTransactions lt
+      WHERE lt.reference_type = N'Payment' AND lt.reference_id = i.payment_id AND lt.description = N'Clawback - payment reversed'
+    );
+
+  -- 3. Update cached balance on CustomerProfiles to prevent drift
+  UPDATE cp
+  SET cp.loyalty_points = (
+    SELECT ISNULL(SUM(points), 0) 
+    FROM dbo.LoyaltyTransactions 
+    WHERE customer_id = cp.user_id
+  ),
+  cp.updated_at = SYSDATETIME()
+  FROM dbo.CustomerProfiles cp
+  WHERE cp.user_id IN (
+    SELECT COALESCE(o.customer_id, r.customer_id)
+    FROM inserted i
+    LEFT JOIN dbo.Orders o ON o.order_id = i.order_id
+    LEFT JOIN dbo.Reservations r ON r.reservation_id = i.reservation_id
+    WHERE COALESCE(o.customer_id, r.customer_id) IS NOT NULL
+  );
+END
+GO
+
 -- ============================================================================
 -- MOCK DATA (DML) - INSERT STATEMENTS IN ENGLISH
 -- ============================================================================
@@ -789,6 +922,16 @@ VALUES
 (6, 12, N'linhtran',  '2003-08-21', N'Female', N'Vietnam', N'English', N'Prefers elegant seating and light desserts.', 620,  N'["VIP area","Desserts","No seafood allergy"]'),
 (7, 13, N'baokhanh',  '2001-12-05', N'Other',  N'Vietnam', N'Vietnamese', N'Guest who often books private rooms.', 1800, N'["Private room","Chef recommendation","Premium wine pairing"]');
 SET IDENTITY_INSERT dbo.CustomerProfiles OFF;
+GO
+
+INSERT INTO dbo.LoyaltyTransactions (customer_id, points, transaction_type, reference_type, reference_id, description, created_at) VALUES
+(7, 150, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', DATEADD(day, -5, SYSDATETIME())),
+(8, 520, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', DATEADD(day, -5, SYSDATETIME())),
+(9, 80, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', DATEADD(day, -5, SYSDATETIME())),
+(10, 980, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', DATEADD(day, -5, SYSDATETIME())),
+(11, 120, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', DATEADD(day, -5, SYSDATETIME())),
+(12, 620, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', DATEADD(day, -5, SYSDATETIME())),
+(13, 1800, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', DATEADD(day, -5, SYSDATETIME()));
 GO
 
 SET IDENTITY_INSERT dbo.StaffProfiles ON;
@@ -1085,11 +1228,14 @@ GO
 
 SET IDENTITY_INSERT dbo.Promotions ON;
 INSERT INTO dbo.Promotions
-(promotion_id, promotion_name, description, discount_type, discount_value, min_order_value, max_discount, start_at, end_at, is_active, created_by_staff_id)
+(promotion_id, promotion_name, description, discount_type, discount_value, min_order_value, max_discount, start_at, end_at, is_active, applicable_to, points_required, validity_duration_hours, total_quantity, remaining_quantity, created_by_staff_id)
 VALUES
-(1, N'Weekend Special 10%', N'10% off during weekends', N'Percent', 10.00, 200000, 50000, '2026-01-01T00:00:00', '2026-12-31T23:59:59', 1, 1),
-(2, N'New Member 50K',      N'Fixed 50K discount for new members', N'Fixed', 50000, 150000, NULL, '2026-01-01T00:00:00', '2026-06-30T23:59:59', 1, 1),
-(3, N'VIP Summer 15%',      N'VIP area summer discount', N'Percent', 15.00, 500000, 100000, '2026-06-01T00:00:00', '2026-08-31T23:59:59', 1, 1);
+(1, N'Weekend Special 10%', N'10% off during weekends', N'Percent', 10.00, 200000, 50000, '2026-01-01T00:00:00', '2026-12-31T23:59:59', 1, N'Both', NULL, 24, NULL, NULL, 1),
+(2, N'New Member 50K',      N'Fixed 50K discount for new members', N'Fixed', 50000, 150000, NULL, '2026-01-01T00:00:00', '2026-12-31T23:59:59', 1, N'Both', NULL, 24, NULL, NULL, 1),
+(3, N'VIP Summer 15%',      N'VIP area summer discount', N'Percent', 15.00, 500000, 100000, '2026-06-01T00:00:00', '2026-08-31T23:59:59', 1, N'Both', NULL, 24, NULL, NULL, 1),
+(4, N'Loyalty Reward 50K',  N'Exchange 100 points for 50K voucher', N'Fixed', 50000, 150000, NULL, '2026-01-01T00:00:00', '2027-12-31T23:59:59', 1, N'Both', 100, 48, 100, 95, 1),
+(5, N'Loyalty Reward 100K', N'Exchange 180 points for 100K voucher', N'Fixed', 100000, 250000, NULL, '2026-01-01T00:00:00', '2027-12-31T23:59:59', 1, N'Both', 180, 72, 50, 47, 1),
+(6, N'Loyalty VIP Reward 200K', N'Exchange 300 points for 200K voucher', N'Fixed', 200000, 400000, NULL, '2026-01-01T00:00:00', '2027-12-31T23:59:59', 1, N'Both', 300, 120, 20, 19, 1);
 SET IDENTITY_INSERT dbo.Promotions OFF;
 GO
 
@@ -1336,9 +1482,10 @@ BEGIN
     SET @i = 0;
     WHILE @i < @res_count
     BEGIN
-        INSERT INTO dbo.Reservations (contact_name, contact_phone, reservation_start_at, guest_count, reservation_status, created_at, updated_at)
+        INSERT INTO dbo.Reservations (contact_name, contact_phone, reservation_start_at, reservation_end_at, guest_count, reservation_status, created_at, updated_at)
         VALUES (N'AutoMock ' + CAST(@days_ago AS NVARCHAR) + '-' + CAST(@i AS NVARCHAR), '0900000000', 
                 DATEADD(hour, 19, CAST(CAST(@current_date AS DATE) AS DATETIME2)), 
+                DATEADD(hour, 21, CAST(CAST(@current_date AS DATE) AS DATETIME2)), 
                 FLOOR(RAND() * 4) + 2, 
                 CASE WHEN @days_ago > 0 THEN N'Completed' ELSE N'Seated' END, 
                 @current_date, @current_date);

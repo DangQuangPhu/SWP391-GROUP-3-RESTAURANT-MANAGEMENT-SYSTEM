@@ -85,11 +85,7 @@ export default function AuditLogs() {
         description="Monitor system activities, safety audits, configuration modifications, and administrative operations."
       />
 
-      {loading ? (
-        <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#8c764b]"></div>
-        </div>
-      ) : error ? (
+      {error ? (
         <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-red-700 text-sm">
           {error}
         </div>
@@ -97,6 +93,7 @@ export default function AuditLogs() {
         <AdminDataTable
           columns={columns}
           data={logs}
+          loading={loading}
           emptyMessage="No audit logs available."
         />
       )}

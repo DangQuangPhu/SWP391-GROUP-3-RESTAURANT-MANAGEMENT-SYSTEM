@@ -1,4 +1,5 @@
 import React from 'react';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 /**
  * Reusable data table component for admin dashboards.
@@ -7,9 +8,10 @@ import React from 'react';
  * - columns: Array of columns. Each item can be a string (acting as a column header/key),
  *            or an object: { header: 'Header Title', key: 'object_property', render: (row, index) => ReactNode }
  * - data: Array of data objects to display.
+ * - loading: Boolean indicating if data is fetching.
  * - emptyMessage: Custom message to display when data is empty.
  */
-export default function AdminDataTable({ columns, data, emptyMessage = "No data available." }) {
+export default function AdminDataTable({ columns, data, loading = false, emptyMessage = "No data available." }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden w-full">
       <div className="overflow-x-auto">
@@ -30,7 +32,17 @@ export default function AdminDataTable({ columns, data, emptyMessage = "No data 
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {data && data.length > 0 ? (
+            {loading ? (
+              Array.from({ length: 5 }).map((_, rowIdx) => (
+                <tr key={rowIdx}>
+                  {columns.map((col, colIdx) => (
+                    <td key={colIdx} className="px-6 py-4">
+                      <Skeleton className="w-24 h-4" />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : data && data.length > 0 ? (
               data.map((row, rowIdx) => (
                 <tr
                   key={row.id || row.user_id || row.audit_log_id || rowIdx}

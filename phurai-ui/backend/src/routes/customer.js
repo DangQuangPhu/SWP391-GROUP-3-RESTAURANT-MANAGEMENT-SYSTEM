@@ -8,7 +8,13 @@ import {
 } from "../controllers/qrSessionController.js";
 import { resolveUserId, requireUserId } from "../middleware/authMiddleware.js";
 import { requireCustomer } from "../middleware/customerMiddleware.js";
-import { getCustomerPaymentHistory } from "../controllers/customer.controller.js";
+import { 
+  getCustomerPaymentHistory,
+  getCustomerDashboardSummary,
+  getCustomerExpenditureTrend,
+  getCustomerOrdersByCategory,
+  getCustomerRecentActivity
+} from "../controllers/customer.controller.js";
 
 const router = express.Router();
 
@@ -66,6 +72,50 @@ router.get(
   requireUserId,
   requireCustomer,
   getCustomerPaymentHistory
+);
+
+/**
+ * GET /api/customer/dashboard/summary
+ */
+router.get(
+  "/dashboard/summary",
+  resolveUserId,
+  requireUserId,
+  requireCustomer,
+  getCustomerDashboardSummary
+);
+
+/**
+ * GET /api/customer/dashboard/expenditure-trend
+ */
+router.get(
+  "/dashboard/expenditure-trend",
+  resolveUserId,
+  requireUserId,
+  requireCustomer,
+  getCustomerExpenditureTrend
+);
+
+/**
+ * GET /api/customer/dashboard/orders-by-category
+ */
+router.get(
+  "/dashboard/orders-by-category",
+  resolveUserId,
+  requireUserId,
+  requireCustomer,
+  getCustomerOrdersByCategory
+);
+
+/**
+ * GET /api/customer/dashboard/recent-activity
+ */
+router.get(
+  "/dashboard/recent-activity",
+  resolveUserId,
+  requireUserId,
+  requireCustomer,
+  getCustomerRecentActivity
 );
 
 export default router;

@@ -10,8 +10,8 @@ const exploreLinks = [
 ];
 
 const serviceLinks = [
-  { label: "Private Dining", to: "#" },
-  { label: "Catering", to: "#" },
+  { label: "Private Dining", to: "/private-events" },
+  { label: "Catering", to: "/catering" },
   { label: "Event Hosting", to: "#" },
   { label: "Gift Cards", to: "/gift-cards" },
   { label: "Loyalty Program", to: "#" },

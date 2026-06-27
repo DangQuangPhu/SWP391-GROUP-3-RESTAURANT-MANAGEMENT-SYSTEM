@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiGet, apiPut } from '@/core/api/httpClient';
 import AdminPageHeader from '@/features/admin-dashboard/components/AdminPageHeader';
+import { FormSkeleton } from '@/components/ui/Skeleton';
 
 export default function SystemSettings() {
   const [settings, setSettings] = useState([]);
@@ -91,9 +92,7 @@ export default function SystemSettings() {
       />
 
       {loading ? (
-        <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#8c764b]"></div>
-        </div>
+        <FormSkeleton items={8} />
       ) : error ? (
         <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-red-700 text-sm">
           {error}

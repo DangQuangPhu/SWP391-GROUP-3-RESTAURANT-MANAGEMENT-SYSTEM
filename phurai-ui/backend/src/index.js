@@ -23,6 +23,7 @@ import menuRoutes from "./routes/menu.routes.js";
 import customerRoutes from "./routes/customer.js";
 import kitchenRoutes from "./routes/kitchen.routes.js";
 import ordersRoutes from "./routes/orders.routes.js";
+import loyaltyRoutes from "./routes/loyalty.js";
 import { initSocket } from "./socket.js";
 import { runReservationReminders } from "./services/reminderService.js";
 import { runAutoSeed } from "./utils/autoSeeder.js";
@@ -86,6 +87,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/promotions", promotionRoutes);
 app.use("/api/vouchers", voucherRoutes);
 app.use("/api/public", publicRoutes);
+app.use("/api/loyalty", loyaltyRoutes);
 
 import paymentRoutes from "./routes/paymentRoutes.js";
 app.use("/api/payments", paymentRoutes);
@@ -105,7 +107,11 @@ app.use((req, res) => {
   });
 });
 
-const distPath = path.join(__dirname, "../dist");
+let distPath = path.join(__dirname, "../dist");
+if (!fs.existsSync(distPath)) {
+  distPath = path.join(__dirname, "../../dist");
+}
+
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
 

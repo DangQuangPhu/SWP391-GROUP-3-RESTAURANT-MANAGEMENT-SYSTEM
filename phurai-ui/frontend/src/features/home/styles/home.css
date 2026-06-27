@@ -48,11 +48,17 @@
 
   transition:
     transform 0.35s ease,
-    opacity 0.35s ease,
     background-color 0.35s ease,
     border-color 0.35s ease,
     box-shadow 0.35s ease,
-    color 0.35s ease;
+    color 0.35s ease,
+    opacity 0.8s ease !important;
+}
+
+body.intro-running .phurai-navbar {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(-20px) !important;
 }
 
 .phurai-navbar__logo {
@@ -267,10 +273,7 @@
 
 .phurai-hero__title em {
   background-size: 200% auto;
-
-  animation:
-    heroReveal 1.2s ease forwards,
-    goldShine 6s linear infinite 1.5s;
+  animation: goldShine 6s linear infinite 1.5s;
 }
 
 @keyframes goldShine {
@@ -284,11 +287,7 @@
 }
 
 .hero-title {
-  opacity: 0;
-  transform: translateY(40px);
-  filter: blur(10px);
-
-  animation: heroReveal 1.9s ease-out forwards;
+  /* Removed hardcoded heroReveal to use useScrollReveal instead */
 }
 
 @keyframes heroReveal {
@@ -316,19 +315,6 @@
   justify-content: center;
   margin-top: 2rem;
   padding-top: 0;
-  opacity: 0;
-  transform: translateY(20px);
-
-  animation:
-    buttonReveal 1s ease forwards;
-  animation-delay: 1.1s;
-}
-
-@keyframes buttonReveal {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .phurai-btn-primary {

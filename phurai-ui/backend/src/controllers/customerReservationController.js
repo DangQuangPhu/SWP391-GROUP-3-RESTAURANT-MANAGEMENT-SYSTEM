@@ -274,45 +274,128 @@ export const applyPromoCodeToReservation = async (req, res) => {
       return res.status(400).json({ success: false, message: "Voucher can only be applied to reservations with food preorder." });
     }
 
-    const result = await checkVoucherValidity(promo_code, preorderItemsTotal, 'Reservation');
+    // Check if it's a customer-redeemed loyalty voucher
+    const userVoucherResult = await pool.request()
+      .input('code', sql.NVarChar(50), promo_code)
+      .input('userId', sql.Int, req.userId || 0)
+      .query(`
+        SELECT cv.customer_voucher_id, cv.status, cv.expires_at, p.applicable_to, p.discount_type, p.discount_value, p.min_order_value, p.promotion_name
+        FROM dbo.CustomerVouchers cv
+        JOIN dbo.Promotions p ON cv.promotion_id = p.promotion_id
+        WHERE cv.voucher_code = @code AND cv.customer_id = @userId
+      `);
 
-    if (!result.isValid) {
-      return res.status(400).json({ success: false, message: result.message });
+    let discount_amount = 0;
+    let customerVoucherId = null;
+    let promoName = '';
+
+    if (userVoucherResult.recordset.length > 0) {
+      const voucher = userVoucherResult.recordset[0];
+      
+      // Check status
+      if (voucher.status !== 'active') {
+        return res.status(400).json({ success: false, message: `Voucher is already ${voucher.status}` });
+      }
+
+      // Check expiry
+      if (new Date(voucher.expires_at) <= new Date()) {
+        await pool.request()
+          .input('voucherId', sql.Int, voucher.customer_voucher_id)
+          .query("UPDATE dbo.CustomerVouchers SET status = N'expired' WHERE customer_voucher_id = @voucherId");
+        return res.status(400).json({ success: false, message: "Voucher has expired" });
+      }
+
+      // Check applicability
+      if (voucher.applicable_to !== 'Both' && voucher.applicable_to !== 'Reservation') {
+        return res.status(400).json({ success: false, message: "Voucher is only applicable to Orders" });
+      }
+
+      // Check minimum order value
+      if (preorderItemsTotal < parseFloat(voucher.min_order_value)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `Minimum order value of ${parseFloat(voucher.min_order_value).toLocaleString()} VND required to apply this voucher.` 
+        });
+      }
+
+      // Calculate discount
+      if (voucher.discount_type === 'Fixed') {
+        discount_amount = parseFloat(voucher.discount_value);
+      } else if (voucher.discount_type === 'Percent') {
+        discount_amount = preorderItemsTotal * (parseFloat(voucher.discount_value) / 100);
+      }
+      discount_amount = Math.min(discount_amount, preorderItemsTotal);
+      customerVoucherId = voucher.customer_voucher_id;
+      promoName = voucher.promotion_name;
+    } else {
+      // Fallback to traditional promo code check
+      const result = await checkVoucherValidity(promo_code, preorderItemsTotal, 'Reservation');
+      if (!result.isValid) {
+        return res.status(400).json({ success: false, message: result.message });
+      }
+      discount_amount = Number(result.discount_amount) || 0;
+      promoName = result.promo.promotion_name;
     }
 
     const BASE_TABLE_DEPOSIT = 20000;
-    const discount_amount = Number(result.discount_amount) || 0;
     const net_total = BASE_TABLE_DEPOSIT + Math.max(0, preorderItemsTotal - discount_amount);
     const new_deposit_amount = Math.round(net_total * 0.3);
     const new_final_total = net_total - new_deposit_amount;
 
-    // Update reservation with new deposit and final total
-    await pool.request()
-      .input('resId', sql.Int, reservationId)
-      .input('promo', sql.VarChar(50), promo_code)
-      .input('newDeposit', sql.Decimal(12,2), new_deposit_amount)
-      .input('newFinalTotal', sql.Decimal(12,2), new_final_total)
-      .query(`
-        UPDATE dbo.Reservations 
-        SET applied_promo_code = @promo, deposit_amount = @newDeposit, final_total = @newFinalTotal
-        WHERE reservation_id = @resId
-      `);
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      // Update reservation
+      await transaction.request()
+        .input('resId', sql.Int, reservationId)
+        .input('promo', sql.VarChar(50), promo_code)
+        .input('voucherId', sql.Int, customerVoucherId)
+        .input('newDeposit', sql.Decimal(12,2), new_deposit_amount)
+        .input('newFinalTotal', sql.Decimal(12,2), new_final_total)
+        .query(`
+          UPDATE dbo.Reservations 
+          SET applied_promo_code = @promo, 
+              applied_voucher_id = @voucherId,
+              deposit_amount = @newDeposit, 
+              final_total = @newFinalTotal
+          WHERE reservation_id = @resId
+        `);
 
-    // Sync the preorder total_amount inside dbo.Orders
-    await pool.request()
-      .input('resId', sql.Int, reservationId)
-      .input('totalAmount', sql.Decimal(12, 2), Math.max(0, preorderItemsTotal - discount_amount))
-      .query(`
-        UPDATE dbo.Orders 
-        SET total_amount = @totalAmount 
-        WHERE reservation_id = @resId AND order_type = N'Preorder' AND order_status = 'Open'
-      `);
+      // If it's a customer-redeemed voucher, mark it used
+      if (customerVoucherId) {
+        await transaction.request()
+          .input('voucherId', sql.Int, customerVoucherId)
+          .input('resId', sql.Int, reservationId)
+          .query(`
+            UPDATE dbo.CustomerVouchers
+            SET status = N'used',
+                used_at = SYSDATETIME(),
+                used_in_reservation_id = @resId
+            WHERE customer_voucher_id = @voucherId
+          `);
+      }
+
+      // Sync the preorder total_amount inside dbo.Orders
+      await transaction.request()
+        .input('resId', sql.Int, reservationId)
+        .input('totalAmount', sql.Decimal(12, 2), Math.max(0, preorderItemsTotal - discount_amount))
+        .query(`
+          UPDATE dbo.Orders 
+          SET total_amount = @totalAmount 
+          WHERE reservation_id = @resId AND order_type = N'Preorder' AND order_status = 'Open'
+        `);
+
+      await transaction.commit();
+    } catch (txErr) {
+      await transaction.rollback();
+      throw txErr;
+    }
 
     return res.json({
       success: true,
       discount_amount,
       new_deposit_amount,
-      promotion_name: result.promo.promotion_name
+      promotion_name: promoName
     });
 
   } catch (error) {

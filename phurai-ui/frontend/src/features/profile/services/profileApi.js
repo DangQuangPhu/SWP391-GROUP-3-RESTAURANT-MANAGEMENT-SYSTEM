@@ -25,6 +25,38 @@ export async function getProfileMe(userId) {
   return data;
 }
 
+export async function getCustomerDashboardSummary(userId, startDate, endDate) {
+  let url = `/customer/dashboard/summary`;
+  if (startDate && endDate) url += `?startDate=${startDate}&endDate=${endDate}`;
+  return await request(url, {
+    headers: profileRequestHeaders(userId),
+  });
+}
+
+export async function getCustomerExpenditureTrend(userId, range = '6m', startDate, endDate) {
+  let url = `/customer/dashboard/expenditure-trend?range=${range}`;
+  if (startDate && endDate) url += `&startDate=${startDate}&endDate=${endDate}`;
+  return await request(url, {
+    headers: profileRequestHeaders(userId),
+  });
+}
+
+export async function getCustomerOrdersByCategory(userId, startDate, endDate) {
+  let url = `/customer/dashboard/orders-by-category`;
+  if (startDate && endDate) url += `?startDate=${startDate}&endDate=${endDate}`;
+  return await request(url, {
+    headers: profileRequestHeaders(userId),
+  });
+}
+
+export async function getCustomerRecentActivity(userId, startDate, endDate) {
+  let url = `/customer/dashboard/recent-activity`;
+  if (startDate && endDate) url += `?startDate=${startDate}&endDate=${endDate}`;
+  return await request(url, {
+    headers: profileRequestHeaders(userId),
+  });
+}
+
 export async function getProfilePayments(userId) {
   const data = await request(`/customer/payments/history`, {
     headers: profileRequestHeaders(userId),
@@ -92,12 +124,16 @@ export function patchProfile(userId, payload) {
   });
 }
 
-export function updateProfilePhone(userId, phoneNumber) {
+export async function updateProfilePhone(userId, phoneNumber) {
   const normalized = String(phoneNumber || "").replace(/\D/g, "");
-  return patchProfile(userId, {
+  const data = await patchProfile(userId, {
     phone: normalized,
     phoneNumber: normalized,
   });
+  if (data?.user) {
+    return { ...data, user: mapApiUserToFrontend(data.user) };
+  }
+  return data;
 }
 
 export async function uploadProfileAvatar(userId, file) {

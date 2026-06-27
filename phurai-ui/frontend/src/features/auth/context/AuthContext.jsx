@@ -11,7 +11,8 @@ import {
   AuthSuccessOverlay,
   blurActiveElement,
 } from "@/features/auth";
-import { getProfile, normalizeStoredAvatarUrl } from "@/features/profile";
+import { getProfile } from "@/features/profile/services/profileApi";
+import { normalizeStoredAvatarUrl } from "@/features/profile/utils/avatarUtils";
 import { isStaffPortalUser } from "@/features/staff-dashboard";
 
 export const AuthContext = createContext(null);

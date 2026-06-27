@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import HeroSection from '../components/HeroSection.jsx';
 import SignatureDishCarousel from '../components/SignatureDishCarousel.jsx';
 import OfferingBlock from '../components/OfferingBlock.jsx';
@@ -9,11 +10,39 @@ import { UniqueExperienceAccordion } from '@/components/ui/interactive-image-acc
 import RolledPerfectionSection from '../components/RolledPerfectionSection.jsx';
 import TestimonialsSection from '../components/TestimonialsSection.jsx';
 import AboutUsSection from '../components/AboutUsSection.jsx';
+import CinematicIntro from '@/components/ui/CinematicIntro.jsx';
 import { homeImages } from '../data/homeAssets.js';
 import '../styles/home.css';
 
 function Home() {
   const location = useLocation();
+  const [showIntro, setShowIntro] = useState(() => !sessionStorage.getItem('hasSeenIntro'));
+  const [revealUI, setRevealUI] = useState(() => !!sessionStorage.getItem('hasSeenIntro'));
+
+  useEffect(() => {
+    const hasSeenIntro = sessionStorage.getItem('hasSeenIntro');
+    if (!hasSeenIntro) {
+      document.body.classList.add('intro-running');
+      setShowIntro(true);
+      setRevealUI(false);
+      
+      const introTimer = setTimeout(() => {
+        setShowIntro(false);
+        sessionStorage.setItem('hasSeenIntro', 'true');
+      }, 3500);
+      
+      const revealTimer = setTimeout(() => {
+        setRevealUI(true);
+        document.body.classList.remove('intro-running');
+      }, 4500);
+
+      return () => {
+        clearTimeout(introTimer);
+        clearTimeout(revealTimer);
+        document.body.classList.remove('intro-running');
+      };
+    }
+  }, []);
 
   useEffect(() => {
     if (location.hash !== "#about") return undefined;
@@ -31,13 +60,20 @@ function Home() {
   }, [location.pathname, location.hash]);
 
   return (
-    <div className="phurai-home">
-      <div className="phurai-home__header-wrap">
-        <HeroSection />
-      </div>
+    <>
+      <AnimatePresence>
+        {showIntro && <CinematicIntro />}
+      </AnimatePresence>
+      <div className="phurai-home">
+        <div className="phurai-home__header-wrap">
+          <HeroSection 
+            isRevealReady={revealUI} 
+            isVideoPlaying={!showIntro} 
+          />
+        </div>
 
-      <main>
-        <SignatureDishCarousel />
+        <main>
+          <SignatureDishCarousel />
 
         <OfferingBlock
           label="OFFERINGS"
@@ -73,6 +109,7 @@ function Home() {
         <AboutUsSection />
       </main>
     </div>
+    </>
   );
 }
 
