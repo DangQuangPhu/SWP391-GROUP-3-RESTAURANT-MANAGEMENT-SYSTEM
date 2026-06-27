@@ -1,10 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
-export function useCountUp(value, duration = 0.8, formatFn = (v) => Math.round(v)) {
+export function useCountUp(value, duration = 0.8, formatFn = (v) => Math.round(v), delay = 600) {
   const [displayValue, setDisplayValue] = useState(formatFn(0));
-  const prevValue = React.useRef(0);
+  const prevValue = useRef(0);
+  const [shouldStart, setShouldStart] = useState(false);
+
+  // Delay the start of the initial count-up until the page is settled
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShouldStart(true);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [delay]);
 
   useEffect(() => {
+    if (!shouldStart) {
+      setDisplayValue(formatFn(0));
+      return;
+    }
+
     const start = prevValue.current;
     const end = Number(value) || 0;
     
@@ -35,7 +49,7 @@ export function useCountUp(value, duration = 0.8, formatFn = (v) => Math.round(v
     return () => {
       if (rAF) cancelAnimationFrame(rAF);
     };
-  }, [value, duration, formatFn]);
+  }, [value, duration, formatFn, shouldStart]);
 
   return displayValue;
 }

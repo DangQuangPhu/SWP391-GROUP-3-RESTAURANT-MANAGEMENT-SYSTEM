@@ -42,7 +42,7 @@ function ChartSkeleton({ type = 'area' }) {
 
 function DashboardSkeleton() {
   return (
-    <div className="h-full flex flex-col overflow-hidden p-4 gap-4 bg-white">
+    <div className="h-full flex flex-col overflow-hidden p-4 gap-4 bg-[#f3f4f6]">
       <div className="flex items-center justify-between flex-none">
         <div className="h-8 w-1/3 rounded bg-gray-100 animate-pulse"></div>
       </div>
@@ -160,7 +160,7 @@ const CustomerDashboard = () => {
   const { summary, trend, categories, activity } = data || {};
 
   return (
-    <div className={`h-full flex flex-col overflow-hidden p-4 gap-4 bg-white ${isRefetching ? 'opacity-85 pointer-events-none' : ''}`} style={{ transition: 'opacity 0.2s ease' }}>
+    <div className={`h-full flex flex-col overflow-hidden p-4 gap-4 bg-[#f3f4f6] ${isRefetching ? 'opacity-85 pointer-events-none' : ''}`} style={{ transition: 'opacity 0.2s ease' }}>
       {/* Top Row: Header & KPIs */}
       <div className="flex-none flex flex-col gap-4">
         {/* Header */}
