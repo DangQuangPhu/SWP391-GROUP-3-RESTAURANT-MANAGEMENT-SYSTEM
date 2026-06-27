@@ -2628,7 +2628,7 @@ body.profile-page-open {
 
 /* StatCard Flash Animations */
 @keyframes flash-card-up {
-  0% {
+  0%, 80% {
     background-color: #ecfdf5; /* bg-emerald-50 */
     border-bottom-color: #6ee7b7;
     border-left-color: #6ee7b7;
@@ -2645,7 +2645,7 @@ body.profile-page-open {
 }
 
 @keyframes flash-card-down {
-  0% {
+  0%, 80% {
     background-color: #fff1f2; /* bg-rose-50 */
     border-bottom-color: #fca5a5;
     border-left-color: #fca5a5;
@@ -2670,7 +2670,7 @@ body.profile-page-open {
 }
 
 @keyframes flash-text-up {
-  0% {
+  0%, 80% {
     color: #059669; /* text-emerald-600 */
     transform: scale(1.05);
     text-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
@@ -2683,7 +2683,7 @@ body.profile-page-open {
 }
 
 @keyframes flash-text-down {
-  0% {
+  0%, 80% {
     color: #e11d48; /* text-rose-600 */
     transform: scale(0.95);
     text-shadow: 0 0 8px rgba(225, 29, 72, 0.4);
@@ -2704,7 +2704,7 @@ body.profile-page-open {
 }
 
 @keyframes flash-icon-up {
-  0% {
+  0%, 80% {
     background-color: rgba(16, 185, 129, 0.2);
     color: #10b981;
   }
@@ -2714,7 +2714,7 @@ body.profile-page-open {
 }
 
 @keyframes flash-icon-down {
-  0% {
+  0%, 80% {
     background-color: rgba(239, 68, 68, 0.2);
     color: #ef4444;
   }
