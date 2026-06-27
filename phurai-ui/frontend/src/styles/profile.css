@@ -2625,3 +2625,101 @@ body.profile-page-open {
     opacity: 0;
   }
 }
+
+/* StatCard Flash Animations */
+@keyframes flash-card-up {
+  0% {
+    background-color: #ecfdf5; /* bg-emerald-50 */
+    border-color: #6ee7b7;     /* border-emerald-300 */
+    box-shadow: 0 4px 25px rgba(16, 185, 129, 0.25);
+  }
+  100% {
+    background-color: #ffffff;
+    border-color: rgba(0, 0, 0, 0.06);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* standard shadow-sm */
+  }
+}
+
+@keyframes flash-card-down {
+  0% {
+    background-color: #fff1f2; /* bg-rose-50 */
+    border-color: #fca5a5;     /* border-rose-300 */
+    box-shadow: 0 4px 25px rgba(239, 68, 68, 0.25);
+  }
+  100% {
+    background-color: #ffffff;
+    border-color: rgba(0, 0, 0, 0.06);
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  }
+}
+
+.animate-flash-card-up {
+  animation: flash-card-up 1.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.animate-flash-card-down {
+  animation: flash-card-down 1.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes flash-text-up {
+  0% {
+    color: #059669; /* text-emerald-600 */
+    transform: scale(1.05);
+    text-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+  }
+  100% {
+    color: #111827; /* text-gray-900 */
+    transform: scale(1);
+    text-shadow: none;
+  }
+}
+
+@keyframes flash-text-down {
+  0% {
+    color: #e11d48; /* text-rose-600 */
+    transform: scale(0.95);
+    text-shadow: 0 0 8px rgba(225, 29, 72, 0.4);
+  }
+  100% {
+    color: #111827; /* text-gray-900 */
+    transform: scale(1);
+    text-shadow: none;
+  }
+}
+
+.animate-flash-text-up {
+  animation: flash-text-up 1.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.animate-flash-text-down {
+  animation: flash-text-down 1.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes flash-icon-up {
+  0% {
+    background-color: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+  }
+  100% {
+    /* Transitions gracefully back to base class */
+  }
+}
+
+@keyframes flash-icon-down {
+  0% {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+  }
+  100% {
+    /* Transitions gracefully back to base class */
+  }
+}
+
+.animate-flash-icon-up {
+  animation: flash-icon-up 1.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.animate-flash-icon-down {
+  animation: flash-icon-down 1.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+}

@@ -1,33 +1,22 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { useCountUp } from '@/hooks/useCountUp';
 
-// Module-level cache to persist previous values across component unmounts/remounts
-const prevValuesCache = {};
-
 export default function StatCard({ label, value, icon: Icon, deltaPercent, formatValue, theme }) {
-  const [flash, setFlash] = useState(false);
-  const [trendDirection, setTrendDirection] = useState('none'); // 'up' | 'down' | 'none'
-
+  const [flashKey, setFlashKey] = useState(0);
+  const [trend, setTrend] = useState('none');
+  
+  // Track previous value to detect changes. Initialize to 0 so it flashes on first mount.
+  const prevValue = useRef(0);
   const endValue = Number(value) || 0;
 
-  // Initialize the cache for this card to 0 on first render so it flashes on initial mount
-  if (prevValuesCache[label] === undefined) {
-    prevValuesCache[label] = 0;
+  // Synchronous state derivation (React recommended pattern for derived state)
+  // This is completely immune to Strict Mode double-invocations and unmounts!
+  if (prevValue.current !== endValue) {
+    setTrend(endValue > prevValue.current ? 'up' : 'down');
+    setFlashKey(k => k + 1);
+    prevValue.current = endValue;
   }
-
-  useEffect(() => {
-    const cachedValue = prevValuesCache[label];
-    if (cachedValue !== endValue) {
-      setTrendDirection(endValue > cachedValue ? 'up' : 'down');
-      setFlash(true);
-      const timer = setTimeout(() => {
-        setFlash(false);
-        setTrendDirection('none');
-      }, 1200);
-      prevValuesCache[label] = endValue;
-      return () => clearTimeout(timer);
-    }
-  }, [value, label, endValue]);
 
   const animatedValue = useCountUp(value, 1.2, formatValue);
 
@@ -52,30 +41,22 @@ export default function StatCard({ label, value, icon: Icon, deltaPercent, forma
 
   const currentTheme = themeClasses[theme] || themeClasses.blue;
 
+  // Base classes + CSS Animation classes
+  const flashCardClass = flashKey > 0 ? (trend === 'up' ? 'animate-flash-card-up' : 'animate-flash-card-down') : '';
+  const flashIconClass = flashKey > 0 ? (trend === 'up' ? 'animate-flash-icon-up' : 'animate-flash-icon-down') : '';
+  const flashTextClass = flashKey > 0 ? (trend === 'up' ? 'animate-flash-text-up' : 'animate-flash-text-down') : '';
+
   return (
     <div
-      className={`rounded-2xl bg-white p-5 shadow-sm border border-gray-100 flex flex-col justify-between border-t-[3px] ${currentTheme.border} transition-all duration-300 ${
-        flash 
-          ? (trendDirection === 'up' 
-              ? 'shadow-[0_4px_25px_rgba(16,185,129,0.2)] bg-emerald-50 border-emerald-300' 
-              : 'shadow-[0_4px_25px_rgba(239,68,68,0.2)] bg-rose-50 border-rose-300') 
-          : ''
-      }`}
+      key={`card-${flashKey}`}
+      className={`rounded-2xl bg-white p-5 shadow-sm border border-gray-100 flex flex-col justify-between border-t-[3px] ${currentTheme.border} ${flashCardClass}`}
     >
       <div className="flex items-center gap-4 mb-4">
-        <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${
-          flash 
-            ? (trendDirection === 'up' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500') 
-            : currentTheme.iconBg
-        }`}>
+        <div className={`w-14 h-14 rounded-full flex items-center justify-center ${currentTheme.iconBg} ${flashIconClass}`}>
           <Icon size={24} strokeWidth={2} />
         </div>
         <div>
-          <h3 className={`text-2xl font-bold transition-all duration-500 ${
-            flash 
-              ? (trendDirection === 'up' ? 'text-emerald-600 scale-105 drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'text-rose-600 scale-95 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)]') 
-              : 'text-gray-900'
-          }`}>
+          <h3 className={`text-2xl font-bold text-gray-900 ${flashTextClass}`}>
             {animatedValue}
           </h3>
           <p className="text-sm font-semibold text-gray-500">{label}</p>
@@ -101,7 +82,7 @@ export default function StatCard({ label, value, icon: Icon, deltaPercent, forma
           )}
         </div>
       ) : (
-        <div className="h-5"></div>
+        <div className="h-4"></div>
       )}
     </div>
   );
