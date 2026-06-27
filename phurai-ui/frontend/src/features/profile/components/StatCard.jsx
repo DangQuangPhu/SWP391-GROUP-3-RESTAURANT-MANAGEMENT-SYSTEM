@@ -7,6 +7,8 @@ export default function StatCard({ label, value, icon: Icon, deltaPercent, forma
   const [flash, setFlash] = useState(false);
   const [trendDirection, setTrendDirection] = useState('none'); // 'up' | 'down' | 'none'
 
+  console.warn(`[StatCard RENDER: ${label}] value: ${value} (${typeof value}), prev: ${prevValue.current}, flash: ${flash}, trend: ${trendDirection}`);
+
   useEffect(() => {
     const endValue = Number(value) || 0;
     console.warn(`[StatCard: ${label}] useEffect run. value: ${value}, prev: ${prevValue.current}`);
