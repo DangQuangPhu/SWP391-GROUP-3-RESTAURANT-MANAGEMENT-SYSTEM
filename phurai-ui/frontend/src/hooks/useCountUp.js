@@ -5,6 +5,12 @@ export function useCountUp(value, duration = 0.8, formatFn = (v) => Math.round(v
   const prevValue = useRef(0);
   const [shouldStart, setShouldStart] = useState(false);
 
+  // Keep the formatting function reference stable using a Ref
+  const formatFnRef = useRef(formatFn);
+  useEffect(() => {
+    formatFnRef.current = formatFn;
+  }, [formatFn]);
+
   // Delay the start of the initial count-up until the page is settled
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -15,7 +21,7 @@ export function useCountUp(value, duration = 0.8, formatFn = (v) => Math.round(v
 
   useEffect(() => {
     if (!shouldStart) {
-      setDisplayValue(formatFn(0));
+      setDisplayValue(formatFnRef.current(0));
       return;
     }
 
@@ -34,12 +40,12 @@ export function useCountUp(value, duration = 0.8, formatFn = (v) => Math.round(v
       const easeProgress = progress * (2 - progress);
       
       const currentVal = start + (end - start) * easeProgress;
-      setDisplayValue(formatFn(currentVal));
+      setDisplayValue(formatFnRef.current(currentVal));
 
       if (progress < 1) {
         rAF = requestAnimationFrame(tick);
       } else {
-        setDisplayValue(formatFn(end));
+        setDisplayValue(formatFnRef.current(end));
       }
     };
 
@@ -49,7 +55,7 @@ export function useCountUp(value, duration = 0.8, formatFn = (v) => Math.round(v
     return () => {
       if (rAF) cancelAnimationFrame(rAF);
     };
-  }, [value, duration, formatFn, shouldStart]);
+  }, [value, duration, shouldStart]);
 
   return displayValue;
 }
