@@ -370,12 +370,17 @@ export const getCustomerPaymentDetails = async (req, res) => {
                 pm.method_name,
                 o.order_id, o.order_status, o.subtotal AS total_amount, o.service_charge AS tax_amount, o.discount_amount, o.total_amount AS net_amount, o.order_type,
                 r.reservation_id, r.reservation_status, r.reservation_start_at, r.guest_count, r.special_request,
-                t.table_number, t.seating_capacity
+                t.table_number, t.capacity AS seating_capacity
             FROM dbo.Payments p
             LEFT JOIN dbo.PaymentMethods pm ON p.payment_method_id = pm.payment_method_id
             LEFT JOIN dbo.Orders o ON p.order_id = o.order_id
             LEFT JOIN dbo.Reservations r ON p.reservation_id = r.reservation_id
-            LEFT JOIN dbo.RestaurantTables t ON r.table_id = t.table_id
+            OUTER APPLY (
+                SELECT TOP 1 rt.table_id 
+                FROM dbo.ReservationTables rt 
+                WHERE rt.reservation_id = r.reservation_id
+            ) rt_join
+            LEFT JOIN dbo.RestaurantTables t ON t.table_id = COALESCE(o.table_id, rt_join.table_id)
             WHERE p.payment_id = @paymentId AND (o.customer_id = @userId OR r.customer_id = @userId)
         `;
         const payments = await query(paymentQuery, { paymentId, userId });

@@ -101,6 +101,10 @@ function PaymentDetailsModal({ isOpen, onClose, userId, paymentId }) {
         <div className="payment-modal__section">
           <h4 className="payment-modal__section-title">Transaction Info</h4>
           <div className="payment-modal__row">
+            <span>Payment ID</span>
+            <span>#{payment.payment_id}</span>
+          </div>
+          <div className="payment-modal__row">
             <span>Method</span>
             <span>{payment.method_name || "Unknown"}</span>
           </div>
@@ -108,6 +112,12 @@ function PaymentDetailsModal({ isOpen, onClose, userId, paymentId }) {
             <span>Reference</span>
             <span>{payment.transaction_ref || "N/A"}</span>
           </div>
+          {payment.table_number && (
+            <div className="payment-modal__row">
+              <span>Table</span>
+              <span>{payment.table_number}</span>
+            </div>
+          )}
         </div>
 
         {payment.order_id && (

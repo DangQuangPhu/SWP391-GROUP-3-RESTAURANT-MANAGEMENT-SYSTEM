@@ -286,17 +286,6 @@ body.intro-running .phurai-navbar {
   }
 }
 
-.hero-title {
-  /* Removed hardcoded heroReveal to use useScrollReveal instead */
-}
-
-@keyframes heroReveal {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
-}
 
 .phurai-hero__subtitle {
   max-width: 672px;

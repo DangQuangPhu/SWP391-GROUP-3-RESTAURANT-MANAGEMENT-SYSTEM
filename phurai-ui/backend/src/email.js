@@ -973,7 +973,7 @@ export async function sendReservationReminderEmail({ toEmail, customerName, rese
 // ============================================================================
 // sendReservationInvoiceEmail
 // ============================================================================
-export async function sendReservationInvoiceEmail({ to, reservation, preorderItems, totalAmount }) {
+export async function sendReservationInvoiceEmail({ to, reservation, preorderItems, totalAmount, paymentId }) {
   const recipient = String(to || "").trim().toLowerCase();
   if (!recipient) return { sent: false, reason: "no_recipient" };
   if (!isSmtpConfigured()) return { sent: false, devMode: true };
@@ -1064,6 +1064,7 @@ export async function sendReservationInvoiceEmail({ to, reservation, preorderIte
                     </p>
                     <table width="100%" cellpadding="0" cellspacing="0">
                       ${infoRow("Your Reservation ID", `<strong style="color:#9f7c3a;font-size:15px;">${formattedId}</strong>`)}
+                      ${paymentId ? infoRow("Payment ID", `<strong style="color:#9f7c3a;font-size:15px;">#${paymentId}</strong>`) : ''}
                       ${infoRow("Request time", formatDateTimeVN(reservation.created_at))}
                       ${infoRow("Customer Name", safeName)}
                       ${infoRow("Phone Number", reservation.contact_phone || "—")}

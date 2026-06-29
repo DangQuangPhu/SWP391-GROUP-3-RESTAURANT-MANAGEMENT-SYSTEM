@@ -254,6 +254,7 @@ export const handleSepayWebhook = async (req, res) => {
 
             await sendReservationInvoiceEmail({
               to: resInfo.contact_email,
+              paymentId: paymentId,
               reservation: {
                 reservation_id: reservation.reservation_id,
                 contact_name: resInfo.contact_name,

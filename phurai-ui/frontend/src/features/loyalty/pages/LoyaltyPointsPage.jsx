@@ -296,7 +296,7 @@ export default function LoyaltyPointsPage() {
       <section className="space-y-4">
         <div className="flex items-center gap-2 border-b border-gray-100 dark:border-gray-700 pb-3">
           <Ticket className="text-yellow-500" />
-          <h3 className="text-lg font-bold text-black dark:text-white">Exchange Rewards Catalog</h3>
+          <h3 className="text-lg font-bold text-black">Exchange Rewards Catalog</h3>
         </div>
 
         {catalog.length === 0 ? (
@@ -354,7 +354,7 @@ export default function LoyaltyPointsPage() {
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 border-b border-gray-100 dark:border-gray-700 pb-3">
           <div className="flex items-center gap-2">
             <Ticket className="text-yellow-500" />
-            <h3 className="text-lg font-bold text-black dark:text-white">My Vouchers</h3>
+            <h3 className="text-lg font-bold text-black">My Vouchers</h3>
           </div>
           
           <div className="flex bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg text-xs self-start sm:self-auto">

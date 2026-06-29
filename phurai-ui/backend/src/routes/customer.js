@@ -10,6 +10,7 @@ import { resolveUserId, requireUserId } from "../middleware/authMiddleware.js";
 import { requireCustomer } from "../middleware/customerMiddleware.js";
 import { 
   getCustomerPaymentHistory,
+  getCustomerPaymentDetails,
   getCustomerDashboardSummary,
   getCustomerExpenditureTrend,
   getCustomerOrdersByCategory,
@@ -116,6 +117,17 @@ router.get(
   requireUserId,
   requireCustomer,
   getCustomerRecentActivity
+);
+
+/**
+ * GET /api/customer/payments/:paymentId/details
+ */
+router.get(
+  "/payments/:paymentId/details",
+  resolveUserId,
+  requireUserId,
+  requireCustomer,
+  getCustomerPaymentDetails
 );
 
 export default router;
