@@ -1,27 +1,116 @@
-services:
-  db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "Phudeptrai@"
-    ports:
-      - "1433:1433"
-    volumes:
-      - mssql_data:/var/opt/mssql
+# =============================================================================
+# docker-compose.yml — Phurai Restaurant Management System
+#
+# PROFILES:
+#   cloud  → app only, connects to Azure SQL (default .env)
+#   local  → app + local MSSQL container (for offline / dev use)
+#
+# Usage:
+#   Cloud  (Azure SQL):  docker compose --profile cloud  up -d --build
+#   Local  (MSSQL):      docker compose --profile local  up -d --build
+#
+# The .env file is injected at RUNTIME — secrets are never baked into image.
+# =============================================================================
 
+services:
+
+  # ---------------------------------------------------------------------------
+  # app — Single self-contained container: Express API + built React frontend
+  # ---------------------------------------------------------------------------
   app:
     build:
       context: .
       dockerfile: Dockerfile
+      # Build-time args for Vite (baked into JS bundle, not secret)
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-""}
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-909445481908-0773rhu0gq39sbhf5mkriin0di4h9pnp.apps.googleusercontent.com}
+    image: phurai-app:latest
+    container_name: phurai-app
+    # Inject all runtime secrets from .env (never baked into image)
+    env_file:
+      - ./.env
+    # Override DB_SERVER when running with local MSSQL profile
+    environment:
+      NODE_ENV: production
+    ports:
+      - "${PORT:-5001}:5001"
+    restart: unless-stopped
+    profiles:
+      - cloud
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # app-local — Same image, but overrides DB_SERVER to point at local MSSQL
+  # ---------------------------------------------------------------------------
+  app-local:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-""}
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-909445481908-0773rhu0gq39sbhf5mkriin0di4h9pnp.apps.googleusercontent.com}
+    image: phurai-app:latest
+    container_name: phurai-app-local
     env_file:
       - ./.env
     environment:
-      - DB_SERVER=db
+      NODE_ENV: production
+      # Override DB_SERVER to use the local MSSQL container
+      DB_SERVER: db
+      DB_ENCRYPT: "false"
+      DB_TRUST_SERVER_CERTIFICATE: "true"
     ports:
-      - "80:5001"
-      - "5001:5001"
+      - "${PORT:-5001}:5001"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - local
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
+  # ---------------------------------------------------------------------------
+  # db — Local Microsoft SQL Server (only used with --profile local)
+  # ---------------------------------------------------------------------------
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: phurai-mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${DB_PASSWORD:-Phudeptrai@2026}
+      MSSQL_PID: Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    restart: unless-stopped
+    profiles:
+      - local
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"${DB_PASSWORD:-Phudeptrai@2026}\" -C -Q \"SELECT 1\" || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+# -----------------------------------------------------------------------------
+# Named volumes
+# -----------------------------------------------------------------------------
 volumes:
   mssql_data:
+    driver: local

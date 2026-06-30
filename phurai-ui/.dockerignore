@@ -1,6 +1,50 @@
-node_modules
-dist
+# ============================================================
+# .dockerignore — Controls what gets sent to the Docker build
+# context. Smaller context = faster builds & smaller images.
+# ============================================================
+
+# Dependencies (will be re-installed inside container)
+node_modules/
+**/node_modules/
+
+# Built output (re-built inside container from source)
+dist/
+**/dist/
+
+# Environment files — NEVER bake secrets into the image.
+# Inject at runtime via docker-compose env_file or -e flags.
 .env
-.git
-*.log
+.env.*
+!.env.example
+
+# Version control
+.git/
+.gitignore
+
+# OS / editor noise
 .DS_Store
+Thumbs.db
+*.log
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Docker files themselves (not needed inside the build)
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Dev / test / docs (not needed at runtime)
+*.md
+test-cases/
+scratch/
+coverage/
+
+# CI / tooling config
+.eslintrc*
+.prettierrc*
+.claude/
+.agents/
+.bmad/
+.agyrules
