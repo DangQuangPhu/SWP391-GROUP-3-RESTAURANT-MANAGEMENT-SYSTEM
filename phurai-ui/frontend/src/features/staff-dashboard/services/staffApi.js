@@ -406,9 +406,23 @@ export async function editStaffReservation(reservationId, userId, payload) {
   return res;
 }
 
-export async function fetchStaffTables() {
-  return staffGet("/staff/tables", []);
+export async function fetchStaffTables(userId) {
+  return staffGet("/staff/tables", [], userId);
 }
+
+/**
+ * Create a Walk-in reservation immediately (Dining, no deposit, no voucher).
+ * @param {number} userId  — authenticated staff user_id
+ * @param {{ contact_name, contact_phone, contact_email, guest_count, table_id }} payload
+ */
+export async function createWalkInReservation(userId, payload) {
+  const res = await staffPost("/staff/reservations/walk-in", userId, payload);
+  if (!res?.success) {
+    throw new Error(res?.message || "Failed to create walk-in reservation.");
+  }
+  return res;
+}
+
 
 export async function checkInStaffTable(tableId, userId) {
   return staffPost(`/staff/tables/${tableId}/check-in`, userId);

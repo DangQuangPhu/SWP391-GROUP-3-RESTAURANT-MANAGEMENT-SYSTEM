@@ -124,7 +124,7 @@ export const getAllReservations = async (req, res) => {
            WHEN N'Pending Payment' THEN 2
            WHEN N'Reserved' THEN 3
            WHEN N'Confirmed' THEN 4
-           WHEN N'Seated' THEN 5
+           WHEN N'Dining' THEN 5
            WHEN N'Cleaning' THEN 6
            WHEN N'Check-out' THEN 7
            WHEN N'Reject Request' THEN 8

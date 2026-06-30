@@ -2,7 +2,7 @@ import pool from "../db.js";
 
 const ALLOWED_STATUSES = new Set([
   'Pending Request', 'Pending Payment', 'Reserved', 'Confirmed',
-  'Cancelled', 'Completed', 'No Show', 'Seated', 'Cleaning',
+  'Cancelled', 'Completed', 'No Show', 'Dining', 'Cleaning',
   'Check-out', 'Reject Check-in', 'Reject Request', 'Reject Check-out',
   'Paid', 'PaymentFailed', 'Pending', 'Await Check-in', 'Check-in',
   'Complete Paid', 'Overdue'
@@ -278,7 +278,7 @@ export const validateReservationCreate = async (req, res, next) => {
          JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
          WHERE rt.table_id IN (${tableIds.join(',')})
            AND (
-             r.reservation_status IN (N'Confirmed', N'Reserved', N'Seated')
+             r.reservation_status IN (N'Confirmed', N'Reserved', N'Dining')
              OR
              (r.reservation_status IN (N'Pending Request', N'Pending Payment') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
            )
@@ -646,7 +646,7 @@ export const validateReservationUpdate = async (req, res, next) => {
            WHERE rt.table_id IN (${activeTableIds.join(',')})
              AND r.reservation_id != ?
              AND (
-               r.reservation_status IN (N'Confirmed', N'Reserved', N'Seated')
+               r.reservation_status IN (N'Confirmed', N'Reserved', N'Dining')
                OR
                (r.reservation_status IN (N'Pending Request', N'Pending Payment') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
              )

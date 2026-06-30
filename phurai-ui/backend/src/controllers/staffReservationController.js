@@ -6,6 +6,219 @@ import { sendBookingCheckedInEmail, sendBookingRejectedEmail } from "../email.js
 import { processPreordersToKds } from "../services/kdsIntegrationService.js";
 import { RESERVATION_STATUS } from "../../../frontend/src/shared/reservationStatus.js";
 
+
+// ──────────────────────────────────────────────────────────────────────────────
+// POST /api/staff/reservations/walk-in
+//
+// Creates an immediate Walk-in reservation — no deposit, no voucher.
+// Atomic transaction with UPDLOCK on RestaurantTables to prevent race conditions
+// when two staff members pick the same Available table simultaneously.
+//
+// Security: all inputs bound via sql.NVarChar / sql.Int — zero string concat.
+// ──────────────────────────────────────────────────────────────────────────────
+export const createWalkInReservation = async (req, res) => {
+  const staffId = parseInt(req.user?.userId || req.userId, 10);
+  if (!staffId) {
+    return res.status(401).json({ success: false, message: 'Unauthorized.' });
+  }
+
+  const { contact_name, contact_phone, contact_email, guest_count, table_id } = req.body;
+
+  // ── Input validation ──────────────────────────────────────────────────────
+  if (!contact_name || typeof contact_name !== 'string' || contact_name.trim().length < 2) {
+    return res.status(400).json({ success: false, message: 'Full name is required (min 2 characters).' });
+  }
+  if (!contact_phone || typeof contact_phone !== 'string' || contact_phone.trim().length < 8) {
+    return res.status(400).json({ success: false, message: 'Valid phone number is required.' });
+  }
+  if (contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact_email)) {
+    return res.status(400).json({ success: false, message: 'Invalid email format.' });
+  }
+  const parsedGuestCount = parseInt(guest_count, 10);
+  if (!parsedGuestCount || parsedGuestCount < 1 || parsedGuestCount > 50) {
+    return res.status(400).json({ success: false, message: 'Guest count must be between 1 and 50.' });
+  }
+  const parsedTableId = parseInt(table_id, 10);
+  if (!parsedTableId || isNaN(parsedTableId)) {
+    return res.status(400).json({ success: false, message: 'A valid table must be selected.' });
+  }
+
+  // Sanitize string inputs (trim whitespace + max length enforcement)
+  const safeName  = contact_name.trim().slice(0, 100);
+  const safePhone = contact_phone.trim().slice(0, 20);
+  const safeEmail = contact_email ? contact_email.trim().slice(0, 100) : null;
+
+  const rawPool = await getRawPool();
+  const transaction = new sql.Transaction(rawPool);
+  await transaction.begin();
+
+  try {
+    // ── SECURITY: UPDLOCK acquires an update-lock immediately on the row.
+    // A second concurrent transaction reading 'Available' is blocked until
+    // this one commits or rolls back — race condition eliminated. ──────────
+    const req1 = new sql.Request(transaction);
+    req1.input('tableId', sql.Int, parsedTableId);
+    const tableCheck = await req1.query(`
+      SELECT table_status, table_number, capacity
+      FROM dbo.RestaurantTables WITH (UPDLOCK, ROWLOCK)
+      WHERE table_id = @tableId
+    `);
+
+    if (!tableCheck.recordset.length) {
+      await transaction.rollback();
+      return res.status(404).json({ success: false, message: 'Table not found.' });
+    }
+    const tableRow = tableCheck.recordset[0];
+    if (tableRow.table_status !== 'Available') {
+      await transaction.rollback();
+      return res.status(409).json({
+        success: false,
+        message: `Table is not available (currently: ${tableRow.table_status}). Please select another table.`
+      });
+    }
+
+    // ── Step 1: INSERT Reservation (Walk-in, Dining, no deposit, no voucher) ──
+    const now   = new Date();
+    const endAt = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
+    const req2 = new sql.Request(transaction);
+    req2.input('safeName',   sql.NVarChar(100), safeName);
+    req2.input('safePhone',  sql.NVarChar(20),  safePhone);
+    req2.input('safeEmail',  sql.NVarChar(100), safeEmail);
+    req2.input('guestCount', sql.TinyInt,       parsedGuestCount);
+    req2.input('staffId',    sql.Int,           staffId);
+    req2.input('startAt',    sql.DateTime2,     now);
+    req2.input('endAt',      sql.DateTime2,     endAt);
+
+    const insertRes = await req2.query(`
+      INSERT INTO dbo.Reservations
+        (contact_name, contact_phone, contact_email,
+         guest_count, reservation_status, reservation_source,
+         deposit_amount, applied_promo_code, applied_voucher_id,
+         created_by_staff_id, confirmed_by_staff_id,
+         reservation_start_at, reservation_end_at,
+         checked_in_at, created_at, updated_at)
+      OUTPUT INSERTED.reservation_id
+      VALUES
+        (@safeName, @safePhone, @safeEmail,
+         @guestCount, N'Dining', N'Walk-in',
+         NULL, NULL, NULL,
+         @staffId, @staffId,
+         @startAt, @endAt,
+         SYSDATETIME(), SYSDATETIME(), SYSDATETIME())
+    `);
+    const newReservationId = insertRes.recordset[0].reservation_id;
+
+    // ── Step 2: Link reservation ↔ table ──────────────────────────────────
+    const req3 = new sql.Request(transaction);
+    req3.input('reservationId', sql.Int, newReservationId);
+    req3.input('tableId',       sql.Int, parsedTableId);
+    req3.input('staffId',       sql.Int, staffId);
+    await req3.query(`
+      INSERT INTO dbo.ReservationTables (reservation_id, table_id, assigned_by_staff_id)
+      VALUES (@reservationId, @tableId, @staffId)
+    `);
+
+    // ── Step 3: Table → Occupied ──────────────────────────────────────────
+    const req4 = new sql.Request(transaction);
+    req4.input('tableId', sql.Int, parsedTableId);
+    await req4.query(`
+      UPDATE dbo.RestaurantTables
+      SET table_status = N'Occupied', updated_at = SYSDATETIME()
+      WHERE table_id = @tableId
+    `);
+
+    // ── Step 4: Timeline + Audit ──────────────────────────────────────────
+    const req5 = new sql.Request(transaction);
+    req5.input('reservationId', sql.Int, newReservationId);
+    req5.input('staffId',       sql.Int, staffId);
+    await req5.query(`
+      INSERT INTO dbo.ReservationTimelines
+        (reservation_id, event_type, performed_by, notes)
+      VALUES
+        (@reservationId, N'WALK_IN_CREATED', @staffId,
+         N'Walk-in reservation created by staff. No deposit required.');
+      INSERT INTO dbo.AuditLogs
+        (user_id, action_name, target_table, target_id, new_values, ip_address)
+      VALUES
+        (@staffId, N'WALK_IN_CREATED', N'Reservations', @reservationId,
+         N'{"reservation_source":"Walk-in","reservation_status":"Dining"}', NULL);
+    `);
+
+    // ── Step 5: Create QR session for the table ───────────────────────────
+    const tNum  = tableRow.table_number || `T-${parsedTableId}`;
+    const slug  = String(tNum).trim().toLowerCase().replace(/\s+/g, '-');
+    const stamp = now.toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
+    const token = `qr-walkin-${slug}-${stamp}`;
+
+    const req6 = new sql.Request(transaction);
+    req6.input('tableId',       sql.Int,          parsedTableId);
+    req6.input('reservationId', sql.Int,          newReservationId);
+    req6.input('token',         sql.VarChar(255), token);
+    req6.input('staffId',       sql.Int,          staffId);
+    await req6.query(`
+      IF NOT EXISTS (
+        SELECT 1 FROM dbo.QROrderSessions
+        WHERE table_id = @tableId AND session_status = N'Active'
+          AND (expires_at IS NULL OR expires_at > SYSDATETIME())
+      )
+      BEGIN
+        INSERT INTO dbo.QROrderSessions
+          (table_id, reservation_id, customer_id, token, session_status,
+           generated_by_staff_id, generated_at, expires_at)
+        VALUES
+          (@tableId, @reservationId, NULL, @token, N'Active',
+           @staffId, SYSDATETIME(), DATEADD(hour, 4, SYSDATETIME()))
+      END
+    `);
+
+    await transaction.commit();
+
+    // ── Step 6: Real-time broadcast to Staff + Manager portals ────────────
+    try {
+      const io = getIO();
+      if (io) {
+        const broadcastPayload = {
+          reservation_id:     newReservationId,
+          customer_name:      safeName,
+          contact_phone:      safePhone,
+          reservation_status: 'Dining',
+          reservation_source: 'Walk-in',
+          table_id:           parsedTableId,
+          table_number:       tableRow.table_number,
+        };
+        ['room:staff', 'room:manager'].forEach((room) => {
+          io.to(room).emit('reservation:new', broadcastPayload);
+          io.to(room).emit('reservation:status_changed', {
+            reservation_id: newReservationId,
+            new_status:     'Dining',
+            table_id:       parsedTableId,
+          });
+          io.to(room).emit('table:status_changed', {
+            table_id:   parsedTableId,
+            new_status: 'Occupied',
+          });
+        });
+      }
+    } catch (socketErr) {
+      console.error('[Walk-in] Socket.IO broadcast failed (non-fatal):', socketErr.message);
+    }
+
+    return res.status(201).json({
+      success:        true,
+      message:        `Walk-in #${newReservationId} created — Table ${tableRow.table_number} is now Occupied.`,
+      reservation_id: newReservationId,
+      table_id:       parsedTableId,
+      table_number:   tableRow.table_number,
+    });
+
+  } catch (err) {
+    try { await transaction.rollback(); } catch (_) {}
+    console.error('[createWalkInReservation] Error:', err.message);
+    return res.status(500).json({ success: false, message: 'Failed to create walk-in reservation.' });
+  }
+};
+
 // ──────────────────────────────────────────────────────────────────────────────
 // GET /api/staff/reservations/today-shift
 //
@@ -154,7 +367,7 @@ export const assignTable = async (req, res) => {
       `);
       
       // Step 2: Force Reservation Status Update (Relaxed validation)
-      await request.query(`UPDATE dbo.Reservations SET reservation_status = N'Seated', checked_in_at = COALESCE(checked_in_at, SYSDATETIME()), updated_at = SYSDATETIME() WHERE reservation_id = @id`);
+      await request.query(`UPDATE dbo.Reservations SET reservation_status = N'Dining', checked_in_at = COALESCE(checked_in_at, SYSDATETIME()), updated_at = SYSDATETIME() WHERE reservation_id = @id`);
       
       await request.query(`UPDATE dbo.RestaurantTables SET table_status = N'Occupied' WHERE table_id = @tableId`);
 
@@ -257,8 +470,8 @@ export const assignTable = async (req, res) => {
       try {
         const io = req.app.get("io");
         if (io) {
-          io.to('room:manager').emit('reservation:status_changed', { reservation_id: reservationId, new_status: 'Seated', table_id: tableId });
-          io.to('room:staff').emit('reservation:status_changed', { reservation_id: reservationId, new_status: 'Seated', table_id: tableId });
+          io.to('room:manager').emit('reservation:status_changed', { reservation_id: reservationId, new_status: 'Dining', table_id: tableId });
+          io.to('room:staff').emit('reservation:status_changed', { reservation_id: reservationId, new_status: 'Dining', table_id: tableId });
 
           io.to('room:manager').emit('table:status_changed', { table_id: tableId, new_status: 'Occupied' });
           io.to('room:staff').emit('table:status_changed', { table_id: tableId, new_status: 'Occupied' });
@@ -786,7 +999,7 @@ export const staffCheckIn = async (req, res) => {
         tableIdList = reservation.table_ids.split(',').map(Number);
       }
 
-      // Update reservation status to Seated directly since they are checked-in with table assigned
+      // Update reservation status to Dining directly since they are checked-in with table assigned
       await connection.query(
         `UPDATE dbo.Reservations 
          SET reservation_status = ?, checked_in_at = SYSDATETIME(), updated_at = SYSDATETIME()

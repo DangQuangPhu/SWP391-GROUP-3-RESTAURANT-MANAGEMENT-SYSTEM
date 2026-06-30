@@ -32,6 +32,7 @@ import { FILTER_GROUPS, RESERVATION_STATUS, RESERVATION_STATUS_META, STAFF_VISIB
 
 import LateArrivalBadge from "./LateArrivalBadge.jsx";
 import StaffEditReservationModal from "./StaffEditReservationModal.jsx";
+import AddWalkInModal from "./AddWalkInModal.jsx";
 import "@/styles/staff-dashboard/ReservationManagement.css";
 
 
@@ -223,6 +224,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
   const [assignDialog, setAssignDialog] = useState(null); // holds reservation obj
   const [tables, setTables] = useState([]);
   const [loadingTables, setLoadingTables] = useState(false);
+  const [walkInOpen, setWalkInOpen] = useState(false);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -484,8 +486,8 @@ function ReservationManagement({ user, toast, refreshKey }) {
     () => dateScopedQueue.filter((r) => r.reservation_status === "Confirmed").length,
     [dateScopedQueue]
   );
-  const kpiSeated = useMemo(
-    () => dateScopedQueue.filter((r) => r.reservation_status === "Seated").length,
+  const kpiDining = useMemo(
+    () => dateScopedQueue.filter((r) => r.reservation_status === "Dining").length,
     [dateScopedQueue]
   );
   const kpiCompleted = useMemo(
@@ -1010,8 +1012,8 @@ function ReservationManagement({ user, toast, refreshKey }) {
                 <div className="sfx-kpi__top">
                   <span className="sfx-kpi__icon" aria-hidden="true"><Icon name="check" size={18} /></span>
                 </div>
-                <p className="sfx-kpi__value">{kpiSeated}</p>
-                <p className="sfx-kpi__label">Seated</p>
+                <p className="sfx-kpi__value">{kpiDining}</p>
+                <p className="sfx-kpi__label">Dining</p>
               </article>
 
               <article className="sfx-kpi" style={{ borderTop: "3px solid #7c5cbf" }}>
@@ -1091,6 +1093,25 @@ function ReservationManagement({ user, toast, refreshKey }) {
                 </div>
 
                 <div style={{ flex: 1 }}></div>
+
+                {/* Add Walk-in button */}
+                <button
+                  type="button"
+                  onClick={() => setWalkInOpen(true)}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 7,
+                    padding: "9px 16px", borderRadius: 10,
+                    background: "linear-gradient(135deg,#059669 0%,#047857 100%)",
+                    color: "#fff", border: "none", cursor: "pointer",
+                    fontSize: 13, fontWeight: 700, whiteSpace: "nowrap",
+                    boxShadow: "0 2px 8px rgba(5,150,105,0.28)",
+                    transition: "all 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 4px 14px rgba(5,150,105,0.4)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(5,150,105,0.28)"; e.currentTarget.style.transform = "translateY(0)"; }}
+                >
+                  Add Walk-in
+                </button>
 
                 <div
                   className={`staff-reservations-toolbar__date${pickerOpen ? " is-open" : ""}`}
@@ -1403,6 +1424,14 @@ function ReservationManagement({ user, toast, refreshKey }) {
           </div>
         )}
       </div>
+      {walkInOpen && (
+        <AddWalkInModal
+          user={user}
+          toast={toast}
+          onClose={() => setWalkInOpen(false)}
+          onCreated={() => { loadReservations(); }}
+        />
+      )}
     </>
   );
 }

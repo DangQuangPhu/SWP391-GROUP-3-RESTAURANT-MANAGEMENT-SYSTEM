@@ -77,7 +77,7 @@ router.post('/verify-deposit/:reservationId', async (req, res) => {
     const { reservation_status, order_code, deposit_amount } = result.recordset[0];
 
     // If already paid/confirmed, return success immediately
-    const alreadyPaidStatuses = ['Confirmed', 'Completed', 'Check-in', 'Seated'];
+    const alreadyPaidStatuses = ['Confirmed', 'Completed', 'Check-in', 'Dining'];
     if (alreadyPaidStatuses.includes(reservation_status)) {
       return res.json({ success: true, already_paid: true, status: reservation_status });
     }

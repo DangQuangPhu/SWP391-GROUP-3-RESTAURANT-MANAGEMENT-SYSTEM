@@ -175,7 +175,7 @@ export const updateStaffAccount = async (req, res) => {
                         .query(`
                             SELECT 1 FROM dbo.Reservations r
                             LEFT JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
-                            WHERE r.reservation_status IN (N'Check-in', N'Seated', N'Payment Pending')
+                            WHERE r.reservation_status IN (N'Check-in', N'Dining', N'Payment Pending')
                             AND (r.confirmed_by_staff_id = @userId OR rt.assigned_by_staff_id = @userId)
                         `);
                     if (restaurantCheck.recordset.length > 0) {
@@ -295,7 +295,7 @@ export const deleteStaffAccount = async (req, res) => {
                     .query(`
                         SELECT 1 FROM dbo.Reservations r
                         LEFT JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
-                        WHERE r.reservation_status IN (N'Check-in', N'Seated', N'Payment Pending')
+                        WHERE r.reservation_status IN (N'Check-in', N'Dining', N'Payment Pending')
                         AND (r.confirmed_by_staff_id = @userId OR rt.assigned_by_staff_id = @userId)
                     `);
                 if (restaurantCheck.recordset.length > 0) {

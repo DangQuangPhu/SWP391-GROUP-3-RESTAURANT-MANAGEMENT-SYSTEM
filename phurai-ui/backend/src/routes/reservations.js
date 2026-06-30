@@ -363,7 +363,7 @@ router.get("/availability", async (req, res) => {
              JOIN dbo.Reservations r ON rt.reservation_id = r.reservation_id
              WHERE rt.table_id = t.table_id
                AND (
-                 r.reservation_status IN (N'Confirmed', N'Reserved', N'Seated')
+                 r.reservation_status IN (N'Confirmed', N'Reserved', N'Dining')
                  OR
                  (r.reservation_status IN (N'Pending Request', N'Pending Payment') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
                )
@@ -804,7 +804,7 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
                    ON rt.reservation_id = r.reservation_id
                  WHERE rt.table_id = t.table_id
                    AND (
-                     r.reservation_status IN (N'Confirmed', N'Reserved', N'Seated')
+                     r.reservation_status IN (N'Confirmed', N'Reserved', N'Dining')
                      OR
                      (r.reservation_status IN (N'Pending Request', N'Pending Payment') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
                    )

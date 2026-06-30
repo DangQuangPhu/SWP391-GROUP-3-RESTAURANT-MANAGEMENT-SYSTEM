@@ -1,5 +1,120 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   ReservationStatusBadge — Premium CSS Token System
+   NO icons. Clean, modern pill badges with refined HSL color palette.
+   Glow-pulse animation for actionable states only.
+───────────────────────────────────────────────────────────────────────────── */
+
+/* Base pill */
+.rsb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: opacity 0.2s;
+  cursor: default;
+  user-select: none;
+}
+
+/* Sizes */
+.rsb--md { padding: 4px 10px; font-size: 12px; }
+.rsb--sm { padding: 3px 8px;  font-size: 11px; }
+
+/* ── Color Tokens ─────────────────────────────────────────────────────────── */
+
+/* Amber — Pending Request, Awaiting Deposit, Payment Pending */
+.rsb--amber {
+  background: hsl(38 96% 93%);
+  color:      hsl(32 95% 32%);
+  border-color: hsl(38 92% 82%);
+}
+
+/* Blue — Confirmed */
+.rsb--blue {
+  background: hsl(224 100% 94%);
+  color:      hsl(224 72% 38%);
+  border-color: hsl(224 90% 84%);
+}
+
+/* Purple/Violet — Check-in */
+.rsb--purple {
+  background: hsl(270 90% 94%);
+  color:      hsl(270 72% 38%);
+  border-color: hsl(270 80% 84%);
+}
+
+/* Emerald/Green — Dining, Completed(active) */
+.rsb--green {
+  background: hsl(152 76% 91%);
+  color:      hsl(152 72% 24%);
+  border-color: hsl(152 65% 77%);
+}
+
+/* Muted gray-green — Completed (terminal) */
+.rsb--muted {
+  background: hsl(148 20% 92%);
+  color:      hsl(148 20% 38%);
+  border-color: hsl(148 15% 82%);
+}
+
+/* Red — Cancelled, No Show, Rejected */
+.rsb--red {
+  background: hsl(0 86% 94%);
+  color:      hsl(0 72% 38%);
+  border-color: hsl(0 82% 84%);
+}
+
+/* Flash — live payment event (legacy isFlashing prop) */
+.rsb--flash {
+  background: hsl(152 72% 44%);
+  color:      #ffffff;
+  border-color: hsl(152 72% 36%);
+  animation: rsb-flash-glow 1.5s infinite;
+}
+
+/* ── Pulse animations ─────────────────────────────────────────────────────── */
+
+/* Amber glow pulse (Pending Request, Payment Pending) */
+.rsb--amber.rsb--pulse {
+  animation: rsb-pulse-amber 2.2s ease-in-out infinite;
+}
+@keyframes rsb-pulse-amber {
+  0%, 100% { box-shadow: 0 0 0 0 hsla(38, 95%, 55%, 0); }
+  50%       { box-shadow: 0 0 0 4px hsla(38, 95%, 55%, 0.22); }
+}
+
+/* Purple glow pulse (Check-in) */
+.rsb--purple.rsb--pulse {
+  animation: rsb-pulse-purple 2s ease-in-out infinite;
+}
+@keyframes rsb-pulse-purple {
+  0%, 100% { box-shadow: 0 0 0 0 hsla(270, 80%, 55%, 0); }
+  50%       { box-shadow: 0 0 0 4px hsla(270, 80%, 55%, 0.22); }
+}
+
+/* Emerald glow pulse (Dining — revenue-generating, highest priority) */
+.rsb--green.rsb--pulse {
+  animation: rsb-pulse-green 1.8s ease-in-out infinite;
+}
+@keyframes rsb-pulse-green {
+  0%, 100% { box-shadow: 0 0 0 0 hsla(152, 72%, 40%, 0); }
+  50%       { box-shadow: 0 0 0 5px hsla(152, 72%, 40%, 0.25); }
+}
+
+/* Green flash (legacy payment event) */
+@keyframes rsb-flash-glow {
+  0%   { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70%  { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+/* Legacy sfxBadgePulse (kept for backward compat) */
 @keyframes sfxBadgePulse {
-  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-  70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+  0%   { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70%  { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
   100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }

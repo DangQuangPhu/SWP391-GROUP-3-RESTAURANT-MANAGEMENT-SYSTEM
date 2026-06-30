@@ -119,7 +119,7 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
       if (paymentDetectedRef.current) return;
       const targetId = payload.reservationId || payload.reservation_id || payload.id;
       // 'Confirmed' is the canonical paid/awaiting-check-in state in the new enum
-      const paidStatuses = ['Confirmed', 'Completed', 'Check-in', 'Seated', 'Await Check-in', 'Reserved', 'Paid', 'Complete Paid'];
+      const paidStatuses = ['Confirmed', 'Completed', 'Check-in', 'Dining', 'Await Check-in', 'Reserved', 'Paid', 'Complete Paid'];
       if (Number(targetId) === Number(reservation.reservation_id) && paidStatuses.includes(payload.status)) {
         console.log('[Payment] Socket PAYMENT_SUCCESS: confirmed', payload.status);
         handlePaymentDetected.current();
@@ -170,7 +170,7 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
         // apiGet returns the JSON body directly: { success: true, data: { status: '...' } }
         const status = res?.data?.status;
         console.log('[Payment] Poll status:', status);
-        const paidStatuses = ['Confirmed', 'Completed', 'Check-in', 'Seated', 'Await Check-in', 'Reserved'];
+        const paidStatuses = ['Confirmed', 'Completed', 'Check-in', 'Dining', 'Await Check-in', 'Reserved'];
         const cancelStatuses = ['Cancelled', 'Rejected', 'PaymentFailed'];
         if (paidStatuses.includes(status)) {
           clearInterval(intervalId);

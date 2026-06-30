@@ -17,8 +17,6 @@ import { RESERVATION_STATUS_META, RESERVATION_STATUS, FILTER_GROUPS, ALL_RESERVA
 import { getReservationsFilterFromSearch } from "../../config/managerRoutes.js";
 import {
   confirmReservation, rejectReservation, cancelReservation, getReservationDetails, updateReservation, getReservationHistory, resolveEditRequest,
-  seedTestReservations,
-  clearTestReservations
 } from "../../services/managerApi.js";
 import { useManagerPortal } from "../../context/ManagerPortalContext.jsx";
 import ReservationStatusBadge from "@/components/shared/ReservationStatusBadge.jsx";
@@ -122,8 +120,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
   const [cancelModal, setCancelModal] = useState(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
-  const [addingTest, setAddingTest] = useState(false);
-  const [deletingTest, setDeletingTest] = useState(false);
+
 
   /* ── Assign Table drawer state ── */
   const confirmingRef = useRef(new Set()); // guard against double-submit
@@ -650,60 +647,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
 
           <div style={{ flex: 1 }}></div>
 
-          {/* Add/Delete Mock Data buttons */}
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              disabled={addingTest || deletingTest}
-              onClick={async () => {
-                setAddingTest(true);
-                try {
-                  const res = await seedTestReservations(user?.user_id);
-                  toast(res.message || `✓ 10 mock records successfully seeded into SQL Database.`, "success");
-                  // Trigger UI reload (Using event since useManagerStore isn't implemented)
-                  window.dispatchEvent(new Event("phurai_manager_refresh"));
-                } catch (e) {
-                  toast("Error: " + (e?.message || "unknown"), "error");
-                } finally {
-                  setAddingTest(false);
-                }
-              }}
 
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "7px 14px", borderRadius: 9, border: "1px dashed #c9a86c",
-                background: "rgba(201,168,108,0.08)", color: "#9f7b3a",
-                fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap"
-              }}
-            >
-              {addingTest ? "Adding…" : "＋ Add Mock Data"}
-            </button>
-            <button
-              type="button"
-              disabled={addingTest || deletingTest}
-              onClick={async () => {
-                setDeletingTest(true);
-                try {
-                  const res = await clearTestReservations(user?.user_id);
-                  toast(res.message || `✓ All mock data successfully purged from database.`, "success");
-                  // Trigger UI reload
-                  window.dispatchEvent(new Event("phurai_manager_refresh"));
-                } catch (e) {
-                  toast("Error: " + (e?.message || "unknown"), "error");
-                } finally {
-                  setDeletingTest(false);
-                }
-              }}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "7px 14px", borderRadius: 9, border: "1px dashed #ef4444",
-                background: "rgba(239,68,68,0.08)", color: "#dc2626",
-                fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap"
-              }}
-            >
-              {deletingTest ? "Deleting…" : "− Delete Mock Data"}
-            </button>
-          </div>
 
           <div className={`staff-reservations-toolbar__date${pickerOpen ? " is-open" : ""}`} style={{ marginLeft: "auto", position: "relative" }}>
             <button

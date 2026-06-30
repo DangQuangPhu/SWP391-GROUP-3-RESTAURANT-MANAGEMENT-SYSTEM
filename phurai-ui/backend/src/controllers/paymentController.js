@@ -73,7 +73,7 @@ export const handleSepayWebhook = async (req, res) => {
 
         const reservation = resResult.recordset[0];
         // Guard: skip if already paid (Confirmed = paid & awaiting check-in in new enum)
-        const alreadyPaidStatuses = ['Confirmed', 'Completed', 'Check-in', 'Seated'];
+        const alreadyPaidStatuses = ['Confirmed', 'Completed', 'Check-in', 'Dining'];
         if (alreadyPaidStatuses.includes(reservation.reservation_status)) {
           await transaction.rollback();
           return res.status(200).json({ success: true, message: 'Webhook received, reservation is already confirmed/paid' });
@@ -359,7 +359,7 @@ export const handleSepayWebhook = async (req, res) => {
             .input('resId', sql.Int, order.reservation_id)
             .query(`
               INSERT INTO dbo.ReservationTimelines (reservation_id, status_from, status_to, note, created_at)
-              VALUES (@resId, N'Seated', N'Completed', N'Payment completed', SYSDATETIME())
+              VALUES (@resId, N'Dining', N'Completed', N'Payment completed', SYSDATETIME())
             `);
         }
 

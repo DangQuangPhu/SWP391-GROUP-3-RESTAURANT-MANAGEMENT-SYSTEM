@@ -12,8 +12,8 @@ async function patchLiveDb() {
       UPDATE dbo.Reservations SET reservation_status = 'Confirmed'
       WHERE reservation_status = 'Await Check-in';
 
-      UPDATE dbo.Reservations SET reservation_status = 'Seated'
-      WHERE reservation_status IN ('Check-in', 'Occupied');
+      UPDATE dbo.Reservations SET reservation_status = 'Dining'
+      WHERE reservation_status IN ('Check-in', 'Occupied', 'Seated');
 
       UPDATE dbo.Reservations SET reservation_status = 'Completed'
       WHERE reservation_status = 'Complete Paid';

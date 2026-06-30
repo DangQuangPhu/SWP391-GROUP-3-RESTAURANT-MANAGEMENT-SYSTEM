@@ -42,7 +42,7 @@ BEGIN
         VALUES (N'AutoMock ' + CAST(@days_ago AS NVARCHAR) + '-' + CAST(@i AS NVARCHAR), '0900000000', 
                 DATEADD(hour, 19, CAST(CAST(@current_date AS DATE) AS DATETIME2)), 
                 FLOOR(RAND() * 4) + 2, 
-                CASE WHEN @days_ago > 0 THEN N'Completed' ELSE N'Seated' END, 
+                CASE WHEN @days_ago > 0 THEN N'Completed' ELSE N'Dining' END, 
                 @current_date, @current_date);
         SET @i = @i + 1;
     END

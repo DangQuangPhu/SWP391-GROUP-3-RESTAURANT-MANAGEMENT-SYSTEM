@@ -58,7 +58,7 @@ function getPool() {
                   N'Awaiting Deposit', -- Chờ khách cọc tiền
                   N'Confirmed',        -- Đã duyệt/Đã cọc (Bàn sẽ chuyển sang Reserved)
                   N'Check-in',         -- Lễ tân đã xác nhận khách đến cửa
-                  N'Seated',           -- Khách đã vào bàn (Bàn sẽ chuyển sang Occupied)
+                  N'Dining',           -- Khách đang dùng bữa (Bàn sẽ chuyển sang Occupied)
                   N'Payment Pending',  -- Đang chờ thanh toán
                   N'Completed',        -- Đã thanh toán xong
                   N'Cancelled',        -- Hủy đơn

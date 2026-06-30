@@ -228,7 +228,7 @@ export async function listTodayReservations(req, res) {
          N'Pending Payment',
          N'Reserved',
          N'Confirmed',
-         N'Seated',
+         N'Dining',
          N'Cleaning',
          N'Check-out',
          N'Completed',
@@ -796,7 +796,7 @@ export async function resetTable(req, res) {
       `SELECT r.reservation_id, r.reservation_status 
        FROM dbo.Reservations r
        JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
-       WHERE rt.table_id = ? AND r.reservation_status IN (N'Seated', N'Cleaning', N'Check-out');`,
+       WHERE rt.table_id = ? AND r.reservation_status IN (N'Dining', N'Cleaning', N'Check-out');`,
       [tableId]
     );
 
@@ -1699,7 +1699,7 @@ export async function getTableBill(req, res) {
       `SELECT TOP 1 r.reservation_id, r.deposit_amount, r.final_total, r.applied_promo_code, r.order_code
        FROM dbo.Reservations r
        INNER JOIN dbo.ReservationTables rt ON rt.reservation_id = r.reservation_id
-       WHERE rt.table_id = ? AND r.reservation_status IN (N'Seated', N'Cleaning')`,
+       WHERE rt.table_id = ? AND r.reservation_status IN (N'Dining', N'Cleaning')`,
       [tableId]
     );
 
@@ -1929,7 +1929,7 @@ export async function checkoutTablePayment(req, res) {
       `SELECT TOP 1 r.reservation_id, r.deposit_amount, r.final_total, r.applied_promo_code, r.order_code
        FROM dbo.Reservations r
        INNER JOIN dbo.ReservationTables rt ON rt.reservation_id = r.reservation_id
-       WHERE rt.table_id = ? AND r.reservation_status IN (N'Seated', N'Cleaning')`,
+       WHERE rt.table_id = ? AND r.reservation_status IN (N'Dining', N'Cleaning')`,
       [tableId]
     );
 
@@ -2073,15 +2073,15 @@ export async function checkoutTablePayment(req, res) {
           `SELECT TOP 1 r.reservation_id, r.reservation_status
            FROM dbo.Reservations r
            INNER JOIN dbo.ReservationTables rt ON rt.reservation_id = r.reservation_id
-           WHERE rt.table_id = ? AND r.reservation_status IN (N'Seated', N'Cleaning')`,
+           WHERE rt.table_id = ? AND r.reservation_status IN (N'Dining', N'Cleaning')`,
           [tableId]
         );
         if (occupiedRows.length > 0) {
           const resId = occupiedRows[0].reservation_id;
           let currentStatus = occupiedRows[0].reservation_status;
 
-          // Transition directly from Seated -> Completed (which is RESERVATION_STATUS.COMPLETED)
-          if (currentStatus === RESERVATION_STATUS.SEATED) {
+          // Transition directly from Dining -> Completed (which is RESERVATION_STATUS.COMPLETED)
+          if (currentStatus === RESERVATION_STATUS.DINING) {
             await updateReservationStatus({
               connection: checkoutConn,
               reservationId: resId,

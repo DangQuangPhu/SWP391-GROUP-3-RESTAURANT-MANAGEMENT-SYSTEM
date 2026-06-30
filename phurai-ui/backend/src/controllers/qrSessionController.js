@@ -232,7 +232,7 @@ export async function scanStaticQr(req, res) {
         `SELECT TOP 1 r.reservation_id, r.customer_id
          FROM dbo.ReservationTables rt
          JOIN dbo.Reservations r ON rt.reservation_id = r.reservation_id
-         WHERE rt.table_id = ? AND r.reservation_status IN (N'Check-in', N'Seated')
+         WHERE rt.table_id = ? AND r.reservation_status IN (N'Check-in', N'Dining')
          ORDER BY r.reservation_id DESC`,
         [resolvedTableId]
       );
@@ -390,7 +390,7 @@ export async function scanStaticQrCodeUrl(req, res) {
         `SELECT TOP 1 r.reservation_id, r.customer_id
          FROM dbo.ReservationTables rt
          JOIN dbo.Reservations r ON rt.reservation_id = r.reservation_id
-         WHERE rt.table_id = ? AND r.reservation_status IN (N'Check-in', N'Seated')
+         WHERE rt.table_id = ? AND r.reservation_status IN (N'Check-in', N'Dining')
          ORDER BY r.reservation_id DESC`,
         [resolvedTableId]
       );

@@ -113,7 +113,7 @@ const DDL = [
     CONSTRAINT CK_Reservations_guest_count CHECK (guest_count > 0),
     CONSTRAINT CK_Reservations_time CHECK (reservation_end_at > reservation_start_at),
     CONSTRAINT CK_Reservations_status CHECK (reservation_status IN
-        (N'Pending Request', N'Awaiting Deposit', N'Confirmed', N'Check-in', N'Seated', N'Payment Pending', N'Completed', N'Cancelled', N'No Show')),
+        (N'Pending Request', N'Awaiting Deposit', N'Confirmed', N'Check-in', N'Dining', N'Payment Pending', N'Completed', N'Cancelled', N'No Show')),
     CONSTRAINT CK_Reservations_source CHECK (reservation_source IN (N'Online', N'Walk-in', N'Phone'))
   )`,
   `CREATE TABLE dbo.ReservationTables (

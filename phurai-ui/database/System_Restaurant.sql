@@ -346,7 +346,7 @@ CREATE TABLE dbo.Reservations (
     CONSTRAINT CK_Reservations_time CHECK (reservation_end_at > reservation_start_at),
     CONSTRAINT CK_Reservations_status CHECK (reservation_status IN (
         N'Pending Request', N'Awaiting Deposit', N'Confirmed', 
-        N'Check-in', N'Seated', N'Payment Pending', 
+        N'Check-in', N'Dining', N'Payment Pending', 
         N'Completed', N'Cancelled', N'No Show'
     )),
     CONSTRAINT CK_Reservations_source CHECK (reservation_source IN (N'Online', N'Walk-in', N'Phone')),
@@ -1116,7 +1116,7 @@ VALUES
 (10, 8, NULL, 4, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 4, N'[Dining Purpose: Business] window seat', N'Pending Request', N'Online', NULL, NULL, NULL),
 (11, 9, NULL, 2, '2026-06-24T12:00:00', '2026-06-24T14:00:00', 3, N'[Dining Purpose: Casual Dining]', N'Awaiting Deposit', N'Online', NULL, NULL, NULL),
 (12, 10, NULL, 5, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 6, N'[Dining Purpose: Birthday] extra cake', N'Check-in', N'Online', 4, '2026-06-24T08:00:00', '2026-06-24T19:55:00'),
-(13, NULL, 3, 2, '2026-06-24T18:00:00', '2026-06-24T20:00:00', 2, N'[Dining Purpose: Anniversary]', N'Seated', N'Walk-in', 3, '2026-06-24T17:55:00', '2026-06-24T18:00:00'),
+(13, NULL, 3, 2, '2026-06-24T18:00:00', '2026-06-24T20:00:00', 2, N'[Dining Purpose: Anniversary]', N'Dining', N'Walk-in', 3, '2026-06-24T17:55:00', '2026-06-24T18:00:00'),
 (14, 7, NULL, 2, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 2, N'[Dining Purpose: Casual Dining]', N'Payment Pending', N'Online', 3, '2026-06-20T10:00:00', '2026-06-24T18:55:00'),
 (15, 8, NULL, 4, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 4, N'[Dining Purpose: Celebration]', N'Completed', N'Online', 4, '2026-06-20T09:30:00', '2026-06-24T19:55:00'),
 (16, 10, NULL, 1, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 3, N'[Dining Purpose: Casual Date]', N'Cancelled', N'Online', 3, '2026-06-20T10:00:00', NULL),
@@ -1298,7 +1298,7 @@ VALUES
  '127.0.0.1', '2026-06-18T10:05:00'),
 (3, 4, N'ASSIGN_TABLE',               N'Reservations', 12,
  N'{"reservation_status":"Check-in","table_id":null}',
- N'{"reservation_status":"Seated","table_id":10}',
+ N'{"reservation_status":"Dining","table_id":10}',
  '127.0.0.1', '2026-06-24T19:55:00');
 SET IDENTITY_INSERT dbo.AuditLogs OFF;
 GO
@@ -1487,7 +1487,7 @@ BEGIN
                 DATEADD(hour, 19, CAST(CAST(@current_date AS DATE) AS DATETIME2)), 
                 DATEADD(hour, 21, CAST(CAST(@current_date AS DATE) AS DATETIME2)), 
                 FLOOR(RAND() * 4) + 2, 
-                CASE WHEN @days_ago > 0 THEN N'Completed' ELSE N'Seated' END, 
+                CASE WHEN @days_ago > 0 THEN N'Completed' ELSE N'Dining' END, 
                 @current_date, @current_date);
         SET @i = @i + 1;
     END

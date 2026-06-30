@@ -36,6 +36,7 @@ import {
   sendCookingQueue,
   transferReservationTable,
   assignTable,
+  createWalkInReservation,
 } from "../controllers/staffReservationController.js";
 import {
   mergeTables,
@@ -70,6 +71,13 @@ router.post(
   resolveUserId,
   requireUserId,
   checkinReservation
+);
+
+router.post(
+  "/reservations/walk-in",
+  resolveUserId,
+  requireUserId,
+  createWalkInReservation
 );
 
 router.post(
