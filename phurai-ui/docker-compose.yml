@@ -69,6 +69,7 @@ services:
       DB_SERVER: db
       DB_ENCRYPT: "false"
       DB_TRUST_SERVER_CERTIFICATE: "true"
+      DB_PASSWORD: PhuraiLocal@2026  # Override to match local MSSQL SA password below
     ports:
       - "${PORT:-5001}:5001"
     depends_on:
@@ -89,10 +90,11 @@ services:
   # ---------------------------------------------------------------------------
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64   # Required for Apple Silicon (M1/M2/M3) via Rosetta
     container_name: phurai-mssql
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: ${DB_PASSWORD:-Phudeptrai@2026}
+      MSSQL_SA_PASSWORD: PhuraiLocal@2026  # Hard-coded: avoids Docker Compose v5 substitution issues
       MSSQL_PID: Developer
     ports:
       - "1433:1433"
@@ -102,7 +104,7 @@ services:
     profiles:
       - local
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"${DB_PASSWORD:-Phudeptrai@2026}\" -C -Q \"SELECT 1\" || exit 1"]
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'PhuraiLocal@2026' -C -Q 'SELECT 1' || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 5

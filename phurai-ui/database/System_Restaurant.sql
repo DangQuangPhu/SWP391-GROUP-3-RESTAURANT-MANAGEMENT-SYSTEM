@@ -473,7 +473,7 @@ CREATE TABLE dbo.OrderItems (
     updated_at      DATETIME2(0) NOT NULL CONSTRAINT DF_OrderItems_updated_at DEFAULT SYSDATETIME(),
     CONSTRAINT PK_OrderItems PRIMARY KEY (order_item_id),
     CONSTRAINT FK_OrderItems_Orders FOREIGN KEY (order_id) REFERENCES dbo.Orders(order_id) ON DELETE CASCADE,
-    CONSTRAINT FK_OrderItems_Dishes FOREIGN KEY (dish_id) REFERENCES dbo.Dishes(dish_id) ON DELETE CASCADE,
+    CONSTRAINT FK_OrderItems_Dishes FOREIGN KEY (dish_id) REFERENCES dbo.Dishes(dish_id) ON DELETE NO ACTION,
     CONSTRAINT CK_OrderItems_quantity CHECK (quantity > 0),
     CONSTRAINT CK_OrderItems_unit_price CHECK (unit_price >= 0),
     CONSTRAINT CK_OrderItems_status CHECK (item_status IN

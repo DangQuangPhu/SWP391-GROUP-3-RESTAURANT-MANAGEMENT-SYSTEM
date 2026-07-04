@@ -1,53 +1,101 @@
-# React + Vite
+# Phurai Restaurant Management System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## 🚀 Quick Start (Local Development)
 
-Currently, two official plugins are available:
+### Yêu cầu
+- **Docker Desktop** (v4.0+) với Docker Compose v2
+- **macOS** (Intel hoặc Apple Silicon M1/M2/M3), **Windows** (WSL2), hoặc **Linux**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+> ⚠️ Dùng `docker compose` (có space) — **KHÔNG** dùng `docker-compose` (có gạch nối, phiên bản cũ)
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Setup lần đầu (1 lệnh)
 
-## Expanding the ESLint configuration
+```bash
+cd phurai-ui
+bash scripts/setup-local.sh
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Script sẽ tự động:
+1. 🐳 Khởi động MSSQL Server (Docker container)
+2. ⏳ Chờ đến khi SQL Server sẵn sàng
+3. 🗄️ Chạy file SQL để tạo database + seed data
+4. 🚀 Khởi động backend + frontend app
 
-## Auth Setup
+**App sẽ chạy tại:** `http://localhost:5001`
 
-Files already prepared in this repo:
+---
 
-- Frontend env: `.env`
-- Frontend env template: `.env.example`
-- Backend env template: `server/.env.example`
-- Backend env file: `server/.env`
+### Các lệnh thường dùng
 
-Values you still must replace with real credentials:
+```bash
+# Xem logs
+docker logs phurai-app-local -f
 
-- `VITE_GOOGLE_CLIENT_ID` in `.env`
-- `GOOGLE_CLIENT_ID` in `server/.env`
-- `DB_PASSWORD` and other `DB_*` values in `server/.env`
-- `SMTP_USER` and `SMTP_PASS` in `server/.env`
+# Dừng toàn bộ
+docker compose --profile local down
 
-Required Google Cloud setup:
+# Reset database (xóa sạch và tạo lại)
+docker compose --profile local down -v
+bash scripts/setup-local.sh
 
-1. Create an OAuth 2.0 Client ID of type `Web application`.
-2. Add `http://localhost:5173` to `Authorized JavaScript origins`.
-3. Copy the generated client id into both frontend and backend env files.
+# Rebuild app sau khi thay đổi code
+docker compose --profile local down
+docker compose --profile local up --build -d db
+# chờ healthy, sau đó:
+bash scripts/setup-local.sh
+```
 
-Current behavior:
+---
 
-1. `Sign in with Google` opens the Google account chooser.
-2. After the user selects an account, frontend sends the Google access token to `POST /api/google`.
-3. Backend validates the token with Google and returns the normalized user.
-4. Google sign-in does not go through OTP.
-5. Email/password register creates records in `Users`, `UserProfiles`, `UserRoles`, `Customers`, and `OtpTokens`.
-6. Email verification activates the account through `/api/verify`.
+### Thông tin kết nối local DB
 
-What is still blocked outside the repo:
+| Field    | Value             |
+|----------|-------------------|
+| Host     | `localhost`       |
+| Port     | `1433`            |
+| Database | `System_Restaurant` |
+| User     | `sa`              |
+| Password | `PhuraiLocal@2026` |
 
-- Real Google OAuth cannot work until you provide a real Google client id.
-- Real database persistence cannot work until your MySQL server is running and `server/.env` has valid DB credentials.
-- Real email sending cannot work until SMTP credentials are valid.
+---
+
+### Profiles Docker Compose
+
+| Profile | Lệnh | Dùng khi |
+|---------|------|----------|
+| `local` | `docker compose --profile local up` | Dev offline, local MSSQL |
+| `cloud` | `docker compose --profile cloud up` | Connect Azure SQL |
+
+---
+
+### Troubleshooting
+
+#### `no service selected`
+Phải chỉ định profile: `docker compose --profile local up`
+
+#### `health: starting` mãi không đổi (Apple Silicon)
+MSSQL chạy qua Rosetta emulation, cần ~60s. Cứ chờ.
+
+#### `Login failed for user 'sa'`
+Có thể volume cũ với password khác. Chạy: `docker compose --profile local down -v` rồi setup lại.
+
+#### `Exception in thread Thread-4 (watch_events): KeyError: 'id'`
+Đây là bug của `docker-compose` v1 (Python), **không phải lỗi app**. Dùng `docker compose` (v2) thay thế.
+
+---
+
+### Profiles & môi trường
+
+- **`.env`** — Cấu hình runtime (Azure SQL production, SMTP, JWT...)
+- **`docker-compose.yml`** — Profile `local` dùng MSSQL container riêng, override `DB_SERVER` và `DB_PASSWORD`
+- **`database/System_Restaurant.sql`** — Schema + seed data
+
+---
+
+### GitHub Actions (CI/CD)
+
+Push lên branch `main` tự động:
+- Build Docker image cho **linux/amd64** và **linux/arm64**
+- Push lên GitHub Container Registry (`ghcr.io`)
