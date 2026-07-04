@@ -1,5 +1,5 @@
 import express from 'express';
-import { getMenu, createDish, updateDish, deleteDish, syncMenu } from '../controllers/menuController.js';
+import { getMenu, createDish, updateDish, deleteDish, syncMenu, deactivateDish } from '../controllers/menuController.js';
 import { authMiddleware } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -21,6 +21,7 @@ router.get('/sync', syncMenu);
 router.use(authMiddleware);
 router.post('/', requireManagerOrAdmin, createDish);
 router.put('/:id', requireManagerOrAdmin, updateDish);
+router.patch('/:id/deactivate', requireManagerOrAdmin, deactivateDish); // Soft-disable/enable
 router.delete('/:id', requireManagerOrAdmin, deleteDish);
 
 router.get('/fix-404', async (req, res) => {

@@ -17,7 +17,7 @@ import { getIO } from "../socket.js";
 import { resolveShift } from "../services/shiftResolver.js";
 import { sendBookingConfirmationEmail, sendBookingEditedEmail, sendManagerCancelledEmail, sendEditConfirmedEmail, sendEditRejectedEmail } from "../email.js";
 import { updateReservationStatus } from "../services/reservationStateService.js";
-import { RESERVATION_STATUS } from "../../../frontend/src/shared/reservationStatus.js";
+import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
 
 // ============================================================================
 // STATE MACHINE CONSTANTS (must match CK_Reservations_status in SQL)

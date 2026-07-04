@@ -24,7 +24,8 @@ import {
 import {
     createDish,
     updateDish,
-    deleteDish
+    deleteDish,
+    deactivateDish
 } from '../controllers/menuController.js';
 import {
     createTable,
@@ -48,6 +49,7 @@ import {
 import { approveQrSession } from '../controllers/qrSessionController.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { validateReservationUpdate } from '../middleware/validateReservation.js';
+import { createArea, updateArea, deactivateArea } from '../controllers/areaController.js';
 
 const router = express.Router();
 
@@ -62,6 +64,9 @@ const requireManagerOrAdmin = (req, res, next) => {
 router.patch('/qr-sessions/:id/approve', requireManagerOrAdmin, approveQrSession);
 router.post('/orders/:id/force-settle', requireManagerOrAdmin, forceSettleOrder);
 router.get('/areas', requireManagerOrAdmin, getAreas);
+router.post('/areas', requireManagerOrAdmin, createArea);
+router.patch('/areas/:id', requireManagerOrAdmin, updateArea);
+router.delete('/areas/:id', requireManagerOrAdmin, deactivateArea);
 router.get('/tables-filtered', requireManagerOrAdmin, getFilteredTables);
 
 // Mock Data routes (Manager Only)

@@ -4,7 +4,7 @@ import { writeAudit, ACTION } from '../services/audit.service.js';
 import { createError } from '../middleware/errorHandler.js';
 import { getCustomerBalance } from '../services/loyaltyService.js';
 
-import { RESERVATION_STATUS } from '../../../frontend/src/shared/reservationStatus.js';
+import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
 
 export async function submitReservation(req, res, next) {
   try {

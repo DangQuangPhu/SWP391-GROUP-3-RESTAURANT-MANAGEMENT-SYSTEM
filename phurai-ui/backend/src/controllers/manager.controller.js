@@ -3,7 +3,7 @@ import { resolveShift, getShiftStaff } from '../services/shift.service.js';
 import { saveNotification, TYPE }       from '../services/notification.service.js';
 import { writeAudit, ACTION }           from '../services/audit.service.js';
 import { createError }                  from '../middleware/errorHandler.js';
-import { RESERVATION_STATUS }           from '../../../frontend/src/shared/reservationStatus.js';
+import { RESERVATION_STATUS }           from '../constants/reservationStatus.js';
 
 export async function listReservations(req, res, next) {
   try {

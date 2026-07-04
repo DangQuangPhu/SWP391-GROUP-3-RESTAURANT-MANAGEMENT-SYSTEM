@@ -1,4 +1,4 @@
-import { canTransition } from '../../../frontend/src/shared/reservationStatus.js';
+import { canTransition } from '../constants/reservationStatus.js';
 import sql from 'mssql';
 import { getIO } from '../socket.js';
 

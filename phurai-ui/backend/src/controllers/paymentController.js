@@ -2,7 +2,7 @@ import sql from 'mssql';
 import { getRawPool } from '../db.js';
 import { getIO } from '../socket.js';
 import { sendReservationInvoiceEmail, sendCheckoutReceiptEmail } from '../email.js';
-import { RESERVATION_STATUS } from '../../../frontend/src/shared/reservationStatus.js';
+import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
 
 
 /**

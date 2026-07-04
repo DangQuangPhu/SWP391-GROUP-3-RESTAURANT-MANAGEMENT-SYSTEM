@@ -158,6 +158,39 @@ export async function deleteDish(req, res) {
   }
 }
 
+/**
+ * PATCH /api/manager/menu/:id/deactivate
+ * Soft-deactivation: sets is_available = 0 without deleting.
+ * Safer than hard delete when dish has order history.
+ */
+export async function deactivateDish(req, res) {
+  try {
+    const { id } = req.params;
+    const { reactivate } = req.query; // ?reactivate=true to toggle back on
+
+    const [existing] = await pool.query('SELECT dish_id, is_available FROM dbo.Dishes WHERE dish_id = ?', [id]);
+    if (!existing.length) {
+        return res.status(404).json({ success: false, message: 'Dish not found.' });
+    }
+
+    const newStatus = reactivate === 'true' ? 1 : 0;
+    const label = newStatus === 1 ? 'reactivated' : 'deactivated';
+
+    await pool.query(
+        'UPDATE dbo.Dishes SET is_available = ?, updated_at = SYSDATETIME() WHERE dish_id = ?',
+        [newStatus, id]
+    );
+
+    const io = req.app.get('io');
+    if (io) io.emit('menu:updated');
+
+    return res.json({ success: true, message: `Dish ${label} successfully.`, is_available: Boolean(newStatus) });
+  } catch (error) {
+    console.error('PATCH /api/manager/menu/:id/deactivate Error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to update dish availability.' });
+  }
+}
+
 export async function syncMenu(req, res) {
   try {
     const menuCategories = [

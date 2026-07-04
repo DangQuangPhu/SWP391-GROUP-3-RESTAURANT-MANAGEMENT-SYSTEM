@@ -190,17 +190,41 @@ export const markItemServed = async (req, res) => {
     try {
         const pool = await getRawPool();
         
-        // 1. Verify item exists and is not already Served
+        // 1. Verify item exists and enforce transition: only Ready → Served is allowed
         const currentItem = await pool.request()
             .input('orderItemId', sql.Int, orderItemId)
-            .query(`SELECT item_status FROM dbo.OrderItems WHERE order_item_id = @orderItemId`);
+            .query(`
+                SELECT oi.item_status, oi.order_id, oi.dish_id, kt.kitchen_ticket_id, kt.kitchen_status
+                FROM dbo.OrderItems oi
+                LEFT JOIN dbo.KitchenTickets kt ON kt.order_item_id = oi.order_item_id
+                WHERE oi.order_item_id = @orderItemId
+            `);
 
         if (currentItem.recordset.length === 0) {
             return res.status(404).json({ success: false, message: 'Order item not found.' });
         }
 
-        if (currentItem.recordset[0].item_status === 'Served') {
+        const { item_status, kitchen_status } = currentItem.recordset[0];
+
+        if (item_status === 'Served') {
             return res.status(409).json({ success: false, message: 'Item is already served.' });
+        }
+
+        if (item_status === 'Cancelled') {
+            return res.status(409).json({ success: false, message: 'Cannot serve a cancelled item.' });
+        }
+
+        // Enforce valid transition: must be Ready (from Kitchen) before marking Served
+        // Allow override if kitchen_status is Ready or if no ticket (walk-in without KDS)
+        const allowedFromStatuses = ['Ready', 'Pending', 'Preparing']; // staff can mark served once kitchen marks ready
+        if (kitchen_status && kitchen_status !== 'Ready' && kitchen_status !== 'Cancelled') {
+            // Only block if kitchen ticket exists and is not Ready
+            if (!['Ready'].includes(kitchen_status)) {
+                return res.status(409).json({
+                    success: false,
+                    message: `Cannot mark as served yet. Kitchen status is "${kitchen_status}". Wait for kitchen to mark it Ready.`
+                });
+            }
         }
 
         // 2. Update item status to Served
@@ -217,7 +241,7 @@ export const markItemServed = async (req, res) => {
         await pool.request()
             .input('userId', sql.Int, staffUserId)
             .input('targetId', sql.Int, orderItemId)
-            .input('oldValue', sql.NVarChar(sql.MAX), JSON.stringify({ item_status: currentItem.recordset[0].item_status }))
+            .input('oldValue', sql.NVarChar(sql.MAX), JSON.stringify({ item_status }))
             .input('newValue', sql.NVarChar(sql.MAX), JSON.stringify({ item_status: 'Served' }))
             .input('ipAddress', sql.NVarChar(45), req.ip || '127.0.0.1')
             .query(`
@@ -225,11 +249,12 @@ export const markItemServed = async (req, res) => {
                 VALUES (@userId, N'MARK_ITEM_SERVED', N'OrderItems', @targetId, @oldValue, @newValue, @ipAddress, SYSDATETIME())
             `);
 
-        // Emit socket event if needed for front-of-house UI updates
+        // 4. Emit socket event
         const io = getIO();
         if (io) {
             io.to('room:staff').emit('orders:item_served', {
                 orderItemId: parseInt(orderItemId, 10),
+                previousStatus: item_status,
                 servedAt: new Date().toISOString()
             });
         }
@@ -258,6 +283,14 @@ export const checkoutOrder = async (req, res) => {
         return res.status(400).json({ success: false, message: 'table_id is required for checkout.' });
     }
 
+    // Validate quantity > 0 for all items upfront
+    for (const item of items) {
+        const qty = parseInt(item.quantity) || 0;
+        if (qty <= 0) {
+            return res.status(400).json({ success: false, message: 'All item quantities must be greater than 0.' });
+        }
+    }
+
     let pool;
     try {
         pool = await getRawPool();
@@ -269,10 +302,29 @@ export const checkoutOrder = async (req, res) => {
     await transaction.begin();
 
     try {
+        // Validate table exists and is Occupied or Reserved
+        const tableCheck = await transaction.request()
+            .input('tableId', sql.Int, parsedTableId)
+            .query(`SELECT table_id, table_status, table_number FROM dbo.RestaurantTables WHERE table_id = @tableId`);
+
+        if (tableCheck.recordset.length === 0) {
+            await transaction.rollback();
+            return res.status(404).json({ success: false, message: 'Table not found.' });
+        }
+        const tableStatus = tableCheck.recordset[0].table_status;
+        const tableNumber = tableCheck.recordset[0].table_number;
+        if (!['Occupied', 'Reserved'].includes(tableStatus)) {
+            await transaction.rollback();
+            return res.status(409).json({
+                success: false,
+                message: `Table is currently "${tableStatus}". Can only create orders for Occupied or Reserved tables.`
+            });
+        }
+
         let totalAmount = 0;
         const validItems = [];
 
-        // 1. Calculate securely from DB
+        // Validate dishes and calculate total
         for (const item of items) {
             const dishId = resolveCartDishId(item);
             if (!Number.isFinite(dishId) || dishId <= 0) {
@@ -282,61 +334,110 @@ export const checkoutOrder = async (req, res) => {
 
             const result = await transaction.request()
                 .input('dishId', sql.Int, dishId)
-                .query(`SELECT price FROM dbo.Dishes WHERE dish_id = @dishId`);
+                .query(`SELECT dish_id, dish_name, price, is_available FROM dbo.Dishes WHERE dish_id = @dishId`);
             
             if (result.recordset.length === 0) {
                 await transaction.rollback();
                 return res.status(400).json({ success: false, message: `Dish ID ${dishId} is invalid.` });
             }
 
-            const unitPrice = result.recordset[0].price;
-            const quantity = parseInt(item.quantity) || 1;
-            totalAmount += (unitPrice * quantity);
+            const dish = result.recordset[0];
+            if (dish.is_available === false || dish.is_available === 0) {
+                await transaction.rollback();
+                return res.status(409).json({ success: false, message: `"${dish.dish_name}" is currently unavailable.` });
+            }
 
-            validItems.push({
-                dish_id: dishId,
-                quantity,
-                unit_price: unitPrice
-            });
+            const unitPrice = Number(dish.price) || 0;
+            const quantity = parseInt(item.quantity) || 1;
+            const notes = String(item.notes || '').trim() || null;
+            totalAmount += unitPrice * quantity;
+
+            validItems.push({ dish_id: dishId, dish_name: dish.dish_name, quantity, unit_price: unitPrice, notes });
         }
 
-        // 2. Insert Order and use SCOPE_IDENTITY() to prevent trigger conflicts
+        // Insert Order
         const orderResult = await transaction.request()
             .input('tableId', sql.Int, parsedTableId)
+            .input('customerId', sql.Int, req.user?.user_id || null)
+            .input('subtotal', sql.Decimal(18, 2), totalAmount)
             .input('totalAmount', sql.Decimal(18, 2), totalAmount)
             .query(`
-                INSERT INTO dbo.Orders (table_id, subtotal, total_amount, order_status, created_at, updated_at)
-                VALUES (@tableId, @totalAmount, @totalAmount, N'Open', SYSDATETIME(), SYSDATETIME());
-                SELECT SCOPE_IDENTITY() AS order_id;
+                INSERT INTO dbo.Orders (table_id, customer_id, subtotal, total_amount, order_status, order_type, created_at, updated_at)
+                OUTPUT INSERTED.order_id
+                VALUES (@tableId, @customerId, @subtotal, @totalAmount, N'Sent To Kitchen', N'Dine-In', SYSDATETIME(), SYSDATETIME())
             `);
 
         const orderId = orderResult.recordset[0].order_id;
+        const createdItems = [];
 
-        // 3. Insert OrderItems
+        // Insert OrderItems + KitchenTickets (with idempotency check)
         for (const vItem of validItems) {
-            await transaction.request()
+            const itemResult = await transaction.request()
                 .input('orderId', sql.Int, orderId)
                 .input('dishId', sql.Int, vItem.dish_id)
                 .input('quantity', sql.Int, vItem.quantity)
                 .input('unitPrice', sql.Decimal(18, 2), vItem.unit_price)
+                .input('notes', sql.NVarChar(500), vItem.notes)
+                .input('tableNumber', sql.NVarChar(20), tableNumber)
                 .query(`
-                    INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, item_status)
-                    VALUES (@orderId, @dishId, @quantity, @unitPrice, N'Pending')
+                    INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, snapshot_table_name, item_status)
+                    OUTPUT INSERTED.order_item_id
+                    VALUES (@orderId, @dishId, @quantity, @unitPrice, @notes, @tableNumber, N'Pending')
                 `);
+
+            const orderItemId = itemResult.recordset[0].order_item_id;
+
+            // Idempotency: skip if ticket already exists for this order_item_id
+            const existingTicket = await transaction.request()
+                .input('orderItemId', sql.Int, orderItemId)
+                .query(`SELECT kitchen_ticket_id FROM dbo.KitchenTickets WHERE order_item_id = @orderItemId`);
+
+            let kitchenTicketId = null;
+            if (existingTicket.recordset.length === 0) {
+                const ticketResult = await transaction.request()
+                    .input('orderItemId', sql.Int, orderItemId)
+                    .query(`
+                        INSERT INTO dbo.KitchenTickets (order_item_id, kitchen_status, priority_level, sent_at)
+                        OUTPUT INSERTED.kitchen_ticket_id
+                        VALUES (@orderItemId, N'Pending', 3, SYSDATETIME())
+                    `);
+                kitchenTicketId = ticketResult.recordset[0].kitchen_ticket_id;
+            } else {
+                kitchenTicketId = existingTicket.recordset[0].kitchen_ticket_id;
+            }
+
+            createdItems.push({ ...vItem, order_item_id: orderItemId, kitchen_ticket_id: kitchenTicketId });
         }
 
         await transaction.commit();
 
-        // 4. Generate SePay QR URL dynamically
-        const sepayUrl = `https://qr.sepay.vn/img?bank=TPBank&acc=00003942326&amount=${totalAmount}&des=ORD${orderId}&template=&showinfo=true&holder=DANG%20QUANG%20PHU&store=PHURAI%20RESTAURANT`;
+        const payload = {
+            order_id: orderId,
+            table_id: parsedTableId,
+            table_number: tableNumber,
+            item_count: createdItems.reduce((sum, i) => sum + i.quantity, 0),
+            items: createdItems,
+        };
+
+        // Emit socket events for Kitchen and Staff dashboards
+        const io = req.app?.get?.('io') || getIO();
+        if (io) {
+            io.to('room:kitchen').emit('kitchen:new_ticket', payload);
+            io.to('room:kitchen').emit('NEW_KITCHEN_ORDER', payload);
+            io.to('room:staff').emit('orders:new_order', payload);
+        }
+
+        // Generate SePay QR URL for payment
+        const sepayUrl = `https://qr.sepay.vn/img?bank=TPBank&acc=00003942326&amount=${totalAmount}&des=DH${orderId}&template=&showinfo=true&holder=DANG%20QUANG%20PHU&store=PHURAI%20RESTAURANT`;
 
         return res.status(201).json({
             success: true,
-            message: 'Order created successfully. Please scan the QR to pay.',
+            message: 'Order sent to kitchen.',
             data: {
                 order_id: orderId,
                 total_amount: totalAmount,
-                qr_url: sepayUrl
+                qr_url: sepayUrl,
+                items: createdItems
             }
         });
 
@@ -489,5 +590,159 @@ export const applyVoucher = async (req, res) => {
         if (transaction) await transaction.rollback();
         console.error('[ordersController] applyVoucher error:', error);
         return res.status(500).json({ success: false, message: 'Failed to apply voucher', error: error.message });
+    }
+};
+
+// POST /api/payments/cash
+// Handles cash payment: accepts amount_paid, computes change, marks order Paid.
+export const processCashPayment = async (req, res) => {
+    const { order_id, amount_paid } = req.body;
+    const staffUserId = req.user?.user_id || null;
+
+    const parsedOrderId = Number(order_id);
+    const parsedAmountPaid = Number(amount_paid);
+
+    if (!Number.isFinite(parsedOrderId) || parsedOrderId <= 0) {
+        return res.status(400).json({ success: false, message: 'order_id is required.' });
+    }
+    if (!Number.isFinite(parsedAmountPaid) || parsedAmountPaid <= 0) {
+        return res.status(400).json({ success: false, message: 'amount_paid must be greater than 0.' });
+    }
+
+    let pool;
+    try {
+        pool = await getRawPool();
+    } catch (e) {
+        return res.status(500).json({ success: false, message: 'DB connection failed' });
+    }
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+        // 1. Fetch order and lock it
+        const orderRes = await transaction.request()
+            .input('orderId', sql.Int, parsedOrderId)
+            .query(`
+                SELECT order_id, order_status, total_amount, amount_paid AS already_paid,
+                       table_id, qr_session_id, reservation_id, customer_id
+                FROM dbo.Orders WITH (UPDLOCK)
+                WHERE order_id = @orderId
+            `);
+
+        if (orderRes.recordset.length === 0) {
+            await transaction.rollback();
+            return res.status(404).json({ success: false, message: 'Order not found.' });
+        }
+
+        const order = orderRes.recordset[0];
+
+        if (order.order_status === 'Paid') {
+            await transaction.rollback();
+            return res.status(409).json({ success: false, message: 'Order is already paid.' });
+        }
+        if (order.order_status === 'Cancelled') {
+            await transaction.rollback();
+            return res.status(409).json({ success: false, message: 'Cannot pay for a cancelled order.' });
+        }
+
+        const totalDue = Number(order.total_amount) - Number(order.already_paid || 0);
+
+        if (parsedAmountPaid < totalDue - 0.009) {
+            await transaction.rollback();
+            return res.status(400).json({
+                success: false,
+                message: `Insufficient amount. Total due: ${totalDue.toLocaleString('vi-VN')}₫. Received: ${parsedAmountPaid.toLocaleString('vi-VN')}₫.`,
+                data: { total_due: totalDue, amount_received: parsedAmountPaid }
+            });
+        }
+
+        const changeGiven = Math.max(0, parsedAmountPaid - totalDue);
+
+        // 2. Insert Payment record (method_id 1 = Cash)
+        await transaction.request()
+            .input('orderId', sql.Int, parsedOrderId)
+            .input('amountPaid', sql.Decimal(12, 2), parsedAmountPaid)
+            .input('changeGiven', sql.Decimal(12, 2), changeGiven)
+            .query(`
+                INSERT INTO dbo.Payments (order_id, payment_method_id, amount_paid, change_given, payment_status, paid_at, created_at, updated_at)
+                VALUES (@orderId, 1, @amountPaid, @changeGiven, N'Completed', SYSDATETIME(), SYSDATETIME(), SYSDATETIME())
+            `);
+
+        // 3. Mark Order as Paid
+        await transaction.request()
+            .input('orderId', sql.Int, parsedOrderId)
+            .input('amountPaid', sql.Decimal(12, 2), parsedAmountPaid)
+            .query(`
+                UPDATE dbo.Orders
+                SET order_status = N'Paid', amount_paid = ISNULL(amount_paid, 0) + @amountPaid, updated_at = SYSDATETIME()
+                WHERE order_id = @orderId
+            `);
+
+        // 4. Update table to Cleaning
+        if (order.table_id) {
+            await transaction.request()
+                .input('tableId', sql.SmallInt, order.table_id)
+                .query(`UPDATE dbo.RestaurantTables SET table_status = N'Cleaning', updated_at = SYSDATETIME() WHERE table_id = @tableId`);
+        }
+
+        // 5. Close QR session if exists
+        if (order.qr_session_id) {
+            await transaction.request()
+                .input('sessionId', sql.Int, order.qr_session_id)
+                .query(`UPDATE dbo.QROrderSessions SET session_status = N'Closed', closed_at = SYSDATETIME() WHERE qr_session_id = @sessionId`);
+        }
+
+        // 6. Complete reservation if linked
+        if (order.reservation_id) {
+            await transaction.request()
+                .input('resId', sql.Int, order.reservation_id)
+                .query(`
+                    UPDATE dbo.Reservations
+                    SET reservation_status = N'Completed', updated_at = SYSDATETIME()
+                    WHERE reservation_id = @resId;
+
+                    INSERT INTO dbo.ReservationTimelines (reservation_id, status_from, status_to, note, created_at)
+                    VALUES (@resId, N'Dining', N'Completed', N'Cash payment completed by staff', SYSDATETIME())
+                `);
+        }
+
+        // 7. Audit log
+        await transaction.request()
+            .input('userId', sql.Int, staffUserId)
+            .input('orderId', sql.Int, parsedOrderId)
+            .input('newValue', sql.NVarChar(sql.MAX), JSON.stringify({ method: 'Cash', amount_paid: parsedAmountPaid, change_given: changeGiven }))
+            .input('ip', sql.NVarChar(45), req.ip || '127.0.0.1')
+            .query(`
+                INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, ip_address, created_at)
+                VALUES (@userId, N'CASH_PAYMENT_COMPLETED', N'Orders', @orderId, @newValue, @ip, SYSDATETIME())
+            `);
+
+        await transaction.commit();
+
+        // 8. Emit socket events
+        const io = req.app?.get?.('io') || getIO();
+        if (io) {
+            const payload = { orderId: parsedOrderId, order_id: parsedOrderId, status: 'Paid', table_id: order.table_id, payment_method: 'Cash' };
+            io.emit('PAYMENT_STATUS_CHANGED', payload);
+            io.to('room:staff').to('room:manager').emit('table:status_changed', { tableId: order.table_id, status: 'Cleaning' });
+            io.to('room:kitchen').emit('kds:clear_order', { orderId: parsedOrderId });
+        }
+
+        return res.json({
+            success: true,
+            message: 'Cash payment processed successfully.',
+            data: {
+                order_id: parsedOrderId,
+                total_due: totalDue,
+                amount_paid: parsedAmountPaid,
+                change_given: changeGiven
+            }
+        });
+
+    } catch (error) {
+        if (transaction) await transaction.rollback();
+        console.error('[ordersController] processCashPayment error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to process cash payment.', error: error.message });
     }
 };

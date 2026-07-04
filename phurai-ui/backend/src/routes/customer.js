@@ -16,6 +16,7 @@ import {
   getCustomerOrdersByCategory,
   getCustomerRecentActivity
 } from "../controllers/customer.controller.js";
+import { getRecommendations } from "../controllers/recommendationController.js";
 
 const router = express.Router();
 
@@ -128,6 +129,18 @@ router.get(
   requireUserId,
   requireCustomer,
   getCustomerPaymentDetails
+);
+
+/**
+ * GET /api/customer/recommendations?limit=6
+ * UC-CU08 — Personalized dish recommendations
+ */
+router.get(
+  "/recommendations",
+  resolveUserId,
+  requireUserId,
+  requireCustomer,
+  getRecommendations
 );
 
 export default router;

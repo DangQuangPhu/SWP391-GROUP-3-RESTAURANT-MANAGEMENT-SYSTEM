@@ -1,5 +1,5 @@
 import pool from "../db.js";
-import { RESERVATION_STATUS } from "../../../frontend/src/shared/reservationStatus.js";
+import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
 import { updateReservationStatus } from "./reservationStateService.js";
 
 export const sweepNoShows = async () => {

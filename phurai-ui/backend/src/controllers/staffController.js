@@ -10,7 +10,7 @@ import {
 } from "../services/notificationService.js";
 import { getIO } from "../socket.js";
 import { updateReservationStatus } from "../services/reservationStateService.js";
-import { RESERVATION_STATUS } from "../../../frontend/src/shared/reservationStatus.js";
+import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
 
 function jsonOk(res, data, status = 200) {
   return res.status(status).json({ success: true, data });

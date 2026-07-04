@@ -46,6 +46,12 @@ import {
 } from "../controllers/tableMergeController.js";
 import { splitOrderItems } from "../controllers/staffOrderController.js";
 import { approveQrSession, rejectQrSession } from "../controllers/qrSessionController.js";
+import {
+  createTableRequest,
+  listTableRequests,
+  resolveTableRequest,
+  cancelOrderItem
+} from "../controllers/tableRequestController.js";
 
 const router = express.Router();
 
@@ -158,6 +164,12 @@ router.get("/kds/ready", getKdsReadyQueue);
 router.get("/kds/delayed", getKdsDelayedItems);
 router.get("/reports/summary", getShiftReportSummary);
 router.get("/reports/audit", getShiftReportAudit);
+
+// UC-S09: Table requests (customer call-staff, cancel-item, extra-note)
+router.post("/table-requests", resolveUserId, createTableRequest);
+router.get("/table-requests", resolveUserId, requireUserId, listTableRequests);
+router.patch("/table-requests/:logId/resolve", resolveUserId, requireUserId, resolveTableRequest);
+router.post("/table-requests/cancel-item", resolveUserId, requireUserId, cancelOrderItem);
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */

@@ -4,7 +4,7 @@ import { getIO } from "../socket.js";
 import { resolveShift } from "../services/shiftResolver.js";
 import { sendBookingCheckedInEmail, sendBookingRejectedEmail } from "../email.js";
 import { processPreordersToKds } from "../services/kdsIntegrationService.js";
-import { RESERVATION_STATUS } from "../../../frontend/src/shared/reservationStatus.js";
+import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
 
 
 // ──────────────────────────────────────────────────────────────────────────────

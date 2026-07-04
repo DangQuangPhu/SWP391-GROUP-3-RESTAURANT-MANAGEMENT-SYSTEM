@@ -13,7 +13,7 @@ import {
 import { notifyStaffNewCustomerAction } from "../services/notificationService.js";
 import { getIO } from "../socket.js";
 import { sendBookingConfirmationEmail } from "../email.js";
-import { RESERVATION_STATUS } from "../../../frontend/src/shared/reservationStatus.js";
+import { RESERVATION_STATUS } from "../constants/reservationStatus.js"; // backend-local copy — do NOT import from frontend/ (breaks Docker)
 import { updateReservationStatus } from "../services/reservationStateService.js";
 import { submitEditRequest, submitCancelRequest } from "../services/reservationRequestService.js";
 import {

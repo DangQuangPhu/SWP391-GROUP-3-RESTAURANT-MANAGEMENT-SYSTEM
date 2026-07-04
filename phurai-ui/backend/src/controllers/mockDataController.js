@@ -1,5 +1,5 @@
 import { getRawPool } from '../db.js';
-import { RESERVATION_STATUS } from '../../../frontend/src/shared/reservationStatus.js';
+import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
 
 export const purgeMockData = async (req, res) => {
     try {

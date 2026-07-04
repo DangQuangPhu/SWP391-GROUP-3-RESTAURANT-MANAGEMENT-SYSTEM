@@ -1,6 +1,6 @@
 import { getRawPool } from "../db.js";
 import sql from "mssql";
-import { RESERVATION_STATUS } from "../../../frontend/src/shared/reservationStatus.js";
+import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
 import { getIO } from "../socket.js";
 
 export const createPreSaveReservation = async (req, res) => {

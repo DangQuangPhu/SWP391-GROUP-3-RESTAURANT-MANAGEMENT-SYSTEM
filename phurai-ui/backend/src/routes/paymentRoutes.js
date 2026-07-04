@@ -2,6 +2,7 @@ import express from 'express';
 import sql from 'mssql';
 import { getRawPool } from '../db.js';
 import { handleSepayWebhook } from '../controllers/paymentController.js';
+import { processCashPayment } from '../controllers/ordersController.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -131,6 +132,9 @@ router.post('/verify-deposit/:reservationId', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+
+// POST /api/payments/cash — Staff/Manager process a cash payment
+router.post('/cash', authMiddleware, requireRole(2, 4, 5), processCashPayment);
 
 // Mock success endpoint for testing locally (Requires Staff, Manager, or Admin)
 router.post('/mock-success', authMiddleware, requireRole(2, 4, 5), async (req, res) => {
