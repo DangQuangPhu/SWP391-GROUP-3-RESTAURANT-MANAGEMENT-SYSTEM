@@ -98,6 +98,7 @@ function mergeUser(user, extended) {
       user.googleAvatarUrl || user.google_avatar_url || user.picture || "",
     avatarSource: user.avatarSource || user.avatar_source || "",
     fullName: user.fullName || "",
+    created_at: user.created_at || extended.created_at || null,
     username:
       user.username ||
       (user.email?.includes("@") ? user.email.split("@")[0] : "user"),
@@ -164,6 +165,7 @@ function buildProfileApiPayload(user, fields, extended) {
     country: fields.country ?? user?.country ?? extended.country ?? "",
     language: fields.language ?? user?.language ?? extended.language ?? "",
     preferences: fields.preferences ?? user?.preferences ?? extended.preferences ?? [],
+    created_at: fields.created_at ?? user?.created_at ?? extended.created_at ?? null,
   };
 }
 
@@ -224,6 +226,7 @@ export function useUserProfile(user, onUserUpdate) {
         nextTier: normalized.nextTier ?? prev.nextTier,
         pointsToNextTier: normalized.pointsToNextTier ?? prev.pointsToNextTier,
         progressPercent: normalized.progressPercent ?? prev.progressPercent,
+        created_at: normalized.created_at ?? prev.created_at,
       }));
       return;
     }

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Gem, Award, Clock, Ticket, TrendingUp, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 import { getLoyaltyBalance, getLoyaltyCatalog, redeemVoucher, getMyVouchers } from '../services/loyaltyApi.js';
 import { format } from 'date-fns';
@@ -179,11 +180,14 @@ export default function LoyaltyPointsPage() {
         setActionSuccess(`Successfully exchanged! Your code is: ${res.voucher.code}`);
         setSelectedVoucher(null);
         await loadLoyaltyData(); // reload
+        setTimeout(() => setActionSuccess(''), 5000);
       } else {
         setActionError(res?.message || 'Failed to redeem voucher.');
+        setTimeout(() => setActionError(''), 5000);
       }
     } catch (err) {
       setActionError(err?.message || 'An error occurred during redemption.');
+      setTimeout(() => setActionError(''), 5000);
     } finally {
       setExchanging(false);
     }
@@ -204,7 +208,7 @@ export default function LoyaltyPointsPage() {
   }
 
   return (
-    <div className="space-y-8 p-1">
+    <div className="space-y-8 pt-8 pb-1 px-1 relative">
       {/* Messages */}
       {actionSuccess && (
         <div className="flex items-center gap-3 bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl shadow-sm animate-fade-in">
@@ -420,7 +424,7 @@ export default function LoyaltyPointsPage() {
       </section>
 
       {/* Confirmation Modal */}
-      {selectedVoucher && (
+      {selectedVoucher && createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-6 animate-scale-up text-gray-800 dark:text-white">
             <div className="text-center space-y-2">
@@ -473,7 +477,8 @@ export default function LoyaltyPointsPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

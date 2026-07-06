@@ -43,5 +43,6 @@ export function mapApiUserToFrontend(raw) {
     preferences,
     googleAvatarUrl: raw.google_avatar_url ?? raw.googleAvatarUrl ?? "",
     avatarSource: raw.avatar_source ?? raw.avatarSource ?? "",
+    created_at: raw.created_at ?? null,
   };
 }

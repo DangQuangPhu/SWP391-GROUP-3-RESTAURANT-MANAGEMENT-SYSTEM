@@ -25,7 +25,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 export const ExpenditureTrendChart = ({ data }) => {
   return (
     <div className="w-full h-full min-h-0">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
         <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
@@ -101,7 +101,7 @@ export const OrderCategoryChart = ({ data }) => {
     <div className="flex flex-col sm:flex-row items-center gap-6 w-full h-full">
       {/* Doughnut Chart */}
       <div className="w-full sm:w-1/2 flex-1 flex items-center justify-center relative min-h-[180px]">
-        <ResponsiveContainer width="100%" height={180}>
+        <ResponsiveContainer width="100%" height={180} minWidth={1} minHeight={1}>
           <PieChart>
             <Tooltip 
               contentStyle={{ borderRadius: '8px', border: '1px solid #f3f4f6', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}

@@ -164,11 +164,7 @@ const CustomerDashboard = () => {
       {/* Top Row: Header & KPIs */}
       <div className="flex-none flex flex-col gap-4">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-500 mt-1">Welcome back, {userName}!</p>
-          </div>
+        <div className="flex flex-col md:flex-row md:items-center justify-end gap-4">
           
           {/* Filter Periode */}
           <div className="flex items-center gap-3">

@@ -63,7 +63,7 @@ export default function Analytics({ type, title, description }) {
       case 'revenue':
         return (
           <div className="h-96 w-full bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minHeight={1}>
               <LineChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                 <XAxis dataKey="date" tick={{fontSize: 12}} tickMargin={10} stroke="#9ca3af" />
@@ -79,7 +79,7 @@ export default function Analytics({ type, title, description }) {
       case 'reservations':
         return (
           <div className="h-96 w-full bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minHeight={1}>
               <BarChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                 <XAxis dataKey="reservation_status" tick={{fontSize: 12}} stroke="#9ca3af" />
@@ -134,7 +134,7 @@ export default function Analytics({ type, title, description }) {
       case 'reviews':
         return (
           <div className="h-96 w-full bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minHeight={1}>
               <BarChart data={data} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
                 <XAxis type="number" tick={{fontSize: 12}} stroke="#9ca3af" />
@@ -150,7 +150,7 @@ export default function Analytics({ type, title, description }) {
       case 'staff-performance':
         return (
           <div className="h-96 w-full bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minHeight={1}>
               <BarChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                 <XAxis dataKey="staff_code" tick={{fontSize: 12}} stroke="#9ca3af" />

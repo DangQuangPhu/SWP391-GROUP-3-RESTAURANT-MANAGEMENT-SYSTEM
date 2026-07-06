@@ -298,6 +298,17 @@ function PhoneIcon() {
   );
 }
 
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
+
 function ProfileAvatar({ user }) {
   return (
     <div className="profile-dashboard__profile-avatar-wrap">
@@ -311,7 +322,7 @@ function ProfileAvatar({ user }) {
   );
 }
 
-function ProfileField({ field, value, isEditing, onChange, error }) {
+function ProfileField({ field, value, isEditing, onChange, error, disabled }) {
   const isDateField = field.key === "dateOfBirth";
   const displayValue = isDateField
     ? formatDateOfBirthDisplay(value)
@@ -322,7 +333,7 @@ function ProfileField({ field, value, isEditing, onChange, error }) {
       <label htmlFor={isEditing ? `profile-${field.key}` : undefined}>{field.label}</label>
       {isEditing ? (
         field.type === "select" ? (
-          <select id={`profile-${field.key}`} value={value} onChange={onChange}>
+          <select id={`profile-${field.key}`} value={value} onChange={onChange} disabled={disabled}>
             {field.options.map((opt) => (
               <option key={opt || "empty"} value={opt}>
                 {opt || field.placeholder}
@@ -336,7 +347,8 @@ function ProfileField({ field, value, isEditing, onChange, error }) {
             value={value}
             placeholder={field.placeholder}
             onChange={onChange}
-            className={error ? "profile-dashboard__input--error" : ""}
+            disabled={disabled}
+            className={`${error ? "profile-dashboard__input--error" : ""} ${disabled ? "opacity-50 cursor-not-allowed bg-gray-50" : ""}`}
             aria-invalid={Boolean(error)}
           />
         )
@@ -909,6 +921,7 @@ function ProfilePage({
             value={effectiveDraft.username}
             isEditing={isEditing}
             onChange={handleChange("username")}
+            disabled={true}
           />
           <ProfileField
             field={fieldByKey.gender}
@@ -954,15 +967,8 @@ function ProfilePage({
           </div>
         </div>
 
-        <PreferencesPanel
-          preferences={effectiveDraft.preferences || []}
-          isEditing={isEditing}
-          onAdd={handleAddPreference}
-          onRemove={handleRemovePreference}
-        />
-
         <section className="profile-dashboard__contact">
-          <h3 className="profile-gradient-title">Contact</h3>
+          <h3 className="profile-gradient-title">Contact & Info</h3>
           <div className="profile-dashboard__contact-block">
             <p className="profile-dashboard__contact-label">My email address</p>
             <div className="profile-dashboard__email-row">
@@ -986,6 +992,17 @@ function ProfilePage({
               </span>
               <p className="profile-dashboard__email-text">
                 {phoneDisplay || "No phone number added"}
+              </p>
+            </div>
+          </div>
+          <div className="profile-dashboard__contact-block">
+            <p className="profile-dashboard__contact-label">Account created on</p>
+            <div className="profile-dashboard__email-row">
+              <span className="profile-dashboard__email-icon">
+                <CalendarIcon />
+              </span>
+              <p className="profile-dashboard__email-text">
+                {profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-GB') : "—"}
               </p>
             </div>
           </div>
@@ -1064,7 +1081,7 @@ function ProfilePage({
 
           <div className={`profile-dashboard__content ${activePanel === "dashboard" ? "flex flex-col h-full overflow-hidden" : ""}`}>
             <article className={`profile-dashboard__card mac-animate animate-scale ${activePanel === "dashboard" ? "flex flex-col h-full overflow-hidden flex-1 min-h-0" : ""}`} style={{ "--delay": "100ms" }}>
-            {activePanel !== "dashboard" && (
+            {activePanel !== "dashboard" && activePanel !== "loyalty" && (
               <div
                 className="profile-dashboard__cover"
                 style={{ background: coverGradient }}
@@ -1072,7 +1089,7 @@ function ProfilePage({
               />
             )}
 
-            {activePanel !== "dashboard" && (
+            {activePanel !== "dashboard" && activePanel !== "loyalty" && (
               <div
                 className="profile-dashboard__profile-header"
                 style={{ background: `linear-gradient(180deg, transparent 0%, #f3f4f6 100%)` }}

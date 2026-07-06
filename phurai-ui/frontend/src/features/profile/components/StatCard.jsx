@@ -20,6 +20,17 @@ export default function StatCard({ label, value, icon: Icon, deltaPercent, forma
 
   const animatedValue = useCountUp(value, 1.2, formatValue);
 
+  // Animate the delta percentage if available
+  const formatDelta = (v) => {
+    const absV = Math.abs(v);
+    return Number.isInteger(absV) ? absV : absV.toFixed(1);
+  };
+  const animatedDelta = useCountUp(
+    deltaPercent !== null ? Math.abs(deltaPercent) : 0, 
+    1.2, 
+    formatDelta
+  );
+
   const themeClasses = {
     blue: {
       border: 'border-t-[#4a7b9d]',
@@ -82,14 +93,14 @@ export default function StatCard({ label, value, icon: Icon, deltaPercent, forma
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M12 4L4 12L5.41 13.41L11 7.83V20H13V7.83L18.59 13.41L20 12L12 4Z" fill="#10B981" />
               </svg>
-              <span className="text-emerald-500">{Math.abs(deltaPercent).toFixed(1)}% (30 days)</span>
+              <span className="text-emerald-500">{animatedDelta}%</span>
             </>
           ) : (
             <>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M20 12L18.59 10.59L13 16.17V4H11V16.17L5.41 10.59L4 12L12 20L20 12Z" fill="#EF4444" />
               </svg>
-              <span className="text-red-500">{Math.abs(deltaPercent).toFixed(1)}% (30 days)</span>
+              <span className="text-red-500">{animatedDelta}%</span>
             </>
           )}
         </div>

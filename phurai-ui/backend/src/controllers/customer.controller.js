@@ -496,8 +496,15 @@ export const getCustomerDashboardSummary = async (req, res) => {
         const totalLoyaltyPoints = loyaltyBalanceData.balance || 0;
 
         const calcDelta = (curr, prev) => {
-            if (!prev || prev === 0) return null;
-            return ((curr - prev) / prev) * 100;
+            let res;
+            if (!prev || prev === 0) {
+                if (!curr || curr === 0) res = 0;
+                else res = 100;
+            } else {
+                res = ((curr - prev) / prev) * 100;
+            }
+            console.log(`calcDelta: curr=${curr}, prev=${prev}, res=${res}`);
+            return res;
         };
 
         const generateSparklineArray = (data) => {

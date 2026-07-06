@@ -33,7 +33,8 @@ const PROFILE_SELECT = `
     cp.preferences,
     sp.staff_code,
     sp.job_title,
-    sp.hire_date
+    sp.hire_date,
+    ua.created_at
   FROM dbo.UserAccounts ua
   LEFT JOIN dbo.Roles r ON ua.role_id = r.role_id
   LEFT JOIN dbo.CustomerProfiles cp ON ua.user_id = cp.user_id
@@ -94,6 +95,7 @@ export function formatProfileResponse(row) {
     preferences,
     staff_code: row.staff_code || null,
     job_title: row.job_title || null,
+    created_at: row.created_at || null,
   };
 }
 
