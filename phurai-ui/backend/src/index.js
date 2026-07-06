@@ -92,6 +92,33 @@ app.use("/api/loyalty", loyaltyRoutes);
 import paymentRoutes from "./routes/paymentRoutes.js";
 app.use("/api/payments", paymentRoutes);
 
+// Serve built React frontend (must come BEFORE the 404 handler)
+// Use process.cwd() as primary: in Docker WORKDIR=/app so dist is always at /app/dist
+const cwdDist = path.join(process.cwd(), "dist");
+const dirnameDistUp1 = path.join(__dirname, "../dist");
+const dirnameDistUp2 = path.join(__dirname, "../../dist");
+
+let distPath = [cwdDist, dirnameDistUp1, dirnameDistUp2].find(fs.existsSync);
+
+console.log(`[Frontend] Checking dist paths:`);
+console.log(`  cwd      : ${cwdDist}  → ${fs.existsSync(cwdDist) ? "✅ FOUND" : "❌ missing"}`);
+console.log(`  ../dist  : ${dirnameDistUp1}  → ${fs.existsSync(dirnameDistUp1) ? "✅ FOUND" : "❌ missing"}`);
+console.log(`  ../../dist: ${dirnameDistUp2}  → ${fs.existsSync(dirnameDistUp2) ? "✅ FOUND" : "❌ missing"}`);
+
+if (distPath) {
+  console.log(`[Frontend] Serving static files from: ${distPath}`);
+  app.use(express.static(distPath));
+
+  // SPA catch-all: serve index.html for any non-API route
+  app.get(/^\/(?!api).*/, (_req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+} else {
+  console.warn("[Frontend] ⚠️  No dist/ folder found — frontend will NOT be served!");
+  console.warn("[Frontend]    Run 'npm run build' first, or check Docker build logs.");
+}
+
+// favicon silence (before 404 so it doesn't pollute logs)
 app.use((req, res, next) => {
   if (req.originalUrl === '/favicon.ico') {
     return res.status(204).end();
@@ -100,25 +127,13 @@ app.use((req, res, next) => {
   next();
 });
 
+// 404 fallback for unmatched API routes
 app.use((req, res) => {
   res.status(404).json({
     success: false,
     message: "API endpoint not found.",
   });
 });
-
-let distPath = path.join(__dirname, "../dist");
-if (!fs.existsSync(distPath)) {
-  distPath = path.join(__dirname, "../../dist");
-}
-
-if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath));
-
-  app.get(/^\/(?!api).*/, (_req, res) => {
-    res.sendFile(path.join(distPath, "index.html"));
-  });
-}
 
 runOtpLifecycleCleanup().catch((err) => {
   console.warn("OTP lifecycle cleanup:", err.message);
