@@ -130,6 +130,8 @@ export const handleSepayWebhook = async (req, res) => {
         }
 
         // b. Insert into dbo.Payments
+        // NOTE: dbo.Payments has a DB trigger — bare OUTPUT...without INTO is forbidden.
+        // Use DECLARE @tbl + OUTPUT INTO @tbl pattern, then SELECT from it.
         const paymentResult = await transaction.request()
           .input('resId', sql.Int, reservation.reservation_id)
           .input('paymentMethodId', sql.TinyInt, 3) // 3 = Bank Transfer
@@ -137,13 +139,15 @@ export const handleSepayWebhook = async (req, res) => {
           .input('paymentStatus', sql.VarChar, 'Completed')
           .input('transactionRef', sql.VarChar, referenceCode)
           .query(`
+            DECLARE @PaymentOutput TABLE (payment_id INT);
             INSERT INTO dbo.Payments (
               reservation_id, payment_method_id, amount_paid, payment_status, transaction_ref, paid_at, created_at, updated_at
             )
-            OUTPUT inserted.payment_id 
+            OUTPUT INSERTED.payment_id INTO @PaymentOutput
             VALUES (
               @resId, @paymentMethodId, @amountPaid, @paymentStatus, @transactionRef, SYSDATETIME(), SYSDATETIME(), SYSDATETIME()
-            )
+            );
+            SELECT TOP 1 payment_id FROM @PaymentOutput;
           `);
 
         const paymentId = paymentResult.recordset[0].payment_id;
