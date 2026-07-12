@@ -52,11 +52,12 @@ export const requireRole = (...allowedRoleIds) => (req, res, next) => {
 
 export const requireCustomer = requireRole(1);
 export const requireStaff    = requireRole(2);
-export const requireKitchenStaff = requireRole(3);
-export const requireStaffOrKitchen = requireRole(2, 3);
+// role_id=3 (Kitchen Staff) deprecated — use requireKdsDevice from kdsAuth.js for KDS routes
+export const requireStaffOrKitchen = requireRole(2); // was (2,3); role 3 deprecated
 export const requireManager  = requireRole(4);
 export const requireAdmin    = requireRole(5);
-export const requireAny      = requireRole(1, 2, 3, 4, 5);
+export const requireAny      = requireRole(1, 2, 4, 5); // 3 removed (deprecated)
+
 
 export const verifyAdmin = (req, res, next) => {
   const role = req.user?.role_id;

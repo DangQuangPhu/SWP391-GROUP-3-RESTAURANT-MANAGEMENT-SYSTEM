@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { blurActiveElement } from "../utils/authHelpers.js";
-import "@/styles/authModal.css";
+import "@/features/auth/styles/authModal.css";
 
 const MOCK_ACCOUNTS = [
   {

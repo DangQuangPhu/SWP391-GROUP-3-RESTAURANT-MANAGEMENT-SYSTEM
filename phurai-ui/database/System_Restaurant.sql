@@ -30,6 +30,7 @@ DROP TABLE IF EXISTS dbo.Payments;
 DROP TABLE IF EXISTS dbo.PaymentMethods;
 DROP TABLE IF EXISTS dbo.BillSplits;
 DROP TABLE IF EXISTS dbo.KitchenTickets;
+DROP TABLE IF EXISTS dbo.KitchenDevices;   -- KDS Device Auth
 DROP TABLE IF EXISTS dbo.OrderItems;
 DROP TABLE IF EXISTS dbo.Orders;
 DROP TABLE IF EXISTS dbo.QROrderSessions;
@@ -46,11 +47,14 @@ DROP TABLE IF EXISTS dbo.Shifts;
 DROP TABLE IF EXISTS dbo.RestaurantTables;
 DROP TABLE IF EXISTS dbo.RestaurantAreas;
 DROP TABLE IF EXISTS dbo.RestaurantSettings;
+DROP TABLE IF EXISTS dbo.PerformanceReviews; -- Employee Registry
 DROP TABLE IF EXISTS dbo.StaffProfiles;
 DROP TABLE IF EXISTS dbo.CustomerProfiles;
 DROP TABLE IF EXISTS dbo.OtpTokens;
 DROP TABLE IF EXISTS dbo.UserAccounts;
+DROP TABLE IF EXISTS dbo.JobTitles;          -- Employee Registry lookup
 DROP TABLE IF EXISTS dbo.Roles;
+
 GO
 
 -- ============================================================================
@@ -79,9 +83,11 @@ CREATE TABLE dbo.UserAccounts (
     avatar_url       NVARCHAR(500) NULL,
     is_active        BIT NOT NULL CONSTRAINT DF_UserAccounts_is_active DEFAULT 1,
     email_verified   BIT NOT NULL CONSTRAINT DF_UserAccounts_email_verified DEFAULT 0,
+    force_password_reset BIT NOT NULL CONSTRAINT DF_UserAccounts_force_pw_reset DEFAULT 0,
     last_login_at    DATETIME2(0) NULL,
     created_at       DATETIME2(0) NOT NULL CONSTRAINT DF_UserAccounts_created_at DEFAULT SYSDATETIME(),
     updated_at       DATETIME2(0) NOT NULL CONSTRAINT DF_UserAccounts_updated_at DEFAULT SYSDATETIME(),
+
     CONSTRAINT PK_UserAccounts PRIMARY KEY (user_id),
     CONSTRAINT UQ_UserAccounts_email UNIQUE (email),
     CONSTRAINT FK_UserAccounts_Roles FOREIGN KEY (role_id) REFERENCES dbo.Roles(role_id),
@@ -129,26 +135,71 @@ CREATE TABLE dbo.CustomerProfiles (
 );
 GO
 
-CREATE TABLE dbo.StaffProfiles (
-    staff_id           INT IDENTITY(1,1) NOT NULL,
-    user_id            INT NOT NULL,
-    staff_code         VARCHAR(30) NOT NULL,
-    job_title          NVARCHAR(80) NOT NULL,
-    hire_date          DATE NOT NULL,
-    employment_status  NVARCHAR(20) NOT NULL CONSTRAINT DF_StaffProfiles_status DEFAULT N'Active',
-    base_salary        DECIMAL(12,2) NULL,
-    created_at         DATETIME2(0) NOT NULL CONSTRAINT DF_StaffProfiles_created_at DEFAULT SYSDATETIME(),
-    updated_at         DATETIME2(0) NOT NULL CONSTRAINT DF_StaffProfiles_updated_at DEFAULT SYSDATETIME(),
-    CONSTRAINT PK_StaffProfiles PRIMARY KEY (staff_id),
-    CONSTRAINT UQ_StaffProfiles_user UNIQUE (user_id),
-    CONSTRAINT UQ_StaffProfiles_staff_code UNIQUE (staff_code),
-    CONSTRAINT FK_StaffProfiles_UserAccounts FOREIGN KEY (user_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE CASCADE,
-    CONSTRAINT CK_StaffProfiles_status CHECK (employment_status IN (N'Active', N'On Leave', N'Resigned')),
-    CONSTRAINT CK_StaffProfiles_salary CHECK (base_salary IS NULL OR base_salary >= 0)
+-- ============================================================================
+-- Job Titles lookup table (Employee Registry — KDS Plan Part B)
+-- ============================================================================
+CREATE TABLE dbo.JobTitles (
+    job_title_id TINYINT IDENTITY(1,1) NOT NULL,
+    title_name   NVARCHAR(80) NOT NULL,
+    CONSTRAINT PK_JobTitles PRIMARY KEY (job_title_id),
+    CONSTRAINT UQ_JobTitles_title_name UNIQUE (title_name)
 );
 GO
 
+CREATE TABLE dbo.StaffProfiles (
+    staff_id           INT IDENTITY(1,1) NOT NULL,
+    -- user_id is nullable: employees can exist in the registry WITHOUT a system account.
+    -- When NULL, has_system_account MUST be 0.
+    user_id            INT NULL,
+    staff_code         VARCHAR(30) NOT NULL,
+    job_title          NVARCHAR(80) NOT NULL,          -- free-text legacy column (kept for backward compat)
+    job_title_id       TINYINT NULL,                   -- FK to JobTitles lookup
+    hire_date          DATE NOT NULL,
+    employment_status  NVARCHAR(20) NOT NULL CONSTRAINT DF_StaffProfiles_status DEFAULT N'Active',
+    base_salary        DECIMAL(12,2) NULL,             -- HR salary field (alias: salary)
+    salary             DECIMAL(18,2) NULL,             -- new HR column added by KDS plan
+    department         NVARCHAR(60) NULL,              -- new HR column
+    has_system_account BIT NOT NULL CONSTRAINT DF_StaffProfiles_has_sys_acct DEFAULT 0,  -- 1 when user_id is linked
+    -- contact info fields for employees without a UserAccounts row
+    full_name          NVARCHAR(200) NULL,
+    email              NVARCHAR(255) NULL,
+    phone              NVARCHAR(20) NULL,
+    created_at         DATETIME2(0) NOT NULL CONSTRAINT DF_StaffProfiles_created_at DEFAULT SYSDATETIME(),
+    updated_at         DATETIME2(0) NOT NULL CONSTRAINT DF_StaffProfiles_updated_at DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_StaffProfiles PRIMARY KEY (staff_id),
+    CONSTRAINT UQ_StaffProfiles_staff_code UNIQUE (staff_code),
+    -- user_id uniqueness: only enforced when not NULL
+    CONSTRAINT UQ_StaffProfiles_user UNIQUE (user_id),
+    CONSTRAINT FK_StaffProfiles_UserAccounts FOREIGN KEY (user_id) REFERENCES dbo.UserAccounts(user_id),
+    CONSTRAINT FK_StaffProfiles_JobTitles FOREIGN KEY (job_title_id) REFERENCES dbo.JobTitles(job_title_id),
+    CONSTRAINT CK_StaffProfiles_status CHECK (employment_status IN (N'Active', N'On Leave', N'Resigned')),
+    CONSTRAINT CK_StaffProfiles_salary CHECK (base_salary IS NULL OR base_salary >= 0),
+    CONSTRAINT CK_StaffProfiles_salary2 CHECK (salary IS NULL OR salary >= 0),
+    CONSTRAINT CK_StaffProfiles_sys_acct CHECK (
+        (has_system_account = 0 AND user_id IS NULL) OR has_system_account = 1
+    )
+);
+GO
+
+-- PerformanceReviews: manager/admin-only history of staff ratings
+CREATE TABLE dbo.PerformanceReviews (
+    review_id   INT IDENTITY(1,1) NOT NULL,
+    staff_id    INT NOT NULL,
+    rating      DECIMAL(3,1) NOT NULL,
+    notes       NVARCHAR(1000) NULL,
+    reviewed_by INT NOT NULL,
+    review_date DATE NOT NULL CONSTRAINT DF_PerformanceReviews_date DEFAULT CAST(SYSDATETIME() AS DATE),
+    created_at  DATETIME2(0) NOT NULL CONSTRAINT DF_PerformanceReviews_created_at DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_PerformanceReviews PRIMARY KEY (review_id),
+    CONSTRAINT FK_PerformanceReviews_Staff FOREIGN KEY (staff_id) REFERENCES dbo.StaffProfiles(staff_id) ON DELETE CASCADE,
+    CONSTRAINT FK_PerformanceReviews_ReviewedBy FOREIGN KEY (reviewed_by) REFERENCES dbo.UserAccounts(user_id),
+    CONSTRAINT CK_PerformanceReviews_rating CHECK (rating BETWEEN 1.0 AND 5.0)
+);
+CREATE INDEX IX_PerformanceReviews_staff ON dbo.PerformanceReviews(staff_id, review_date DESC);
+GO
+
 CREATE TABLE dbo.RestaurantSettings (
+
     setting_key     NVARCHAR(100) NOT NULL,
     setting_value   NVARCHAR(1000) NOT NULL,
     description     NVARCHAR(255) NULL,
@@ -212,6 +263,7 @@ GO
 CREATE TABLE dbo.StaffSchedules (
     schedule_id       INT IDENTITY(1,1) NOT NULL,
     user_id           INT NOT NULL,
+    staff_id          INT NULL,                        -- canonical join to StaffProfiles (Employee Registry)
     shift_id          TINYINT NOT NULL,
     work_date         DATE NOT NULL,
     attendance_status NVARCHAR(20) NOT NULL CONSTRAINT DF_StaffSchedules_status DEFAULT N'Scheduled',
@@ -221,11 +273,13 @@ CREATE TABLE dbo.StaffSchedules (
     CONSTRAINT PK_StaffSchedules PRIMARY KEY (schedule_id),
     CONSTRAINT UQ_StaffSchedules_user_date_shift UNIQUE (user_id, work_date, shift_id),
     CONSTRAINT FK_StaffSchedules_UserAccounts FOREIGN KEY (user_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE CASCADE,
+    CONSTRAINT FK_StaffSchedules_StaffProfiles FOREIGN KEY (staff_id) REFERENCES dbo.StaffProfiles(staff_id),
     CONSTRAINT FK_StaffSchedules_Shifts FOREIGN KEY (shift_id) REFERENCES dbo.Shifts(shift_id) ON DELETE CASCADE,
     CONSTRAINT FK_StaffSchedules_AssignedBy FOREIGN KEY (assigned_by) REFERENCES dbo.UserAccounts(user_id),
     CONSTRAINT CK_StaffSchedules_status CHECK (attendance_status IN (N'Scheduled', N'Present', N'Absent', N'On Leave'))
 );
 GO
+
 
 CREATE TABLE dbo.ShiftLogs (
     log_id         INT IDENTITY(1,1) NOT NULL,
@@ -487,15 +541,20 @@ CREATE TABLE dbo.KitchenTickets (
     kitchen_status       NVARCHAR(20) NOT NULL CONSTRAINT DF_KitchenTickets_status DEFAULT N'Pending',
     priority_level       TINYINT NOT NULL CONSTRAINT DF_KitchenTickets_priority DEFAULT 3,
     assigned_to_staff_id INT NULL,
+    -- KDS Device Auth: which physical KDS device processed this ticket (nullable — set after device auth)
+    device_id            INT NULL,
     sent_at              DATETIME2(0) NOT NULL CONSTRAINT DF_KitchenTickets_sent_at DEFAULT SYSDATETIME(),
     started_at           DATETIME2(0) NULL,
     ready_at             DATETIME2(0) NULL,
     cancelled_at         DATETIME2(0) NULL,
+    -- updated_at supports optimistic locking (CAS) when concurrent KDS devices update the same ticket
+    updated_at           DATETIME2(0) NOT NULL CONSTRAINT DF_KitchenTickets_updated_at DEFAULT SYSDATETIME(),
     CONSTRAINT PK_KitchenTickets PRIMARY KEY (kitchen_ticket_id),
     CONSTRAINT UQ_KitchenTickets_order_item UNIQUE (order_item_id),
     CONSTRAINT FK_KitchenTickets_OrderItems FOREIGN KEY (order_item_id) REFERENCES dbo.OrderItems(order_item_id) ON DELETE CASCADE,
     CONSTRAINT FK_KitchenTickets_AssignedTo FOREIGN KEY (assigned_to_staff_id) REFERENCES dbo.UserAccounts(user_id),
-    CONSTRAINT CK_KitchenTickets_status CHECK (kitchen_status IN (N'Pending', N'Preparing', N'Ready', N'Cancelled')),
+    -- FK_KitchenTickets_Device is added below after KitchenDevices is created (forward ref prevention)
+    CONSTRAINT CK_KitchenTickets_status CHECK (kitchen_status IN (N'Pending', N'Sent To Kitchen', N'Preparing', N'Ready', N'Served', N'Cancelled')),
     CONSTRAINT CK_KitchenTickets_priority CHECK (priority_level BETWEEN 1 AND 5),
     CONSTRAINT CK_KitchenTickets_timeline CHECK (
         (started_at IS NULL OR started_at >= sent_at)
@@ -505,6 +564,37 @@ CREATE TABLE dbo.KitchenTickets (
     )
 );
 GO
+
+-- ============================================================================
+-- KitchenDevices — Device-Based KDS Authentication (KDS Plan Part A)
+-- Replaces individual Kitchen Staff accounts (role_id=3, deprecated/soft-deleted).
+-- Each physical KDS terminal has a PIN → exchanges for a 12-hour JWT.
+-- station_category_ids: JSON int array of category_ids this device serves (NULL = all).
+-- ============================================================================
+CREATE TABLE dbo.KitchenDevices (
+    device_id            INT IDENTITY(1,1) NOT NULL,
+    device_name          NVARCHAR(100) NOT NULL,
+    device_pin_hash      VARCHAR(255) NOT NULL,
+    -- Multi-station routing: JSON array e.g. '[1,3]'. NULL = catch-all (all categories).
+    station_category_ids NVARCHAR(500) NULL,
+    is_active            BIT NOT NULL CONSTRAINT DF_KitchenDevices_is_active DEFAULT 1,
+    pin_fail_count       TINYINT NOT NULL CONSTRAINT DF_KitchenDevices_fail_count DEFAULT 0,
+    pin_locked_until     DATETIME2(0) NULL,
+    created_by           INT NOT NULL,
+    created_at           DATETIME2(0) NOT NULL CONSTRAINT DF_KitchenDevices_created_at DEFAULT SYSDATETIME(),
+    last_active_at       DATETIME2(0) NULL,
+    CONSTRAINT PK_KitchenDevices PRIMARY KEY (device_id),
+    CONSTRAINT FK_KitchenDevices_CreatedBy FOREIGN KEY (created_by) REFERENCES dbo.UserAccounts(user_id),
+    CONSTRAINT CK_KitchenDevices_fail_count CHECK (pin_fail_count >= 0)
+);
+GO
+
+-- Now add the FK from KitchenTickets.device_id → KitchenDevices (added after KitchenDevices is created)
+ALTER TABLE dbo.KitchenTickets
+ADD CONSTRAINT FK_KitchenTickets_Device FOREIGN KEY (device_id) REFERENCES dbo.KitchenDevices(device_id);
+GO
+
+
 
 -- ============================================================================
 -- MODULE 6: FINANCE & PROMOTIONS
@@ -893,12 +983,14 @@ SET IDENTITY_INSERT dbo.UserAccounts ON;
 INSERT INTO dbo.UserAccounts
 (user_id, role_id, full_name, email, phone, password_hash, is_active, email_verified, last_login_at)
 VALUES
-(1, 5, N'Dang Quang Phu',  N'phuadmin@phurai.vn',    '0901000001', N'$2b$10$NKnVpBImQPDDAB9pkSw00edPtrHpEWUmwGwPvlaAnNRMcX5HFWwkW',   1, 1, '2026-05-18T08:00:00'),
-(2, 4, N'Dang Quang Phu',  N'phumanager@phurai.vn',  '0901000002', N'$2b$10$e04PpX9xUpPuRyW89qcv7.X/Lgfq.6sl319ehCioPrEW1nLXeQis6', 1, 1, '2026-05-18T08:10:00'),
+(1, 5, N'Dang Quang Phu',  N'phuadmin@phurai.vn',    '0901000001', N'scrypt$4f2ab2ac57cea58a40e76477d53f3e61$d38e5d2db24cd605a3d29eaf79e1b0429e7c7f5fce28c47faf59126fdd15029828447e1b56d0886c74f888ff7ac6693d7b33e0371ac39c9ff0b55385a0ca547e',   1, 1, '2026-05-18T08:00:00'),
+
+(2, 4, N'Dang Quang Phu',  N'phumanager@phurai.vn',  '0901000002', N'scrypt$8b83430313edc67abc8eadeefc31e841$ce82bbdd63b2f38cc66e8cb939a52599c91f53a8396a40ec2ee1d3d28dd106eedb890ddbe0a4b462080f268b0f848fc5d3f1974aa3930dab29612cb25cb887f0', 1, 1, '2026-05-18T08:10:00'),
 (3, 2, N'Dang Quang Phu',       N'phustaff1@phurai.vn',   '0901000003', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, '2026-05-18T08:30:00'),
 (4, 2, N'Pham Thi Thuy',    N'thuystaff@phurai.vn',   '0901000004', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, NULL),
-(5, 3, N'Hoang Van Tho',    N'kitchen1@phurai.vn', '0901000005', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',   1, 1, '2026-05-18T09:00:00'),
-(6, 3, N'Do Thi Hao',       N'kitchen2@phurai.vn', '0901000006', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',   1, 1, NULL),
+-- Kitchen Staff accounts (role_id=3) soft-deleted — KDS is device-based; individual user accounts deprecated.
+(5, 3, N'Hoang Van Tho',    N'kitchen1@phurai.vn', '0901000005', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',   0, 1, '2026-05-18T09:00:00'),
+(6, 3, N'Do Thi Hao',       N'kitchen2@phurai.vn', '0901000006', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',   0, 1, NULL),
 (7, 1, N'Minh Khoa',         N'khoa@gmail.com',     '0908000001', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6',   1, 1, '2026-05-17T20:00:00'),
 (8, 1, N'Thu Huong',         N'huong@gmail.com',    '0908000002', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6',   1, 1, '2026-05-17T21:00:00'),
 (9, 1, N'Bao Nguyen',        N'bao@gmail.com',      '0908000003', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6',   1, 0, NULL),
@@ -934,17 +1026,43 @@ INSERT INTO dbo.LoyaltyTransactions (customer_id, points, transaction_type, refe
 (13, 1800, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', DATEADD(day, -5, SYSDATETIME()));
 GO
 
+-- ── Seed: JobTitles lookup ──────────────────────────────────────────────────
+SET IDENTITY_INSERT dbo.JobTitles ON;
+INSERT INTO dbo.JobTitles (job_title_id, title_name) VALUES
+(1,  N'System Admin'),
+(2,  N'Restaurant Manager'),
+(3,  N'Receptionist'),
+(4,  N'Waiter'),
+(5,  N'Head Chef'),
+(6,  N'Sous Chef'),
+(7,  N'Bartender'),
+(8,  N'Host/Hostess'),
+(9,  N'Cashier'),
+(10, N'Kitchen Porter'),
+(11, N'Pastry Chef'),
+(12, N'Line Cook'),
+(13, N'Server');
+SET IDENTITY_INSERT dbo.JobTitles OFF;
+GO
+
+-- ── Seed: StaffProfiles ─────────────────────────────────────────────────────
+-- has_system_account=1 for all rows that have a linked UserAccounts row.
+-- Kitchen staff (KIT001/KIT002) kept as Resigned since their UserAccounts are soft-deleted.
 SET IDENTITY_INSERT dbo.StaffProfiles ON;
-INSERT INTO dbo.StaffProfiles (staff_id, user_id, staff_code, job_title, hire_date, employment_status, base_salary)
+INSERT INTO dbo.StaffProfiles (staff_id, user_id, staff_code, job_title, job_title_id, hire_date, employment_status, base_salary, has_system_account)
 VALUES
-(1, 1, 'ADM001', 'System Admin',       '2025-01-01', N'Active', 25000000),
-(2, 2, 'MGR001', 'Restaurant Manager', '2025-01-15', N'Active', 22000000),
-(3, 3, 'STF001', 'Receptionist',       '2025-02-01', N'Active', 12000000),
-(4, 4, 'STF002', 'Waiter',              '2025-02-05', N'Active', 11000000),
-(5, 5, 'KIT001', 'Head Chef',          '2025-01-20', N'Active', 18000000),
-(6, 6, 'KIT002', 'Sous Chef',          '2025-03-01', N'Active', 15000000);
+(1, 1, 'ADM001', N'System Admin',       1,  '2025-01-01', N'Active',   25000000, 1),
+(2, 2, 'MGR001', N'Restaurant Manager', 2,  '2025-01-15', N'Active',   22000000, 1),
+(3, 3, 'STF001', N'Receptionist',       3,  '2025-02-01', N'Active',   12000000, 1),
+(4, 4, 'STF002', N'Waiter',             4,  '2025-02-05', N'Active',   11000000, 1),
+-- Kitchen staff soft-linked: their UserAccounts rows are is_active=0 (KDS device-based model)
+(5, 5, 'KIT001', N'Head Chef',          5,  '2025-01-20', N'Resigned', 18000000, 1),
+(6, 6, 'KIT002', N'Sous Chef',          6,  '2025-03-01', N'Resigned', 15000000, 1),
+(7, 14,'STF003', N'Waiter',             4,  '2025-04-01', N'Active',   11000000, 1);
 SET IDENTITY_INSERT dbo.StaffProfiles OFF;
 GO
+
+
 
 INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description, updated_by) VALUES
 (N'restaurant_name',  N'Phūrai Premium Restaurant', N'Display name', 1),
@@ -1197,15 +1315,30 @@ SET IDENTITY_INSERT dbo.KitchenTickets ON;
 INSERT INTO dbo.KitchenTickets
 (kitchen_ticket_id, order_item_id, kitchen_status, priority_level, assigned_to_staff_id, sent_at, started_at, ready_at)
 VALUES
-(1, 11, N'Preparing', 2, 5, '2026-05-20T19:00:00', '2026-05-20T19:02:00', NULL),
-(2, 12, N'Preparing', 2, 5, '2026-05-20T19:00:00', '2026-05-20T19:02:00', NULL),
-(3, 13, N'Ready',   3, 6, '2026-05-20T19:00:00', '2026-05-20T19:01:00', '2026-05-20T19:08:00'),
-(4, 14, N'Preparing', 3, 5, '2026-05-18T19:05:00', '2026-05-18T19:07:00', NULL),
-(5, 15, N'Pending',   3, NULL,'2026-05-18T19:05:00', NULL, NULL),
+-- assigned_to_staff_id NULL: kitchen staff accounts (user_id 5,6) are soft-deleted; KDS is device-based now.
+(1, 11, N'Preparing', 2, NULL, '2026-05-20T19:00:00', '2026-05-20T19:02:00', NULL),
+(2, 12, N'Preparing', 2, NULL, '2026-05-20T19:00:00', '2026-05-20T19:02:00', NULL),
+(3, 13, N'Ready',     3, NULL, '2026-05-20T19:00:00', '2026-05-20T19:01:00', '2026-05-20T19:08:00'),
+(4, 14, N'Preparing', 3, NULL, '2026-05-18T19:05:00', '2026-05-18T19:07:00', NULL),
+(5, 15, N'Pending',   3, NULL, '2026-05-18T19:05:00', NULL, NULL),
 (6, 16, N'Pending',   3, NULL, SYSDATETIME(), NULL, NULL),
 (7, 17, N'Pending',   3, NULL, SYSDATETIME(), NULL, NULL);
 SET IDENTITY_INSERT dbo.KitchenTickets OFF;
 GO
+
+-- ── Seed: KitchenDevices ────────────────────────────────────────────────────
+-- PIN hashes below = bcrypt of '1234' (test only — regenerate in production).
+-- station_category_ids NULL = catch-all device.
+-- created_by = user_id 1 (Admin).
+SET IDENTITY_INSERT dbo.KitchenDevices ON;
+INSERT INTO dbo.KitchenDevices (device_id, device_name, device_pin_hash, station_category_ids, is_active, created_by)
+VALUES
+(1, N'KDS - Main Kitchen',  N'$2b$10$NKnVpBImQPDDAB9pkSw00edPtrHpEWUmwGwPvlaAnNRMcX5HFWwkW', NULL,     1, 1),
+(2, N'KDS - Dessert Bar',   N'$2b$10$NKnVpBImQPDDAB9pkSw00edPtrHpEWUmwGwPvlaAnNRMcX5HFWwkW', N'[6]',   1, 1);
+SET IDENTITY_INSERT dbo.KitchenDevices OFF;
+GO
+
+
 
 SET IDENTITY_INSERT dbo.PaymentMethods ON;
 INSERT INTO dbo.PaymentMethods (payment_method_id, method_name, is_active) VALUES
@@ -1399,7 +1532,6 @@ GO
 -- tiếng việt -- 21. Lấy dữ liệu bảng Phiếu bếp KDS (KitchenTickets)
 SELECT kitchen_ticket_id, order_item_id, kitchen_status, priority_level, assigned_to_staff_id, sent_at, started_at, ready_at, cancelled_at FROM dbo.KitchenTickets;
 GO
-
 -- tiếng việt -- 22. Lấy dữ liệu bảng Phương thức Thanh toán (PaymentMethods)
 SELECT payment_method_id, method_name, is_active, created_at FROM dbo.PaymentMethods;
 GO
@@ -1448,80 +1580,15 @@ GO
 SELECT timeline_id, reservation_id, event_type, performed_by, notes, created_at FROM dbo.ReservationTimelines;
 GO
 
--- ====================================================================================
--- SCRIPT TỰ ĐỘNG TẠO DỮ LIỆU GIẢ LẬP (MOCK DATA) CHO 60 NGÀY QUA DÀNH CHO BẢNG ĐIỀU KHIỂN
--- ====================================================================================
-
--- 1. Xóa dữ liệu giả lập cũ (nếu có) để tránh trùng lặp
-DELETE FROM dbo.KitchenTickets WHERE order_item_id IN (SELECT order_item_id FROM dbo.OrderItems WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE order_note = N'AutoMock'));
-DELETE FROM dbo.Payments WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE order_note = N'AutoMock');
-DELETE FROM dbo.OrderItems WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE order_note = N'AutoMock');
-DELETE FROM dbo.Orders WHERE order_note = N'AutoMock';
-DELETE FROM dbo.Reservations WHERE contact_name LIKE N'AutoMock%';
-
--- 2. Khai báo biến vòng lặp
-DECLARE @days_ago INT = 60;
-DECLARE @current_date DATETIME2;
-DECLARE @daily_orders INT;
-DECLARE @random_rev DECIMAL(12,2);
-DECLARE @res_count INT;
-DECLARE @i INT;
-DECLARE @order_id INT;
-DECLARE @order_item_id INT;
-
-WHILE @days_ago >= 0
-BEGIN
-    SET @current_date = DATEADD(day, -@days_ago, SYSDATETIME());
-    
-    -- Tạo 10-20 đơn hàng mỗi ngày
-    SET @daily_orders = FLOOR(RAND() * 11) + 10;
-    
-    -- Tạo 2-5 đặt bàn mỗi ngày
-    SET @res_count = FLOOR(RAND() * 4) + 2;
-    
-    SET @i = 0;
-    WHILE @i < @res_count
-    BEGIN
-        INSERT INTO dbo.Reservations (contact_name, contact_phone, reservation_start_at, reservation_end_at, guest_count, reservation_status, created_at, updated_at)
-        VALUES (N'AutoMock ' + CAST(@days_ago AS NVARCHAR) + '-' + CAST(@i AS NVARCHAR), '0900000000', 
-                DATEADD(hour, 19, CAST(CAST(@current_date AS DATE) AS DATETIME2)), 
-                DATEADD(hour, 21, CAST(CAST(@current_date AS DATE) AS DATETIME2)), 
-                FLOOR(RAND() * 4) + 2, 
-                CASE WHEN @days_ago > 0 THEN N'Completed' ELSE N'Dining' END, 
-                @current_date, @current_date);
-        SET @i = @i + 1;
-    END
-
-    SET @i = 0;
-    WHILE @i < @daily_orders
-    BEGIN
-        SET @random_rev = FLOOR(RAND() * 1500000) + 500000;
-        
-        INSERT INTO dbo.Orders (table_id, order_type, order_status, order_note, subtotal, discount_amount, service_charge, total_amount, amount_paid, created_at, updated_at)
-        VALUES (1, N'Dine In', CASE WHEN @days_ago > 0 THEN N'Paid' ELSE N'Sent To Kitchen' END, N'AutoMock', @random_rev, 0, 0, @random_rev, @random_rev, @current_date, @current_date);
-        
-        SET @order_id = SCOPE_IDENTITY();
-
-        INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, item_status, created_at, updated_at)
-        VALUES (@order_id, FLOOR(RAND() * 5) + 1, FLOOR(RAND() * 3) + 1, 100000, N'Served', @current_date, @current_date);
-        
-        SET @order_item_id = SCOPE_IDENTITY();
-
-        IF @days_ago > 0
-        BEGIN
-            INSERT INTO dbo.Payments (order_id, payment_method_id, amount_paid, change_given, payment_status, paid_at, created_at, updated_at)
-            VALUES (@order_id, 1, @random_rev, 0, N'Completed', @current_date, @current_date, @current_date);
-        END
-        ELSE
-        BEGIN
-            -- Nếu là ngày hôm nay, giả lập có bếp đang làm
-            INSERT INTO dbo.KitchenTickets (order_item_id, kitchen_status, priority_level, sent_at)
-            VALUES (@order_item_id, N'Preparing', 2, @current_date);
-        END
-
-        SET @i = @i + 1;
-    END
-
-    SET @days_ago = @days_ago - 1;
-END
+-- tiếng việt -- 34. Lấy dữ liệu bảng Danh mục Chức danh (JobTitles)
+SELECT job_title_id, title_name FROM dbo.JobTitles;
 GO
+
+-- tiếng việt -- 35. Lấy dữ liệu bảng Thiết bị KDS (KitchenDevices)
+SELECT device_id, device_name, station_category_ids, is_active, pin_fail_count, pin_locked_until, created_by, created_at, last_active_at FROM dbo.KitchenDevices;
+GO
+
+-- tiếng việt -- 36. Lấy dữ liệu bảng Lịch sử Đánh giá Hiệu suất (PerformanceReviews)
+SELECT review_id, staff_id, rating, notes, reviewed_by, review_date, created_at FROM dbo.PerformanceReviews;
+GO
+

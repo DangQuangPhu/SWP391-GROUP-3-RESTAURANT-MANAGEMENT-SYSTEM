@@ -7,7 +7,7 @@ import {
 } from "../services/profileApi.js";
 import { SYSTEM_AVATARS, getAvatarSrc, normalizeStoredAvatarUrl } from "../utils/avatarUtils.js";
 import { validateAvatarFile, SystemAvatarOption, UserAvatar } from "@/features/auth";
-import "@/styles/AvatarPickerModal.css";
+import "@/features/profile/styles/AvatarPickerModal.css";
 
 function AvatarPickerModal({ isOpen, onClose, user, onSave }) {
   const [alert, setAlert] = useState(null);

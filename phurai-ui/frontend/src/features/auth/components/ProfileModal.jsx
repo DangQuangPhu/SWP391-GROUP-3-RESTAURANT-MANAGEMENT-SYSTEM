@@ -19,7 +19,7 @@ import {
 import UserAvatar from "./UserAvatar";
 import SystemAvatarOption from "./SystemAvatarOption";
 import ResetPasswordForm from "./ResetPasswordForm";
-import "@/styles/auth.css";
+import "@/features/auth/styles/auth.css";
 import {
   getDisplayName,
   getPasswordStrength,
@@ -32,7 +32,7 @@ import {
   parseDateOfBirth,
   validateAvatarFile,
 } from "../utils/authHelpers.js";
-import "@/styles/profileModal.css";
+import "@/features/profile/styles/profileModal.css";
 
 const PROFILE_MODES = {
   VIEW: "view",

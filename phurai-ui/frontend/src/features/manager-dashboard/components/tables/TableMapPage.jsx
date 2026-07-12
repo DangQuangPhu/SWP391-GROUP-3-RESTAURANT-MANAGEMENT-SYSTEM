@@ -5,7 +5,7 @@ import { SectionHead, ContentPanel, StatusBadge, Button } from "../ManagerUI.jsx
 import { useManagerPortal } from "../../context/ManagerPortalContext.jsx";
 import { TABLE_STATUS_META, AREAS } from "@/shared/constants.js";
 import { fetchAreas, fetchFilteredTables, mergeTablesApi, unmergeTableApi, updateTableApi, deleteTableApi, fetchTableTimelineApi } from "../../services/managerApi.js";
-import { asArray } from "@/utils/asArray.js";
+import { asArray } from "@/core/utils/asArray.js";
 import AddTableModal from "./AddTableModal.jsx";
 import TableMapFilterBar from "./TableMapFilterBar.jsx";
 import { STATUS_KEYS, STATUS_SLUG_TO_API } from "./tableConstants.js";

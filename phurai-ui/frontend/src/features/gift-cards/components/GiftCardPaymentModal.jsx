@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { formatVND } from "@/utils/formatCurrency";
+import { formatVND } from "@/core/utils/formatCurrency";
 import "../styles/gift-cards.css";
 
 function GiftCardPaymentModal({

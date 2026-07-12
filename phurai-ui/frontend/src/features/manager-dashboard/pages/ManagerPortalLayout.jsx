@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import ManagerLayout from "../components/ManagerLayout.jsx";
@@ -18,6 +18,9 @@ function ManagerPortalLayout({ onSignOut }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Refresh state for Refresh Data button
+  const [refreshing, setRefreshing] = useState(false);
+
   const view = getViewFromPath(location.pathname);
   const pendingAction = pendingActionFromSearch(location.search);
 
@@ -35,6 +38,16 @@ function ManagerPortalLayout({ onSignOut }) {
     },
     [navigate]
   );
+
+  /** Refresh Data button handler — dispatches phurai_manager_refresh event */
+  const handleRefresh = useCallback(() => {
+    if (refreshing) return;
+    setRefreshing(true);
+    // Trigger all data reload via existing event listener in ManagerPortalPage
+    window.dispatchEvent(new Event("phurai_manager_refresh"));
+    // Auto-clear after 2s (data fetch is async, we just show spinner briefly)
+    setTimeout(() => setRefreshing(false), 2000);
+  }, [refreshing]);
 
   useEffect(() => {
     if (!pendingAction || !isEphemeralPendingAction(pendingAction)) return undefined;
@@ -59,7 +72,8 @@ function ManagerPortalLayout({ onSignOut }) {
       subtitle={subtitle}
       search={search}
       onSearch={setSearch}
-      onQuickAction={() => portalNavigate("reservations")}
+      onRefresh={handleRefresh}
+      refreshing={refreshing}
       onSignOut={onSignOut}
       toasts={toasts}
     >

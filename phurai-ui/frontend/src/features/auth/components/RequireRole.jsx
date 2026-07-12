@@ -27,7 +27,8 @@ export default function RequireRole({ allowedRoles }) {
     if (userRole === 'Admin') return <Navigate to="/admin" replace />;
     if (userRole === 'Manager') return <Navigate to="/manager" replace />;
     if (userRole === 'Restaurant Staff') return <Navigate to="/staff" replace />;
-    if (userRole === 'Kitchen Staff') return <Navigate to="/kds" replace />;
+    // Kitchen Staff (role_id=3) deprecated — KDS is device-based, no user redirect
+
     
     // Fallback for missing/unknown roles
     return <Navigate to="/" replace />;

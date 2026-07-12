@@ -143,6 +143,7 @@ router.post("/login", async (req, res) => {
     const hash = String(user.password_hash || "");
     const isPasswordValid = await verifyStoredPassword(password, hash);
 
+
     if (!isPasswordValid) {
       return res.status(401).json({ message: "Invalid password." });
     }
@@ -153,7 +154,12 @@ router.post("/login", async (req, res) => {
       if (refreshed) Object.assign(user, refreshed);
     }
 
-    if (user.last_login_at == null) {
+    // First-login / forced reset check
+    // Uses force_password_reset column (explicit) as primary signal.
+    // Falls back to last_login_at IS NULL as secondary for rows created before migration.
+    if (user.force_password_reset === 1 || user.force_password_reset === true
+        || user.last_login_at == null) {
+
       const restrictedToken = jwt.sign(
         {
           user_id: user.user_id,
@@ -718,7 +724,12 @@ router.post("/first-login-reset", async (req, res) => {
        return res.status(500).json({ message: "Failed to update password." });
     }
     
-    await pool.query("UPDATE dbo.UserAccounts SET last_login_at = SYSDATETIME(), updated_at = SYSDATETIME() WHERE user_id = ?", [decoded.user_id]);
+    // Clear force_password_reset flag + stamp last_login_at
+    await pool.query(
+      "UPDATE dbo.UserAccounts SET last_login_at = SYSDATETIME(), force_password_reset = 0, updated_at = SYSDATETIME() WHERE user_id = ?",
+      [decoded.user_id]
+    );
+
     
     // Fetch user and issue normal token
     const [users] = await pool.query(`${PROFILE_SELECT} WHERE ua.user_id = ?`, [decoded.user_id]);

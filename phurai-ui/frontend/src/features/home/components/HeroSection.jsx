@@ -3,39 +3,37 @@ import { Link } from "react-router-dom";
 import { homeImages } from "../data/homeAssets.js";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 
+/**
+ * HeroSection
+ *
+ * Video strategy:
+ *   - src is SET IMMEDIATELY so browser preloads while intro overlay is on top.
+ *   - .play() is only called once intro finishes (isVideoPlaying = true).
+ *   - This eliminates the gray-flash: by the time the overlay lifts, video
+ *     has already buffered its first frame.
+ *   - The hero section has a black background-color as a further safety net.
+ */
 function HeroSection({ isRevealReady = true, isVideoPlaying = true }) {
   const revealRef = useScrollReveal({ enabled: isRevealReady });
-  const videoRef = useRef(null);
-
-  // Track if this is a new session on mount (before hasSeenIntro is set to true)
-  const isNewSession = useRef(!sessionStorage.getItem('hasSeenIntro'));
-
-  // A state to control when the video source is loaded and allowed to play
-  const [allowVideo, setAllowVideo] = useState(!isNewSession.current);
-
-  useEffect(() => {
-    if (isNewSession.current) {
-      // For new sessions, delay loading/playing the video by 4.3 seconds
-      const timer = setTimeout(() => {
-        setAllowVideo(true);
-      }, 3520);
-      return () => clearTimeout(timer);
-    }
-  }, []);
+  const videoRef  = useRef(null);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    if (allowVideo && isVideoPlaying) {
-      if (!video.src) {
-        video.src = homeImages.heroVideo;
-      }
-      video.play().catch(e => console.log("Video playback failed/prevented:", e));
+    // Always set src immediately so it preloads in the background.
+    // The intro overlay (z-index: 2000) hides it while it buffers.
+    if (!video.src && homeImages.heroVideo) {
+      video.src = homeImages.heroVideo;
+      video.load(); // explicitly trigger preload
+    }
+
+    if (isVideoPlaying) {
+      video.play().catch(e => console.log('Video autoplay prevented:', e));
     } else {
       video.pause();
     }
-  }, [allowVideo, isVideoPlaying]);
+  }, [isVideoPlaying]);
 
   return (
     <section className="phurai-hero" aria-label="Welcome">
@@ -45,6 +43,7 @@ function HeroSection({ isRevealReady = true, isVideoPlaying = true }) {
         muted
         loop
         playsInline
+        preload="auto"
         aria-hidden="true"
       />
 

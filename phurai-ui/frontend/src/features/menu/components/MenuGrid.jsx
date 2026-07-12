@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { menuImages } from '../data/menuAssets.js';
-import { formatVND } from '@/utils/formatCurrency';
+import { formatVND } from '@/core/utils/formatCurrency';
 import { flyToCart } from '../utils/flyToCart.js';
 
 const FALLBACK_IMAGE = menuImages.hero;

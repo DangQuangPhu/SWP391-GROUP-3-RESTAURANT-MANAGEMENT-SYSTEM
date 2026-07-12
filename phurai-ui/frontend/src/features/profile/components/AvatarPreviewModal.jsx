@@ -5,7 +5,7 @@ import {
   getAvatarSrc,
   resolveAvatarUrl,
 } from "../utils/avatarUtils.js";
-import "@/styles/AvatarPreviewModal.css";
+import "@/features/profile/styles/AvatarPreviewModal.css";
 
 function AvatarPreviewModal({ isOpen, onClose, user }) {
   const panelRef = useRef(null);

@@ -2,12 +2,20 @@ import React, { useEffect, useState } from 'react';
 import { apiGet } from '@/core/api/httpClient';
 import AdminPageHeader from '@/features/admin-dashboard/components/AdminPageHeader';
 import AdminDataTable from '@/features/admin-dashboard/components/AdminDataTable';
-import { Edit, Trash2, UserPlus } from 'lucide-react';
+import KdsDeviceManager from '@/features/admin-dashboard/components/KdsDeviceManager';
+import { Edit, Trash2, UserPlus, Monitor } from 'lucide-react';
 
 export default function Accounts() {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('accounts'); // 'accounts' | 'kds'
+  const [toastMsg, setToastMsg] = useState(null);
+
+  const toast = ({ type, message }) => {
+    setToastMsg({ type, message });
+    setTimeout(() => setToastMsg(null), 4000);
+  };
 
   const fetchAccounts = async () => {
     try {
@@ -29,7 +37,11 @@ export default function Accounts() {
 
   useEffect(() => {
     fetchAccounts();
+    // Listen for Refresh Data button in AdminLayout header
+    window.addEventListener("phurai_admin_refresh", fetchAccounts);
+    return () => window.removeEventListener("phurai_admin_refresh", fetchAccounts);
   }, []);
+
 
   const handleCreateAccount = () => {
     alert('Create Account feature is coming soon!');
@@ -57,7 +69,9 @@ export default function Accounts() {
         
         if (role === 'Admin') badgeColor = 'bg-purple-100 text-purple-700 border-purple-200';
         else if (role === 'Manager') badgeColor = 'bg-blue-100 text-blue-700 border-blue-200';
-        else if (role === 'Restaurant Staff' || role === 'Kitchen Staff') badgeColor = 'bg-amber-100 text-amber-700 border-amber-200';
+        else if (role === 'Restaurant Staff') badgeColor = 'bg-amber-100 text-amber-700 border-amber-200';
+        // Kitchen Staff (role_id=3) deprecated — accounts soft-deleted, no badge needed
+
         
         return (
           <span className={`px-2.5 py-1 text-xs font-medium rounded-full border ${badgeColor}`}>
@@ -106,31 +120,60 @@ export default function Accounts() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* Toast */}
+      {toastMsg && (
+        <div style={{
+          position: 'fixed', top: '20px', right: '20px', zIndex: 99999,
+          padding: '12px 20px', borderRadius: '10px', fontWeight: '500', fontSize: '14px',
+          background: toastMsg.type === 'error' ? '#e05252' : '#4caf7d', color: '#fff',
+          boxShadow: '0 4px 20px rgba(0,0,0,.4)'
+        }}>
+          {toastMsg.message}
+        </div>
+      )}
+
       <AdminPageHeader
-        title="Accounts"
-        description="Manage restaurant user accounts, view active employees, and assign roles."
-        primaryAction={{
-          label: (
-            <span className="flex items-center gap-2">
-              <UserPlus className="w-4 h-4" />
-              Create Account
-            </span>
-          ),
+        title="Accounts & Devices"
+        description="Manage restaurant user accounts, assign roles, and configure KDS kitchen terminals."
+        primaryAction={activeTab === 'accounts' ? {
+          label: (<span className="flex items-center gap-2"><UserPlus className="w-4 h-4" />Create Account</span>),
           onClick: handleCreateAccount,
-        }}
+        } : undefined}
       />
 
-      {error ? (
-        <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-red-700 text-sm">
-          {error}
-        </div>
-      ) : (
-        <AdminDataTable
-          columns={columns}
-          data={accounts}
-          loading={loading}
-          emptyMessage="No user accounts found."
-        />
+      {/* Tab selector */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '8px' }}>
+        {[{ id: 'accounts', label: 'User Accounts' }, { id: 'kds', label: 'KDS Devices' }].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              padding: '8px 20px', borderRadius: '24px', border: 'none', cursor: 'pointer',
+              fontWeight: activeTab === tab.id ? '600' : '400',
+              background: activeTab === tab.id ? '#c8a96e' : '#2a2a2a',
+              color: '#fff', fontSize: '14px',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'accounts' && (
+        error ? (
+          <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-red-700 text-sm">{error}</div>
+        ) : (
+          <AdminDataTable
+            columns={columns}
+            data={accounts}
+            loading={loading}
+            emptyMessage="No user accounts found."
+          />
+        )
+      )}
+
+      {activeTab === 'kds' && (
+        <KdsDeviceManager toast={toast} />
       )}
     </div>
   );

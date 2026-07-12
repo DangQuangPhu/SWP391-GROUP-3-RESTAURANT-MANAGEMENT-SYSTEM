@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatVND } from "@/utils/formatCurrency";
+import { formatVND } from "@/core/utils/formatCurrency";
 import { getPreorderMenu, savePreorder } from "../services/reservationApi.js";
 
 /**

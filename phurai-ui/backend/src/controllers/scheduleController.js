@@ -1,7 +1,9 @@
 import sql from "mssql";
 import { createDbRequest } from "../db.js";
 
-const ASSIGNABLE_ROLES = new Set(["Restaurant Staff", "Kitchen Staff"]);
+// role_id=3 (Kitchen Staff) removed — deprecated. Any employee with a StaffProfile can be scheduled.
+const ASSIGNABLE_ROLES = new Set(["Restaurant Staff"]);
+
 
 const ATTENDANCE_STATUSES = new Set(["Scheduled", "Present", "Absent", "On Leave"]);
 
@@ -159,9 +161,10 @@ export async function createSchedule(req, res) {
     if (!ASSIGNABLE_ROLES.has(targetRole)) {
       return jsonError(
         res,
-        "Shifts can only be assigned to Restaurant Staff or Kitchen Staff.",
+        "Shifts can only be assigned to Restaurant Staff.",
         403
       );
+
     }
 
     const shiftRequest = await createDbRequest();
@@ -248,7 +251,8 @@ export async function updateScheduleStatus(req, res) {
     if (!ASSIGNABLE_ROLES.has(existing.role_name)) {
       return jsonError(
         res,
-        "Attendance can only be updated for Restaurant Staff or Kitchen Staff schedules.",
+        "Attendance can only be updated for Restaurant Staff schedules.",
+
         403
       );
     }

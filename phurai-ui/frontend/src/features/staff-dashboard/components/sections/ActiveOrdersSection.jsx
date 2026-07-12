@@ -7,8 +7,8 @@ import {
   NotConnectedNote,
 } from "../StaffUI.jsx";
 import { DEMO_NOTICE, ORDER_STATUS_META } from "@/shared/constants.js";
-import { formatVND } from "@/utils/formatCurrency.js";
-import { asArray } from "@/utils/asArray.js";
+import { formatVND } from "@/core/utils/formatCurrency.js";
+import { asArray } from "@/core/utils/asArray.js";
 
 function ActiveOrdersSection({ orders, setOrders, dataSource, toast }) {
   const orderList = asArray(orders);

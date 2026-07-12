@@ -33,8 +33,8 @@ import {
   forgotPasswordReset,
 } from "@/features/auth";
 import { loadAuthUser } from "@/core/api";
-import "@/styles/OtpCodeInput.css";
-import "@/styles/profile.css";
+import "@/features/auth/styles/OtpCodeInput.css";
+import "@/features/profile/styles/profile.css";
 
 const GENDERS = ["", "Male", "Female", "Other"];
 const COUNTRIES = ["", "Vietnam", "United States", "United Kingdom", "Singapore", "Other"];

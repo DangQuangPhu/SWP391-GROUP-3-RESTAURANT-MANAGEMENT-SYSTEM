@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { listContainerVariants, listItemVariants } from "@/components/ui/Skeleton";
 import { format, parseISO } from "date-fns";
 import { SectionHead, ContentPanel, Toolbar, SearchField, Button, EmptyState } from "../ManagerUI.jsx";
 import { ManagerModal } from "../ManagerOverlay.jsx";
@@ -180,14 +182,22 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <motion.tbody
+                variants={listContainerVariants}
+                initial="hidden"
+                animate="visible"
+              >
                 {filtered.map(p => {
                   const isExpired = new Date(p.valid_until) < new Date();
                   const isExhausted = p.usage_limit !== null && p.used_count >= p.usage_limit;
                   const inactive = !p.is_active || isExpired || isExhausted;
 
                   return (
-                    <tr key={p.promotion_id} className={inactive ? "opacity-60 grayscale-[50%]" : ""}>
+                    <motion.tr
+                      key={p.promotion_id}
+                      variants={listItemVariants}
+                      className={inactive ? "opacity-60 grayscale-[50%]" : ""}
+                    >
                       <td className="font-semibold">
                         <div className="inline-flex items-center gap-2 bg-slate-100 border border-dashed border-slate-300 rounded px-3 py-1 font-mono text-slate-900 text-sm">
                           {p.promo_code}
@@ -278,10 +288,10 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                           </button>
                         </div>
                       </td>
-                    </tr>
+                    </motion.tr>
                   );
                 })}
-              </tbody>
+              </motion.tbody>
             </table>
           </div>
         )}

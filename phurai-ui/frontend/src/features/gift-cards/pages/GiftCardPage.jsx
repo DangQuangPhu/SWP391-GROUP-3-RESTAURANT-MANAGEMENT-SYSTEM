@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { formatVND } from "@/utils/formatCurrency";
+import { formatVND } from "@/core/utils/formatCurrency";
 import { GIFT_CARD_OPTIONS } from "../data/giftCardOptions.js";
 import { buyGiftCard } from "../services/giftCardApi.js";
 import GiftCardPaymentModal from "../components/GiftCardPaymentModal.jsx";

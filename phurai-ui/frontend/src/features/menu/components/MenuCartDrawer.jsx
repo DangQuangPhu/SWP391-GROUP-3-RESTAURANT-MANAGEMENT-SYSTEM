@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useMenuCart } from '../context/MenuCartContext.jsx';
-import { formatVND } from '@/utils/formatCurrency';
+import { formatVND } from '@/core/utils/formatCurrency';
 import { appToastError } from '@/core/notifications/appToast.js';
 import toast from 'react-hot-toast';
 import { useTableSession } from '@/features/table-session';

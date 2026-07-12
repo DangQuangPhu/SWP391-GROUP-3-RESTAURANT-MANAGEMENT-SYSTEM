@@ -10,20 +10,22 @@ function ManagerLayout({
   subtitle,
   search,
   onSearch,
-  onQuickAction,
+  onRefresh,
+  refreshing,
   onSignOut,
   toasts,
   children,
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  // Default: sidebar collapsed (icon-only). User toggles to expand.
+  const [expanded, setExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const closeMobile = () => setMobileOpen(false);
 
   return (
-    <div className={`sfx-shell sfx-shell--manager ${collapsed ? "sfx-shell--collapsed" : ""}`}>
+    <div className={`sfx-shell sfx-shell--manager ${expanded ? "sfx-shell--expanded" : "sfx-shell--collapsed"}`}>
       <ManagerSidebar
-        collapsed={collapsed}
+        collapsed={!expanded}
         role={role}
         mobileOpen={mobileOpen}
         onCloseMobile={closeMobile}
@@ -38,9 +40,10 @@ function ManagerLayout({
           user={user}
           search={search}
           onSearch={onSearch}
-          onToggleSidebar={() => setCollapsed((c) => !c)}
+          onToggleSidebar={() => setExpanded((e) => !e)}
           onMobileMenu={() => setMobileOpen(true)}
-          onQuickAction={onQuickAction}
+          onRefresh={onRefresh}
+          refreshing={refreshing}
         />
         <main className="sfx-canvas">{children}</main>
       </div>

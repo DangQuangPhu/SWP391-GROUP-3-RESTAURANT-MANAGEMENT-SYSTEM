@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { OtpCodeInput, formatOtpExpiry } from "@/features/auth";
-import "@/styles/OtpCodeInput.css";
-import "@/styles/profile.css";
-import "@/styles/auth.css";
+import "@/features/auth/styles/OtpCodeInput.css";
+import "@/features/profile/styles/profile.css";
+import "@/features/auth/styles/auth.css";
 
 const EMPTY_DIGITS = ["", "", "", "", "", ""];
 

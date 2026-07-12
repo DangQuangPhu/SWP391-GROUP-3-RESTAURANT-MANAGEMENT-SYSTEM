@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Copy, CheckCircle2 } from 'lucide-react';
-import './CheckoutPayment.css';
+import '../styles/CheckoutPayment.css';
 
 const TOTAL_SECONDS = 15 * 60;
 const PaymentContext = createContext(null);

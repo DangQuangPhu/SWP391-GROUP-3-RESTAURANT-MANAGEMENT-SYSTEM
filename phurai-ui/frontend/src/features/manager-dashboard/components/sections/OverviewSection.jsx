@@ -1,19 +1,19 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { listContainerVariants, listItemVariants, fadeScaleVariants } from "@/components/ui/Skeleton";
 import { isSameDay } from "date-fns";
 import KpiCard from "../KpiCard.jsx";
 import RevenueChart from "../RevenueChart.jsx";
 import DashboardDateRangePicker from "../shared/DashboardDateRangePicker.jsx";
 import Icon from "../ManagerIcons.jsx";
 import { Card } from "../ManagerUI.jsx";
-import { formatVND } from "@/utils/formatCurrency.js";
-import { asArray } from "@/utils/asArray.js";
+import { formatVND } from "@/core/utils/formatCurrency.js";
+import { asArray } from "@/core/utils/asArray.js";
 import {
   KPI_CARDS,
   deriveKpisForRange,
-  expandReservationsForDemo,
   filterDailyRevenue,
   formatDateRangeLabel,
-  generateTwoYearDailyRevenue,
   getDateRangePresets,
   getDefaultDateRange,
   prepareChartSeries,
@@ -26,8 +26,7 @@ const QUICK_ACTIONS = [
   { label: "Export Report", icon: "download", view: "reports", action: "tab-export" },
 ];
 
-function OverviewSection({ kpis: baseKpisProp, reservations, role, onNavigate }) {
-  // Always use real today
+function OverviewSection({ kpis: baseKpisProp, reservations, revenue, role, onNavigate }) {
   const today = useMemo(() => new Date(), []);
 
   const [dateRange, setDateRange] = useState(() => getDefaultDateRange(today));
@@ -41,14 +40,10 @@ function OverviewSection({ kpis: baseKpisProp, reservations, role, onNavigate })
     [baseKpisProp]
   );
 
+  // Use real revenue series from API (revenue.series), fall back to empty []
   const dailyRevenueSeries = useMemo(
-    () => generateTwoYearDailyRevenue(today),
-    [today]
-  );
-
-  const demoReservations = useMemo(
-    () => expandReservationsForDemo(reservations, today),
-    [reservations, today]
+    () => asArray(revenue?.series ?? revenue ?? []),
+    [revenue]
   );
 
   const filteredDailyRevenue = useMemo(
@@ -63,9 +58,10 @@ function OverviewSection({ kpis: baseKpisProp, reservations, role, onNavigate })
 
   const dateRangeLabel = useMemo(() => formatDateRangeLabel(dateRange), [dateRange]);
 
+  // Use real reservations directly — no demo expansion
   const rangeKpis = useMemo(
-    () => deriveKpisForRange(baseKpis, dailyRevenueSeries, dateRange, demoReservations),
-    [baseKpis, dailyRevenueSeries, dateRange, demoReservations]
+    () => deriveKpisForRange(baseKpis, dailyRevenueSeries, dateRange, asArray(reservations)),
+    [baseKpis, dailyRevenueSeries, dateRange, reservations]
   );
 
   const chartTotal = useMemo(
@@ -117,13 +113,27 @@ function OverviewSection({ kpis: baseKpisProp, reservations, role, onNavigate })
 
   return (
     <div className="sfx-stack">
-      <div className="sfx-kpis">
+      {/* KPI cards — staggered entrance */}
+      <motion.div
+        className="sfx-kpis"
+        variants={listContainerVariants}
+        initial="hidden"
+        animate="visible"
+      >
         {visibleKpis.map((card, i) => (
-          <KpiCard key={card.id} card={card} index={i} />
+          <motion.div key={card.id} variants={listItemVariants}>
+            <KpiCard card={card} index={i} />
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
 
-      <div className="sfx-grid sfx-grid--2-1">
+      {/* Charts + quick actions — fade in after cards */}
+      <motion.div
+        className="sfx-grid sfx-grid--2-1"
+        variants={fadeScaleVariants}
+        initial="hidden"
+        animate="visible"
+      >
         {role === "manager" ? (
           <Card className="sfx-span sfx-card--overflow-visible">
             <div className="sfx-chart-anchor">
@@ -198,7 +208,7 @@ function OverviewSection({ kpis: baseKpisProp, reservations, role, onNavigate })
             ))}
           </div>
         </Card>
-      </div>
+      </motion.div>
     </div>
   );
 }

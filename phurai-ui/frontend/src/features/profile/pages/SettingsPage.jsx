@@ -2,8 +2,8 @@ import { useState } from "react";
 import { UserAvatar, getDisplayName } from "@/features/auth";
 import AvatarPickerModal from "../components/AvatarPickerModal.jsx";
 import AccountBackHome from "../components/AccountBackHome.jsx";
-import "@/styles/settings.css";
-import "@/styles/profile.css";
+import "@/features/profile/styles/settings.css";
+import "@/features/profile/styles/profile.css";
 
 const MAIN_ITEMS = [
   { id: "profile", label: "Public profile", path: "/settings/profile", icon: "user" },

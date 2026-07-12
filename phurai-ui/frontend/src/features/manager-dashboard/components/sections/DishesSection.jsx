@@ -12,8 +12,8 @@ import {
   NotConnectedNote,
 } from "../ManagerUI.jsx";
 import { DISH_CATEGORIES } from "@/shared/constants.js";
-import { asArray } from "@/utils/asArray.js";
-import { formatVND } from "@/utils/formatCurrency.js";
+import { asArray } from "@/core/utils/asArray.js";
+import { formatVND } from "@/core/utils/formatCurrency.js";
 import { getMenuTabFromSearch } from "../../config/managerRoutes.js";
 import { addDish, updateDish, deleteDish } from "../../services/managerApi.js";
 import { loadAuthUser } from "@/core/api/httpClient.js";

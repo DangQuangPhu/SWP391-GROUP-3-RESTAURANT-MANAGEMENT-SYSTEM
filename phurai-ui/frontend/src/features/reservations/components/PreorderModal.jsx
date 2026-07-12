@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatVND } from "@/utils/formatCurrency";
+import { formatVND } from "@/core/utils/formatCurrency";
 import { menuImages, MenuImagePreview } from "@/features/menu";
 import "../styles/PreorderModal.css";
 

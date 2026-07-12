@@ -2,7 +2,7 @@ import { DINING_PURPOSES, PROMOTIONS } from "../data/floorPlanConfig.js";
 import { useState, useEffect } from "react";
 import PreorderDashboardModal from "./PreorderDashboardModal.jsx";
 import PromotionModal from "./PromotionModal.jsx";
-import { formatVND } from "@/utils/formatCurrency.js";
+import { formatVND } from "@/core/utils/formatCurrency.js";
 import { apiPost } from "@/core/api/httpClient";
 function formatDate(dateStr) {
   if (!dateStr) return "—";

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { getPaymentDetails } from "../services/profileApi";
 import { format } from "date-fns";
-import "@/styles/PaymentDetailsModal.css";
+import "@/features/reservations/styles/PaymentDetailsModal.css";
 
 function PaymentDetailsModal({ isOpen, onClose, userId, paymentId }) {
   const [data, setData] = useState(null);

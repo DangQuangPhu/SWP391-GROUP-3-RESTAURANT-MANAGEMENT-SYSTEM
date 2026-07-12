@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { fetchStaffTables, fetchActiveStaffOrders } from '../services/staffApi';
-import { asArray } from '@/utils/asArray';
+import { asArray } from '@/core/utils/asArray';
+
 import io from 'socket.io-client';
 import { SOCKET_URL } from "@/core/socket/socketConfig.js";
 

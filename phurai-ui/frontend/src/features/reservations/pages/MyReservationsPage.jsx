@@ -567,7 +567,7 @@ function MyReservationsPage({
               Booking <strong>#{String(cancelTarget.reservation_id).padStart(6, "0")}</strong> will remain <strong>Confirmed</strong> until a Manager reviews and processes your request.
             </p>
             <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 }}>
-              Reason (optional)
+              Reason
             </label>
             <textarea
               className="rzv-input"

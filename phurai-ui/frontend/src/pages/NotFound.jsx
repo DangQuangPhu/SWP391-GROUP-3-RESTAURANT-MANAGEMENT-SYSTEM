@@ -1,6 +1,6 @@
 import React from "react";
 import notFoundImage from "@/assets/images/fork-near-plate-with-twig.jpg";
-import "@/styles/notFound.css";
+import "@/styles/shared/notFound.css";
 
 function HomeIcon() {
   return (

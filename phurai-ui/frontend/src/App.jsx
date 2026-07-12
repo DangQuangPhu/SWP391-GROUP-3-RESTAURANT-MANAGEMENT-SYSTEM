@@ -372,7 +372,8 @@ function App() {
             }
           />
           <Route element={<RequireRole allowedRoles={['Admin']} />}>
-            <Route path="/admin" element={<AdminLayout currentUser={currentUser} />}>
+            <Route path="/admin" element={<AdminLayout currentUser={currentUser} onSignOut={handleSignOut} />}>
+
               <Route index element={<AdminDashboardPage />} />
               
               {/* Accounts Group */}
@@ -421,11 +422,13 @@ function App() {
               }
             />
           </Route>
-          <Route element={<RequireRole allowedRoles={['Kitchen Staff', 'Restaurant Staff', 'Manager', 'Admin']} />}>
+          {/* /kds — device-based PIN gate (no user role restriction; PinGate handles auth) */}
+          <Route element={<RequireRole allowedRoles={['Restaurant Staff', 'Manager', 'Admin']} />}>
             <Route path="/kds" element={<KitchenLayout currentUser={currentUser} onSignOut={handleSignOut} />}>
               <Route index element={<KitchenDashboardPage currentUser={currentUser} />} />
             </Route>
           </Route>
+
           <Route
             path="*"
             element={

@@ -7,7 +7,7 @@ import {
   NotConnectedNote,
 } from "../StaffUI.jsx";
 import { DEMO_NOTICE, ORDER_STATUS_META } from "@/shared/constants.js";
-import { asArray } from "@/utils/asArray.js";
+import { asArray } from "@/core/utils/asArray.js";
 
 const KITCHEN_FLOW = { queued: "cooking", cooking: "ready", ready: "done" };
 const KITCHEN_NEXT_LABEL = {

@@ -28,6 +28,9 @@ export default function AuditLogs() {
 
   useEffect(() => {
     fetchLogs();
+    // Listen for Refresh Data button in AdminLayout header
+    window.addEventListener("phurai_admin_refresh", fetchLogs);
+    return () => window.removeEventListener("phurai_admin_refresh", fetchLogs);
   }, []);
 
   const formatTimestamp = (isoString) => {

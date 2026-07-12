@@ -4,12 +4,11 @@ let io = null;
 
 import pool from "./db.js";
 
-const STAFF_ROLE_IDS = new Set([2, 3, 4, 5]);
+// Role mapping: 1=Customer, 2=Restaurant Staff, 4=Manager, 5=Admin
+// role_id=3 (Kitchen Staff) is DEPRECATED — KDS is device-based, not account-based.
+// KDS devices authenticate via their own KDS JWT and join room:kds independently.
+const STAFF_ROLE_IDS = new Set([2, 4, 5]); // role 3 removed
 const CUSTOMER_ROLE_ID = 1;
-const MANAGER_ROLE_ID = 4; // Based on PRD Manager role context, or we can just check if role === "Manager" in db, but we don't have role name here. PRD says user_id 2 is Manager.
-// Actually, let's just query user role if needed, or trust the roleId mapping.
-// According to PRD: Role 1 Customer, 2 Restaurant Staff, 3 Kitchen Staff, 4 Manager, 5 Admin
-const RESTAURANT_STAFF_ROLE_ID = 2;
 
 /**
  * Attach Socket.IO to the HTTP server.
@@ -36,17 +35,13 @@ export function initSocket(httpServer, { allowedOrigins = [] } = {}) {
       socket.join("room:manager");
     }
 
-    // Kitchen Staff (role 3) → room:kitchen (dedicated KDS room)
-    if (roleId === 3) {
-      socket.join("room:kitchen");
-      socket.join("room:staff"); // also join general staff room for shared events
-    }
-
     // Restaurant Staff (role 2) → room:restaurant_staff + room:staff
     if (roleId === 2) {
       socket.join("room:restaurant_staff");
       socket.join("room:staff");
     }
+    // NOTE: KDS devices (role_id=3 deprecated) join room:kds via their own
+    // device-token handshake, handled separately in the KDS activate flow.
 
     // All staff with shifts → shift-specific rooms
     if (STAFF_ROLE_IDS.has(roleId)) {

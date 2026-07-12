@@ -144,6 +144,8 @@ body.intro-running .phurai-navbar {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Prevent gray flash before video loads — match video dominant dark tone */
+  background-color: #0d0d0d;
 }
 
 .phurai-hero__bg {
@@ -154,6 +156,8 @@ body.intro-running .phurai-navbar {
   object-fit: cover;
   object-position: center;
   z-index: 0;
+  /* Black while video is buffering — prevents gray/white flash */
+  background-color: #0d0d0d;
 }
 
 .phurai-hero__overlay {

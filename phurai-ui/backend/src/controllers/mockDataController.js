@@ -1,15 +1,32 @@
 import { getRawPool } from '../db.js';
-import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
 
 export const purgeMockData = async (req, res) => {
     try {
         const pool = await getRawPool();
 
-        // Delete all mock reservations (where contact_name starts with 'Mock Customer')
+        // Delete AutoMock orders, payments, order items, kitchen tickets
         await pool.request().query(`
-            DELETE FROM dbo.ReservationTables WHERE reservation_id IN (SELECT reservation_id FROM dbo.Reservations WHERE contact_name LIKE 'Mock Customer %');
-            DELETE FROM dbo.Reservations 
-            WHERE contact_name LIKE 'Mock Customer %';
+            DELETE FROM dbo.KitchenTickets
+            WHERE order_item_id IN (
+                SELECT order_item_id FROM dbo.OrderItems
+                WHERE order_id IN (
+                    SELECT order_id FROM dbo.Orders WHERE order_note = N'AutoMock'
+                )
+            );
+            DELETE FROM dbo.Payments
+            WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE order_note = N'AutoMock');
+            DELETE FROM dbo.OrderItems
+            WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE order_note = N'AutoMock');
+            DELETE FROM dbo.Orders WHERE order_note = N'AutoMock';
+
+            DELETE FROM dbo.ReservationTables WHERE reservation_id IN (
+                SELECT reservation_id FROM dbo.Reservations
+                WHERE contact_name LIKE N'Mock Customer %'
+                   OR contact_name LIKE N'AutoMock%'
+            );
+            DELETE FROM dbo.Reservations
+            WHERE contact_name LIKE N'Mock Customer %'
+               OR contact_name LIKE N'AutoMock%';
         `);
 
         return res.status(200).json({
@@ -22,16 +39,23 @@ export const purgeMockData = async (req, res) => {
     }
 };
 
+
 export const seedMockData = async (req, res) => {
     try {
         const pool = await getRawPool();
 
         // 1. Implicitly purge existing mock data to prevent stacking
         await pool.request().query(`
-            DELETE FROM dbo.ReservationTables WHERE reservation_id IN (SELECT reservation_id FROM dbo.Reservations WHERE contact_name LIKE 'Mock Customer %');
-            DELETE FROM dbo.Reservations 
-            WHERE contact_name LIKE 'Mock Customer %';
+            DELETE FROM dbo.ReservationTables WHERE reservation_id IN (
+                SELECT reservation_id FROM dbo.Reservations
+                WHERE contact_name LIKE 'Mock Customer %'
+                   OR contact_name LIKE 'AutoMock%'
+            );
+            DELETE FROM dbo.Reservations
+            WHERE contact_name LIKE 'Mock Customer %'
+               OR contact_name LIKE 'AutoMock%';
         `);
+
 
         // 2. Fetch some valid table IDs to associate the mock data with
         const tablesResult = await pool.request().query(`

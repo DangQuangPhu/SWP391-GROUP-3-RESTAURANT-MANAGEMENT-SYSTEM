@@ -6,7 +6,7 @@ import {
 } from "@/shared/constants.js";
 import { RESERVATION_STATUS_META } from "@/shared/reservationStatus.js";
 
-import { asArray } from "@/utils/asArray.js";
+import { asArray } from "@/core/utils/asArray.js";
 
 /* Operations-focused view (no revenue) for floor & kitchen manager. */
 function TodaySection({ kpis, reservations, tables, orders, onNavigate }) {

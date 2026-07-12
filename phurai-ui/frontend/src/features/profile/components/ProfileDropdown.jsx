@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { getDisplayName, UserAvatar } from "@/features/auth";
 
-import "@/styles/profile.css";
-import "@/styles/AccountDropdown.css";
+import "@/features/profile/styles/profile.css";
+import "@/features/profile/styles/AccountDropdown.css";
 
 
 function ProfileIcon() {

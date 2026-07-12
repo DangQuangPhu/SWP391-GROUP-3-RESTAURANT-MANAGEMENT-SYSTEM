@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import "@/styles/StatusModal.css";
+import "@/components/common/styles/StatusModal.css";
 
 const QUICK_STATUSES = [
   { emoji: "🌴", text: "On vacation" },

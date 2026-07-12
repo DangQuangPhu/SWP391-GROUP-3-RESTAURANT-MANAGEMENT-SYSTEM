@@ -22,7 +22,10 @@ import dishRoutes from "./routes/dishes.js";
 import menuRoutes from "./routes/menu.routes.js";
 import customerRoutes from "./routes/customer.js";
 import kitchenRoutes from "./routes/kitchen.routes.js";
+import kdsRoutes from "./routes/kds.routes.js";
+import adminKdsRoutes from "./routes/admin.kds.routes.js";
 import ordersRoutes from "./routes/orders.routes.js";
+
 import loyaltyRoutes from "./routes/loyalty.js";
 import { initSocket } from "./socket.js";
 import { runReservationReminders } from "./services/reminderService.js";
@@ -77,7 +80,10 @@ app.use("/api/reservations", reservationPaymentRoutes);
 app.use("/api/staff", staffRoutes);
 app.use("/api/manager", managerRoutes);
 app.use("/api/admin", adminRoutes);
-app.use("/api/kitchen", kitchenRoutes);
+app.use("/api/kitchen", kitchenRoutes);   // staff-side view (user JWT)
+app.use("/api/kds", kdsRoutes);           // device-based auth (PIN JWT)
+app.use("/api/admin/kds-devices", adminKdsRoutes); // admin KDS device management
+
 app.use("/api/orders", ordersRoutes);
 app.use("/api/dishes", dishRoutes);
 app.use("/api/menu", menuRoutes);

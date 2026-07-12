@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { formatVND } from '@/utils/formatCurrency';
+import { formatVND } from '@/core/utils/formatCurrency';
 import { useTableSession } from '@/features/table-session';
 import { useNavigate } from 'react-router-dom';
 

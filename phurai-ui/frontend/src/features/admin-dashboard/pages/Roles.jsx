@@ -29,6 +29,9 @@ export default function Roles() {
 
   useEffect(() => {
     fetchRoles();
+    // Listen for Refresh Data button in AdminLayout header
+    window.addEventListener("phurai_admin_refresh", fetchRoles);
+    return () => window.removeEventListener("phurai_admin_refresh", fetchRoles);
   }, []);
 
   const handleEditRole = (row) => {

@@ -3,8 +3,8 @@ import { getStaffSegment } from "./staffRoutes.js";
 
 /**
  * Staff portal navigation — split by role.
- * Role 2 (Restaurant Staff): full floor operations
- * Role 3 (Kitchen Staff): Kitchen Display System only
+ * Role 2 (Restaurant Staff): floor operations + KDS (user-JWT, Ready/Served actions)
+ * KDS Device (device-JWT): /kds route directly, no sidebar
  */
 export const STAFF_NAV = [
   {
@@ -30,17 +30,19 @@ export const STAFF_NAV = [
     ],
   },
   {
+    // KDS tab for Staff (user-JWT): see Ready queue + push Sent To Kitchen + mark Served
+    // KDS Devices (device-JWT) go directly to /kds, not through this sidebar
+    group: "Kitchen",
+    roles: [STAFF_ROLE.RESTAURANT],
+    items: [
+      { id: "kds", label: "Kitchen Display", segment: "kds", icon: "fire" },
+    ],
+  },
+  {
     group: "Insights & Reports",
     roles: [STAFF_ROLE.RESTAURANT],
     items: [
       { id: "shifts",       label: "Shift Reports", segment: "shifts",      icon: "chart" },
-    ],
-  },
-  {
-    group: "Kitchen Operations",
-    roles: [STAFF_ROLE.KITCHEN],
-    items: [
-      { id: "kds", label: "Kitchen Display", segment: "kds", icon: "fire" },
     ],
   },
 ];

@@ -11,7 +11,7 @@ import {
   assignSchedule,
   updateScheduleAttendance,
 } from "../../services/managerApi.js";
-import { formatVND } from "@/utils/formatCurrency.js";
+import { formatVND } from "@/core/utils/formatCurrency.js";
 
 const ATTENDANCE_STATUSES = ["Scheduled", "Present", "Absent", "On Leave"];
 

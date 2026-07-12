@@ -302,7 +302,7 @@ export default function ReservationDetails({
     if (!form.fullName || !form.fullName.trim()) {
       newErrors.fullName = "Please enter your full name.";
     }
-    
+
     if (!form.phone || !form.phone.trim()) {
       newErrors.phone = "Please enter your phone number.";
     } else if (!/^[+]?[\d\s().-]{7,15}$/.test(form.phone.trim())) {
@@ -587,7 +587,7 @@ export default function ReservationDetails({
 
       <div className="rd-row-2">
         <div className="rd-field" ref={registerRef('email')}>
-          <label>EMAIL (OPTIONAL)</label>
+          <label>EMAIL</label>
           <input
             type="email"
             placeholder="Your Email"

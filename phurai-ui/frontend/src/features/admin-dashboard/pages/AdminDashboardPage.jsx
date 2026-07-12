@@ -1,26 +1,108 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { apiGet } from '@/core/api/httpClient';
-import { KpiSkeleton, Skeleton } from '@/components/ui/Skeleton';
 import {
-  Users, UserCheck, ShieldAlert, List, Calendar, Banknote, MessageSquare, AlertTriangle,
-  UserPlus, Settings, FileText, Sliders, Plus
-} from 'lucide-react';
+  SkeletonPresence,
+  KpiSkeleton,
+  Skeleton,
+  listContainerVariants,
+  listItemVariants,
+  fadeScaleVariants,
+} from '@/components/ui/Skeleton';
+import PortalKpiCard from '@/components/portal/PortalKpiCard.jsx';
+import '../styles/AdminDashboardPage.css';
 
-const AdminKpiCard = ({ title, value, icon: Icon, trend, trendColor, iconBgColor, iconColor }) => (
-  <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col justify-between hover:shadow-md transition-shadow">
-    <div className="flex justify-between items-start mb-4">
-      <div className={`p-2.5 rounded-lg ${iconBgColor} ${iconColor}`}>
-        <Icon className="w-5 h-5" />
-      </div>
-      <span className={`text-xs font-semibold ${trendColor}`}>{trend}</span>
-    </div>
-    <div>
-      <h3 className="text-3xl font-bold text-gray-900 mb-1">{value}</h3>
-      <p className="text-sm text-gray-500 font-medium">{title}</p>
-    </div>
-  </div>
-);
+/**
+ * 8 KPI cards — mapped to PortalKpiCard format.
+ * Accent color mapping (approved):
+ *   blue   → neutral/info (Total Accounts, Audit Entries Today)
+ *   green  → active/success (Active Staff)
+ *   amber  → warning/action needed (Pending Role Requests, Staff Performance Flags)
+ *   red    → critical action required (Reviews Needing Reply)
+ *   purple → analytics/historical (Reservations 30d)
+ *   blue   → financial (Total Revenue 30d) [user changed from green]
+ */
+function buildKpis(stats) {
+  return [
+    {
+      label: "Total Accounts",
+      value: stats?.totalAccounts ?? 47,
+      format: "number",
+      icon: "users",
+      accent: "blue",
+      trend: { dir: "up", text: "+3 this month" },
+    },
+    {
+      label: "Active Staff",
+      value: stats ? `${stats.activeStaff} / ${stats.totalAccounts}` : "41 / 47",
+      format: "text",
+      icon: "users",
+      accent: "green",
+      trend: {
+        dir: "flat",
+        text: stats
+          ? `${Math.round((stats.activeStaff / Math.max(stats.totalAccounts, 1)) * 100)}% active`
+          : "87% active",
+      },
+    },
+    {
+      label: "Pending Role Requests",
+      value: stats?.pendingRoleRequests ?? 2,
+      format: "number",
+      icon: "shield",
+      accent: "amber",
+      trend: { dir: "flat", text: "Awaiting approval" },
+    },
+    {
+      label: "Audit Entries Today",
+      value: stats?.auditEntriesToday ?? 63,
+      format: "number",
+      icon: "report",
+      accent: "blue",
+      trend: { dir: "flat", text: "Across all staff" },
+    },
+    {
+      label: "Reservations (30d)",
+      value: stats?.reservations30d ?? 1085,
+      format: "number",
+      icon: "calendar",
+      accent: "purple",
+      trend: { dir: "up", text: "+12% vs prior period" },
+    },
+    {
+      label: "Total Revenue (30d)",
+      value: stats?.revenue30d ?? 282_300_000,
+      format: "currency",
+      icon: "wallet",
+      accent: "blue",
+      trend: { dir: "flat", text: "System wide total" },
+    },
+    {
+      label: "Reviews Needing Reply",
+      value: stats?.reviewsNeedingReply ?? 5,
+      format: "number",
+      icon: "star",
+      accent: "red",
+      trend: { dir: "flat", text: "Rating ≤ 3 stars" },
+    },
+    {
+      label: "Staff Performance Flags",
+      value: stats?.staffPerformanceFlags ?? 1,
+      format: "number",
+      icon: "spark",
+      accent: "amber",
+      trend: { dir: "flat", text: "Below target this week" },
+    },
+  ];
+}
+
+const QUICK_ACTIONS = [
+  { label: "Create account",   icon: "users",   path: "/admin/accounts" },
+  { label: "Configure roles",  icon: "shield",  path: "/admin/roles" },
+  { label: "View audit logs",  icon: "report",  path: "/admin/audit-logs" },
+  { label: "System settings",  icon: "settings",path: "/admin/settings/system" },
+];
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
@@ -33,9 +115,8 @@ export default function AdminDashboardPage() {
       try {
         const [statsRes, logsRes] = await Promise.all([
           apiGet('/admin/dashboard/stats'),
-          apiGet('/admin/audit-logs/recent')
+          apiGet('/admin/audit-logs/recent'),
         ]);
-        
         if (statsRes.success) setStats(statsRes.data);
         if (logsRes.success) setLogs(logsRes.data);
       } catch (error) {
@@ -47,128 +128,113 @@ export default function AdminDashboardPage() {
     fetchData();
   }, []);
 
-  const kpis = [
-    { title: 'Total Accounts', value: stats?.totalAccounts ?? 47, icon: Users, trend: '+3 this month', trendColor: 'text-green-600', iconBgColor: 'bg-blue-50', iconColor: 'text-blue-600' },
-    { title: 'Active Staff', value: stats ? `${stats.activeStaff} / ${stats.totalAccounts}` : '41 / 47', icon: UserCheck, trend: stats ? `${Math.round((stats.activeStaff / Math.max(stats.totalAccounts, 1)) * 100)}% active` : '87% active', trendColor: 'text-gray-500', iconBgColor: 'bg-green-50', iconColor: 'text-green-600' },
-    { title: 'Pending Role Requests', value: stats?.pendingRoleRequests ?? 2, icon: ShieldAlert, trend: 'Awaiting approval', trendColor: 'text-orange-500', iconBgColor: 'bg-orange-50', iconColor: 'text-orange-600' },
-    { title: 'Audit Entries Today', value: stats?.auditEntriesToday ?? 63, icon: List, trend: 'Across all staff', trendColor: 'text-gray-500', iconBgColor: 'bg-indigo-50', iconColor: 'text-indigo-600' },
-    { title: 'Reservations (30d)', value: stats?.reservations30d ?? 1085, icon: Calendar, trend: '+12% vs prior period', trendColor: 'text-green-600', iconBgColor: 'bg-purple-50', iconColor: 'text-purple-600' },
-    { title: 'Total Revenue (30d)', value: stats ? `${(stats.revenue30d / 1_000_000).toFixed(1)}M ₫` : '282.3M ₫', icon: Banknote, trend: 'System wide total', trendColor: 'text-gray-500', iconBgColor: 'bg-emerald-50', iconColor: 'text-emerald-600' },
-    { title: 'Reviews Needing Reply', value: stats?.reviewsNeedingReply ?? 5, icon: MessageSquare, trend: 'Rating <= 3 stars', trendColor: 'text-red-500', iconBgColor: 'bg-red-50', iconColor: 'text-red-600' },
-    { title: 'Staff Performance Flags', value: stats?.staffPerformanceFlags ?? 1, icon: AlertTriangle, trend: 'Below target this week', trendColor: 'text-orange-500', iconBgColor: 'bg-amber-50', iconColor: 'text-amber-600' },
-  ];
-
-  const quickActions = [
-    { label: "Create account", icon: UserPlus, path: "/admin/accounts" },
-    { label: "Configure roles", icon: Settings, path: "/admin/roles" },
-    { label: "View audit logs", icon: FileText, path: "/admin/audit-logs" },
-    { label: "System settings", icon: Sliders, path: "/admin/settings/system" },
-  ];
+  const kpis = buildKpis(stats);
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-8 py-5 flex justify-between items-center sticky top-0 z-10 shadow-sm">
+    <div className="adp-root">
+      {/* Page title row — sits inside sfx-canvas padding from AdminLayout */}
+      <div className="adp-toolbar">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Admin Console</h2>
-          <p className="text-sm text-gray-500 font-medium mt-1">System-wide overview &middot; Today's snapshot</p>
+          <h2 className="adp-page-title">Dashboard</h2>
+          <p className="adp-subtitle">System-wide overview · Today's snapshot</p>
         </div>
-        <button 
-          className="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded-lg font-medium text-sm flex items-center transition-colors"
-          onClick={() => navigate('/admin/accounts')}
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          New Account
-        </button>
       </div>
 
-      <div className="p-8 max-w-7xl mx-auto">
-        {/* KPIs */}
-        {loading ? (
-          <KpiSkeleton count={8} />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {kpis.map((card, i) => (
-              <AdminKpiCard key={i} {...card} />
-            ))}
-          </div>
-        )}
+      {/* KPI grid — SkeletonPresence for smooth skeleton ↔ content handoff */}
+      <SkeletonPresence
+        loading={loading}
+        skeleton={<KpiSkeleton count={8} className="sfx-kpis adp-kpi-grid" />}
+      >
+        <motion.div
+          className="sfx-kpis adp-kpi-grid"
+          variants={listContainerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          {kpis.map((card, i) => (
+            <motion.div key={i} variants={listItemVariants}>
+              <PortalKpiCard card={card} index={i} />
+            </motion.div>
+          ))}
+        </motion.div>
+      </SkeletonPresence>
 
-        {/* Central Panel & Quick Actions Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Central Panel */}
-          <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-            <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center bg-white">
-              <h3 className="text-lg font-bold text-gray-900">Recent Audit Log Activity</h3>
-              <button 
-                className="text-sm font-semibold text-blue-600 hover:text-blue-800"
-                onClick={() => navigate('/admin/audit-logs')}
-              >
-                View all
-              </button>
-            </div>
-            <div className="p-0 overflow-x-auto">
-              {loading ? (
-                <div className="p-6 space-y-4">
-                  <Skeleton className="w-full h-8" />
-                  <Skeleton className="w-full h-8" />
-                  <Skeleton className="w-full h-8" />
-                  <Skeleton className="w-full h-8" />
+      {/* Bottom panels */}
+      <div className="adp-panels">
+        {/* Audit log table */}
+        <div className="adp-panel adp-panel--wide">
+          <div className="adp-panel-header">
+            <h3 className="adp-panel-title">Recent Audit Log Activity</h3>
+            <button
+              className="sfx-btn sfx-btn--ghost sfx-btn--sm"
+              onClick={() => navigate('/admin/audit-logs')}
+            >
+              View all
+            </button>
+          </div>
+          <div className="adp-table-wrap">
+            <SkeletonPresence
+              loading={loading}
+              skeleton={
+                <div className="adp-skeleton-rows">
+                  {[1,2,3,4].map(i => <Skeleton key={i} className="w-full h-8" />)}
                 </div>
-              ) : (
-                <table className="w-full text-left text-sm text-gray-600">
-                  <thead className="bg-gray-50/50 text-gray-500 font-medium">
-                    <tr>
-                      <th className="px-6 py-3 border-b border-gray-100">Time</th>
-                      <th className="px-6 py-3 border-b border-gray-100">Action</th>
-                      <th className="px-6 py-3 border-b border-gray-100">User</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {logs.length > 0 ? logs.map((log, i) => (
-                      <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td className="px-6 py-4 font-medium text-gray-900">
-                          {log.action_name}
-                        </td>
-                        <td className="px-6 py-4">
-                          {log.full_name}
-                        </td>
-                      </tr>
-                    )) : (
+              }
+            >
+              <table className="adp-table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Action</th>
+                    <th>User</th>
+                  </tr>
+                </thead>
+                <AnimatePresence mode="wait">
+                  {logs.length > 0 ? (
+                    <motion.tbody
+                      key="log-rows"
+                      variants={listContainerVariants}
+                      initial="hidden"
+                      animate="visible"
+                    >
+                      {logs.map((log, i) => (
+                        <motion.tr key={i} variants={listItemVariants}>
+                          <td className="adp-table-time">
+                            {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="adp-table-action">{log.action_name}</td>
+                          <td className="adp-table-actor">{log.full_name}</td>
+                        </motion.tr>
+                      ))}
+                    </motion.tbody>
+                  ) : (
+                    <tbody key="empty">
                       <tr>
-                        <td colSpan="3" className="px-6 py-8 text-center text-gray-500">
-                          No recent audit logs.
-                        </td>
+                        <td colSpan="3" className="adp-table-empty">No recent audit logs.</td>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              )}
-            </div>
+                    </tbody>
+                  )}
+                </AnimatePresence>
+              </table>
+            </SkeletonPresence>
           </div>
+        </div>
 
-          {/* Quick Actions */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col">
-            <div className="px-6 py-5 border-b border-gray-100">
-              <h3 className="text-lg font-bold text-gray-900">Quick Actions</h3>
-            </div>
-            <div className="p-6 grid grid-cols-2 gap-4">
-              {quickActions.map((q, i) => (
-                <button
-                  key={i}
-                  className="flex flex-col items-center justify-center p-4 border border-gray-100 rounded-xl hover:border-blue-500 hover:shadow-md hover:bg-blue-50/30 transition-all group"
-                  onClick={() => navigate(q.path)}
-                >
-                  <q.icon className="w-6 h-6 text-gray-400 group-hover:text-blue-600 mb-3" />
-                  <span className="text-xs font-semibold text-gray-700 group-hover:text-blue-700 text-center">
-                    {q.label}
-                  </span>
-                </button>
-              ))}
-            </div>
+        {/* Quick actions */}
+        <div className="adp-panel adp-panel--actions">
+          <div className="adp-panel-header">
+            <h3 className="adp-panel-title">Quick Actions</h3>
+          </div>
+          <div className="adp-quick-actions">
+            {QUICK_ACTIONS.map((q, i) => (
+              <button
+                key={i}
+                className="adp-action-btn"
+                onClick={() => navigate(q.path)}
+              >
+                <span className="adp-action-btn__label">{q.label}</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>

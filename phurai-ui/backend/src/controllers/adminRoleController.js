@@ -69,10 +69,11 @@ export const assignUserRole = async (req, res) => {
         if (parsedNewRoleId === 5) {
             return res.status(403).json({ success: false, message: 'Cannot promote a user to Admin via this endpoint. Contact the system owner.' });
         }
-        // Prevent valid role IDs outside system range
-        if (![1, 2, 3, 4].includes(parsedNewRoleId)) {
-            return res.status(400).json({ success: false, message: 'role_id must be 1 (Customer), 2 (Restaurant Staff), 3 (Kitchen Staff), or 4 (Manager).' });
+        // Prevent valid role IDs outside system range (role_id=3 deprecated, role_id=5 escalation blocked above)
+        if (![1, 2, 4].includes(parsedNewRoleId)) {
+            return res.status(400).json({ success: false, message: 'role_id must be 1 (Customer), 2 (Restaurant Staff), or 4 (Manager). role_id=3 (Kitchen Staff) is deprecated.' });
         }
+
         // Prevent self-role-change
         if (targetUserId === adminUserId) {
             return res.status(403).json({ success: false, message: 'You cannot change your own role.' });
@@ -105,17 +106,8 @@ export const assignUserRole = async (req, res) => {
                 return res.status(409).json({ success: false, message: `User is already assigned to role_id ${parsedNewRoleId}.` });
             }
 
-            // Active duty check
-            if (current_role_id === 3) {
-                // Kitchen Staff: check for active kitchen tickets
-                const kitchenCheck = await transaction.request()
-                    .input('userId', sql.Int, targetUserId)
-                    .query(`SELECT 1 AS has_active FROM dbo.KitchenTickets WHERE assigned_to_staff_id = @userId AND kitchen_status NOT IN (N'Completed', N'Cancelled')`);
-                if (kitchenCheck.recordset.length > 0) {
-                    await transaction.rollback();
-                    return res.status(409).json({ success: false, message: 'Cannot change role. Staff has active kitchen tickets. Reassign them first.' });
-                }
-            } else if ([2, 4].includes(current_role_id)) {
+            // Active duty check (role_id=3 Kitchen Staff check removed — KDS is device-based now)
+            if ([2, 4].includes(current_role_id)) {
                 // Restaurant Staff / Manager: check for active reservations assigned
                 const resCheck = await transaction.request()
                     .input('userId', sql.Int, targetUserId)
@@ -130,6 +122,7 @@ export const assignUserRole = async (req, res) => {
                     return res.status(409).json({ success: false, message: 'Cannot change role. Staff is assigned to active reservations. Reassign them first.' });
                 }
             }
+
 
             // Fetch new role name for job_title
             const newRoleRes = await transaction.request()

@@ -1,5 +1,11 @@
 import { createContext, useContext, useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { createPortal } from "react-dom";
+import { motion } from "framer-motion";
+import {
+  TableCardSkeleton,
+  SkeletonPresence,
+  fadeScaleVariants,
+} from "./StaffSkeleton.jsx";
 import {
   SectionHead,
   SearchField,
@@ -1098,16 +1104,31 @@ function StaffTableTab({
     },
   };
 
+  // Show skeleton only on the true initial load (no data yet)
+  const isFirstLoad = refreshing && (!Array.isArray(tables) || tables.length === 0);
+
   return (
-    <TableManagementProvider value={contextValue}>
-      <div className="sfx-stack">
-        <TableManagementHeader />
-        <TableManagementToolbar />
-        <TableManagementFloorMap />
-        <TableManagementTableModal />
-        <TableManagementReservationModal />
-      </div>
-    </TableManagementProvider>
+    <SkeletonPresence
+      loading={isFirstLoad}
+      skeleton={<TableCardSkeleton count={12} />}
+    >
+      <motion.div
+        key="table-content"
+        variants={fadeScaleVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <TableManagementProvider value={contextValue}>
+          <div className="sfx-stack">
+            <TableManagementHeader />
+            <TableManagementToolbar />
+            <TableManagementFloorMap />
+            <TableManagementTableModal />
+            <TableManagementReservationModal />
+          </div>
+        </TableManagementProvider>
+      </motion.div>
+    </SkeletonPresence>
   );
 }
 

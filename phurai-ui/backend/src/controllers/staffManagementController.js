@@ -3,15 +3,16 @@ import sql from 'mssql';
 import bcrypt from 'bcryptjs';
 
 // Helper to map role name to role id
+// role_id=3 (Kitchen Staff) removed — deprecated
 const getRoleId = (roleName) => {
     switch(roleName) {
         case 'Restaurant Staff': return 2;
-        case 'Kitchen Staff': return 3;
         case 'Manager': return 4;
         case 'Admin': return 5;
         default: return 2; // Default to Restaurant Staff
     }
 };
+
 
 const mapEmploymentStatusToDb = (status) => {
     if (status === 'active') return 'Active';
@@ -157,33 +158,22 @@ export const updateStaffAccount = async (req, res) => {
             const oldRoleId = userCheck.recordset[0].role_id;
             const oldIsActive = userCheck.recordset[0].is_active;
 
-            if (roleId !== oldRoleId) {
-                // Check Active Duties
-                if (oldRoleId === 3) {
-                    // Kitchen Staff
-                    const kitchenCheck = await transaction.request()
-                        .input('userId', sql.Int, userId)
-                        .query("SELECT 1 FROM dbo.KitchenTickets WHERE assigned_to_staff_id = @userId AND kitchen_status NOT IN (N'Completed', N'Cancelled')");
-                    if (kitchenCheck.recordset.length > 0) {
-                        await transaction.rollback();
-                        return res.status(409).json({ success: false, message: "Cannot change role. Please reassign their active tables/tickets first." });
-                    }
-                } else if (oldRoleId === 2 || oldRoleId === 4 || oldRoleId === 5) {
-                    // Restaurant Staff, Manager, Admin
-                    const restaurantCheck = await transaction.request()
-                        .input('userId', sql.Int, userId)
-                        .query(`
-                            SELECT 1 FROM dbo.Reservations r
-                            LEFT JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
-                            WHERE r.reservation_status IN (N'Check-in', N'Dining', N'Payment Pending')
-                            AND (r.confirmed_by_staff_id = @userId OR rt.assigned_by_staff_id = @userId)
-                        `);
-                    if (restaurantCheck.recordset.length > 0) {
-                        await transaction.rollback();
-                        return res.status(409).json({ success: false, message: "Cannot change role. Please reassign their active tables/tickets first." });
-                    }
+            // Active duty check (role_id=3 Kitchen Staff check removed — KDS is device-based)
+            if (oldRoleId === 2 || oldRoleId === 4 || oldRoleId === 5) {
+                const restaurantCheck = await transaction.request()
+                    .input('userId', sql.Int, userId)
+                    .query(`
+                        SELECT 1 FROM dbo.Reservations r
+                        LEFT JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
+                        WHERE r.reservation_status IN (N'Check-in', N'Dining', N'Payment Pending')
+                        AND (r.confirmed_by_staff_id = @userId OR rt.assigned_by_staff_id = @userId)
+                    `);
+                if (restaurantCheck.recordset.length > 0) {
+                    await transaction.rollback();
+                    return res.status(409).json({ success: false, message: "Cannot change role. Please reassign their active tables/tickets first." });
                 }
             }
+
 
             // Update UserAccounts
             await transaction.request()
@@ -279,17 +269,9 @@ export const deleteStaffAccount = async (req, res) => {
             
             const oldRoleId = userCheck.recordset[0].role_id;
 
-            if (oldRoleId === 3) {
-                // Kitchen Staff
-                const kitchenCheck = await transaction.request()
-                    .input('userId', sql.Int, userId)
-                    .query("SELECT 1 FROM dbo.KitchenTickets WHERE assigned_to_staff_id = @userId AND kitchen_status NOT IN (N'Completed', N'Cancelled')");
-                if (kitchenCheck.recordset.length > 0) {
-                    await transaction.rollback();
-                    return res.status(409).json({ success: false, message: "Cannot delete staff. Please reassign their active tables/tickets first." });
-                }
-            } else if (oldRoleId === 2 || oldRoleId === 4 || oldRoleId === 5) {
-                // Restaurant Staff, Manager, Admin
+            // Active duty check before deleting (role_id=3 check removed — KDS is device-based)
+            if (oldRoleId === 2 || oldRoleId === 4 || oldRoleId === 5) {
+
                 const restaurantCheck = await transaction.request()
                     .input('userId', sql.Int, userId)
                     .query(`

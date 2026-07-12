@@ -176,3 +176,22 @@
   font-size: 14px;
   font-weight: 700;
 }
+
+
+/* -- Button variant extensions for KDS tab ------------------- */
+.sfx-btn--success {
+  background: #4caf7d;
+  color: #fff;
+  border: none;
+}
+.sfx-btn--success:hover:not(:disabled) {
+  background: #3d9a6a;
+}
+.sfx-btn--danger {
+  background: rgba(224, 82, 82, 0.15);
+  color: #e05252;
+  border: 1px solid rgba(224, 82, 82, 0.35);
+}
+.sfx-btn--danger:hover:not(:disabled) {
+  background: rgba(224, 82, 82, 0.28);
+}

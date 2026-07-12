@@ -33,7 +33,8 @@ export const ORDER_STATUS_META = {
   done: { label: "Done", tone: "muted" },
 };
 
-export const STAFF_ASSIGNABLE_ROLES = ["Restaurant Staff", "Kitchen Staff"];
+export const STAFF_ASSIGNABLE_ROLES = ["Restaurant Staff"]; // Kitchen Staff (role_id=3) deprecated
+
 
 export const MANAGER_STATUS_META = {
   active: { label: "Active", tone: "green" },

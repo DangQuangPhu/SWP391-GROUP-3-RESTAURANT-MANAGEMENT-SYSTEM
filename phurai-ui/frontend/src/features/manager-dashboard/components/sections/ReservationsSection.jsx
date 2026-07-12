@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { motion } from "framer-motion";
+import { listContainerVariants, listItemVariants } from "@/components/ui/Skeleton";
 import { useSearchParams } from "react-router-dom";
 import { format, parseISO, isSameDay } from "date-fns";
 import { ManagerDrawer } from "../ManagerOverlay.jsx";
@@ -695,7 +697,11 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                 <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <motion.tbody
+              variants={listContainerVariants}
+              initial="hidden"
+              animate="visible"
+            >
               {sortedFiltered.filter(Boolean).map((r) => {
                 const currentId = r.id || r.reservation_id;
                 // Use display_status (computed by backend CASE expression) over raw reservation_status
@@ -712,7 +718,11 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                   : <EmptyVal val="" />;
 
                 return (
-                  <tr key={currentId} style={{ background: "#ffffff" }}>
+                  <motion.tr
+                    key={currentId}
+                    variants={listItemVariants}
+                    style={{ background: "#ffffff" }}
+                  >
                     {/* Reservation ID — sans-serif, black */}
                     <td style={{ fontSize: 13, fontWeight: 600, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
                       #{String(currentId).padStart(6, "0")}
@@ -767,10 +777,10 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                         )}
                       </div>
                     </td>
-                  </tr>
+                  </motion.tr>
                 );
               })}
-            </tbody>
+            </motion.tbody>
           </table>
         </div>
         {filtered.length === 0 ? (

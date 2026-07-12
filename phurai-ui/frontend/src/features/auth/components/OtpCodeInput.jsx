@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import "@/styles/OtpCodeInput.css";
+import "@/features/auth/styles/OtpCodeInput.css";
 
 const EMPTY_DIGITS = ["", "", "", "", "", ""];
 

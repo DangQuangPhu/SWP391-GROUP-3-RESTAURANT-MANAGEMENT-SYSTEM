@@ -44,17 +44,8 @@ function StaffDashboard({ authReady, isAuthenticated, currentUser, onSignOut }) 
   if (!authReady) return null;
   if (!isAuthenticated || !role) return <Navigate to="/login" replace />;
 
-  const isKitchen = role === "kitchen_staff";
-  const isRestaurant = role === "restaurant_staff";
-  const path = location.pathname;
-
-  // Strict domain routing
-  if (isKitchen) {
-     return <Navigate to="/kds" replace />;
-  }
-  if (isRestaurant && path.startsWith("/staff/kds")) {
-     return <Navigate to="/staff/reservations" replace />;
-  }
+  // role_id=3 (Kitchen Staff) deprecated — KDS devices use /kds directly via device-JWT.
+  // Restaurant Staff (role_id=2) may access /staff/kds as the user-JWT Staff KDS view.
 
   const defaultRoute = "reservations";
 
@@ -68,7 +59,8 @@ function StaffDashboard({ authReady, isAuthenticated, currentUser, onSignOut }) 
       onSearch={setSearchQuery}
       onRefresh={() => refreshAll(true)}
       refreshing={refreshing}
-      refreshLabel="Refresh data"
+      refreshLabel="Refresh Data"
+
       onSignOut={onSignOut}
     >
       <Routes>

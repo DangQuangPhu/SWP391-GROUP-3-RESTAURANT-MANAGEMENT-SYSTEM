@@ -1,0 +1,306 @@
+/* AdminDashboardPage.css — sfx-aligned, no Tailwind dependencies */
+
+.adp-root {
+  min-height: 100%;
+}
+
+/* ── Page title row ── */
+.adp-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.adp-page-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--sfx-text, #1f1a17);
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+
+.adp-subtitle {
+  font-size: 13px;
+  color: var(--sfx-muted, #8a8175);
+  margin: 3px 0 0;
+  font-weight: 400;
+}
+
+/* ── KPI grid ── */
+.adp-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+  .adp-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .adp-kpi-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Bottom panels ── */
+.adp-panels {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 16px;
+}
+
+@media (max-width: 1024px) {
+  .adp-panels { grid-template-columns: 1fr; }
+}
+
+.adp-panel {
+  background: var(--sfx-card, #ffffff);
+  border: 1px solid var(--sfx-border-soft, rgba(31,26,23,0.07));
+  border-radius: var(--sfx-radius, 16px);
+  box-shadow: var(--sfx-shadow, 0 1px 2px rgba(31,26,23,0.04), 0 8px 24px rgba(31,26,23,0.06));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.adp-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--sfx-border-soft, rgba(31,26,23,0.07));
+}
+
+.adp-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sfx-text, #1f1a17);
+  margin: 0;
+}
+
+/* ── Audit log table ── */
+.adp-table-wrap {
+  overflow-x: auto;
+  flex: 1;
+}
+
+.adp-skeleton-rows {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.adp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  color: var(--sfx-text, #1f1a17);
+}
+
+.adp-table thead tr {
+  background: var(--sfx-card-2, #f9fafb);
+}
+
+.adp-table th {
+  padding: 10px 20px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--sfx-muted, #8a8175);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  text-align: left;
+  border-bottom: 1px solid var(--sfx-border-soft, rgba(31,26,23,0.07));
+}
+
+.adp-table tbody tr {
+  border-bottom: 1px solid var(--sfx-border-soft, rgba(31,26,23,0.07));
+  transition: background 0.12s ease;
+}
+
+.adp-table tbody tr:last-child { border-bottom: none; }
+.adp-table tbody tr:hover { background: var(--sfx-card-2, #f9fafb); }
+
+.adp-table td {
+  padding: 12px 20px;
+  vertical-align: middle;
+}
+
+.adp-table-time { color: var(--sfx-muted, #8a8175); white-space: nowrap; width: 70px; }
+.adp-table-action { font-weight: 500; }
+.adp-table-actor { color: var(--sfx-muted, #8a8175); }
+.adp-table-empty { text-align: center; padding: 32px 20px; color: var(--sfx-muted, #8a8175); }
+
+/* ── Quick actions ── */
+.adp-quick-actions {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  flex: 1;
+}
+
+.adp-action-btn {
+  background: var(--sfx-card-2, #f9fafb);
+  border: 1px solid var(--sfx-border, rgba(31,26,23,0.12));
+  border-radius: var(--sfx-radius-sm, 10px);
+  padding: 14px 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.adp-action-btn:hover {
+  border-color: var(--sfx-gold, #9f8655);
+  background: var(--sfx-gold-soft, rgba(159,134,85,0.06));
+  box-shadow: 0 4px 12px rgba(159,134,85,0.12);
+}
+
+.adp-action-btn__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sfx-text, #1f1a17);
+  line-height: 1.3;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   Analytics page layout
+   ───────────────────────────────────────────────────────────────── */
+
+.adp-analytic-root {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-height: 100%;
+}
+
+/* ── Page header ── */
+.adp-analytic-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* ── Filter bar ── */
+.adp-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: var(--sfx-card, #ffffff);
+  border: 1px solid var(--sfx-border-soft, rgba(31,26,23,0.07));
+  border-radius: var(--sfx-radius-sm, 10px);
+  padding: 12px 16px;
+  box-shadow: 0 1px 2px rgba(31,26,23,0.04);
+}
+
+.adp-filter-bar__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.adp-filter-bar__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sfx-muted, #8a8175);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+/* Period pills */
+.adp-filter-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.adp-filter-pill {
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--sfx-border, rgba(31,26,23,0.12));
+  background: var(--sfx-card-2, #f9fafb);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--sfx-text, #1f1a17);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.adp-filter-pill:hover {
+  border-color: var(--sfx-gold, #9f8655);
+  background: var(--sfx-gold-soft, rgba(159,134,85,0.08));
+  color: var(--sfx-gold, #9f8655);
+}
+
+.adp-filter-pill--active {
+  border-color: var(--sfx-gold, #9f8655);
+  background: var(--sfx-gold-soft, rgba(159,134,85,0.12));
+  color: var(--sfx-gold, #9f8655);
+  font-weight: 600;
+}
+
+/* Refresh button inside filter bar */
+.adp-filter-bar__refresh {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--sfx-border, rgba(31,26,23,0.12));
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--sfx-muted, #8a8175);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.adp-filter-bar__refresh:hover:not(:disabled) {
+  background: var(--sfx-card-2, #f9fafb);
+  border-color: var(--sfx-gold, #9f8655);
+  color: var(--sfx-gold, #9f8655);
+}
+
+.adp-filter-bar__refresh:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── KPI summary row ── */
+.adp-analytic-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+/* ── Chart title ── */
+.adp-chart-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sfx-text, #1f1a17);
+  margin: 0 0 16px;
+  letter-spacing: -0.1px;
+}
+
+/* ── Empty state ── */
+.adp-empty {
+  background: var(--sfx-card-2, #f9fafb);
+  border: 1px solid var(--sfx-border-soft, rgba(31,26,23,0.07));
+  border-radius: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--sfx-muted, #8a8175);
+  font-size: 14px;
+}

@@ -5,7 +5,7 @@ import { ProfileDropdown } from "@/features/profile";
 import CustomerNotificationBell from "@/components/notifications/CustomerNotificationBell.jsx";
 import { ViewQrTableModal, useTableSession } from "@/features/table-session";
 import "@/features/table-session/styles/table-session.css";
-import "@/styles/profile.css";
+import "@/features/profile/styles/profile.css";
 import "./Navbar.css";
 
 const navLinks = [

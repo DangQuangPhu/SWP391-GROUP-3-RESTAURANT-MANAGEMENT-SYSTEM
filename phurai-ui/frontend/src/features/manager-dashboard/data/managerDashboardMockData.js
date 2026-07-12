@@ -211,32 +211,24 @@ export const ORDER_STATUS_META = {
   done: { label: "Done", tone: "muted" },
 };
 
-/* ---- Staff roster mock — 20 staff members (dbo.UserAccounts + dbo.Roles) ---- */
+/* ---- Staff roster mock — Restaurant Staff only (dbo.UserAccounts + dbo.Roles) ---- */
+/* Note: Kitchen Staff (role_id=3) rows removed — KDS is device-based */
 export const MANAGER = [
   { manager_id: 2, full_name: "Tuan Le", role_name: "Restaurant Staff", phone: "0902 345 678", email: "tuan.le@phurai.com", status: "active", shift: "Evening" },
-  { manager_id: 3, full_name: "Minh Vo", role_name: "Kitchen Staff", phone: "0903 456 789", email: "minh.vo@phurai.com", status: "active", shift: "Evening" },
   { manager_id: 4, full_name: "Lan Pham", role_name: "Restaurant Staff", phone: "0904 567 890", email: "lan.pham@phurai.com", status: "on_leave", shift: "Morning" },
-  { manager_id: 5, full_name: "Bao Nguyen", role_name: "Kitchen Staff", phone: "0905 678 901", email: "bao.nguyen@phurai.com", status: "inactive", shift: "Night" },
   { manager_id: 6, full_name: "Hoa Tran", role_name: "Restaurant Staff", phone: "0906 789 012", email: "hoa.tran@phurai.com", status: "active", shift: "Morning" },
-  { manager_id: 7, full_name: "Duc Hoang", role_name: "Kitchen Staff", phone: "0907 890 123", email: "duc.hoang@phurai.com", status: "active", shift: "Evening" },
   { manager_id: 8, full_name: "Thuy Dang", role_name: "Restaurant Staff", phone: "0908 901 234", email: "thuy.dang@phurai.com", status: "active", shift: "Evening" },
-  { manager_id: 9, full_name: "Nam Bui", role_name: "Kitchen Staff", phone: "0909 012 345", email: "nam.bui@phurai.com", status: "active", shift: "Night" },
   { manager_id: 10, full_name: "Linh Do", role_name: "Restaurant Staff", phone: "0910 123 456", email: "linh.do@phurai.com", status: "on_leave", shift: "Morning" },
-  { manager_id: 11, full_name: "Hung Nguyen", role_name: "Kitchen Staff", phone: "0911 234 567", email: "hung.nguyen@phurai.com", status: "active", shift: "Evening" },
   { manager_id: 12, full_name: "Mai Le", role_name: "Restaurant Staff", phone: "0912 345 678", email: "mai.le@phurai.com", status: "active", shift: "Morning" },
-  { manager_id: 13, full_name: "Quan Pham", role_name: "Kitchen Staff", phone: "0913 456 789", email: "quan.pham@phurai.com", status: "active", shift: "Night" },
   { manager_id: 14, full_name: "Thu Vo", role_name: "Restaurant Staff", phone: "0914 567 890", email: "thu.vo@phurai.com", status: "inactive", shift: "Evening" },
-  { manager_id: 15, full_name: "An Tran", role_name: "Kitchen Staff", phone: "0915 678 901", email: "an.tran@phurai.com", status: "active", shift: "Morning" },
   { manager_id: 16, full_name: "Kim Hoang", role_name: "Restaurant Staff", phone: "0916 789 012", email: "kim.hoang@phurai.com", status: "active", shift: "Evening" },
-  { manager_id: 17, full_name: "Cuong Dang", role_name: "Kitchen Staff", phone: "0917 890 123", email: "cuong.dang@phurai.com", status: "active", shift: "Night" },
   { manager_id: 18, full_name: "Phuong Bui", role_name: "Restaurant Staff", phone: "0918 901 234", email: "phuong.bui@phurai.com", status: "on_leave", shift: "Morning" },
-  { manager_id: 19, full_name: "Long Nguyen", role_name: "Kitchen Staff", phone: "0919 012 345", email: "long.nguyen@phurai.com", status: "active", shift: "Evening" },
   { manager_id: 20, full_name: "Ngan Le", role_name: "Restaurant Staff", phone: "0920 123 456", email: "ngan.le@phurai.com", status: "active", shift: "Morning" },
-  { manager_id: 21, full_name: "Khang Pham", role_name: "Kitchen Staff", phone: "0921 234 567", email: "khang.pham@phurai.com", status: "active", shift: "Evening" },
 ];
 
-/** Roles a Manager may view and manage on /manager (UC-M05). */
-export const STAFF_ASSIGNABLE_ROLES = ["Restaurant Staff", "Kitchen Staff"];
+/** Roles a Manager may view and manage on /manager (UC-M05). Kitchen Staff removed (deprecated). */
+export const STAFF_ASSIGNABLE_ROLES = ["Restaurant Staff"];
+
 export const MANAGER_STATUS_META = {
   active: { label: "Active", tone: "green" },
   on_leave: { label: "On Leave", tone: "amber" },

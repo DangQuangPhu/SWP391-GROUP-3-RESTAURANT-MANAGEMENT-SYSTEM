@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import './TimeWheelPicker.css';
+import '../styles/TimeWheelPicker.css';
 
 // Generate 24h hours (08 to 22) and strict minutes (00, 15, 30, 45)
 const HOURS = Array.from({ length: 15 }, (_, i) => String(i + 8).padStart(2, '0'));

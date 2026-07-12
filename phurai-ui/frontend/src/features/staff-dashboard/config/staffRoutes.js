@@ -20,15 +20,15 @@ export const STAFF_DEFAULT_PATH = {
   [STAFF_ROLE.KITCHEN]:    `/kds`,
 };
 
-// Role 2 = Restaurant Staff: all floor ops, NOT kds
-// Role 3 = Kitchen Staff: ONLY kds
+// Role 2 = Restaurant Staff: all floor ops + KDS (user-JWT Staff view)
+// KDS Devices use /kds directly via device-JWT, not through /staff/*
 const SEGMENT_ROLE_ACCESS = {
   reservations: [STAFF_ROLE.RESTAURANT],
   tables:       [STAFF_ROLE.RESTAURANT],
   orders:       [STAFF_ROLE.RESTAURANT],
   payments:     [STAFF_ROLE.RESTAURANT],
   shifts:       [STAFF_ROLE.RESTAURANT],
-  kds:          [STAFF_ROLE.KITCHEN],
+  kds:          [STAFF_ROLE.RESTAURANT],  // Staff (user-JWT): Ready alerts + Served action
 };
 
 export function resolveStaffRole(user) {

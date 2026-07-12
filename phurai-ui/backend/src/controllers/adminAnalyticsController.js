@@ -142,7 +142,8 @@ export const getAdminOverview = async (req, res) => {
                 FROM dbo.UserAccounts ua
                 JOIN dbo.Roles r ON ua.role_id = r.role_id
                 WHERE ua.is_active = 1
-                  AND r.role_name IN (N'Restaurant Staff', N'Kitchen Staff', N'Manager')
+                  AND r.role_name IN (N'Restaurant Staff', N'Manager')
+
             `),
             // Table occupancy
             pool.request().query(`

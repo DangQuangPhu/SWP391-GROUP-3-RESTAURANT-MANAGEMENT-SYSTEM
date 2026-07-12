@@ -1,11 +1,14 @@
 import express from 'express';
 import { getKitchenQueue, updateKitchenTicketStatus } from '../controllers/kitchenController.js';
-import { authMiddleware, requireStaffOrKitchen } from '../middleware/auth.js';
+import { authMiddleware, requireStaff } from '../middleware/auth.js';
 
 const router = express.Router();
 
+// Staff-side KDS view (user JWT required — role_id=2,4,5)
+// KDS device access is via /api/kds/* using requireKdsDevice
 router.use(authMiddleware);
-router.use(requireStaffOrKitchen);
+router.use(requireStaff);
+
 
 // UC-C01/C02: View kitchen queue (FIFO, includes notes)
 router.get('/queue', getKitchenQueue);

@@ -1,10 +1,11 @@
 import express from 'express';
 import { markItemServed, checkoutOrder, applyVoucher } from '../controllers/ordersController.js';
-import { authMiddleware, requireStaffOrKitchen } from '../middleware/auth.js';
+import { authMiddleware, requireStaff } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.patch('/items/:orderItemId/served', authMiddleware, requireStaffOrKitchen, markItemServed);
+router.patch('/items/:orderItemId/served', authMiddleware, requireStaff, markItemServed);
+
 
 // Secure checkout for User Ordering
 router.post('/checkout', checkoutOrder);

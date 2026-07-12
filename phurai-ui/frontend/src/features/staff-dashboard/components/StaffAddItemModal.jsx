@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "./StaffUI.jsx";
-import { asArray } from "@/utils/asArray.js";
+import { asArray } from "@/core/utils/asArray.js";
 import "../styles/staff-order-tab.css";
 
 function formatPrice(value) {

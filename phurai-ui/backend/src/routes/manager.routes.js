@@ -38,7 +38,7 @@ import {
     unmergeTable,
     getTableTimeline
 } from '../controllers/tableMergeController.js';
-import { purgeMockData, seedMockData } from '../controllers/mockDataController.js';
+import { purgeMockData } from '../controllers/mockDataController.js';
 import {
     getAllPromotions,
     createPromotion,
@@ -69,8 +69,7 @@ router.patch('/areas/:id', requireManagerOrAdmin, updateArea);
 router.delete('/areas/:id', requireManagerOrAdmin, deactivateArea);
 router.get('/tables-filtered', requireManagerOrAdmin, getFilteredTables);
 
-// Mock Data routes (Manager Only)
-router.post('/mock-data/seed', requireManagerOrAdmin, seedMockData);
+// Mock Data routes — seed removed permanently; purge only
 router.delete('/mock-data/purge', requireManagerOrAdmin, purgeMockData);
 
 // Fallbacks for manager routes to prevent 404
@@ -139,5 +138,37 @@ import { getChatbotQuery } from '../controllers/chatbotController.js';
 // Chatbot
 router.post('/chat', requireManagerOrAdmin, processChatMessage);
 router.get('/chatbot/query', requireManagerOrAdmin, getChatbotQuery);
+// ── Kitchen Metrics (aggregate only — no live ticket list for Manager) ────────
+import { getKitchenMetrics } from '../controllers/kitchenController.js';
+router.get('/kitchen/metrics', requireManagerOrAdmin, getKitchenMetrics);
+
+// ── Employee Registry (Part B — KDS Plan) ───────────────────────────────────
+import {
+  listEmployees,
+  listJobTitles,
+  createEmployee,
+  updateEmployee,
+  grantSystemAccess,
+  revokeSystemAccess,
+  addPerformanceReview,
+  listPerformanceHistory,
+} from '../controllers/employeeController.js';
+
+// Job Titles lookup (dropdown population)
+router.get('/job-titles', requireManagerOrAdmin, listJobTitles);
+
+// Employee CRUD
+router.get('/employees',     requireManagerOrAdmin, listEmployees);
+router.post('/employees',    requireManagerOrAdmin, createEmployee);
+router.patch('/employees/:id', requireManagerOrAdmin, updateEmployee);
+
+// System Account Management
+router.post('/employees/:id/grant-access',  requireManagerOrAdmin, grantSystemAccess);
+router.post('/employees/:id/revoke-access', requireManagerOrAdmin, revokeSystemAccess);
+
+// Performance Reviews
+router.post('/employees/:id/performance', requireManagerOrAdmin, addPerformanceReview);
+router.get('/employees/:id/performance',  requireManagerOrAdmin, listPerformanceHistory);
 
 export default router;
+

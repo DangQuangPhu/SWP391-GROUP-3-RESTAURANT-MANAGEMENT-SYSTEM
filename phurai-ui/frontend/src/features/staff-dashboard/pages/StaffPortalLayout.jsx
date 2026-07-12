@@ -7,12 +7,12 @@ import { getStaffSegment } from "../config/staffRoutes.js";
 import { useStaffPortal } from "../context/StaffPortalContext.jsx";
 
 const REFRESH_LABELS = {
-  orders: "Refresh orders",
-  tables: "Refresh tables",
-  reservations: "Refresh reservations",
-  kds: "Refresh KDS",
-  payments: "Refresh payments",
-  shifts: "Refresh shift report",
+  orders:       "Refresh Orders",
+  tables:       "Refresh Tables",
+  reservations: "Refresh Reservations",
+  kds:          "Refresh KDS",
+  payments:     "Refresh Payments",
+  shifts:       "Refresh Shift Report",
 };
 
 function StaffPortalLayout({ onSignOut }) {

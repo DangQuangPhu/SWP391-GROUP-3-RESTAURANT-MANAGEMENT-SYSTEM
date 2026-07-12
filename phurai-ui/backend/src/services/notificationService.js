@@ -1,7 +1,8 @@
 import pool from "../db.js";
 import { getIO } from "../socket.js";
 
-const STAFF_ROLE_IDS = [2, 3, 4, 5];
+const STAFF_ROLE_IDS = [2, 4, 5]; // 3 (Kitchen Staff) removed — deprecated
+
 
 const ALLOWED_TYPES = new Set([
   "Booking Confirmed",

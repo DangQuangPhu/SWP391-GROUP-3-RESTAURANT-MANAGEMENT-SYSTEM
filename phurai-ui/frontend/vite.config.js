@@ -5,6 +5,33 @@ import react from '@vitejs/plugin-react';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Vite plugin: suppress benign ws-proxy noise from terminal.
+ * Vite 8 logs "ws proxy error: EPIPE/ECONNRESET" via its internal logger
+ * (not through proxy.on('error')), so we intercept process.stderr writes.
+ */
+function suppressWsProxyNoise() {
+  return {
+    name: 'suppress-ws-proxy-noise',
+    configureServer() {
+      const _write = process.stderr.write.bind(process.stderr);
+      process.stderr.write = (chunk, ...args) => {
+        const s = typeof chunk === 'string' ? chunk : chunk.toString();
+        // Drop lines that are purely benign disconnect noise.
+        if (
+          s.includes('ws proxy error') ||
+          s.includes('ws proxy socket error') ||
+          (s.includes('EPIPE') && s.includes('socket.io')) ||
+          (s.includes('ECONNRESET') && s.includes('socket.io'))
+        ) return true;
+        return _write(chunk, ...args);
+      };
+    },
+  };
+}
+
+const BENIGN = new Set(['EPIPE', 'ECONNRESET']);
+
 export default defineConfig({
   root: '.',
   envDir: '../',
@@ -12,7 +39,7 @@ export default defineConfig({
     outDir: '../dist',
     emptyOutDir: true
   },
-  plugins: [react()],
+  plugins: [react(), suppressWsProxyNoise()],
 
   server: {
     host: '0.0.0.0',
@@ -41,26 +68,21 @@ export default defineConfig({
         target: 'http://127.0.0.1:5001',
         ws: true,
         changeOrigin: true,
-        configure: (proxy, _options) => {
-          // Remove Vite's default listeners so they don't log benign
-          // EPIPE/ECONNRESET errors on every client disconnect.
-          proxy.removeAllListeners('error');
-          proxy.removeAllListeners('proxyReqWs');
-          proxy.removeAllListeners('open');
-
+        configure: (proxy) => {
+          // Suppress benign disconnect errors at the http-proxy level.
           proxy.on('error', (err) => {
-            if (err.code !== 'EPIPE' && err.code !== 'ECONNRESET') {
-              console.error('WS Proxy Error:', err);
+            if (!BENIGN.has(err.code)) {
+              console.error('[socket.io proxy] error:', err.message);
             }
           });
-          proxy.on('proxyReqWs', (_proxyReq, _req, socket) => {
-            socket.on('error', () => {
-              // Suppress socket errors during abrupt client disconnects
-            });
+          proxy.on('proxyReqWs', (_req, _res, socket) => {
+            socket.on('error', () => { /* benign disconnect */ });
           });
           proxy.on('open', (proxySocket) => {
-            proxySocket.on('error', () => {
-              // Suppress proxy socket errors during abrupt client disconnects
+            proxySocket.on('error', (err) => {
+              if (!BENIGN.has(err.code)) {
+                console.error('[socket.io proxy] socket error:', err.message);
+              }
             });
           });
         }

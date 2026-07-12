@@ -69,14 +69,14 @@ router.post(
     req.userId = 3;
     next();
   },
-  checkinReservation
+  staffCheckIn
 );
 
 router.post(
   "/reservations/:id/check-in",
   resolveUserId,
   requireUserId,
-  checkinReservation
+  staffCheckIn
 );
 
 router.post(
@@ -97,7 +97,7 @@ router.patch(
   "/reservations/:id/check-in",
   resolveUserId,
   requireUserId,
-  checkinReservation
+  staffCheckIn
 );
 router.patch(
   "/reservations/:id/checkin",
@@ -799,7 +799,8 @@ router.get("/staff", async (_req, res) => {
           WHERE ss.user_id = ua.user_id AND ss.work_date >= CAST(GETDATE() AS DATE)
           ORDER BY ss.work_date ASC
        ) AS ws
-       WHERE r.role_name IN (N'Manager', N'Restaurant Staff', N'Kitchen Staff')
+       WHERE r.role_name IN (N'Manager', N'Restaurant Staff')
+
          AND ua.is_active = 1
        ORDER BY ua.full_name ASC;`
     );

@@ -145,36 +145,45 @@ export const createWalkInReservation = async (req, res) => {
          N'{"reservation_source":"Walk-in","reservation_status":"Dining"}', NULL);
     `);
 
-    // ── Step 5: Create QR session for the table ───────────────────────────
-    const tNum  = tableRow.table_number || `T-${parsedTableId}`;
-    const slug  = String(tNum).trim().toLowerCase().replace(/\s+/g, '-');
-    const stamp = now.toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
-    const token = `qr-walkin-${slug}-${stamp}`;
+    // ── Step 5: Auto-generate QR session ─────────────────────────────────
+    // Walk-in guests order immediately — the QR session must exist the moment
+    // they sit down. We ALWAYS create a fresh session:
+    //   1. Expire any stale active session on this table (e.g. from a crash/reset)
+    //   2. Insert the new active session with a cryptographically unique token.
+    {
+      const tNum  = tableRow.table_number || `T-${parsedTableId}`;
+      const slug  = String(tNum).trim().toLowerCase().replace(/\s+/g, '-');
+      // Token: table-slug + epoch-ms + 6-char hex random → guaranteed unique
+      const randomSuffix = Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
+      const token = `qr-walkin-${slug}-${Date.now()}-${randomSuffix}`;
 
-    const req6 = new sql.Request(transaction);
-    req6.input('tableId',       sql.Int,          parsedTableId);
-    req6.input('reservationId', sql.Int,          newReservationId);
-    req6.input('token',         sql.VarChar(255), token);
-    req6.input('staffId',       sql.Int,          staffId);
-    await req6.query(`
-      IF NOT EXISTS (
-        SELECT 1 FROM dbo.QROrderSessions
+      const req5a = new sql.Request(transaction);
+      req5a.input('tableId', sql.Int, parsedTableId);
+      await req5a.query(`
+        UPDATE dbo.QROrderSessions
+        SET session_status = N'Expired', expires_at = SYSDATETIME()
         WHERE table_id = @tableId AND session_status = N'Active'
-          AND (expires_at IS NULL OR expires_at > SYSDATETIME())
-      )
-      BEGIN
+      `);
+
+      const req5b = new sql.Request(transaction);
+      req5b.input('tableId',       sql.Int,          parsedTableId);
+      req5b.input('reservationId', sql.Int,          newReservationId);
+      req5b.input('token',         sql.VarChar(255), token);
+      req5b.input('staffId',       sql.Int,          staffId);
+      await req5b.query(`
         INSERT INTO dbo.QROrderSessions
           (table_id, reservation_id, customer_id, token, session_status,
            generated_by_staff_id, generated_at, expires_at)
         VALUES
           (@tableId, @reservationId, NULL, @token, N'Active',
            @staffId, SYSDATETIME(), DATEADD(hour, 4, SYSDATETIME()))
-      END
-    `);
+      `);
+    }
 
     await transaction.commit();
 
     // ── Step 6: Real-time broadcast to Staff + Manager portals ────────────
+
     try {
       const io = getIO();
       if (io) {
@@ -204,6 +213,24 @@ export const createWalkInReservation = async (req, res) => {
       console.error('[Walk-in] Socket.IO broadcast failed (non-fatal):', socketErr.message);
     }
 
+    // ── Step 7: Optional email — fire-and-forget, non-fatal ──────────────
+    if (safeEmail) {
+      setImmediate(async () => {
+        try {
+          const now2 = new Date();
+          await sendBookingCheckedInEmail({
+            toEmail:         safeEmail,
+            customerName:    safeName,
+            reservationId:   newReservationId,
+            reservationDate: now2.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+            reservationTime: `${String(now2.getHours()).padStart(2, '0')}:${String(now2.getMinutes()).padStart(2, '0')}`,
+          });
+        } catch (emailErr) {
+          console.error('[Walk-in] Email send failed (non-fatal):', emailErr?.message || emailErr);
+        }
+      });
+    }
+
     return res.status(201).json({
       success:        true,
       message:        `Walk-in #${newReservationId} created — Table ${tableRow.table_number} is now Occupied.`,
@@ -211,6 +238,7 @@ export const createWalkInReservation = async (req, res) => {
       table_id:       parsedTableId,
       table_number:   tableRow.table_number,
     });
+
 
   } catch (err) {
     try { await transaction.rollback(); } catch (_) {}
@@ -966,13 +994,15 @@ export const staffCheckIn = async (req, res) => {
         // If a different table_id is passed, update the ReservationTables mapping
         const oldTableIds = reservation.table_ids ? reservation.table_ids.split(',').map(Number) : [];
 
-        // 1. Release previous reserved tables (make them Available if they were Reserved)
+        // GHOST TABLE FIX: Release ALL previous table assignments unconditionally,
+        // not just those in 'Reserved' status. If a table was somehow already
+        // 'Occupied' or in another state, still free it — the new assignment takes over.
         if (oldTableIds.length > 0) {
           const oldPlaceholders = oldTableIds.map(() => '?').join(',');
           await connection.query(
             `UPDATE dbo.RestaurantTables
-             SET table_status = 'Available', updated_at = SYSDATETIME()
-             WHERE table_id IN (${oldPlaceholders}) AND table_status = 'Reserved'`,
+             SET table_status = N'Available', updated_at = SYSDATETIME()
+             WHERE table_id IN (${oldPlaceholders})`,
             [...oldTableIds]
           );
 
@@ -1004,8 +1034,29 @@ export const staffCheckIn = async (req, res) => {
         `UPDATE dbo.Reservations 
          SET reservation_status = ?, checked_in_at = SYSDATETIME(), updated_at = SYSDATETIME()
          WHERE reservation_id = ?`,
-        [RESERVATION_STATUS.SEATED, reservationId]
+        [RESERVATION_STATUS.DINING, reservationId]
       );
+
+      // CONCURRENCY GUARD: UPDLOCK on each target table prevents two concurrent
+      // check-ins from both reading 'Available' and double-assigning the same table.
+      if (tableIdList.length > 0) {
+        const lockPlaceholders = tableIdList.map(() => '?').join(',');
+        const [lockedRows] = await connection.query(
+          `SELECT table_id, table_status
+           FROM dbo.RestaurantTables WITH (UPDLOCK, ROWLOCK)
+           WHERE table_id IN (${lockPlaceholders})`,
+          [...tableIdList]
+        );
+        const alreadyOccupied = lockedRows.filter(r => r.table_status === 'Occupied');
+        if (alreadyOccupied.length > 0) {
+          await connection.rollback();
+          connection.release();
+          return res.status(409).json({
+            success: false,
+            message: `Table conflict: already Occupied by another check-in. Please select another table.`
+          });
+        }
+      }
 
       // Update mapped tables to Occupied
       const placeholders = tableIdList.map(() => '?').join(',');
@@ -1015,6 +1066,7 @@ export const staffCheckIn = async (req, res) => {
          WHERE table_id IN (${placeholders})`,
         [...tableIdList]
       );
+
 
       // Create QR Order Sessions for each table in tableIdList if none exists
       let firstSessionId = null;
@@ -1074,7 +1126,7 @@ export const staffCheckIn = async (req, res) => {
       }
 
       // Insert into AuditLogs & ReservationTimelines
-      const safeValueJson = JSON.stringify({ reservation_status: RESERVATION_STATUS.SEATED });
+      const safeValueJson = JSON.stringify({ reservation_status: RESERVATION_STATUS.DINING });
       await connection.query(
         `INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, created_at)
          VALUES (?, 'STAFF_MANUAL_CHECKIN', 'Reservations', ?, ?, SYSDATETIME());
@@ -1090,7 +1142,7 @@ export const staffCheckIn = async (req, res) => {
       try {
         const io = getIO();
         if (io) {
-          io.emit('RESERVATION_STATUS_CHANGED', { id: reservationId, status: RESERVATION_STATUS.SEATED });
+          io.emit('RESERVATION_STATUS_CHANGED', { id: reservationId, status: RESERVATION_STATUS.DINING });
           tableIdList.forEach(tId => {
             io.emit('TABLE_STATUS_CHANGED', { tableId: tId, newStatus: 'Occupied' });
           });

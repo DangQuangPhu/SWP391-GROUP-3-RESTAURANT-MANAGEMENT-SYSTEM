@@ -3,7 +3,7 @@ import { formatBookingId } from "@/features/reservations/utils/formatBookingId.j
 import { normalizeQueueToken } from "../services/staffApi.js";
 import { DASHBOARD_TODAY } from "@/shared/constants.js";
 import { RESERVATION_STATUS_META } from "@/shared/reservationStatus.js";
-import { asArray } from "@/utils/asArray.js";
+import { asArray } from "@/core/utils/asArray.js";
 
 export const RESERVATION_QUEUE_FILTERS = [
   { id: "all", label: "All" },

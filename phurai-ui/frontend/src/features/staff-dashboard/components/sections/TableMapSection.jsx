@@ -12,7 +12,7 @@ import {
   DEMO_NOTICE,
 } from "@/shared/constants.js";
 import { mergeTablesApi, unmergeTableApi } from "../../services/staffApi.js";
-import { asArray } from "@/utils/asArray.js";
+import { asArray } from "@/core/utils/asArray.js";
 
 const STATUS_KEYS = Object.keys(TABLE_STATUS_META);
 

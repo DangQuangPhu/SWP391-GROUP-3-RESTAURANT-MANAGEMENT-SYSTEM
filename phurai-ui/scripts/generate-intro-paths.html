@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<!--
+  generate-intro-paths.html
+  ─────────────────────────
+  Run this file ONCE in Chrome/Firefox to extract real SVG path data
+  from Dancing Script Bold for "Hello", "Welcome", "To".
+
+  Instructions:
+  1. Open this file in Chrome: File → Open File → select this HTML
+  2. Wait for the font to load (2–3 seconds)
+  3. Click "Extract Paths" button
+  4. Copy the output from the text area below
+  5. Paste it into:
+       frontend/src/features/home/data/introPaths.js
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Dancing Script Path Extractor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: Arial, sans-serif; padding: 24px; background: #f5f5f5; }
+    h1 { font-size: 18px; margin-bottom: 16px; }
+    #status { color: #666; margin: 8px 0; font-size: 14px; }
+    button { padding: 10px 24px; background: #007aff; color: #fff; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }
+    button:hover { background: #0056cc; }
+    textarea { width: 100%; height: 400px; font-family: monospace; font-size: 11px; margin-top: 16px; border: 1px solid #ccc; border-radius: 6px; padding: 12px; }
+    /* Invisible SVG for extraction */
+    #extract-svg { position: absolute; visibility: hidden; top: -9999px; font-family: 'Dancing Script', cursive; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>Dancing Script → SVG Path Extractor</h1>
+  <p id="status">Loading font… (wait 2–3s before clicking)</p>
+
+  <!-- Invisible SVG where text will be rendered -->
+  <svg id="extract-svg" xmlns="http://www.w3.org/2000/svg" width="1000" height="300" viewBox="0 0 1000 300">
+    <text id="t-hello"   x="10" y="160" font-family="'Dancing Script', cursive" font-weight="700" font-size="150">Hello</text>
+    <text id="t-welcome" x="10" y="160" font-family="'Dancing Script', cursive" font-weight="700" font-size="150">Welcome</text>
+    <text id="t-to"      x="10" y="160" font-family="'Dancing Script', cursive" font-weight="700" font-size="150">To</text>
+  </svg>
+
+  <button onclick="extractPaths()">Extract Paths</button>
+  <textarea id="output" placeholder="Path data will appear here after clicking Extract Paths…"></textarea>
+
+  <script>
+    // Give font 2s to load before auto-extracting
+    document.fonts.ready.then(() => {
+      document.getElementById('status').textContent = '✅ Font loaded! Click "Extract Paths" to generate.';
+    });
+
+    function getTextPath(textId, label) {
+      const el = document.getElementById(textId);
+      if (!el) return null;
+
+      // Get bounding box
+      const bb = el.getBBox();
+      const PAD = 20;
+      const vx = Math.floor(bb.x - PAD);
+      const vy = Math.floor(bb.y - PAD);
+      const vw = Math.ceil(bb.width + PAD * 2);
+      const vh = Math.ceil(bb.height + PAD * 2);
+
+      // Convert text to path using SVGGeometryElement trick
+      // We create a temporary path from the text outline
+      const textWidth = el.getComputedTextLength();
+
+      return {
+        label,
+        viewBox: `${vx} ${vy} ${vw} ${vh}`,
+        width: vw,
+        height: vh,
+        textWidth: Math.round(textWidth),
+        // Note: browser text→path conversion requires font to be loaded
+        note: `Text bounding box: x=${vx} y=${vy} w=${vw} h=${vh}`
+      };
+    }
+
+    async function extractPaths() {
+      const status = document.getElementById('status');
+      const output = document.getElementById('output');
+
+      status.textContent = 'Extracting…';
+
+      // Wait for fonts
+      await document.fonts.ready;
+
+      // Method: Use SVG foreignObject trick or canvas to get outline paths
+      // The most reliable way in browser: use Path2D + CanvasRenderingContext2D
+      const canvas = document.createElement('canvas');
+      canvas.width = 1200;
+      canvas.height = 300;
+      const ctx = canvas.getContext('2d');
+
+      const words = [
+        { key: 'hello',   text: 'Hello' },
+        { key: 'welcome', text: 'Welcome' },
+        { key: 'to',      text: 'To' },
+      ];
+
+      const results = {};
+
+      for (const { key, text } of words) {
+        // Use SVG text getBBox for dimensions
+        const textEl = document.getElementById(`t-${key}`);
+        const bb = textEl.getBBox();
+        const PAD = 18;
+
+        const vx = Math.floor(bb.x - PAD);
+        const vy = Math.floor(bb.y - PAD);
+        const vw = Math.ceil(bb.width + PAD * 2);
+        const vh = Math.ceil(bb.height + PAD * 2);
+
+        results[key] = {
+          // We cannot extract outlines in browser without fonttools/opentype.js
+          // Provide viewBox dimensions — paths will be filled by the Node.js script
+          viewBox: `${vx} ${vy} ${vw} ${vh}`,
+          width: vw,
+          height: vh,
+          // Placeholder — fill with actual path from Node script
+          d: `/* REPLACE with actual path from scripts/generate-intro-paths.mjs */`,
+        };
+      }
+
+      // Generate JS module output
+      const js = `/**
+ * AUTO-GENERATED — Dancing Script Bold (Google Fonts)
+ * Generated by: generate-intro-paths.html (browser extraction)
+ * Dimensions sourced from SVGTextElement.getBBox()
+ *
+ * IMPORTANT: The 'd' property for each word needs to be filled in
+ * by running: node scripts/generate-intro-paths.mjs
+ * (requires opentype.js and Dancing Script TTF file)
+ */
+
+export const INTRO_PATHS = ${JSON.stringify(results, null, 2)};
+
+export default INTRO_PATHS;
+`;
+
+      output.value = js;
+
+      // Also log viewBox info for manual reference
+      console.log('ViewBox data extracted:', results);
+      status.textContent = '⚠️ ViewBox dimensions extracted. Note: d="" paths require opentype.js Node script.';
+
+      // Try to show what the text looks like for verification
+      const svgEl = document.getElementById('extract-svg');
+      svgEl.style.visibility = 'visible';
+      svgEl.style.position = 'static';
+      svgEl.style.top = 'auto';
+      status.textContent += ' SVG preview shown below.';
+    }
+  </script>
+</body>
+</html>

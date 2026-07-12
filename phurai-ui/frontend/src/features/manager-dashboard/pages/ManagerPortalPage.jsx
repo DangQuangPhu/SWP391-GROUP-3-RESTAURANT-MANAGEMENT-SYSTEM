@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useOutletContext, useLocation } from "react-router-dom";
 import "../styles/manager-dashboard.css";
-import { KpiSkeleton, TableSkeleton, CardGridSkeleton } from "@/components/ui/Skeleton";
+import {
+  KpiSkeleton,
+  TableSkeleton,
+  CardGridSkeleton,
+  DashboardSkeleton,
+  SkeletonPresence,
+  fadeScaleVariants,
+  listContainerVariants,
+} from "@/components/ui/Skeleton";
+import { motion, AnimatePresence } from "framer-motion";
 
 import NotFound from "@/pages/NotFound.jsx";
 import { KPI_CARDS } from "@/shared/constants.js";
@@ -33,7 +42,7 @@ import {
   fetchReservationStats,
   fetchTableUtilization,
 } from "../services/managerApi.js";
-import { asArray } from "@/utils/asArray.js";
+import { asArray } from "@/core/utils/asArray.js";
 import {
   appToastError,
   appToastInfo,
@@ -48,57 +57,66 @@ function resolveRole(roleName) {
   return null;
 }
 
-function LoadingState() {
-  const location = useLocation();
-  const path = location.pathname;
-
-  if (path.includes("/manager/today") || path.endsWith("/manager/dashboard") || path.endsWith("/manager")) {
-    return (
-      <div className="space-y-8 p-6">
-        <KpiSkeleton count={4} />
-        <TableSkeleton cols={4} rows={3} />
-      </div>
-    );
-  }
+/* ─── Skeleton registry by route path ─────────────────────────────────────── */
+function routeSkeleton(path) {
+  if (
+    path.endsWith("/manager") ||
+    path.endsWith("/manager/dashboard") ||
+    path.includes("/manager/today")
+  ) return <DashboardSkeleton />;
 
   if (
     path.includes("/manager/reservations") ||
     path.includes("/manager/orders") ||
     path.includes("/manager/staff") ||
     path.includes("/manager/promotions")
-  ) {
-    return (
-      <div className="p-6">
-        <TableSkeleton cols={5} rows={6} />
-      </div>
-    );
-  }
+  ) return (
+    <motion.div
+      key="tbl-sk"
+      variants={fadeScaleVariants}
+      initial="hidden" animate="visible" exit="exit"
+      className="p-6"
+    >
+      <TableSkeleton cols={5} rows={6} />
+    </motion.div>
+  );
 
-  if (path.includes("/manager/tables") || path.includes("/manager/menu")) {
-    return (
-      <div className="p-6">
-        <CardGridSkeleton count={6} />
-      </div>
-    );
-  }
+  if (path.includes("/manager/tables") || path.includes("/manager/menu")) return (
+    <motion.div
+      key="grid-sk"
+      variants={fadeScaleVariants}
+      initial="hidden" animate="visible" exit="exit"
+      className="p-6"
+    >
+      <CardGridSkeleton count={6} />
+    </motion.div>
+  );
 
-  if (path.includes("/manager/reports")) {
-    return (
-      <div className="space-y-8 p-6">
-        <KpiSkeleton count={4} />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <TableSkeleton cols={3} rows={4} />
-          <TableSkeleton cols={3} rows={4} />
-        </div>
+  if (path.includes("/manager/reports")) return (
+    <motion.div
+      key="reports-sk"
+      variants={fadeScaleVariants}
+      initial="hidden" animate="visible" exit="exit"
+      className="space-y-8 p-6"
+    >
+      <KpiSkeleton count={4} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <TableSkeleton cols={3} rows={4} />
+        <TableSkeleton cols={3} rows={4} />
       </div>
-    );
-  }
+    </motion.div>
+  );
 
   return (
-    <div className="sfx-loading">
+    <motion.div
+      key="default-sk"
+      variants={fadeScaleVariants}
+      initial="hidden" animate="visible" exit="exit"
+      className="sfx-loading"
+    >
       <span className="sfx-spinner" />
-      <p>Loading operations data…</p>
-    </div>
+      <p>Loading…</p>
+    </motion.div>
   );
 }
 
@@ -110,126 +128,245 @@ function useSectionContext() {
 
 function DashboardRoute() {
   const { loading, baseKpis, data, role, portalNavigate } = useSectionContext();
-  if (loading) return <LoadingState />;
+  const location = useLocation();
   return (
-    <OverviewSection
-      kpis={baseKpis}
-      reservations={data.reservations}
-      role={role}
-      onNavigate={portalNavigate}
-    />
+    <AnimatePresence mode="wait">
+      {loading
+        ? routeSkeleton(location.pathname)
+        : (
+          <motion.div
+            key="dashboard-content"
+            variants={fadeScaleVariants}
+            initial="hidden" animate="visible" exit="exit"
+          >
+            <OverviewSection
+              kpis={baseKpis}
+              reservations={data.reservations}
+              revenue={data.revenue}
+              role={role}
+              onNavigate={portalNavigate}
+            />
+          </motion.div>
+        )
+      }
+    </AnimatePresence>
   );
 }
 
 function TodayRoute() {
   const { loading, baseKpis, data, portalNavigate } = useSectionContext();
-  if (loading) return <LoadingState />;
+  const location = useLocation();
   return (
-    <TodaySection
-      kpis={baseKpis}
-      reservations={data.reservations}
-      tables={data.tables}
-      orders={data.orders}
-      onNavigate={portalNavigate}
-    />
+    <AnimatePresence mode="wait">
+      {loading
+        ? routeSkeleton(location.pathname)
+        : (
+          <motion.div
+            key="today-content"
+            variants={fadeScaleVariants}
+            initial="hidden" animate="visible" exit="exit"
+          >
+            <TodaySection
+              kpis={baseKpis}
+              reservations={data.reservations}
+              tables={data.tables}
+              orders={data.orders}
+              onNavigate={portalNavigate}
+            />
+          </motion.div>
+        )
+      }
+    </AnimatePresence>
   );
 }
 
 function ReservationsRoute() {
   const { loading, data, setList, toast, refreshReservations } = useSectionContext();
-  if (loading) return <LoadingState />;
+  const location = useLocation();
   return (
-    <ReservationsSection
-      reservations={data.reservations}
-      setReservations={setList("reservations")}
-      tables={data.tables}
-      setTables={setList("tables")}
-      toast={toast}
-      onRefresh={refreshReservations}
-    />
+    <AnimatePresence mode="wait">
+      {loading
+        ? routeSkeleton(location.pathname)
+        : (
+          <motion.div
+            key="reservations-content"
+            variants={fadeScaleVariants}
+            initial="hidden" animate="visible" exit="exit"
+          >
+            <ReservationsSection
+              reservations={data.reservations}
+              setReservations={setList("reservations")}
+              tables={data.tables}
+              setTables={setList("tables")}
+              toast={toast}
+              onRefresh={refreshReservations}
+            />
+          </motion.div>
+        )
+      }
+    </AnimatePresence>
   );
 }
 
 function TablesRoute() {
   const { loading, data, setList, pendingAction, role, toast } = useSectionContext();
-  if (loading) return <LoadingState />;
+  const location = useLocation();
   return (
-    <TablesSection
-      tables={data.tables}
-      setTables={setList("tables")}
-      pendingAction={pendingAction}
-      role={role}
-      toast={toast}
-    />
+    <AnimatePresence mode="wait">
+      {loading
+        ? routeSkeleton(location.pathname)
+        : (
+          <motion.div
+            key="tables-content"
+            variants={fadeScaleVariants}
+            initial="hidden" animate="visible" exit="exit"
+          >
+            <TablesSection
+              tables={data.tables}
+              setTables={setList("tables")}
+              pendingAction={pendingAction}
+              role={role}
+              toast={toast}
+            />
+          </motion.div>
+        )
+      }
+    </AnimatePresence>
   );
 }
 
 function MenuRoute() {
   const { loading, data, setList, pendingAction, role, toast, dishSource } = useSectionContext();
-  if (loading) return <LoadingState />;
+  const location = useLocation();
   return (
-    <DishesSection
-      dishes={data.dishes}
-      setDishes={setList("dishes")}
-      bestSellers={data.bestSellers}
-      pendingAction={pendingAction}
-      role={role}
-      toast={toast}
-      dishSource={dishSource}
-    />
+    <AnimatePresence mode="wait">
+      {loading
+        ? routeSkeleton(location.pathname)
+        : (
+          <motion.div
+            key="menu-content"
+            variants={fadeScaleVariants}
+            initial="hidden" animate="visible" exit="exit"
+          >
+            <DishesSection
+              dishes={data.dishes}
+              setDishes={setList("dishes")}
+              bestSellers={data.bestSellers}
+              pendingAction={pendingAction}
+              role={role}
+              toast={toast}
+              dishSource={dishSource}
+            />
+          </motion.div>
+        )
+      }
+    </AnimatePresence>
   );
 }
 
 function OrdersRoute() {
   const { loading, data, setList, toast } = useSectionContext();
-  if (loading) return <LoadingState />;
+  const location = useLocation();
   return (
-    <OrdersSection
-      orders={data.orders}
-      setOrders={setList("orders")}
-      toast={toast}
-    />
+    <AnimatePresence mode="wait">
+      {loading
+        ? routeSkeleton(location.pathname)
+        : (
+          <motion.div
+            key="orders-content"
+            variants={fadeScaleVariants}
+            initial="hidden" animate="visible" exit="exit"
+          >
+            <OrdersSection
+              orders={data.orders}
+              setOrders={setList("orders")}
+              toast={toast}
+            />
+          </motion.div>
+        )
+      }
+    </AnimatePresence>
   );
 }
 
 function StaffRoute() {
   const { loading, data, setList, pendingAction, toast } = useSectionContext();
-  if (loading) return <LoadingState />;
+  const location = useLocation();
   return (
-    <StaffSection
-      staff={data.manager}
-      setStaff={setList("manager")}
-      pendingAction={pendingAction}
-      toast={toast}
-    />
+    <AnimatePresence mode="wait">
+      {loading
+        ? routeSkeleton(location.pathname)
+        : (
+          <motion.div
+            key="staff-content"
+            variants={fadeScaleVariants}
+            initial="hidden" animate="visible" exit="exit"
+          >
+            <StaffSection
+              staff={data.manager}
+              setStaff={setList("manager")}
+              pendingAction={pendingAction}
+              toast={toast}
+            />
+          </motion.div>
+        )
+      }
+    </AnimatePresence>
   );
 }
 
 function PromotionsRoute() {
   const { loading, data, setList, pendingAction, toast } = useSectionContext();
-  if (loading) return <LoadingState />;
+  const location = useLocation();
   return (
-    <PromotionsSection
-      promotions={data.promotions}
-      setPromotions={setList("promotions")}
-      pendingAction={pendingAction}
-      toast={toast}
-    />
+    <AnimatePresence mode="wait">
+      {loading
+        ? routeSkeleton(location.pathname)
+        : (
+          <motion.div
+            key="promotions-content"
+            variants={fadeScaleVariants}
+            initial="hidden" animate="visible" exit="exit"
+          >
+            <PromotionsSection
+              promotions={data.promotions}
+              setPromotions={setList("promotions")}
+              pendingAction={pendingAction}
+              toast={toast}
+            />
+          </motion.div>
+        )
+      }
+    </AnimatePresence>
   );
 }
 
 function ReportsRoute() {
   const { loading, baseKpis, data, toast } = useSectionContext();
-  if (loading) return <LoadingState />;
+  const location = useLocation();
   return (
-    <ReportsSection
-      kpis={baseKpis}
-      reservations={data.reservations}
-      bestSellers={data.bestSellers}
-      stats={data.stats}
-      utilization={data.utilization}
-      toast={toast}
-    />
+    <AnimatePresence mode="wait">
+      {loading
+        ? routeSkeleton(location.pathname)
+        : (
+          <motion.div
+            key="reports-content"
+            variants={fadeScaleVariants}
+            initial="hidden" animate="visible" exit="exit"
+          >
+            <ReportsSection
+              kpis={baseKpis}
+              reservations={data.reservations}
+              bestSellers={data.bestSellers}
+              stats={data.stats}
+              utilization={data.utilization}
+              revenue={data.revenue}
+              toast={toast}
+            />
+          </motion.div>
+        )
+      }
+    </AnimatePresence>
   );
 }
 

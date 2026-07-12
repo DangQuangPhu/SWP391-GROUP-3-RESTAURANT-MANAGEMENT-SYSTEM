@@ -6,8 +6,8 @@ import ForgotPasswordForm from "./ForgotPasswordForm";
 import ResetPasswordForm from "./ResetPasswordForm";
 import FirstLoginResetForm from "./FirstLoginResetForm";
 import { blurActiveElement } from "../utils/authHelpers.js";
-import "@/styles/auth.css";
-import "@/styles/authModal.css";
+import "@/features/auth/styles/auth.css";
+import "@/features/auth/styles/authModal.css";
 
 const VIEWS = {
   AUTH: "auth",

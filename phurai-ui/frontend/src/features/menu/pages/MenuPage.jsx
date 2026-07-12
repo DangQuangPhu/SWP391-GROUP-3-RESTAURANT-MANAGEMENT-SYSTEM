@@ -15,7 +15,7 @@ import { useSocket } from '@/core/socket/SocketContext.jsx';
 
 import { flattenMenuDishes, menuCategories } from '../data/menuData.js';
 import { menuImages } from '../data/menuAssets.js';
-import { normalizePrice, formatVND } from '@/utils/formatCurrency';
+import { normalizePrice, formatVND } from '@/core/utils/formatCurrency';
 import { isMenuCustomer } from '../utils/menuCustomer.js';
 
 function filterDishes(dishes, searchTerm) {

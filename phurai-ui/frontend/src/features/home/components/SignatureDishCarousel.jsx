@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import OutlineButton from '@/components/common/OutlineButton';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
-import '@/styles/SignatureDishCarousel.css';
+import '@/features/home/styles/SignatureDishCarousel.css';
 
 const CARDS = [
   {

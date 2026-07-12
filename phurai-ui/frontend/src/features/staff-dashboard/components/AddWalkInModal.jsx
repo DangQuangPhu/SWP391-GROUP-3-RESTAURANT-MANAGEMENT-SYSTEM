@@ -1,47 +1,64 @@
 /**
  * AddWalkInModal — Staff Portal
  *
- * Collects: Full Name (required), Phone (required), Email (optional),
- *           Guest Count (required, 1–50), Table (required — only Available tables shown).
+ * Collects: Full Name (required), Phone (optional), Email (required — for e-receipt),
+ *           Guest Count (required, 1–50), Table (required — only Available selectable).
  *
  * Business rules enforced:
- *   - No deposit field
- *   - No voucher / promo code field
- *   - Table dropdown filters to Available only
+ *   - No deposit, no voucher/promo code
+ *   - Email is MANDATORY — used to dispatch e-receipt after payment
+ *   - Table selected via the shared Customer Floor Plan (TableBoard) via portal
  *   - On success → parent refreshes list via socket (no manual reload needed)
  */
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { LayoutGrid, X, Check, ChevronRight } from "lucide-react";
+import TableBoard from "@/features/reservations/components/choose-table/TableBoard.jsx";
 import { fetchStaffTables, createWalkInReservation } from "../services/staffApi.js";
-import "./AddWalkInModal.css";
+import "../styles/AddWalkInModal.css";
 
+// ─── Field config ────────────────────────────────────────────────────────────
 const FIELD_RULES = {
-  contact_name:  { label: "Full Name",     required: true,  min: 2,  max: 100, type: "text",  placeholder: "e.g. Nguyen Van An" },
-  contact_phone: { label: "Phone Number",  required: true,  min: 8,  max: 20,  type: "tel",   placeholder: "e.g. 0901234567" },
-  contact_email: { label: "Email",         required: false, min: 0,  max: 100, type: "email", placeholder: "Optional" },
-  guest_count:   { label: "Guest Count",   required: true,  min: 1,  max: 50,  type: "number",placeholder: "Number of guests" },
+  contact_name:  { label: "Full Name",    required: true,  max: 100, type: "text",   placeholder: "e.g. Nguyen Van An",      autoComplete: "name" },
+  contact_phone: { label: "Phone Number", required: false, max: 20,  type: "tel",    placeholder: "e.g. 0901234567",        autoComplete: "tel" },
+  contact_email: { label: "Email",        required: true,  max: 100, type: "email",  placeholder: "e.g. guest@example.com", autoComplete: "email" },
+  guest_count:   { label: "Guest Count",  required: true,  max: 3,   type: "number", placeholder: "e.g. 2",                 autoComplete: "off" },
 };
 
+// ─── Adapt staff API rows → TableBoard's expected shape ──────────────────────
+// TableBoard uses `is_bookable` + `availability_at_slot` for status.
+// Staff API returns `table_status` directly ("Available", "Occupied", etc.).
+function adaptForTableBoard(staffTable) {
+  const isAvailable = staffTable.table_status === "Available";
+  return {
+    ...staffTable,
+    is_bookable: isAvailable,
+    availability_at_slot: isAvailable ? "Available" : staffTable.table_status,
+  };
+}
+
+// ─── Validation ──────────────────────────────────────────────────────────────
 function validate(fields) {
   const errors = {};
   if (!fields.contact_name?.trim() || fields.contact_name.trim().length < 2) {
     errors.contact_name = "Full name is required (min 2 characters).";
   }
-  if (!fields.contact_phone?.trim() || fields.contact_phone.trim().length < 8) {
-    errors.contact_phone = "Valid phone number is required.";
-  }
-  if (fields.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.contact_email)) {
-    errors.contact_email = "Enter a valid email address.";
+  if (!fields.contact_email?.trim()) {
+    errors.contact_email = "Email address is required for e-receipt delivery.";
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.contact_email.trim())) {
+    errors.contact_email = "Please enter a valid email address.";
   }
   const gc = parseInt(fields.guest_count, 10);
   if (!gc || gc < 1 || gc > 50) {
     errors.guest_count = "Guest count must be between 1 and 50.";
   }
   if (!fields.table_id) {
-    errors.table_id = "Please select an available table.";
+    errors.table_id = "Please select a table using the floor plan.";
   }
   return errors;
 }
 
+// ─── Component ───────────────────────────────────────────────────────────────
 export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
   const userId = user?.userId ?? user?.user_id ?? user?.id;
   const modalRef = useRef(null);
@@ -53,38 +70,60 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
     guest_count:   "2",
     table_id:      "",
   });
-  const [errors,       setErrors]       = useState({});
-  const [tables,       setTables]       = useState([]);
-  const [loadingTables,setLoadingTables]= useState(true);
-  const [submitting,   setSubmitting]   = useState(false);
+  const [errors,        setErrors]        = useState({});
+  const [allTables,     setAllTables]     = useState([]);
+  const [loadingTables, setLoadingTables] = useState(true);
+  const [submitting,    setSubmitting]    = useState(false);
+  const [showFloorPlan, setShowFloorPlan] = useState(false);
 
-  // Load available tables on mount
+  // Fetch all tables on mount
   useEffect(() => {
     setLoadingTables(true);
     fetchStaffTables(userId)
       .then((res) => {
         const all = Array.isArray(res?.data) ? res.data : [];
-        setTables(all.filter((t) => t.table_status === "Available" && !t.is_counter));
+        setAllTables(all.filter((t) => !t.is_counter));
       })
-      .catch(() => setTables([]))
+      .catch(() => setAllTables([]))
       .finally(() => setLoadingTables(false));
   }, [userId]);
 
-  // Trap focus + close on Escape
+  // Trap focus + Escape
   useEffect(() => {
     const el = modalRef.current;
     if (!el) return;
     el.focus();
-    const onKeyDown = (e) => {
-      if (e.key === "Escape") onClose();
-    };
+    const onKeyDown = (e) => { if (e.key === "Escape" && !showFloorPlan) onClose(); };
     el.addEventListener("keydown", onKeyDown);
     return () => el.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [onClose, showFloorPlan]);
+
+  // Lock body scroll when floor plan is open
+  useEffect(() => {
+    if (showFloorPlan) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [showFloorPlan]);
 
   function setField(key, val) {
     setFields((f) => ({ ...f, [key]: val }));
     if (errors[key]) setErrors((e) => { const n = { ...e }; delete n[key]; return n; });
+  }
+
+  // The currently-selected table object (for display)
+  const selectedTableData = allTables.find(
+    (t) => String(t.table_id) === String(fields.table_id)
+  );
+
+  // TableBoard-adapted table list
+  const adaptedTables = allTables.map(adaptForTableBoard);
+
+  function handleTableSelect(tableId) {
+    setField("table_id", tableId != null ? String(tableId) : "");
+    setShowFloorPlan(false);
   }
 
   async function handleSubmit(e) {
@@ -96,8 +135,8 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
     try {
       const result = await createWalkInReservation(userId, {
         contact_name:  fields.contact_name.trim(),
-        contact_phone: fields.contact_phone.trim(),
-        contact_email: fields.contact_email.trim() || null,
+        contact_phone: fields.contact_phone.trim() || null,
+        contact_email: fields.contact_email.trim(),
         guest_count:   parseInt(fields.guest_count, 10),
         table_id:      parseInt(fields.table_id, 10),
       });
@@ -111,10 +150,17 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
     }
   }
 
-  return (
+  // ── Walk-in form modal ───────────────────────────────────────────────────
+  const modalJsx = (
     <div className="walkin-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="walkin-modal" role="dialog" aria-modal="true" aria-label="Add Walk-in Guest" ref={modalRef} tabIndex={-1}>
-
+      <div
+        className="walkin-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add Walk-in Guest"
+        ref={modalRef}
+        tabIndex={-1}
+      >
         {/* Header */}
         <div className="walkin-modal__header">
           <div className="walkin-modal__header-left">
@@ -125,7 +171,7 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
             <p className="walkin-modal__subtitle">No deposit · No promo code · Immediate table assignment</p>
           </div>
           <button className="walkin-modal__close" onClick={onClose} aria-label="Close">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <X size={18} />
           </button>
         </div>
 
@@ -135,6 +181,8 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
           {/* Section: Guest Info */}
           <div className="walkin-form__section">
             <p className="walkin-form__section-label">Guest Information</p>
+
+            {/* Row 1: Name + Phone side by side */}
             <div className="walkin-form__grid">
               {["contact_name", "contact_phone"].map((key) => {
                 const rule = FIELD_RULES[key];
@@ -143,6 +191,7 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
                     <label className="walkin-form__label">
                       {rule.label}
                       {rule.required && <span className="walkin-form__required">*</span>}
+                      {!rule.required && <span className="walkin-form__optional"> (optional)</span>}
                     </label>
                     <input
                       className="walkin-form__input"
@@ -151,7 +200,7 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
                       onChange={(e) => setField(key, e.target.value)}
                       placeholder={rule.placeholder}
                       maxLength={rule.max}
-                      autoComplete={key === "contact_phone" ? "tel" : "name"}
+                      autoComplete={rule.autoComplete}
                     />
                     {errors[key] && <p className="walkin-form__error">{errors[key]}</p>}
                   </div>
@@ -159,71 +208,99 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
               })}
             </div>
 
-            <div className="walkin-form__grid walkin-form__grid--2col">
-              {/* Email — optional */}
-              <div className={`walkin-form__field${errors.contact_email ? " is-error" : ""}`}>
-                <label className="walkin-form__label">Email <span className="walkin-form__optional">(optional)</span></label>
-                <input
-                  className="walkin-form__input"
-                  type="email"
-                  value={fields.contact_email}
-                  onChange={(e) => setField("contact_email", e.target.value)}
-                  placeholder="Optional"
-                  maxLength={100}
-                  autoComplete="email"
-                />
-                {errors.contact_email && <p className="walkin-form__error">{errors.contact_email}</p>}
-              </div>
+            {/* Row 2: Email — mandatory for e-receipt */}
+            <div className={`walkin-form__field${errors.contact_email ? " is-error" : ""}`}>
+              <label className="walkin-form__label">
+                {FIELD_RULES.contact_email.label}
+                <span className="walkin-form__required">*</span>
+              </label>
+              <input
+                className="walkin-form__input"
+                type="email"
+                value={fields.contact_email}
+                onChange={(e) => setField("contact_email", e.target.value)}
+                placeholder={FIELD_RULES.contact_email.placeholder}
+                maxLength={FIELD_RULES.contact_email.max}
+                autoComplete="email"
+              />
+              {errors.contact_email && <p className="walkin-form__error">{errors.contact_email}</p>}
+            </div>
 
-              {/* Guest count */}
-              <div className={`walkin-form__field${errors.guest_count ? " is-error" : ""}`}>
-                <label className="walkin-form__label">Guest Count <span className="walkin-form__required">*</span></label>
-                <input
-                  className="walkin-form__input"
-                  type="number"
-                  min={1} max={50}
-                  value={fields.guest_count}
-                  onChange={(e) => setField("guest_count", e.target.value)}
-                  placeholder="Number of guests"
-                />
-                {errors.guest_count && <p className="walkin-form__error">{errors.guest_count}</p>}
-              </div>
+            {/* Row 3: Guest Count */}
+            <div className={`walkin-form__field${errors.guest_count ? " is-error" : ""}`}>
+              <label className="walkin-form__label">
+                {FIELD_RULES.guest_count.label}
+                <span className="walkin-form__required">*</span>
+              </label>
+              <input
+                className="walkin-form__input walkin-form__input--sm"
+                type="number"
+                min={1}
+                max={50}
+                value={fields.guest_count}
+                onChange={(e) => setField("guest_count", e.target.value)}
+                placeholder={FIELD_RULES.guest_count.placeholder}
+              />
+              {errors.guest_count && <p className="walkin-form__error">{errors.guest_count}</p>}
             </div>
           </div>
 
           {/* Section: Table */}
           <div className="walkin-form__section">
-            <p className="walkin-form__section-label">Select Table</p>
-            <div className={`walkin-form__field${errors.table_id ? " is-error" : ""}`}>
-              {loadingTables ? (
-                <div className="walkin-form__table-loading">Loading available tables…</div>
-              ) : tables.length === 0 ? (
-                <div className="walkin-form__no-tables">No available tables at this moment.</div>
-              ) : (
-                <div className="walkin-table-grid">
-                  {tables.map((t) => (
-                    <button
-                      key={t.table_id}
-                      type="button"
-                      className={`walkin-table-tile${fields.table_id === String(t.table_id) ? " is-selected" : ""}`}
-                      onClick={() => setField("table_id", String(t.table_id))}
-                    >
-                      <span className="walkin-table-tile__name">{t.table_name || t.table_number}</span>
-                      <span className="walkin-table-tile__area">{t.area_name || ""}</span>
-                      {t.capacity && (
-                        <span className="walkin-table-tile__cap">{t.capacity} seats</span>
-                      )}
-                    </button>
-                  ))}
+            <p className="walkin-form__section-label">Table Assignment</p>
+
+            {!selectedTableData ? (
+              /* ── No table selected yet ── */
+              <div className={`walkin-table-picker${errors.table_id ? " is-error" : ""}`}>
+                <button
+                  type="button"
+                  className="walkin-table-picker__btn"
+                  onClick={() => setShowFloorPlan(true)}
+                  disabled={loadingTables}
+                >
+                  <LayoutGrid size={18} className="walkin-table-picker__icon" />
+                  <span>{loadingTables ? "Loading tables…" : "Select A Table"}</span>
+                  <ChevronRight size={16} className="walkin-table-picker__chevron" />
+                </button>
+                {errors.table_id && (
+                  <p className="walkin-form__error" style={{ marginTop: 8 }}>{errors.table_id}</p>
+                )}
+              </div>
+            ) : (
+              /* ── Table selected — show chip ── */
+              <div className="walkin-table-selected">
+                <div className="walkin-table-selected__chip">
+                  <span className="walkin-table-selected__check">
+                    <Check size={12} strokeWidth={3} />
+                  </span>
+                  <div className="walkin-table-selected__info">
+                    <span className="walkin-table-selected__name">
+                      {selectedTableData.table_name || selectedTableData.table_number}
+                    </span>
+                    {selectedTableData.area_name && (
+                      <span className="walkin-table-selected__area">{selectedTableData.area_name}</span>
+                    )}
+                    {selectedTableData.capacity && (
+                      <span className="walkin-table-selected__cap">{selectedTableData.capacity} seats</span>
+                    )}
+                  </div>
                 </div>
-              )}
-              {errors.table_id && <p className="walkin-form__error" style={{ marginTop: 8 }}>{errors.table_id}</p>}
-            </div>
+                <button
+                  type="button"
+                  className="walkin-table-selected__change"
+                  onClick={() => setShowFloorPlan(true)}
+                >
+                  Change Table
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Walk-in badge notice */}
+          {/* Notice */}
           <div className="walkin-notice">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
             <span>Walk-in guests are seated immediately. No deposit collected. Voucher &amp; promo codes are not applicable.</span>
           </div>
 
@@ -239,5 +316,56 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
         </form>
       </div>
     </div>
+  );
+
+  // ── Floor Plan portal — reuses exact customer TableBoard ─────────────────
+  // rzv-fullscreen-content already has `animation: rzvModalPop 0.4s cubic-bezier(0.16,1,0.3,1)`
+  // baked into reservation.css — Apple-eased scale-up for free.
+  const floorPlanPortal = showFloorPlan && createPortal(
+    <div
+      className="rzv-fullscreen-overlay"
+      onClick={() => setShowFloorPlan(false)}
+    >
+      <div
+        className="rzv-fullscreen-content"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Floor plan header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexShrink: 0 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "var(--text-color, #0f172a)" }}>
+              Choose a Table
+            </h3>
+            <p style={{ margin: "4px 0 0", fontSize: "0.8rem", color: "#94a3b8" }}>
+              Only available tables can be selected · {parseInt(fields.guest_count, 10) || 2} guests
+            </p>
+          </div>
+          <button
+            type="button"
+            className="walkin-modal__close"
+            onClick={() => setShowFloorPlan(false)}
+            aria-label="Close floor plan"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* TableBoard — exact same component used in customer flow */}
+        <TableBoard
+          tables={adaptedTables}
+          selectedTableId={fields.table_id ? parseInt(fields.table_id, 10) : null}
+          onSelectTable={handleTableSelect}
+          guestCount={parseInt(fields.guest_count, 10) || 2}
+        />
+      </div>
+    </div>,
+    document.body
+  );
+
+  return (
+    <>
+      {createPortal(modalJsx, document.body)}
+      {floorPlanPortal}
+    </>
   );
 }

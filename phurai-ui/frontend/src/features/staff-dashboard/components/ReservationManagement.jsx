@@ -1,5 +1,14 @@
 import { useStaffPortal } from "../context/StaffPortalContext.jsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  ReservationTableSkeleton,
+  SkeletonPresence,
+  listContainerVariants,
+  listItemVariants,
+  fadeScaleVariants,
+} from "./StaffSkeleton.jsx";
 import { useLocation } from "react-router-dom";
 import { format, isSameDay } from "date-fns";
 import DashboardDateRangePicker from "@/features/manager-dashboard/components/shared/DashboardDateRangePicker.jsx";
@@ -19,14 +28,12 @@ import {
   sendReservationToKitchenQueue,
   fetchReservationTimeline,
   fetchStaffTables,
-  assignStaffTable,
 } from "../services/staffApi.js";
 import {
   getReservationDateIso,
   getReservationStatusKey,
   formatReservationTimeDisplay,
 } from "../utils/reservationQueueHelpers.js";
-import TableBoard from "../../reservations/components/choose-table/TableBoard.jsx";
 import { useSocket } from "@/core/socket/SocketContext.jsx";
 import { FILTER_GROUPS, RESERVATION_STATUS, RESERVATION_STATUS_META, STAFF_VISIBLE_STATUSES } from "@/shared/reservationStatus.js";
 
@@ -221,10 +228,13 @@ function ReservationManagement({ user, toast, refreshKey }) {
   const [checkoutReadyIds, setCheckoutReadyIds] = useState(new Set());
   const [checkoutDoneIds, setCheckoutDoneIds] = useState(new Set());
 
-  const [assignDialog, setAssignDialog] = useState(null); // holds reservation obj
-  const [tables, setTables] = useState([]);
-  const [loadingTables, setLoadingTables] = useState(false);
   const [walkInOpen, setWalkInOpen] = useState(false);
+  // Table-selection modal state (replaces standalone "Assign Table" flow)
+  const [tableSelectDialog, setTableSelectDialog] = useState(null); // holds reservation obj
+  const [tableSelectTables, setTableSelectTables] = useState([]);
+  const [tableSelectLoading, setTableSelectLoading] = useState(false);
+  const [tableSelectAreaFilter, setTableSelectAreaFilter] = useState("All");
+  const [tableSelectSubmitting, setTableSelectSubmitting] = useState(false);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -351,7 +361,34 @@ function ReservationManagement({ user, toast, refreshKey }) {
       };
 
       const handleNew = (data) => {
-        toast(`New booking #${String(data.reservation_id || "").padStart(6, "0")} from ${data.customer_name || "Guest"}`, "info");
+        // DIRECTIVE C: Optimistic injection — walk-in appears INSTANTLY in the list
+        // without waiting for the server round-trip from loadReservations().
+        // We inject a synthetic row into queue state immediately, then loadReservations
+        // replaces it with the real server row.
+        if (data?.reservation_source === 'Walk-in' && data?.reservation_id) {
+          const syntheticRow = {
+            reservation_id:     data.reservation_id,
+            customer_name:      data.customer_name || 'Walk-in Guest',
+            contact_phone:      data.contact_phone || '',
+            reservation_status: data.reservation_status || 'Dining',
+            status:             data.reservation_status || 'Dining',
+            reservation_source: 'Walk-in',
+            table_id:           data.table_id,
+            table_number:       data.table_number,
+            guest_count:        data.guest_count || 1,
+            reservation_start_at: new Date().toISOString(),
+            _isOptimistic:      true,
+          };
+          setQueue((prev) => {
+            const alreadyExists = prev.some((r) => r.reservation_id === data.reservation_id);
+            if (alreadyExists) return prev;
+            return [syntheticRow, ...prev];
+          });
+          toast(`Walk-in #${String(data.reservation_id).padStart(6, '0')} — ${data.customer_name || 'Guest'} seated at Table ${data.table_number || ''}`, 'success');
+        } else {
+          toast(`New booking #${String(data.reservation_id || '').padStart(6, '0')} from ${data.customer_name || 'Guest'}`, 'info');
+        }
+        // Always sync from server to replace the synthetic row with real data
         loadReservations();
       };
       const handleCheckoutReady = ({ reservation_id }) => {
@@ -602,27 +639,58 @@ function ReservationManagement({ user, toast, refreshKey }) {
     }
   }, [confirmDialog, toast, loadReservations, user]);
 
-  useEffect(() => {
-    if (assignDialog) {
-      setLoadingTables(true);
-      fetchStaffTables()
-        .then(res => setTables(res.data || res))
-        .catch(err => toast("Failed to load tables: " + err.message, "error"))
-        .finally(() => setLoadingTables(false));
-    }
-  }, [assignDialog, toast]);
-
-  const handleAssignTable = useCallback(async (tableId) => {
-    if (!assignDialog) return;
+  // Open table selection modal and fetch tables
+  const openTableSelect = useCallback(async (reservation) => {
+    setTableSelectDialog(reservation);
+    setTableSelectAreaFilter("All");
+    setTableSelectLoading(true);
     try {
-      await assignStaffTable(assignDialog.reservation_id, userId, { tableId });
-      toast("Table assigned and guests seated!", "success");
-      loadReservations();
-      setAssignDialog(null);
+      const res = await fetchStaffTables(userId);
+      const all = Array.isArray(res?.data) ? res.data : [];
+      setTableSelectTables(all.filter((t) => !t.is_counter));
     } catch (err) {
-      toast(err.message || "Failed to assign table.", "error");
+      toast("Failed to load tables: " + err.message, "error");
+      setTableSelectTables([]);
+    } finally {
+      setTableSelectLoading(false);
     }
-  }, [assignDialog, userId, toast, loadReservations]);
+  }, [userId, toast]);
+
+  // Check-in with chosen table → atomic: Reservation→Dining, Table→Occupied
+  const handleCheckInWithTable = useCallback(async (tableId) => {
+    if (!tableSelectDialog) return;
+    setTableSelectSubmitting(true);
+    try {
+      await checkInStaffReservation(tableSelectDialog.reservation_id, userId, { table_id: tableId });
+      toast("Check-in successful! Table is now Occupied.", "success");
+      setCheckedInIds((prev) => new Set([...prev, tableSelectDialog.reservation_id]));
+      setTableSelectDialog(null);
+      setConfirmDialog(null);
+      loadReservations();
+    } catch (err) {
+      if (err?.status === 409) {
+        // RACE CONDITION: Another staff member just seated a guest at this table.
+        // Show a clear message and auto-refresh the table grid so the floor plan is current.
+        toast(
+          "⚡ This table was just taken by another staff member. Please select a different table.",
+          "error"
+        );
+        // Refresh the table list so the now-Occupied table shows as unavailable
+        try {
+          const res = await fetchStaffTables(userId);
+          const all = Array.isArray(res?.data) ? res.data : [];
+          setTableSelectTables(all.filter((t) => !t.is_counter));
+        } catch (_) {
+          // Non-fatal — modal is still open with stale data, staff can close and reopen
+        }
+      } else {
+        toast(err.message || "Check-in failed. Please try again.", "error");
+      }
+    } finally {
+      setTableSelectSubmitting(false);
+    }
+  }, [tableSelectDialog, userId, toast, loadReservations]);
+
 
   const handleSendToKitchen = useCallback(async (reservationId) => {
     try {
@@ -669,15 +737,15 @@ function ReservationManagement({ user, toast, refreshKey }) {
           <Button
             size="sm"
             variant="soft"
-            style={{ 
-              color: "#fff", 
-              background: "linear-gradient(135deg, #3b82f6, #2563eb)", 
+            style={{
+              color: "#fff",
+              backgroundColor: "#10b981",
               fontWeight: 600,
               border: "none"
             }}
-            onClick={() => setAssignDialog(reservation)}
+            onClick={() => openTableSelect(reservation)}
           >
-            Assign Table
+            Check-in
           </Button>
           {viewBtn}
         </div>
@@ -734,34 +802,19 @@ function ReservationManagement({ user, toast, refreshKey }) {
       return (
         <div className="sfx-rowacts" style={{ justifyContent: "center", gap: 8, display: "flex", alignItems: "center" }}>
           {isToday && (
-            <>
-              <Button
-                size="sm"
-                variant="soft"
-                style={{ 
-                  color: "#fff", 
-                  backgroundColor: "#10b981", 
-                  fontWeight: 600,
-                  border: "none"
-                }}
-                onClick={() => setConfirmDialog({ action: "checkin", target: reservation, reason: "" })}
-              >
-                Check-in
-              </Button>
-              <Button
-                size="sm"
-                variant="soft"
-                style={{ 
-                  color: "#fff", 
-                  background: "linear-gradient(135deg, #3b82f6, #2563eb)", 
-                  fontWeight: 600,
-                  border: "none"
-                }}
-                onClick={() => setAssignDialog(reservation)}
-              >
-                Assign Table
-              </Button>
-            </>
+            <Button
+              size="sm"
+              variant="soft"
+              style={{
+                color: "#fff",
+                backgroundColor: "#10b981",
+                fontWeight: 600,
+                border: "none"
+              }}
+              onClick={() => openTableSelect(reservation)}
+            >
+              Check-in
+            </Button>
           )}
           <Button
             size="sm"
@@ -986,9 +1039,11 @@ function ReservationManagement({ user, toast, refreshKey }) {
     <>
 
       <div className="staff-reservation-tab-content sfx-stack">
-        {loading && (Array.isArray(queue) ? queue : []).length === 0 ? (
-          <p className="sfx-muted">Loading reservations…</p>
-        ) : (
+        {/* ── Initial skeleton vs real content ─────────────────────────── */}
+        <SkeletonPresence
+          loading={loading && dateScopedQueue.length === 0}
+          skeleton={<ReservationTableSkeleton count={6} />}
+        >
           <>
             {/* ── KPI cards ── */}
             <div className="staff-reservation-kpis sfx-kpis" aria-label="Reservation summary">
@@ -1174,8 +1229,12 @@ function ReservationManagement({ user, toast, refreshKey }) {
                           <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Actions</th>
                         </tr>
                       </thead>
-                      <tbody>
-                        {filtered.map((reservation) => {
+                  <motion.tbody
+                    variants={listContainerVariants}
+                    initial="hidden"
+                    animate="visible"
+                  >
+                    {filtered.map((reservation) => {
                           const resId = reservation.reservation_id;
                           const dateIso = getReservationDateIso(reservation);
                           const displayDate = (() => {
@@ -1185,8 +1244,9 @@ function ReservationManagement({ user, toast, refreshKey }) {
                           })();
 
                           return (
-                            <tr
+                            <motion.tr
                               key={resId}
+                              variants={listItemVariants}
                               id={`res-${String(resId).padStart(6, "0")}`}
                               style={{ background: "#ffffff" }}
                               className={`sfx-table__row${checkedInIds.has(resId) ? " sfx-table__row--just-actioned" : ""}${rejectedIds.has(resId) ? " sfx-table__row--just-rejected" : ""}`}
@@ -1222,10 +1282,10 @@ function ReservationManagement({ user, toast, refreshKey }) {
                                   <RowActions reservation={reservation} />
                                 </div>
                               </td>
-                            </tr>
+                            </motion.tr>
                           );
                         })}
-                      </tbody>
+                      </motion.tbody>
 
                     </table>
                   </div>
@@ -1257,19 +1317,14 @@ function ReservationManagement({ user, toast, refreshKey }) {
                         <Button variant="danger" onClick={() => setConfirmDialog({ action: "reject_checkin", target, reason: "" })}>
                           Reject Check-in
                         </Button>
-                        <Button variant="gold" onClick={() => setConfirmDialog({ action: "checkin", target, reason: "" })}>
+                        <Button variant="gold" onClick={() => openTableSelect(target)}>
                           Confirm Check-in
                         </Button>
                       </>}
                       {isOccupiedState && !isFutureDate && checkoutReadyIds.has(target.reservation_id) && (
-                        <>
-                          {/* <Button variant="danger" onClick={() => setConfirmDialog({ action: "reject_checkout", target, reason: "" })}>
-                            Reject Check-out
-                          </Button> */}
-                          <Button variant="gold" onClick={() => setConfirmDialog({ action: "checkout", target })}>
-                            Confirm Check-out
-                          </Button>
-                        </>
+                        <Button variant="gold" onClick={() => setConfirmDialog({ action: "checkout", target })}>
+                          Confirm Check-out
+                        </Button>
                       )}
                     </div>
                   );
@@ -1351,7 +1406,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
               </div>
             )}
           </>
-        )}
+        </SkeletonPresence>
 
         {editReservation && (
           <StaffEditReservationModal
@@ -1367,19 +1422,30 @@ function ReservationManagement({ user, toast, refreshKey }) {
           />
         )}
 
-        {assignDialog && (
+      </div>
+
+      {/* ── Table Selection Modal (Check-in flow) — portal to document.body ─ */}
+      {tableSelectDialog && (() => {
+        const allAreas = ["All", ...new Set(tableSelectTables.map((t) => t.area_name).filter(Boolean))];
+        const visibleTables = tableSelectAreaFilter === "All"
+          ? tableSelectTables
+          : tableSelectTables.filter((t) => t.area_name === tableSelectAreaFilter);
+        const TABLE_DOT = { Available: "#10b981", Occupied: "#ef4444", Reserved: "#f59e0b", Cleaning: "#94a3b8" };
+        const modalContent = (
           <div
             style={{
-              position: "fixed", inset: 0, zIndex: 1100,
-              background: "rgba(0,0,0,0.55)",
+              position: "fixed", inset: 0, zIndex: 9999,
+              background: "rgba(0,0,0,0.72)",
+              backdropFilter: "blur(8px)",
               display: "flex", alignItems: "center", justifyContent: "center",
+              padding: 16,
             }}
-            onClick={() => setAssignDialog(null)}
+            onClick={() => !tableSelectSubmitting && setTableSelectDialog(null)}
           >
             <div
               style={{
-                background: "#f9fafb", borderRadius: 16,
-                padding: 0, width: "95vw", maxWidth: "1200px", height: "85vh",
+                background: "#ffffff", borderRadius: 20,
+                width: "100%", maxWidth: 640, maxHeight: "92vh",
                 boxShadow: "0 24px 64px rgba(0,0,0,0.35)",
                 display: "flex", flexDirection: "column",
                 overflow: "hidden",
@@ -1387,43 +1453,120 @@ function ReservationManagement({ user, toast, refreshKey }) {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ padding: "20px 24px", borderBottom: "1px solid #e5e7eb", background: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              {/* Header */}
+              <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
-                  <h3 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: "#111827" }}>
-                    Assign Table for {assignDialog.customer_name}
-                  </h3>
-                  <p style={{ margin: 0, fontSize: 13, color: "#6b7280" }}>
-                    Guests: <strong>{assignDialog.guest_count}</strong>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ display: "inline-block", padding: "3px 9px", borderRadius: 99, background: "#dbeafe", color: "#1d4ed8", fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", border: "1px solid #bfdbfe" }}>Check-in</span>
+                    <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#0f172a" }}>
+                      Select Table for {tableSelectDialog.customer_name}
+                    </h3>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>
+                    Party of <strong>{tableSelectDialog.guest_count}</strong> · Reservation #{String(tableSelectDialog.reservation_id).padStart(6, "0")}
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setAssignDialog(null)}
-                  style={{ border: "none", background: "transparent", cursor: "pointer", color: "#9ca3af" }}
+                  onClick={() => setTableSelectDialog(null)}
+                  disabled={tableSelectSubmitting}
+                  style={{ border: "none", background: "#f1f5f9", cursor: "pointer", color: "#64748b", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
                 >
-                  <X size={24} />
+                  <X size={16} />
                 </button>
               </div>
 
-              <div style={{ flex: 1, overflow: "auto", padding: "24px", position: "relative" }}>
-                {loadingTables ? (
-                  <p style={{ textAlign: "center", marginTop: 40, color: "#6b7280" }}>Loading floor plan...</p>
+              {/* Area filter pills */}
+              {allAreas.length > 1 && (
+                <div style={{ padding: "12px 24px 0", display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {allAreas.map((area) => (
+                    <button
+                      key={area}
+                      type="button"
+                      onClick={() => setTableSelectAreaFilter(area)}
+                      style={{
+                        padding: "5px 12px", borderRadius: 20, border: "1.5px solid",
+                        fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+                        background: tableSelectAreaFilter === area ? "#ecfdf5" : "#f8fafc",
+                        color: tableSelectAreaFilter === area ? "#059669" : "#64748b",
+                        borderColor: tableSelectAreaFilter === area ? "#059669" : "#e2e8f0",
+                        boxShadow: tableSelectAreaFilter === area ? "0 0 0 2px rgba(5,150,105,0.12)" : "none",
+                      }}
+                    >
+                      {area}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Table grid */}
+              <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px 24px" }}>
+                {tableSelectLoading ? (
+                  <p style={{ textAlign: "center", marginTop: 40, color: "#6b7280", fontSize: 14 }}>Loading floor plan…</p>
+                ) : visibleTables.length === 0 ? (
+                  <p style={{ textAlign: "center", marginTop: 40, color: "#6b7280", fontSize: 14, fontStyle: "italic" }}>No tables in this area.</p>
                 ) : (
-                  <TableBoard
-                    tables={tables}
-                    guestCount={assignDialog.guest_count}
-                    onSelectTable={(tableId) => {
-                      if (window.confirm("Assign this table to " + assignDialog.customer_name + "?")) {
-                        handleAssignTable(tableId);
-                      }
-                    }}
-                  />
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8 }}>
+                    {visibleTables.map((t) => {
+                      const isAvail = t.table_status === "Available";
+                      const dot = TABLE_DOT[t.table_status] || "#94a3b8";
+                      return (
+                        <button
+                          key={t.table_id}
+                          type="button"
+                          disabled={!isAvail || tableSelectSubmitting}
+                          onClick={() => handleCheckInWithTable(t.table_id)}
+                          title={isAvail ? `Seat guest at ${t.table_number}` : `${t.table_status} — unavailable`}
+                          style={{
+                            display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                            padding: "10px 6px 8px", borderRadius: 12, textAlign: "center",
+                            border: `1.5px solid ${isAvail ? "#bbf7d0" : "#e2e8f0"}`,
+                            background: isAvail ? "#f0fdf4" : "#f8fafc",
+                            cursor: isAvail ? "pointer" : "not-allowed",
+                            opacity: isAvail ? 1 : 0.55,
+                            transition: "all 0.15s ease",
+                          }}
+                          onMouseEnter={(e) => { if (isAvail) { e.currentTarget.style.borderColor = "#34d399"; e.currentTarget.style.background = "#dcfce7"; e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(16,185,129,0.15)"; } }}
+                          onMouseLeave={(e) => { if (isAvail) { e.currentTarget.style.borderColor = "#bbf7d0"; e.currentTarget.style.background = "#f0fdf4"; e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; } }}
+                        >
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: dot, display: "block", marginBottom: 2 }} />
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: isAvail ? "#0f172a" : "#6b7280", lineHeight: 1.2 }}>{t.table_number}</span>
+                          <span style={{ fontSize: 10, color: "#94a3b8" }}>{t.area_name || ""}</span>
+                          {t.capacity && <span style={{ fontSize: 10, color: "#64748b", background: "#f1f5f9", borderRadius: 4, padding: "1px 5px" }}>{t.capacity} seats</span>}
+                          <span style={{ fontSize: 9.5, fontWeight: 600, color: dot, letterSpacing: "0.02em", textTransform: "uppercase", marginTop: 1 }}>{t.table_status}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Legend */}
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 16, paddingTop: 12, borderTop: "1px solid #f1f5f9" }}>
+                  {Object.entries(TABLE_DOT).map(([status, color]) => (
+                    <span key={status} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "#64748b", fontWeight: 500 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, display: "inline-block" }} />
+                      {status}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div style={{ padding: "14px 24px", borderTop: "1px solid #f1f5f9", display: "flex", justifyContent: "flex-end", background: "#f8fafc" }}>
+                <Button variant="ghost" onClick={() => setTableSelectDialog(null)} disabled={tableSelectSubmitting}>
+                  Cancel
+                </Button>
+                {tableSelectSubmitting && (
+                  <span style={{ marginLeft: 12, fontSize: 13, color: "#059669", fontWeight: 600, alignSelf: "center" }}>Seating guest…</span>
                 )}
               </div>
             </div>
           </div>
-        )}
-      </div>
+        );
+        return createPortal(modalContent, document.body);
+      })()}
+
+      {/* ── Walk-in Modal — uses createPortal internally to escape stacking context ── */}
       {walkInOpen && (
         <AddWalkInModal
           user={user}

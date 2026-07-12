@@ -16,17 +16,18 @@ function StaffLayout({
   onSignOut,
   children,
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  // Default: sidebar collapsed (icon-only). User toggles to expand.
+  const [expanded, setExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const closeMobile = () => setMobileOpen(false);
   const loading = useStaffStore(state => state.loading);
 
   return (
-    <div className={`sfx-shell sfx-shell--staff ${collapsed ? "sfx-shell--collapsed" : ""}`}>
+    <div className={`sfx-shell sfx-shell--staff ${expanded ? "sfx-shell--expanded" : "sfx-shell--collapsed"}`}>
       <StaffSidebar
         role={role}
-        collapsed={collapsed}
+        collapsed={!expanded}
         mobileOpen={mobileOpen}
         onCloseMobile={closeMobile}
         onSignOut={onSignOut}
@@ -40,7 +41,7 @@ function StaffLayout({
           user={user}
           search={search}
           onSearch={onSearch}
-          onToggleSidebar={() => setCollapsed((c) => !c)}
+          onToggleSidebar={() => setExpanded((e) => !e)}
           onMobileMenu={() => setMobileOpen(true)}
           onRefresh={onRefresh}
           refreshing={refreshing}

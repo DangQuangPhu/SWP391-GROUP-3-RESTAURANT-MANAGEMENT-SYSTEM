@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { MOCK_ACCOUNTS, ROLE_OPTIONS, getRoleLabel } from '../data/adminMockData';
 import AccountFormModal from '../components/AccountFormModal';
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal';
-import './AdminAccountsPage.css';
+import '../styles/AdminAccountsPage.css';
 
 let nextId = MOCK_ACCOUNTS.length + 1;
 

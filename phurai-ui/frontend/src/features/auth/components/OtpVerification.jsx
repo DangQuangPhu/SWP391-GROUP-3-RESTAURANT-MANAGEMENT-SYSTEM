@@ -14,7 +14,7 @@ import {
   formatOtpExpiry,
   resolveRetryAfterSeconds,
 } from "../utils/otpTiming.js";
-import "@/styles/OtpCodeInput.css";
+import "@/features/auth/styles/OtpCodeInput.css";
 
 const SUCCESS_DELAY_MS = 900;
 

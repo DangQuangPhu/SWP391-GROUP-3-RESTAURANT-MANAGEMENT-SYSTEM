@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatVND } from "@/utils/formatCurrency.js";
+import { formatVND } from "@/core/utils/formatCurrency.js";
 
 function formatAxisValue(value) {
   if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;

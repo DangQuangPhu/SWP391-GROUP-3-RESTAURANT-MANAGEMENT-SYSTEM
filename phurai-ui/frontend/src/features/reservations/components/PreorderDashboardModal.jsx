@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { formatVND } from "@/utils/formatCurrency.js";
+import { formatVND } from "@/core/utils/formatCurrency.js";
 import { imagePathMap } from "@/features/menu/data/menuAssets.js";
 import { Search, Filter, ArrowUpDown } from "lucide-react";
 

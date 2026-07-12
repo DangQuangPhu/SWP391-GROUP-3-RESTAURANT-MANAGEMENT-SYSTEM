@@ -14,7 +14,7 @@ import {
   voidStaffOrderItem,
 } from "../services/staffApi.js";
 import { DEMO_NOTICE } from "@/shared/constants.js";
-import { asArray } from "@/utils/asArray.js";
+import { asArray } from "@/core/utils/asArray.js";
 import "../styles/staff-order-tab.css";
 
 const STATUS_LABELS = {

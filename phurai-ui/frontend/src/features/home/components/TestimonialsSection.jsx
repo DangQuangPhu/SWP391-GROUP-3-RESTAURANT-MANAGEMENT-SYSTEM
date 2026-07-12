@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Quote, Star } from 'lucide-react';
 import { homeImages } from '../data/homeAssets.js';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
-import '@/styles/animated-testimonials.css';
+import '@/features/home/styles/animated-testimonials.css';
 
 const testimonials = [
   {

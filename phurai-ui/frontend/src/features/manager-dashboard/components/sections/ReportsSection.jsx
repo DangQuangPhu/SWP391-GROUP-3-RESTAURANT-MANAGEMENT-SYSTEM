@@ -15,13 +15,12 @@ import {
   deriveKpisForRange,
   filterDailyRevenue,
   formatDateRangeLabel,
-  generateTwoYearDailyRevenue,
   getDefaultDateRange,
   prepareChartSeries,
 } from "@/shared/constants.js";
 import { RESERVATION_STATUS_META } from "@/shared/reservationStatus.js";
-import { asArray } from "@/utils/asArray.js";
-import { formatVND } from "@/utils/formatCurrency.js";
+import { asArray } from "@/core/utils/asArray.js";
+import { formatVND } from "@/core/utils/formatCurrency.js";
 import { getReportsTabFromSearch, REPORT_TAB_IDS } from "../../config/managerRoutes.js";
 
 const TABS = [
@@ -37,6 +36,7 @@ function ReportsSection({
   bestSellers,
   stats,
   utilization,
+  revenue,
   toast,
 }) {
   const reservationList = asArray(reservations);
@@ -50,9 +50,10 @@ function ReportsSection({
   );
 
   const dateRange = useMemo(() => getDefaultDateRange(DASHBOARD_TODAY), []);
+  // Use real API revenue series — no mock generation
   const dailyRevenueSeries = useMemo(
-    () => generateTwoYearDailyRevenue(DASHBOARD_TODAY),
-    []
+    () => asArray(revenue?.series ?? revenue ?? []),
+    [revenue]
   );
   const chartSeries = useMemo(() => {
     const filtered = filterDailyRevenue(dailyRevenueSeries, dateRange);

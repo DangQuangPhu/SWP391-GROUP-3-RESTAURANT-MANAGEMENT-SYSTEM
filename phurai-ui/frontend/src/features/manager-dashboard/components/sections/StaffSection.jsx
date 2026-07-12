@@ -1,5 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+/**
+ * StaffSection.jsx — Employee Registry (Full Rewrite per KDS Directive Part 3.4)
+ *
+ * Shows ALL employees from dbo.StaffProfiles (with OR without system accounts).
+ * Actions: Edit, Grant Access, Revoke Access, Add Performance Review.
+ * Filter: All / With Account / Without Account (client-side, single API call).
+ * Salary column: visible only to Manager (role_id=4) and Admin (role_id=5).
+ */
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { motion } from "framer-motion";
+import { listContainerVariants, listItemVariants } from "@/components/ui/Skeleton";
 import { ManagerModal } from "../ManagerOverlay.jsx";
 import {
   SectionHead,
@@ -9,505 +18,412 @@ import {
   StatusBadge,
   Button,
   EmptyState,
-  NotConnectedNote,
 } from "../ManagerUI.jsx";
-import {
-  STAFF_ASSIGNABLE_ROLES,
-  MANAGER_STATUS_META,
-  SHIFTS,
-} from "@/shared/constants.js";
-import { asArray } from "@/utils/asArray.js";
-import { getStaffTabFromSearch, STAFF_TAB_IDS } from "../../config/managerRoutes.js";
 import { useManagerPortal } from "../../context/ManagerPortalContext.jsx";
 import {
-  updateStaffShift,
-  apiCreateStaff,
-  apiUpdateStaff,
-  apiDeleteStaff,
+  getEmployees,
+  getJobTitles,
+  createEmployee,
+  updateEmployee,
+  grantAccess,
+  revokeAccess,
+  addPerformanceReview,
 } from "../../services/managerApi.js";
-import {
-  getStaffMemberKey,
-  WORK_SHIFT_OPTIONS,
-} from "@/features/staff-dashboard/config/staffWorkShifts.js";
-import ShiftScheduler from "./ShiftScheduler.jsx";
 
-function isSubordinateStaff(member) {
-  return STAFF_ASSIGNABLE_ROLES.includes(String(member?.role_name ?? "").trim());
-}
+// ── Role label map ────────────────────────────────────────────────────────────
+const ROLE_LABELS = { 1: "Customer", 2: "Staff", 4: "Manager", 5: "Admin" };
+const GRANTABLE_ROLES_MANAGER = [{ id: 2, label: "Restaurant Staff" }];
+const GRANTABLE_ROLES_ADMIN   = [{ id: 2, label: "Restaurant Staff" }, { id: 4, label: "Manager" }];
 
-const EMPTY = {
-  full_name: "",
-  role_name: STAFF_ASSIGNABLE_ROLES[0],
-  phone: "",
-  email: "",
-  status: "active",
-  shift: SHIFTS[0],
-};
-
-const STAFF_TABS = [
-  { id: "list", label: "Staff List" },
-  { id: "shifts", label: "Shift Management" },
+// ── Filter tabs ───────────────────────────────────────────────────────────────
+const FILTER_TABS = [
+  { id: "all",      label: "All" },
+  { id: "with",     label: "With Account" },
+  { id: "without",  label: "Without Account" },
 ];
 
-function resolveStaffShiftValue(member) {
-  const shift = member?.shift || WORK_SHIFT_OPTIONS[0];
-  return WORK_SHIFT_OPTIONS.includes(shift) ? shift : WORK_SHIFT_OPTIONS[0];
-}
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const fmt = (v) => v ?? "—";
+const fmtSalary = (v) => v != null ? `${Number(v).toLocaleString("vi-VN")}₫` : "—";
+const fmtRating = (v) => v != null ? `${Number(v).toFixed(1)} ★` : "—";
 
-function StaffListPanel({
-  staff,
-  search,
-  onSearch,
-  roleFilter,
-  onRoleFilter,
-  onEdit,
-  onDelete,
-  onShiftChange,
-  shiftSavingId,
-}) {
-  const staffList = asArray(staff);
+// ── Empty form templates ──────────────────────────────────────────────────────
+const EMPTY_EMP = {
+  full_name: "", email: "", phone: "", job_title_id: "", department: "", salary: "",
+};
+const EMPTY_REVIEW = { rating: "5", notes: "" };
+const EMPTY_GRANT  = { role_id: 2 };
 
-  const filtered = useMemo(() => {
-    return staffList.filter((s) => {
-      const kw = search.trim().toLowerCase();
-      const matchKw =
-        !kw ||
-        s.full_name.toLowerCase().includes(kw) ||
-        s.email.toLowerCase().includes(kw) ||
-        String(s.phone).includes(kw);
-      const matchRole = roleFilter === "all" || s.role_name === roleFilter;
-      return matchKw && matchRole;
-    });
-  }, [staffList, search, roleFilter]);
-
-  return (
-    <>
-      <Toolbar>
-        <SearchField value={search} onChange={onSearch} placeholder="Name, email or phone…" />
-        <select
-          className="sfx-select"
-          value={roleFilter}
-          onChange={(e) => onRoleFilter(e.target.value)}
-        >
-          <option value="all">All roles</option>
-          {STAFF_ASSIGNABLE_ROLES.map((r) => (
-            <option key={r}>{r}</option>
-          ))}
-        </select>
-      </Toolbar>
-
-      <div className="sfx-card sfx-card--flush">
-        <div className="sfx-table-wrap">
-          <table className="sfx-table sfx-table--hover">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Role</th>
-                <th>Contact</th>
-                <th>Shift</th>
-                <th>Status</th>
-                <th className="sfx-table__right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((s, index) => (
-                <tr key={s.manager_id ?? s.staff_id ?? s.user_id ?? `staff-row-${index}`}>
-                  <td>
-                    <div className="sfx-dishcell">
-                      <span className="sfx-thumb sfx-thumb--round">
-                        {s.full_name
-                          .split(" ")
-                          .map((w) => w[0])
-                          .slice(0, 2)
-                          .join("")}
-                      </span>
-                      <strong>{s.full_name}</strong>
-                    </div>
-                  </td>
-                  <td>{s.role_name}</td>
-                  <td>
-                    {s.phone}
-                    <small className="sfx-cell-sub">{s.email}</small>
-                  </td>
-                  <td>
-                    {(() => {
-                      const memberKey = getStaffMemberKey(s);
-                      const currentShift = resolveStaffShiftValue(s);
-                      return (
-                        <select
-                          className="sfx-select staff-shift-select"
-                          value={currentShift}
-                          disabled={!memberKey || shiftSavingId === memberKey}
-                          aria-label={`Work shift for ${s.full_name}`}
-                          onChange={(e) => {
-                            const nextShift = e.target.value;
-                            if (!memberKey || nextShift === currentShift) return;
-                            onShiftChange(s, memberKey, nextShift);
-                          }}
-                        >
-                          {WORK_SHIFT_OPTIONS.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      );
-                    })()}
-                  </td>
-                  <td>
-                    <StatusBadge tone={MANAGER_STATUS_META[s.status]?.tone}>
-                      {MANAGER_STATUS_META[s.status]?.label}
-                    </StatusBadge>
-                  </td>
-                  <td className="sfx-table__right">
-                    <div className="sfx-rowacts">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon="edit"
-                        onClick={() => onEdit(s)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        icon="trash"
-                        onClick={() => onDelete(s)}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {filtered.length === 0 ? (
-          <EmptyState icon="users" title="No staff members found" />
-        ) : null}
-      </div>
-    </>
-  );
-}
-
-function StaffSection({ staff, setStaff, pendingAction, toast }) {
+// ═════════════════════════════════════════════════════════════════════════════
+function StaffSection({ toast }) {
   const { currentUser } = useManagerPortal();
-  const managerUserId = currentUser?.userId ?? currentUser?.id ?? null;
-  const [searchParams, setSearchParams] = useSearchParams();
-  const tab = useMemo(
-    () => getStaffTabFromSearch(`?${searchParams.toString()}`),
-    [searchParams]
-  );
-  const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("all");
-  const [editing, setEditing] = useState(null);
-  const [isNew, setIsNew] = useState(false);
-  const [confirmDel, setConfirmDel] = useState(null);
-  const [shiftSavingId, setShiftSavingId] = useState(null);
+  const callerRoleId = currentUser?.role_id;
+  const showSalary   = [4, 5].includes(callerRoleId);
+  const grantableRoles = callerRoleId === 5 ? GRANTABLE_ROLES_ADMIN : GRANTABLE_ROLES_MANAGER;
 
-  const selectTab = (nextTab) => {
-    if (!STAFF_TAB_IDS.includes(nextTab)) return;
-    if (nextTab === "list") {
-      setSearchParams({}, { replace: true });
-      return;
-    }
-    setSearchParams({ tab: nextTab }, { replace: true });
-  };
+  // ── Data state ────────────────────────────────────────────────────────────
+  const [employees, setEmployees]   = useState([]);
+  const [jobTitles, setJobTitles]   = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [filterTab, setFilterTab]   = useState("all");
+  const [searchQ, setSearchQ]       = useState("");
 
-  useEffect(() => {
-    if (pendingAction === "add" && tab === "list") {
-      setEditing({ ...EMPTY });
-      setIsNew(true);
-    }
-  }, [pendingAction, tab]);
+  // ── Modal state ───────────────────────────────────────────────────────────
+  const [editModal, setEditModal]       = useState(null);  // employee row | null
+  const [isNew, setIsNew]               = useState(false);
+  const [editForm, setEditForm]         = useState(EMPTY_EMP);
+  const [grantModal, setGrantModal]     = useState(null);  // employee row | null
+  const [grantForm, setGrantForm]       = useState(EMPTY_GRANT);
+  const [reviewModal, setReviewModal]   = useState(null);  // employee row | null
+  const [reviewForm, setReviewForm]     = useState(EMPTY_REVIEW);
+  const [saving, setSaving]             = useState(false);
 
-  // Removed JSON shift mapping hook
-
-  const handleShiftChange = async (member, memberKey, nextShift) => {
-    const staffKey = String(memberKey ?? "").trim();
-    if (!staffKey || !managerUserId) {
-      toast("Cannot update shift — staff id missing.", "error");
-      return;
-    }
-
-    if (!WORK_SHIFT_OPTIONS.includes(nextShift)) {
-      toast("Invalid shift selection.", "error");
-      return;
-    }
-
-    const previousShift = member?.shift || WORK_SHIFT_OPTIONS[0];
-    if (nextShift === previousShift) return;
-
-    setShiftSavingId(staffKey);
-    setStaff((prev) =>
-      asArray(prev).map((row) => {
-        const rowKey = getStaffMemberKey(row);
-        return rowKey === staffKey ? { ...row, shift: nextShift } : row;
-      })
-    );
-
+  // ── Fetch data ────────────────────────────────────────────────────────────
+  const loadData = useCallback(async () => {
+    setLoading(true);
     try {
-      await updateStaffShift(staffKey, nextShift, managerUserId);
-      toast(`${member.full_name} assigned to ${nextShift} shift`, "success");
+      const [empRes, jtRes] = await Promise.all([getEmployees(), getJobTitles()]);
+      setEmployees(empRes.data ?? []);
+      setJobTitles(jtRes.data ?? []);
     } catch (err) {
-      setStaff((prev) =>
-        asArray(prev).map((row) => {
-          const rowKey = getStaffMemberKey(row);
-          return rowKey === staffKey ? { ...row, shift: previousShift } : row;
-        })
-      );
-      toast(err.message || "Could not update shift assignment", "error");
+      toast?.({ type: "error", message: "Failed to load employees." });
     } finally {
-      setShiftSavingId(null);
+      setLoading(false);
     }
-  };
+  }, [toast]);
 
-  const visibleStaff = useMemo(
-    () => asArray(staff).filter(isSubordinateStaff),
-    [staff]
-  );
+  useEffect(() => { loadData(); }, [loadData]);
 
-  const openEdit = (member) => {
-    setEditing({ ...member });
+  // ── Client-side filter + search ───────────────────────────────────────────
+  const filtered = useMemo(() => {
+    let list = employees;
+    if (filterTab === "with")    list = list.filter(e => e.has_system_account);
+    if (filterTab === "without") list = list.filter(e => !e.has_system_account);
+    if (searchQ.trim()) {
+      const q = searchQ.toLowerCase();
+      list = list.filter(e =>
+        (e.full_name ?? "").toLowerCase().includes(q) ||
+        (e.email     ?? "").toLowerCase().includes(q) ||
+        (e.job_title ?? "").toLowerCase().includes(q) ||
+        (e.department?? "").toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [employees, filterTab, searchQ]);
+
+  // ── Edit handlers ─────────────────────────────────────────────────────────
+  const openEdit = (emp) => {
     setIsNew(false);
+    setEditForm({
+      full_name:    emp.full_name  ?? "",
+      email:        emp.email      ?? "",
+      phone:        emp.phone      ?? "",
+      job_title_id: emp.job_title_id ?? "",
+      department:   emp.department ?? "",
+      salary:       emp.salary     ?? "",
+    });
+    setEditModal(emp);
   };
 
-  const [isSaving, setIsSaving] = useState(false);
+  const openNew = () => {
+    setIsNew(true);
+    setEditForm(EMPTY_EMP);
+    setEditModal({});
+  };
 
-  const save = async () => {
-    if (!editing.full_name.trim()) {
-      toast("Staff name is required", "error");
-      return;
+  const handleSaveEmployee = async () => {
+    if (!editForm.full_name.trim()) {
+      toast?.({ type: "error", message: "Full name is required." }); return;
     }
-    if (!isSubordinateStaff(editing)) {
-      toast("Only Restaurant Staff and Kitchen Staff can be managed here.", "error");
-      return;
-    }
-    
-    setIsSaving(true);
+    setSaving(true);
     try {
+      const payload = {
+        full_name:    editForm.full_name.trim(),
+        email:        editForm.email.trim()    || undefined,
+        phone:        editForm.phone.trim()    || undefined,
+        job_title_id: editForm.job_title_id   || undefined,
+        department:   editForm.department.trim() || undefined,
+        ...(showSalary ? { salary: editForm.salary || undefined } : {}),
+      };
       if (isNew) {
-        const result = await apiCreateStaff(editing, managerUserId);
-        setStaff((prev) => [
-          ...prev.filter(isSubordinateStaff),
-          result,
-        ]);
-        toast("Staff member created successfully.", "success");
+        await createEmployee(payload);
+        toast?.({ type: "success", message: "Employee created." });
       } else {
-        const staffKey = getStaffMemberKey(editing);
-        const result = await apiUpdateStaff(staffKey, editing, managerUserId);
-        setStaff((prev) =>
-          prev
-            .filter(isSubordinateStaff)
-            .map((s) => (getStaffMemberKey(s) === staffKey ? result : s))
-        );
-        toast("Staff member updated successfully.", "success");
+        await updateEmployee(editModal.staff_id, payload);
+        toast?.({ type: "success", message: "Employee updated." });
       }
-      setEditing(null);
+      setEditModal(null);
+      await loadData();
     } catch (err) {
-      toast(err.message || "Failed to save staff member", "error");
+      toast?.({ type: "error", message: err.message || "Failed to save employee." });
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
   };
 
-  const remove = async () => {
+  // ── Grant Access handlers ─────────────────────────────────────────────────
+  const openGrant = (emp) => {
+    setGrantForm({ role_id: grantableRoles[0]?.id ?? 2 });
+    setGrantModal(emp);
+  };
+
+  const handleGrant = async () => {
+    setSaving(true);
     try {
-      const staffKey = getStaffMemberKey(confirmDel);
-      await apiDeleteStaff(staffKey, managerUserId);
-      setStaff((prev) =>
-        prev.filter(isSubordinateStaff).filter((s) => getStaffMemberKey(s) !== staffKey)
-      );
-      toast("Staff member deleted successfully", "success");
-      setConfirmDel(null);
+      await grantAccess(grantModal.staff_id, { role_id: grantForm.role_id });
+      toast?.({ type: "success", message: "System access granted. Temp password sent to employee email." });
+      setGrantModal(null);
+      await loadData();
     } catch (err) {
-      toast(err.message || "Failed to delete staff member", "error");
+      toast?.({ type: "error", message: err.message || "Failed to grant access." });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const sectionSubtitle =
-    tab === "shifts"
-      ? "Assign shifts and track attendance"
-      : `${visibleStaff.length} staff member${visibleStaff.length === 1 ? "" : "s"}`;
+  // ── Revoke Access ─────────────────────────────────────────────────────────
+  const handleRevoke = async (emp) => {
+    if (!window.confirm(`Revoke system access for ${emp.full_name}? They will be logged out immediately.`)) return;
+    setSaving(true);
+    try {
+      await revokeAccess(emp.staff_id);
+      toast?.({ type: "success", message: `Access revoked for ${emp.full_name}.` });
+      await loadData();
+    } catch (err) {
+      toast?.({ type: "error", message: err.message || "Failed to revoke access." });
+    } finally {
+      setSaving(false);
+    }
+  };
 
+  // ── Performance Review ────────────────────────────────────────────────────
+  const openReview = (emp) => {
+    setReviewForm(EMPTY_REVIEW);
+    setReviewModal(emp);
+  };
+
+  const handleSaveReview = async () => {
+    const rating = parseFloat(reviewForm.rating);
+    if (isNaN(rating) || rating < 1 || rating > 5) {
+      toast?.({ type: "error", message: "Rating must be between 1.0 and 5.0." }); return;
+    }
+    setSaving(true);
+    try {
+      await addPerformanceReview(reviewModal.staff_id, { rating, notes: reviewForm.notes.trim() || undefined });
+      toast?.({ type: "success", message: "Performance review saved." });
+      setReviewModal(null);
+      await loadData();
+    } catch (err) {
+      toast?.({ type: "error", message: err.message || "Failed to save review." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="sfx-stack">
-      <SectionHead
-        title="Staff"
-        subtitle={sectionSubtitle}
-        actions={
-          tab === "list" ? (
-            <Button
-              variant="gold"
-              icon="plus"
-              onClick={() => {
-                setEditing({ ...EMPTY });
-                setIsNew(true);
-              }}
-            >
-              Add Staff
-            </Button>
-          ) : null
-        }
-      />
+    <div className="staff-section">
+      <SectionHead title="Employee Registry" subtitle={`${employees.length} employee${employees.length !== 1 ? "s" : ""} total`}>
+        <Button variant="primary" onClick={openNew}>+ Add Employee</Button>
+      </SectionHead>
 
-      <ContentPanel compact>
-      <div className="sfx-tabs" role="tablist" aria-label="Staff views">
-        {STAFF_TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            className={`sfx-tab ${tab === t.id ? "is-active" : ""}`}
-            onClick={() => selectTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "list" ? (
-        <StaffListPanel
-          staff={visibleStaff}
-          search={search}
-          onSearch={setSearch}
-          roleFilter={roleFilter}
-          onRoleFilter={setRoleFilter}
-          onEdit={openEdit}
-          onDelete={setConfirmDel}
-          onShiftChange={handleShiftChange}
-          shiftSavingId={shiftSavingId}
-        />
-      ) : null}
-
-      {tab === "shifts" ? <ShiftScheduler /> : null}
-
-      </ContentPanel>
-
-      <ManagerModal
-        open={Boolean(editing)}
-        title={isNew ? "Add Staff" : `Edit ${editing?.full_name || "staff member"}`}
-        onClose={() => setEditing(null)}
-        footer={
-          <>
-            {!isNew ? (
-              <Button
-                variant="danger"
-                icon="trash"
-                onClick={() => {
-                  setConfirmDel(editing);
-                  setEditing(null);
+      <ContentPanel>
+        {/* Filter Tabs + Search */}
+        <Toolbar>
+          <div className="filter-tabs" style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+            {FILTER_TABS.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setFilterTab(tab.id)}
+                style={{
+                  padding: "6px 14px", borderRadius: "20px", border: "none", cursor: "pointer",
+                  fontWeight: filterTab === tab.id ? "600" : "400",
+                  background: filterTab === tab.id ? "var(--accent, #c8a96e)" : "var(--surface-2, #2a2a2a)",
+                  color: filterTab === tab.id ? "#fff" : "var(--text-muted, #aaa)",
                 }}
               >
-                Delete
-              </Button>
-            ) : (
-              <span />
-            )}
-            <div className="sfx-modal__footacts">
-              <Button variant="ghost" onClick={() => setEditing(null)}>
-                Cancel
-              </Button>
-              <Button variant="gold" onClick={save} disabled={isSaving}>
-                {isSaving ? "Saving..." : (isNew ? "Add staff" : "Save changes")}
-              </Button>
-            </div>
-          </>
-        }
-      >
-        {editing ? (
-          <div className="sfx-form">
-            <label className="sfx-field">
-              <span>Full name</span>
-              <input
-                value={editing.full_name}
-                onChange={(e) => setEditing({ ...editing, full_name: e.target.value })}
-                placeholder="e.g. Tran Van A"
-              />
-            </label>
-            <div className="sfx-form__row">
-              <label className="sfx-field">
-                <span>Role</span>
-                <select
-                  value={editing.role_name}
-                  onChange={(e) => setEditing({ ...editing, role_name: e.target.value })}
-                >
-                  {STAFF_ASSIGNABLE_ROLES.map((r) => (
-                    <option key={r}>{r}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="sfx-field">
-                <span>Shift</span>
-                <select
-                  value={editing.shift}
-                  onChange={(e) => setEditing({ ...editing, shift: e.target.value })}
-                >
-                  {SHIFTS.map((shift) => (
-                    <option key={shift}>{shift}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="sfx-form__row">
-              <label className="sfx-field">
-                <span>Phone</span>
-                <input
-                  value={editing.phone}
-                  onChange={(e) => setEditing({ ...editing, phone: e.target.value })}
-                  placeholder="09xx xxx xxx"
-                />
-              </label>
-              <label className="sfx-field">
-                <span>Email</span>
-                <input
-                  type="email"
-                  value={editing.email}
-                  onChange={(e) => setEditing({ ...editing, email: e.target.value })}
-                  placeholder="name@phurai.com"
-                />
-              </label>
-            </div>
-            <label className="sfx-field">
-              <span>Status</span>
-              <div className="sfx-chips">
-                {Object.entries(MANAGER_STATUS_META).map(([k, m]) => (
-                  <button
-                    key={k}
-                    type="button"
-                    className={`sfx-chip ${editing.status === k ? "is-active" : ""}`}
-                    onClick={() => setEditing({ ...editing, status: k })}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-            </label>
+                {tab.label}
+              </button>
+            ))}
           </div>
-        ) : null}
-      </ManagerModal>
+          <SearchField
+            placeholder="Search name, email, title, department…"
+            value={searchQ}
+            onChange={e => setSearchQ(e.target.value)}
+          />
+        </Toolbar>
 
-      <ManagerModal
-        open={Boolean(confirmDel)}
-        title="Remove staff member?"
-        size="sm"
-        onClose={() => setConfirmDel(null)}
-        footer={
-          <div className="sfx-modal__footacts">
-            <Button variant="ghost" onClick={() => setConfirmDel(null)}>
-              Keep
-            </Button>
-            <Button variant="danger" icon="trash" onClick={remove}>
-              Remove
-            </Button>
+        {loading ? (
+          <div style={{ padding: "40px", textAlign: "center", color: "var(--text-muted)" }}>Loading employees…</div>
+        ) : filtered.length === 0 ? (
+          <EmptyState message="No employees match your filter." />
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border, #333)", color: "var(--text-muted, #888)", textAlign: "left" }}>
+                  <th style={{ padding: "10px 12px" }}>Name</th>
+                  <th style={{ padding: "10px 12px" }}>Job Title</th>
+                  <th style={{ padding: "10px 12px" }}>Department</th>
+                  {showSalary && <th style={{ padding: "10px 12px" }}>Salary</th>}
+                  <th style={{ padding: "10px 12px" }}>Rating</th>
+                  <th style={{ padding: "10px 12px" }}>System Access</th>
+                  <th style={{ padding: "10px 12px" }}>Actions</th>
+                </tr>
+              </thead>
+              <motion.tbody variants={listContainerVariants} initial="hidden" animate="visible">
+                {filtered.map(emp => (
+                  <motion.tr
+                    key={emp.staff_id}
+                    variants={listItemVariants}
+                    style={{ borderBottom: "1px solid var(--border-subtle, #222)", verticalAlign: "middle" }}
+                  >
+                    <td style={{ padding: "10px 12px" }}>
+                      <div style={{ fontWeight: "500" }}>{fmt(emp.full_name)}</div>
+                      <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>{fmt(emp.email)}</div>
+                    </td>
+                    <td style={{ padding: "10px 12px", color: "var(--text-muted)" }}>{fmt(emp.job_title)}</td>
+                    <td style={{ padding: "10px 12px", color: "var(--text-muted)" }}>{fmt(emp.department)}</td>
+                    {showSalary && <td style={{ padding: "10px 12px", fontFamily: "monospace" }}>{fmtSalary(emp.salary)}</td>}
+                    <td style={{ padding: "10px 12px" }}>{fmtRating(emp.latest_rating)}</td>
+                    <td style={{ padding: "10px 12px" }}>
+                      {emp.has_system_account ? (
+                        <StatusBadge status={emp.account_is_active ? "active" : "inactive"}>
+                          {emp.account_is_active ? ROLE_LABELS[emp.role_id] ?? "Staff" : "Suspended"}
+                        </StatusBadge>
+                      ) : (
+                        <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>No Account</span>
+                      )}
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                        <Button size="sm" onClick={() => openEdit(emp)}>Edit</Button>
+                        {!emp.has_system_account && (
+                          <Button size="sm" variant="success" onClick={() => openGrant(emp)}>Grant Access</Button>
+                        )}
+                        {emp.has_system_account && emp.account_is_active && emp.role_id !== 5 && (
+                          <Button size="sm" variant="danger" onClick={() => handleRevoke(emp)} disabled={saving}>Revoke</Button>
+                        )}
+                        <Button size="sm" variant="ghost" onClick={() => openReview(emp)}>Review</Button>
+                      </div>
+                    </td>
+                  </motion.tr>
+                ))}
+              </motion.tbody>
+            </table>
           </div>
-        }
-      >
-        <p className="sfx-confirm-text">
-          Remove <strong>{confirmDel?.full_name}</strong> from the staff list?
-        </p>
-      </ManagerModal>
+        )}
+      </ContentPanel>
+
+      {/* Edit / New Employee Modal */}
+      {editModal !== null && (
+        <ManagerModal
+          title={isNew ? "New Employee" : "Edit Employee"}
+          onClose={() => setEditModal(null)}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setEditModal(null)}>Cancel</Button>
+              <Button variant="primary" onClick={handleSaveEmployee} disabled={saving}>
+                {saving ? "Saving…" : "Save"}
+              </Button>
+            </>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            <label>Full Name *
+              <input className="modal-input" value={editForm.full_name}
+                onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))} />
+            </label>
+            <label>Email
+              <input className="modal-input" type="email" value={editForm.email}
+                onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} />
+            </label>
+            <label>Phone
+              <input className="modal-input" value={editForm.phone}
+                onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
+            </label>
+            <label>Job Title
+              <select className="modal-input" value={editForm.job_title_id}
+                onChange={e => setEditForm(f => ({ ...f, job_title_id: e.target.value }))}>
+                <option value="">— Select —</option>
+                {jobTitles.map(jt => (
+                  <option key={jt.job_title_id} value={jt.job_title_id}>{jt.title_name}</option>
+                ))}
+              </select>
+            </label>
+            <label>Department
+              <input className="modal-input" value={editForm.department}
+                onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))} />
+            </label>
+            {showSalary && (
+              <label>Salary (VND)
+                <input className="modal-input" type="number" value={editForm.salary}
+                  onChange={e => setEditForm(f => ({ ...f, salary: e.target.value }))} />
+              </label>
+            )}
+          </div>
+        </ManagerModal>
+      )}
+
+      {/* Grant System Access Modal */}
+      {grantModal !== null && (
+        <ManagerModal
+          title={`Grant Access — ${grantModal.full_name}`}
+          onClose={() => setGrantModal(null)}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setGrantModal(null)}>Cancel</Button>
+              <Button variant="primary" onClick={handleGrant} disabled={saving}>
+                {saving ? "Granting…" : "Grant Access"}
+              </Button>
+            </>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            <p style={{ color: "var(--text-muted)", fontSize: "13px" }}>
+              A temporary password will be sent to <strong>{grantModal.email}</strong>.
+              The employee must change it on first login.
+            </p>
+            <label>Assign Role
+              <select className="modal-input" value={grantForm.role_id}
+                onChange={e => setGrantForm(f => ({ ...f, role_id: Number(e.target.value) }))}>
+                {grantableRoles.map(r => (
+                  <option key={r.id} value={r.id}>{r.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </ManagerModal>
+      )}
+
+      {/* Performance Review Modal */}
+      {reviewModal !== null && (
+        <ManagerModal
+          title={`Performance Review — ${reviewModal.full_name}`}
+          onClose={() => setReviewModal(null)}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setReviewModal(null)}>Cancel</Button>
+              <Button variant="primary" onClick={handleSaveReview} disabled={saving}>
+                {saving ? "Saving…" : "Save Review"}
+              </Button>
+            </>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            <label>Rating (1.0 – 5.0) *
+              <input className="modal-input" type="number" min="1" max="5" step="0.1"
+                value={reviewForm.rating}
+                onChange={e => setReviewForm(f => ({ ...f, rating: e.target.value }))} />
+            </label>
+            <label>Notes
+              <textarea className="modal-input" rows={4} value={reviewForm.notes}
+                onChange={e => setReviewForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Optional notes about this review period…" />
+            </label>
+          </div>
+        </ManagerModal>
+      )}
     </div>
   );
 }

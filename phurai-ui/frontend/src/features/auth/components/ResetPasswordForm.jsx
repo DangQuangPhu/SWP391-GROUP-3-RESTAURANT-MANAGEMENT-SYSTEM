@@ -2,7 +2,7 @@ import { useState } from "react";
 import OtpCodeInput from "./OtpCodeInput";
 import { getPasswordStrength, isPasswordStrong } from "../utils/authHelpers.js";
 import { forgotPasswordReset } from "../services/authApi.js";
-import "@/styles/OtpCodeInput.css";
+import "@/features/auth/styles/OtpCodeInput.css";
 
 function EyeIcon({ visible }) {
   if (visible) {

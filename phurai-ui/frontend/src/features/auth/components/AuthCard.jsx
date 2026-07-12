@@ -19,7 +19,7 @@ import { signInWithGoogle, registerWithGoogle } from "./googleAuth";
 import GoogleAccountChooserModal from "./GoogleAccountChooserModal";
 import LoginForm from "./LoginForm";
 import RegisterForm from "./RegisterForm";
-import "@/styles/auth.css";
+import "@/features/auth/styles/auth.css";
 
 const EMPTY_SIGNUP = {
   fullName: "",

@@ -8,7 +8,7 @@
    ============================================================ */
 
 import { request, profileRequestHeaders, createApiError, loadAuthUser } from "@/core/api/httpClient.js";
-import { asArray } from "@/utils/asArray.js";
+import { asArray } from "@/core/utils/asArray.js";
 import {
   KPI_CARDS,
   REVENUE_SERIES,
@@ -692,3 +692,97 @@ export const sendChatMessage = async (message) => {
     body: JSON.stringify({ message }) 
   });
 };
+
+/* ================================================================
+   EMPLOYEE REGISTRY (Part B - KDS Plan)
+   ================================================================ */
+
+export async function getEmployees() {
+  try {
+    const res = await request("/manager/employees", { method: "GET" });
+    if (res?.success) return { source: "api", data: res.data ?? [] };
+  } catch (err) { console.error("getEmployees error:", err?.message); }
+  return { source: "mock", data: [] };
+}
+
+export async function getJobTitles() {
+  try {
+    const res = await request("/manager/job-titles", { method: "GET" });
+    if (res?.success) return { source: "api", data: res.data ?? [] };
+  } catch (err) { console.error("getJobTitles error:", err?.message); }
+  return { source: "mock", data: [] };
+}
+
+export async function createEmployee(data) {
+  const res = await request("/manager/employees", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+  if (!res?.success) throw createApiError(res?.message || "Could not create employee.");
+  return res.data;
+}
+
+export async function updateEmployee(staffId, data) {
+  const res = await request("/manager/employees/" + staffId, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+  if (!res?.success) throw createApiError(res?.message || "Could not update employee.");
+  return res.data;
+}
+
+export async function grantAccess(staffId, { role_id }) {
+  const res = await request("/manager/employees/" + staffId + "/grant-access", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role_id }) });
+  if (!res?.success) throw createApiError(res?.message || "Could not grant access.");
+  return res;
+}
+
+export async function revokeAccess(staffId) {
+  const res = await request("/manager/employees/" + staffId + "/revoke-access", { method: "POST", headers: { "Content-Type": "application/json" } });
+  if (!res?.success) throw createApiError(res?.message || "Could not revoke access.");
+  return res;
+}
+
+export async function addPerformanceReview(staffId, { rating, notes }) {
+  const res = await request("/manager/employees/" + staffId + "/performance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rating, notes }) });
+  if (!res?.success) throw createApiError(res?.message || "Could not save review.");
+  return res.data;
+}
+
+export async function getPerformanceHistory(staffId) {
+  try {
+    const res = await request("/manager/employees/" + staffId + "/performance", { method: "GET" });
+    if (res?.success) return { source: "api", data: res.data ?? [] };
+  } catch (err) { console.error("getPerformanceHistory error:", err?.message); }
+  return { source: "mock", data: [] };
+}
+
+/* KITCHEN METRICS */
+export async function getKitchenMetrics() {
+  try {
+    const res = await request("/manager/kitchen/metrics", { method: "GET" });
+    if (res?.success) return { source: "api", data: res.data };
+  } catch (err) { console.error("getKitchenMetrics error:", err?.message); }
+  return { source: "mock", data: null };
+}
+
+/* KDS DEVICE MANAGEMENT */
+export async function getKdsDevices() {
+  try {
+    const res = await request("/admin/kds-devices", { method: "GET" });
+    if (res?.success) return { source: "api", data: res.data ?? [] };
+  } catch (err) { console.error("getKdsDevices error:", err?.message); }
+  return { source: "mock", data: [] };
+}
+
+export async function createKdsDevice({ device_name, pin, station_category_ids }) {
+  const res = await request("/admin/kds-devices", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ device_name, pin, station_category_ids }) });
+  if (!res?.success) throw createApiError(res?.message || "Could not create KDS device.");
+  return res.data;
+}
+
+export async function updateKdsDevice(deviceId, updates) {
+  const res = await request("/admin/kds-devices/" + deviceId, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates) });
+  if (!res?.success) throw createApiError(res?.message || "Could not update KDS device.");
+  return res.data;
+}
+
+export async function deleteKdsDevice(deviceId) {
+  const res = await request("/admin/kds-devices/" + deviceId, { method: "DELETE" });
+  if (!res?.success) throw createApiError(res?.message || "Could not deactivate KDS device.");
+  return res;
+}

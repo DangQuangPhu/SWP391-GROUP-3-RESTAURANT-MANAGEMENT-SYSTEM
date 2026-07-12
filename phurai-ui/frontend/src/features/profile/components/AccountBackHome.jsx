@@ -1,4 +1,4 @@
-import "@/styles/profile.css";
+import "@/features/profile/styles/profile.css";
 
 function AccountBackHome({ onNavigateHome, className = "" }) {
   return (

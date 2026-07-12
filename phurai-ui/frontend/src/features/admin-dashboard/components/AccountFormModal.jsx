@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ROLE_OPTIONS } from '../data/adminMockData';
-import './AccountFormModal.css';
+import '../styles/AccountFormModal.css';
 
 const EMPTY_FORM = { fullName: '', email: '', phone: '', roleId: 2, isActive: true };
 

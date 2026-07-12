@@ -12,7 +12,7 @@ import {
   STAFF_REPORT_SUMMARY,
   getMockPaymentBill,
 } from "@/shared/constants.js";
-import { asArray } from "@/utils/asArray.js";
+import { asArray } from "@/core/utils/asArray.js";
 
 const MOCK_DELAY = 220;
 
@@ -540,4 +540,17 @@ export async function fetchShiftReportSummary() {
 
 export async function fetchShiftReportAudit() {
   return staffGet("/staff/reports/audit", STAFF_REPORT_AUDIT);
+}
+
+/** PATCH /api/kitchen/tickets/:id/status — FSM ticket transition (Staff: Served, Sent To Kitchen, Cancel) */
+export async function updateKitchenTicketFSM(ticketId, payload) {
+  // payload: { new_status, cancel_reason?, expected_updated_at? }
+  return staffPatch(`/kitchen/tickets/${ticketId}/status`, null, payload);
+}
+
+/** GET /api/kitchen/queue — full FSM kitchen queue (user-JWT Staff view) */
+export async function fetchKitchenQueueFSM() {
+  const FALLBACK = [];
+  const res = await staffGet("/kitchen/queue", FALLBACK);
+  return res;
 }
