@@ -65,6 +65,8 @@ function ReservationSummary({
   const [showPreorder, setShowPreorder] = useState(false);
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
+  const [promoInput, setPromoInput] = useState(promoCode || "");
+  const [promoError, setPromoError] = useState("");
 
   // Clear promo code if preorderTotal becomes 0
   useEffect(() => {
@@ -336,6 +338,12 @@ function ReservationSummary({
                 <span>{promoCode ? `Applied: ${promoCode}` : "APPLY VOUCHER / PROMO CODE"}</span>
                 <span>→</span>
               </button>
+
+              {promoError && (
+                <div style={{ padding: "10px 16px", background: "#fef2f2", borderTop: "1px solid #fca5a5", color: "#b91c1c", fontSize: "0.85rem" }}>
+                  {promoError}
+                </div>
+              )}
 
               {promoCode && (
                 <div style={{ padding: "12px 16px", background: "#fff", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
