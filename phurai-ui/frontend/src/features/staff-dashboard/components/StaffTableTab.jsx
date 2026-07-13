@@ -128,6 +128,7 @@ function buildReservationBriefing(reservation) {
   const durationMinutes = reservation?.duration_minutes ?? holdMinutes ?? null;
   const diningPurpose =
     reservation?.dining_purpose ||
+    reservation?.occasion ||
     parseTaggedField(specialRequest, "Dining Purpose") ||
     "Not specified";
   const specialNotes =
@@ -236,86 +237,78 @@ function TableManagementProvider({ children, value }) {
 }
 
 function TableManagementHeader() {
-  const { state, actions } = useTableManagement();
-  const { tables, areas, dataSource, refreshing } = state;
-  const { handleRefreshAll } = actions;
-
-  return (
-    <div className="staff-card staff-table-intro">
-      <SectionHead
-        title="Table Management"
-        subtitle={`${tables.length} tables across ${areas.length} areas`}
-        actions={
-          <Button
-            variant="ghost"
-            size="sm"
-            icon="refresh"
-            onClick={handleRefreshAll}
-            disabled={refreshing}
-          >
-            Refresh
-          </Button>
-        }
-      />
-      {dataSource === "mock" ? (
-        <NotConnectedNote>{DEMO_NOTICE}</NotConnectedNote>
-      ) : null}
-    </div>
-  );
+  return null;
 }
 
 function TableManagementToolbar() {
   const { state, actions } = useTableManagement();
-  const { searchTerm, selectedArea, selectedStatuses, areas } = state;
-  const { setSearchTerm, setSelectedArea, toggleStatusFilter } = actions;
+  const { searchTerm, selectedArea, selectedStatuses, areas, refreshing } = state;
+  const { setSearchTerm, setSelectedArea, toggleStatusFilter, handleRefreshAll } = actions;
 
   return (
-    <div className="staff-card staff-card--compact">
-      <div className="sfx-filterbar sfx-filterbar--horizontal">
+    <div className="sfx-filterbar sfx-filterbar--horizontal" style={{ display: "flex", alignItems: "flex-end", gap: "12px 16px", flexWrap: "wrap" }}>
+      
+      <div style={{ flex: "1 1 220px", minWidth: "200px" }}>
+        <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--sfx-muted)", display: "block", marginBottom: "6px" }}>Search Table</span>
         <SearchField
           value={searchTerm}
           onChange={setSearchTerm}
           placeholder="Search table number..."
         />
+      </div>
 
-        <label className="sfx-field sfx-filterbar__area">
-          <span>Area</span>
-          <select
-            className="sfx-select"
-            value={selectedArea}
-            onChange={(e) => setSelectedArea(e.target.value)}
-          >
-            <option value="">All Areas</option>
-            {areas.map((area) => (
-              <option key={area} value={area}>
-                {area}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div style={{ flex: "0 1 180px", minWidth: "140px" }}>
+        <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--sfx-muted)", display: "block", marginBottom: "6px" }}>Area</span>
+        <select
+          className="sfx-select"
+          value={selectedArea}
+          onChange={(e) => setSelectedArea(e.target.value)}
+          style={{ width: "100%", height: "40px" }}
+        >
+          <option value="">All Areas</option>
+          {areas.map((area) => (
+            <option key={area} value={area}>
+              {area}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        <div className="sfx-filterbar__statuses">
-          <span className="sfx-filterbar__label">Status</span>
-          <div className="sfx-chips">
-            {FILTER_STATUS_SLUGS.map((slug) => {
-              const active = selectedStatuses.includes(slug);
-              const meta = TABLE_STATUS_META[slug];
-              return (
-                <button
-                  key={slug}
-                  type="button"
-                  className={`sfx-chip ${active ? "is-active" : "sfx-chip--outline"}`}
-                  aria-pressed={active}
-                  onClick={() => toggleStatusFilter(slug)}
-                >
-                  <i className={`sfx-dot sfx-dot--${meta.tone}`} />
-                  {meta.label}
-                </button>
-              );
-            })}
-          </div>
+      <div className="sfx-filterbar__statuses" style={{ flex: "1 1 320px", minWidth: "280px", margin: 0 }}>
+        <span className="sfx-filterbar__label" style={{ fontSize: "12px", fontWeight: 600, color: "var(--sfx-muted)", display: "block", marginBottom: "6px" }}>Status</span>
+        <div className="sfx-chips" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {FILTER_STATUS_SLUGS.map((slug) => {
+            const active = selectedStatuses.includes(slug);
+            const meta = TABLE_STATUS_META[slug];
+            return (
+              <button
+                key={slug}
+                type="button"
+                className={`sfx-chip ${active ? "is-active" : "sfx-chip--outline"}`}
+                aria-pressed={active}
+                onClick={() => toggleStatusFilter(slug)}
+                style={{ height: "40px", display: "inline-flex", alignItems: "center" }}
+              >
+                <i className={`sfx-dot sfx-dot--${meta.tone}`} />
+                {meta.label}
+              </button>
+            );
+          })}
         </div>
       </div>
+
+      <div style={{ marginLeft: "auto", height: "40px", display: "flex", alignItems: "center" }}>
+        <Button
+          variant="ghost"
+          size="sm"
+          icon="refresh"
+          onClick={handleRefreshAll}
+          disabled={refreshing}
+        >
+          Refresh
+        </Button>
+      </div>
+
     </div>
   );
 }

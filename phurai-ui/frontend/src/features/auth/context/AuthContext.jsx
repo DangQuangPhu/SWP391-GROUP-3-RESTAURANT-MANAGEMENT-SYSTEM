@@ -17,8 +17,10 @@ import { isStaffPortalUser } from "@/features/staff-dashboard";
 
 export const AuthContext = createContext(null);
 
-export function normalizeAuthUser(user) {
-  const mapped = mapApiUserToFrontend(user) || user;
+function normalizeAuthUser(user) {
+  if (!user) return null;
+  // If the object already has camelCase properties, do not remap it
+  const mapped = (user.userId || user.fullName || user.email) ? user : mapApiUserToFrontend(user);
   return {
     ...mapped,
     avatarUrl: normalizeStoredAvatarUrl(mapped?.avatarUrl),
@@ -27,7 +29,7 @@ export function normalizeAuthUser(user) {
   };
 }
 
-export function isAdminUser(user) {
+function isAdminUser(user) {
   if (!user) return false;
   const roleId = Number(user.roleId ?? user.role_id);
   if (roleId === 5) return true;
@@ -35,7 +37,7 @@ export function isAdminUser(user) {
   return role === "admin";
 }
 
-export function isManagerUser(user) {
+function isManagerUser(user) {
   if (!user) return false;
   const roleId = Number(user.roleId ?? user.role_id);
   if (roleId === 4) return true;

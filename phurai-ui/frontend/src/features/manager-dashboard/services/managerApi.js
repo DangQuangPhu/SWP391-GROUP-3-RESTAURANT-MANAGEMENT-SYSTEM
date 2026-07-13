@@ -68,9 +68,16 @@ export async function fetchKpis() {
 }
 
 export async function fetchRevenueSeries() {
-  const res = await managerGet("/staff/reports/revenue", { series: REVENUE_SERIES });
+  const res = await managerGet("/staff/reports/revenue", []);
   if (res.source === "api") {
-    return { source: "api", data: res.data?.series ?? REVENUE_SERIES };
+    const rawData = Array.isArray(res.data) ? res.data : [];
+    const parsedData = rawData.map(item => ({
+      ...item,
+      dateObj: new Date(item.date),
+      revenue: Number(item.revenue || 0),
+      reservations: Number(item.reservations || 0),
+    }));
+    return { source: "api", data: parsedData };
   }
   return res;
 }
@@ -96,11 +103,18 @@ export async function fetchPendingReservations(userId) {
   return mock(RESERVATIONS.filter(r => r.reservation_status === 'Pending'));
 }
 
-export async function fetchAllReservations(userId) {
+export async function fetchAllReservations(userId, params = {}) {
   try {
-    const res = await managerAuthRequest("/manager/reservations/all", { method: "GET" }, userId);
+    const queryStr = new URLSearchParams(params).toString();
+    const res = await managerAuthRequest(`/manager/reservations/all?${queryStr}`, { method: "GET" }, userId);
     if (res?.success) {
-      return { source: "api", data: sortReservationsChronologically(res.reservations ?? []) };
+      return { 
+        source: "api", 
+        data: sortReservationsChronologically(res.reservations ?? []),
+        totalCount: res.totalCount,
+        totalPages: res.totalPages,
+        currentPage: res.currentPage
+      };
     }
   } catch (err) { console.error("fetch API ERROR:", err?.message || String(err));
     /* fall through */
@@ -785,4 +799,88 @@ export async function deleteKdsDevice(deviceId) {
   const res = await request("/admin/kds-devices/" + deviceId, { method: "DELETE" });
   if (!res?.success) throw createApiError(res?.message || "Could not deactivate KDS device.");
   return res;
+}
+
+/* ------------------------------------------------------------------ */
+/* Phase 1 — Reservation Change Request Workflow APIs                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Fetch pending change requests for the Staff review queue.
+ * @param {string} status - 'Pending' (default), 'StaffResolved', etc.
+ * @param {number} page
+ * @param {number} limit
+ */
+export async function fetchStaffReservationRequests(status = "Pending", page = 1, limit = 20) {
+  try {
+    const qs = new URLSearchParams({ status, page, limit }).toString();
+    const res = await request(`/staff/reservation-requests?${qs}`, { method: "GET" });
+    if (res?.success) return { source: "api", data: res.data };
+  } catch (err) { console.error("[fetchStaffReservationRequests]", err?.message); }
+  return { source: "mock", data: { requests: [], totalCount: 0, totalPages: 1, currentPage: 1 } };
+}
+
+/**
+ * Staff resolves a non-financial change request.
+ */
+export async function staffResolveChangeRequest(requestId, staffNote = "") {
+  const res = await request(`/staff/reservation-requests/${requestId}/resolve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ staff_note: staffNote }),
+  });
+  if (!res?.success) throw createApiError(res?.message || "Could not resolve change request.");
+  return res;
+}
+
+/**
+ * Fetch pending change requests for the Manager financial approval queue.
+ * @param {string} status - 'PendingManagerApproval' (default)
+ */
+export async function fetchManagerChangeRequests(userId, status = "PendingManagerApproval", page = 1, limit = 20) {
+  try {
+    const qs = new URLSearchParams({ status, page, limit }).toString();
+    const res = await managerAuthRequest(`/manager/reservation-requests?${qs}`, { method: "GET" }, userId);
+    if (res?.success) return { source: "api", data: res.data };
+  } catch (err) { console.error("[fetchManagerChangeRequests]", err?.message); }
+  return { source: "mock", data: { requests: [], totalCount: 0, totalPages: 1, currentPage: 1 } };
+}
+
+/**
+ * Manager approves a financially-escalated change request.
+ */
+export async function approveChangeRequest(userId, requestId, reason, refundAmount = null) {
+  const res = await managerAuthRequest(`/manager/reservation-requests/${requestId}/approve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason, refund_amount: refundAmount }),
+  }, userId);
+  if (!res?.success) throw createApiError(res?.message || "Could not approve change request.");
+  return res;
+}
+
+/**
+ * Manager rejects a financially-escalated change request.
+ */
+export async function rejectChangeRequest(userId, requestId, reason) {
+  const res = await managerAuthRequest(`/manager/reservation-requests/${requestId}/reject`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason }),
+  }, userId);
+  if (!res?.success) throw createApiError(res?.message || "Could not reject change request.");
+  return res;
+}
+
+/**
+ * Fetch Staff no-show candidates (reservations past grace period, not yet checked in).
+ * NOTE: This ONLY returns candidates — it does NOT auto-flag them.
+ * Staff must confirm via a separate action.
+ */
+export async function fetchNoShowCandidates() {
+  try {
+    const res = await request("/staff/no-show-candidates", { method: "GET" });
+    if (res?.success) return { source: "api", data: res.data };
+  } catch (err) { console.error("[fetchNoShowCandidates]", err?.message); }
+  return { source: "mock", data: { candidates: [], count: 0 } };
 }

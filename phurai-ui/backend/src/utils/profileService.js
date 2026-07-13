@@ -1,5 +1,4 @@
 import pool from "../db.js";
-import { getMembershipInfo } from "./membership.js";
 
 // Must match CK_CustomerProfiles_gender CHECK constraint in SQL Server
 const ALLOWED_GENDERS = new Set(["Male", "Female", "Other"]);
@@ -74,7 +73,6 @@ export function formatProfileResponse(row) {
   if (!row) return null;
 
   const loyaltyPoints = Number(row.loyalty_points) || 0;
-  const membership = getMembershipInfo(loyaltyPoints);
   const preferences = parsePreferences(row.preferences);
 
   return {
@@ -96,6 +94,7 @@ export function formatProfileResponse(row) {
     staff_code: row.staff_code || null,
     job_title: row.job_title || null,
     created_at: row.created_at || null,
+    last_login_at: row.last_login_at || null,
   };
 }
 
@@ -140,7 +139,6 @@ export async function ensureCustomerProfile(userId, email, defaults = {}) {
   const baseUsername = defaults.username || getEmailPrefix(email);
   const safeUsername = baseUsername + '_' + Date.now().toString().slice(-4);
   const preferences = serializePreferences(defaults.preferences || []);
-  const membership = getMembershipInfo(defaults.loyalty_points ?? 0);
 
   await pool.query(
     `

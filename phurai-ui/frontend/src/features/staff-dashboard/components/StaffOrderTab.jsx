@@ -40,7 +40,8 @@ function formatReadyDetail(count) {
 }
 
 function isManagerUser(user) {
-  return Number(user?.roleId ?? user?.role_id) === 4;
+  const r = Number(user?.roleId ?? user?.role_id);
+  return r === 3 || r === 4;
 }
 
 function LockIcon() {
@@ -233,27 +234,6 @@ function StaffOrderTab({
 
   return (
     <div className={`staff-order-wrap${refreshing ? " is-loading" : ""}`}>
-      <div className="staff-card staff-order-intro">
-        <SectionHead
-          title="Order Management"
-          subtitle="Monitor items for occupied tables, add manual orders, and confirm service."
-          actions={
-            <Button
-              variant="ghost"
-              icon="refresh"
-              onClick={onRefresh}
-              disabled={refreshing}
-            >
-              Refresh
-            </Button>
-          }
-        />
-
-        {dataSource === "mock" ? (
-          <NotConnectedNote>{DEMO_NOTICE}</NotConnectedNote>
-        ) : null}
-      </div>
-
       {!tables.length ? (
         <div className="staff-card">
           <EmptyState
@@ -265,7 +245,16 @@ function StaffOrderTab({
       ) : (
         <div className="staff-order-layout">
           <aside className="staff-order-sidebar staff-card staff-card--compact staff-card--flush">
-            <p className="staff-order-sidebar__title">ACTIVE TABLES</p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px 8px" }}>
+              <p className="staff-order-sidebar__title" style={{ margin: 0 }}>ACTIVE TABLES</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="refresh"
+                onClick={onRefresh}
+                disabled={refreshing}
+              />
+            </div>
             <div className="staff-order-pills" role="tablist" aria-label="Select table">
               {tables.map((table) => {
                 const count = table.items?.length ?? 0;

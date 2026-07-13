@@ -7,8 +7,9 @@ export function resolveUserId(req, _res, next) {
   const queryId = req.query.userId ?? req.query.user_id;
   const bodyId = req.body?.userId ?? req.body?.user_id;
   const authUserId = req.auth?.userId ?? req.auth?.user_id;
+  const reqUserId = req.user?.user_id ?? req.user?.userId ?? req.user?.id;
 
-  const raw = authUserId ?? headerId ?? queryId ?? bodyId;
+  const raw = authUserId ?? headerId ?? queryId ?? bodyId ?? reqUserId;
   const parsed = Number(raw);
 
   req.userId = Number.isFinite(parsed) && parsed > 0 ? parsed : null;

@@ -22,7 +22,6 @@ function ReservationDetailsPanel({
   onSelectTable,
   tables,
   tablesLoading,
-  membershipTier,
   onNavigateLogin,
   onNavigateRegister,
 }) {
@@ -40,7 +39,6 @@ function ReservationDetailsPanel({
           onSelectTable={onSelectTable}
           tables={tables}
           tablesLoading={tablesLoading}
-          membershipTier={membershipTier}
           onNavigateLogin={onNavigateLogin}
           onNavigateRegister={onNavigateRegister}
         />

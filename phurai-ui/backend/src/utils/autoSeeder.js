@@ -1,4 +1,6 @@
 import pool from '../db.js';
+import fs from 'node:fs';
+import path from 'node:path';
 const DISH_CATEGORIES = [
   'Sushi & Sashimi',
   'Noodle & Rice',
@@ -202,6 +204,20 @@ const MENU_DATA = [
 
 export async function runAutoSeed() {
   try {
+    // Check for filesystem lock from manual database initialization script
+    const lockFile = path.join(process.cwd(), ".db-sync-lock");
+    if (fs.existsSync(lockFile)) {
+      console.log("[Seeder] Database initialization lock active. Skipping auto-seed.");
+      return;
+    }
+
+    // Skip auto-seeding if the database already has seeded user accounts (e.g. from System_Restaurant.sql)
+    // to prevent concurrent race conditions during manual database initialization.
+    const [userRows] = await pool.query('SELECT COUNT(*) as count FROM dbo.UserAccounts');
+    if (userRows[0].count > 4) {
+      return;
+    }
+
     const [rows] = await pool.query('SELECT COUNT(*) as count FROM dbo.Dishes');
     if (rows[0].count > 0) {
       return; // Already seeded

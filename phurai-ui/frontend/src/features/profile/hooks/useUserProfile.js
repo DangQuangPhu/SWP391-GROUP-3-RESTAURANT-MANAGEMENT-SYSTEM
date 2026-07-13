@@ -221,11 +221,6 @@ export function useUserProfile(user, onUserUpdate) {
         dateOfBirth: normalized.dateOfBirth || prev.dateOfBirth,
         preferences: normalized.preferences ?? prev.preferences,
         loyaltyPoints: normalized.loyaltyPoints ?? prev.loyaltyPoints,
-        membershipTier: normalized.membershipTier ?? prev.membershipTier,
-        membershipIcon: normalized.membershipIcon ?? prev.membershipIcon,
-        nextTier: normalized.nextTier ?? prev.nextTier,
-        pointsToNextTier: normalized.pointsToNextTier ?? prev.pointsToNextTier,
-        progressPercent: normalized.progressPercent ?? prev.progressPercent,
         created_at: normalized.created_at ?? prev.created_at,
       }));
       return;
@@ -450,11 +445,6 @@ export function useUserProfile(user, onUserUpdate) {
         highContrast: highContrast ?? extended.highContrast,
         preferences: preferences ?? apiUser?.preferences ?? extended.preferences,
         loyaltyPoints: apiUser?.loyaltyPoints ?? extended.loyaltyPoints,
-        membershipTier: apiUser?.membershipTier ?? extended.membershipTier,
-        membershipIcon: apiUser?.membershipIcon ?? extended.membershipIcon,
-        nextTier: apiUser?.nextTier ?? extended.nextTier,
-        pointsToNextTier: apiUser?.pointsToNextTier ?? extended.pointsToNextTier,
-        progressPercent: apiUser?.progressPercent ?? extended.progressPercent,
       };
 
       persistExtended(nextExtended);
@@ -469,11 +459,6 @@ export function useUserProfile(user, onUserUpdate) {
         language: language ?? apiUser.language,
         preferences: preferences ?? apiUser.preferences,
         loyaltyPoints: apiUser.loyaltyPoints,
-        membershipTier: apiUser.membershipTier,
-        membershipIcon: apiUser.membershipIcon,
-        nextTier: apiUser.nextTier,
-        pointsToNextTier: apiUser.pointsToNextTier,
-        progressPercent: apiUser.progressPercent,
         googleAvatarUrl: apiUser.googleAvatarUrl || user?.googleAvatarUrl || "",
         avatarSource: apiUser.avatarSource || user?.avatarSource || "",
         phone: apiUser.phone ?? apiPayload.phone ?? apiPayload.phoneNumber,

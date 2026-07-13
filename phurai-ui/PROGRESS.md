@@ -61,29 +61,27 @@ Refining the reservation time selection UX by replacing static duration selectio
 
 ## 🚀 [BMAD] Live FSM Dashboard, RBAC Tabs & AuditLog Timeline 🚀
 
-**Status:** IN PROGRESS — Phase 2 (PLAN) complete, awaiting /feature-dev approval
-**Module:** Manager Dashboard / ReservationsSection
-**Methodology:** ECC-ARCH + ECC-RBAC + ECC-SEC (clean-architecture.md, SECURITY_GUARDRAILS.md, api-security-patterns.md)
+**Status:** IN PROGRESS — Plan updated & ready for `/feature-dev` approval
+**Module:** Manager & Staff Dashboards
+**Methodology:** ECC-ARCH + ECC-RBAC + ECC-SEC (clean-architecture.md, SECURITY_GUARDRAILS.md)
 **Started:** 2026-07-08
 
 ### 1. Context & Mission
-Replacing the static status dropdown in `ReservationsSection.jsx` with 5 FSM tab pills (Pending / Upcoming / In Progress / Completed / Cancelled). Adding RBAC so Staff cannot see the Cancel/Reject/Edit actions. Upgrading the Timeline drawer to use the live `/api/reservations/:id/timeline` endpoint (with `role_name` enrichment) instead of the legacy `/manager/reservations/:id/history`.
+Sync the Staff and Manager dashboards to show identical live SQL database rows. Introduce 5 FSM tab pills (Pending / Upcoming / In Progress / Completed / Cancelled). Enforce RBAC (Staff cannot Cancel/Reject/Edit/Refund). Implement live AuditLog + ReservationTimeline feed.
 
-### 2. DB Verification (Phase 1 — READ)
-- AuditLog JOIN schema confirmed from `backend/src/routes/reservations.js` (lines 1741–1757)
-- `test-timeline-schema.js` written and validated (schema shape confirmed; outbound TCP blocked in AI sandbox, but dev server runs fine at 6h+ uptime)
-- **Security**: No `password_hash`/`otp_hash` in SELECT, parameterized query, LEFT JOIN pattern safe
+### 2. Actions Already Taken (This Turn)
+- **Loyalty Points Recovery**: Restored Loyalty Points tab to user profile and rewrote `LoyaltyPointsPage.jsx` styling using custom design tokens to eliminate dark Tailwind background mismatches.
+- **Loyalty Layout Fix**: Removed cover theme and avatar whitespace overhead when viewing loyalty points. Overrode card min-height to automatically snap-fit the loyalty content.
+- **Term Integration Sync**: Changed Staff `fetchTodayReservations` endpoint in `staffApi.js` to call `/manager/reservations/all` to guarantee 100% data parity between Staff and Manager portals.
+- **Terminology Alignment**: Renamed "Bookings today", "Total Bookings", and "Lost Bookings" KPI card labels to "Reservations today", "Total Reservations", and "Lost Reservations" across Staff, Manager, and Admin dashboards.
 
-### 3. Key Finding — Duplicate Route Bug
-`backend/src/routes/reservations.js` has TWO `/:id/timeline` handlers (line 48 + line 1713). The inline handler at line 1713 shadows the canonical `timelineLogger.js` handler. **Removing the duplicate at lines 1709–1822 is a critical fix in Phase 3.**
-
-### 4. Phase 3 File Scope (BUILD)
-- `frontend/.../ReservationsSection.jsx` — FSM tabs + RBAC guards + timeline source upgrade
-- `frontend/.../managerApi.js` — Add `getReservationTimeline()`
-- `backend/src/utils/timelineLogger.js` — Add `role_name` JOIN to query
-- `backend/src/routes/reservations.js` — Remove duplicate timeline handler (lines 1709–1822)
+### 3. Proposed Next Steps (Awaiting `/feature-dev` Approval)
+- **Backend Endpoints**: Ensure `/api/reservations/:id/timeline` fetches combined audit logs and timelines with role names.
+- **Timeline Modal**: Add interactive timeline history drawer to both portals.
+- **RBAC Filters**: Add tab filters for Staff (Upcoming + In Progress) vs Manager (All).
 
 ---
+
 
 ## 🚀 [BMAD] Fix FSM: Reservation Check-in vs Table Status 🚀
 

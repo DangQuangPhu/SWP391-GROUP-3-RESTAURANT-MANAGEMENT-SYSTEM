@@ -141,53 +141,92 @@ app.use((req, res) => {
   });
 });
 
-runOtpLifecycleCleanup().catch((err) => {
-  console.warn("OTP lifecycle cleanup:", err.message);
-});
-
-const OTP_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
-
-// Run auto seed on startup
-runAutoSeed();
-startCronJobs();
-setInterval(() => {
-  runOtpLifecycleCleanup().catch((err) => {
-    console.warn("OTP lifecycle cleanup:", err.message);
-  });
-}, OTP_CLEANUP_INTERVAL_MS);
-
-const REMINDER_INTERVAL_MS = 15 * 60 * 1000; // 15 mins
-setInterval(() => {
-  runReservationReminders().catch((err) => {
-    console.warn("Reservation reminder cron:", err.message);
-  });
-}, REMINDER_INTERVAL_MS);
-
-const NO_SHOW_INTERVAL_MS = 5 * 60 * 1000; // 5 mins
-setInterval(() => {
-  sweepNoShows().catch((err) => {
-    console.warn("No show sweeper cron:", err.message);
-  });
-}, NO_SHOW_INTERVAL_MS);
-
 const server = http.createServer(app);
 const io = initSocket(server, { allowedOrigins });
 app.set("io", io);
 
-server.on("error", (err) => {
-  if (err.code === "EADDRINUSE") {
-    console.error(`\n❌  Port ${port} is already in use.`);
-    console.error(`   Run this command to free it, then restart:\n`);
-    console.error(`   kill -9 $(lsof -ti :${port}) && npm run dev:full\n`);
-    process.exit(1);
-  } else {
-    throw err;
-  }
-});
 
-server.listen(port, "0.0.0.0", () => {
-  console.log(`Backend server listening on http://127.0.0.1:${port}`);
-  console.log("SMTP configured:", isSmtpConfigured());
-  console.log("Socket.IO enabled");
-});
+const OTP_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+const REMINDER_INTERVAL_MS = 15 * 60 * 1000; // 15 mins
+const NO_SHOW_INTERVAL_MS = 5 * 60 * 1000; // 5 mins
+
+async function startServer() {
+  try {
+    // 1. Initial cleanup and auto-seeding (runs migrations in db.js)
+    await runOtpLifecycleCleanup().catch((err) => {
+      console.warn("OTP lifecycle cleanup:", err.message);
+    });
+    await runAutoSeed();
+    startCronJobs();
+
+    // 2. Schedule interval tasks
+    setInterval(() => {
+      runOtpLifecycleCleanup().catch((err) => {
+        console.warn("OTP lifecycle cleanup:", err.message);
+      });
+    }, OTP_CLEANUP_INTERVAL_MS);
+
+    setInterval(() => {
+      runReservationReminders().catch((err) => {
+        console.warn("Reservation reminder cron:", err.message);
+      });
+    }, REMINDER_INTERVAL_MS);
+
+    setInterval(() => {
+      sweepNoShows().catch((err) => {
+        console.warn("No show sweeper cron:", err.message);
+      });
+    }, NO_SHOW_INTERVAL_MS);
+
+    // 3. Start listening only after DB initialization is complete
+    let retries = 0;
+    const maxRetries = 10;
+    const delay = 500;
+
+    server.once("listening", () => {
+      console.log(`Backend server listening on http://127.0.0.1:${port}`);
+      console.log("SMTP configured:", isSmtpConfigured());
+      console.log("Socket.IO enabled");
+    });
+
+    const startListening = () => {
+      server.listen(port, "0.0.0.0");
+    };
+
+    server.on("error", (err) => {
+      if (err.code === "EADDRINUSE" && retries < maxRetries) {
+        retries++;
+        console.warn(`[Port ${port} busy, retrying in ${delay}ms... (${retries}/${maxRetries})]`);
+        setTimeout(startListening, delay);
+      } else {
+        console.error("Failed to start backend server:", err);
+        process.exit(1);
+      }
+    });
+
+    startListening();
+  } catch (err) {
+    console.error("Failed to start backend server:", err);
+    process.exit(1);
+  }
+}
+
+// Graceful shutdown on SIGTERM / SIGINT
+const handleGracefulShutdown = (signal) => {
+  console.log(`\n[${signal}] Shutting down gracefully...`);
+  server.close(() => {
+    console.log("HTTP server closed.");
+    process.exit(0);
+  });
+  // Force exit after 3 seconds if server.close hangs
+  setTimeout(() => {
+    console.error("Graceful shutdown timed out. Forcing exit...");
+    process.exit(1);
+  }, 3000);
+};
+
+process.on("SIGTERM", () => handleGracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => handleGracefulShutdown("SIGINT"));
+
+startServer();
 

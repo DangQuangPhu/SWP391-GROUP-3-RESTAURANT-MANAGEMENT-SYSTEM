@@ -11,6 +11,8 @@ import {
 } from '../services/profileApi';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import { Link } from 'react-router-dom';
+import { format, isSameDay } from "date-fns";
+import DashboardDateRangePicker from "@/features/manager-dashboard/components/shared/DashboardDateRangePicker.jsx";
 
 function StatCardSkeleton() {
   return (
@@ -116,31 +118,73 @@ const CustomerDashboard = () => {
   const userId = currentUser?.user_id || currentUser?.userId || currentUser?.id;
   const userName = (currentUser?.full_name || currentUser?.fullName || currentUser?.name || 'User');
 
-  // Filter Period State
-  const [filterType, setFilterType] = useState('30d');
-  
-  const dateFilter = useMemo(() => {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [draftRange, setDraftRange] = useState(() => {
     const end = new Date();
     const start = new Date();
-    if (filterType === 'today') {
-      start.setHours(0, 0, 0, 0);
-      end.setHours(23, 59, 59, 999);
-      return { range: 'today', startDate: start.toISOString(), endDate: end.toISOString(), label: 'Today' };
+    start.setMonth(end.getMonth() - 6);
+    return { startDate: start, endDate: end, key: "selection" };
+  });
+  const [appliedRange, setAppliedRange] = useState(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setMonth(end.getMonth() - 6);
+    return { startDate: start, endDate: end };
+  });
+  const [activePresetId, setActivePresetId] = useState("6m");
+
+  const closePicker = useCallback(() => setPickerOpen(false), []);
+  const openPicker = useCallback(() => {
+    setDraftRange({ startDate: appliedRange.startDate, endDate: appliedRange.endDate, key: "selection" });
+    setPickerOpen(true);
+  }, [appliedRange]);
+
+  const handleApplyDate = useCallback((sel) => {
+    setAppliedRange({ startDate: sel.startDate, endDate: sel.endDate });
+    closePicker();
+  }, [closePicker]);
+
+  const handlePresetSelect = useCallback((preset) => {
+    const range = preset.range || { startDate: preset.startDate, endDate: preset.endDate, key: "selection" };
+    setActivePresetId(preset.id);
+    setDraftRange(range);
+    setAppliedRange({ startDate: range.startDate, endDate: range.endDate });
+    closePicker();
+  }, [closePicker]);
+
+  const dateFilter = useMemo(() => {
+    const sd = appliedRange.startDate;
+    const ed = appliedRange.endDate;
+    
+    let label = "All Time";
+    if (sd && ed) {
+      if (isSameDay(sd, ed)) {
+        label = format(sd, "dd/MM/yyyy");
+      } else {
+        label = `${format(sd, "dd/MM")} – ${format(ed, "dd/MM/yyyy")}`;
+      }
+    } else if (activePresetId === "all_time") {
+      label = "All Time";
     }
-    if (filterType === '7d') {
-      start.setDate(end.getDate() - 7);
-      return { range: '7d', startDate: start.toISOString(), endDate: end.toISOString(), label: 'Last 7 Days' };
-    }
-    if (filterType === '30d') {
-      start.setDate(end.getDate() - 30);
-      return { range: '30d', startDate: start.toISOString(), endDate: end.toISOString(), label: 'Last 30 Days' };
-    }
-    if (filterType === '1y') {
-      start.setFullYear(end.getFullYear() - 1);
-      return { range: '1y', startDate: start.toISOString(), endDate: end.toISOString(), label: 'Last Year' };
-    }
-    return { range: 'all', startDate: null, endDate: null, label: 'All Time' };
-  }, [filterType]);
+
+    const startIso = sd ? new Date(sd).toISOString() : null;
+    const endIso = ed ? new Date(ed).toISOString() : null;
+
+    let rangeVal = "all";
+    if (activePresetId === "today") rangeVal = "today";
+    else if (activePresetId === "7d") rangeVal = "7d";
+    else if (activePresetId === "30d") rangeVal = "30d";
+    else if (activePresetId === "6m") rangeVal = "6m";
+    else if (activePresetId === "1y") rangeVal = "1y";
+    else if (sd && ed) rangeVal = "custom";
+
+    return {
+      range: rangeVal,
+      startDate: startIso,
+      endDate: endIso,
+      label
+    };
+  }, [appliedRange, activePresetId]);
 
   const { data, isLoading, isRefetching, isError, error, refetch } = useDashboardQuery(userId, dateFilter);
 
@@ -174,27 +218,31 @@ const CustomerDashboard = () => {
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-[#8c764b]"></span>
               </span>
             )}
-            <div className="relative group z-20">
-              <button className="flex items-center gap-3 bg-white border border-gray-200 px-4 py-2.5 rounded-xl shadow-sm hover:bg-gray-50 transition-colors">
-                <div className="bg-blue-50 p-1.5 rounded-lg text-[#8c764b]">
-                  <Calendar size={18} strokeWidth={2.5} />
-                </div>
-                <div className="text-left mr-2">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Filter Period</p>
-                  <p className="text-sm font-semibold text-gray-800">{dateFilter.label}</p>
-                </div>
-                <ChevronDown size={16} className="text-gray-400" />
+            <div className="relative z-20">
+              <button
+                type="button"
+                onClick={() => (pickerOpen ? closePicker() : openPicker())}
+                aria-expanded={pickerOpen}
+                className="flex items-center justify-center bg-white border border-gray-200 w-10 h-10 rounded-xl shadow-sm hover:bg-gray-50 transition-colors text-[#8c764b]"
+                title={`Filter Period: ${dateFilter.label}`}
+              >
+                <Calendar size={18} strokeWidth={2.2} />
               </button>
               
-              <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                <div className="py-1">
-                  <button onClick={() => setFilterType('today')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Today</button>
-                  <button onClick={() => setFilterType('7d')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Last 7 Days</button>
-                  <button onClick={() => setFilterType('30d')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Last 30 Days</button>
-                  <button onClick={() => setFilterType('1y')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Last Year</button>
-                  <button onClick={() => setFilterType('all')} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">All Time</button>
+              {pickerOpen && (
+                <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", zIndex: 1000 }}>
+                  <DashboardDateRangePicker
+                    inline={true}
+                    allowFuture={false}
+                    draftRange={draftRange}
+                    activePresetId={activePresetId}
+                    onDraftChange={(selection) => { setDraftRange(selection); setActivePresetId("custom"); }}
+                    onPresetSelect={handlePresetSelect}
+                    onApply={handleApplyDate}
+                    onCancel={closePicker}
+                  />
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -342,6 +390,117 @@ const CustomerDashboard = () => {
           </Link>
         </div>
       </div>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        /* Date Picker Popover Overrides */
+        .sfx-dp-popover {
+          background: #ffffff !important;
+          border: 1px solid #e5e7eb !important;
+          border-radius: 16px !important;
+          box-shadow: 0 10px 40px rgba(0,0,0,0.12) !important;
+          color: #374151 !important;
+          overflow: hidden !important;
+          display: inline-flex !important;
+          flex-direction: column !important;
+        }
+
+        .sfx-dp-body {
+          display: grid !important;
+          grid-template-columns: 180px max-content !important;
+          background: #ffffff !important;
+        }
+
+        .sfx-dp-presets {
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 6px !important;
+          padding: 16px 12px !important;
+          border-right: 1px solid #f3f4f6 !important;
+          background: #f9fafb !important;
+        }
+
+        .sfx-dp-preset {
+          border: none !important;
+          background: transparent !important;
+          text-align: left !important;
+          padding: 8px 12px !important;
+          border-radius: 8px !important;
+          font-size: 13px !important;
+          font-weight: 500 !important;
+          color: #4b5563 !important;
+          cursor: pointer !important;
+          transition: all 0.15s ease !important;
+        }
+
+        .sfx-dp-preset:hover {
+          background: rgba(140, 118, 75, 0.08) !important;
+          color: #8c764b !important;
+        }
+
+        .sfx-dp-preset.is-active {
+          background: rgba(140, 118, 75, 0.12) !important;
+          color: #8c764b !important;
+          font-weight: 600 !important;
+        }
+
+        .sfx-dp-foot {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          padding: 12px 16px !important;
+          border-top: 1px solid #f3f4f6 !important;
+          background: #ffffff !important;
+        }
+
+        .sfx-dp-range-label {
+          font-size: 13px !important;
+          font-weight: 500 !important;
+          color: #4b5563 !important;
+          margin-right: auto !important;
+        }
+
+        .sfx-dp-foot-actions {
+          display: flex !important;
+          gap: 8px !important;
+        }
+
+        .sfx-btn {
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          font-size: 13px !important;
+          font-weight: 600 !important;
+          border-radius: 8px !important;
+          cursor: pointer !important;
+          transition: all 0.15s ease !important;
+          border: 1px solid transparent !important;
+          padding: 8px 16px !important;
+        }
+
+        .sfx-btn--ghost {
+          background: #ffffff !important;
+          border-color: #d1d5db !important;
+          color: #374151 !important;
+        }
+
+        .sfx-btn--ghost:hover {
+          background: #f9fafb !important;
+          border-color: #9ca3af !important;
+        }
+
+        .sfx-btn--gold {
+          background: #8c764b !important;
+          color: #ffffff !important;
+        }
+
+        .sfx-btn--gold:hover {
+          background: #735f3a !important;
+        }
+
+        .rdrDateRangePickerWrapper {
+          background: #ffffff !important;
+        }
+      `}} />
     </div>
   );
 };

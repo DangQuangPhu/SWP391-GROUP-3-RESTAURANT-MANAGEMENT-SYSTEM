@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
+import pool from '../db.js';
 
-export function authMiddleware(req, res, next) {
+export async function authMiddleware(req, res, next) {
   const header = req.headers['authorization'];
   if (!header || !header.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Authorization header missing or malformed.' });
@@ -20,6 +21,7 @@ export function authMiddleware(req, res, next) {
       role_name: decoded.role_name,
       full_name: decoded.full_name,
       email:     decoded.email,
+      iat:       decoded.iat,  // JWT issued-at timestamp (seconds)
     };
 
     if (!req.user.user_id || !req.user.role_id) {
@@ -28,6 +30,31 @@ export function authMiddleware(req, res, next) {
 
     req.user.user_id = Number(req.user.user_id);
     req.user.role_id = Number(req.user.role_id);
+
+    // Phase 2: Check if session was revoked after this token was issued.
+    // If session_revoked_at > JWT.iat, the user was force-logged-out (e.g. access revoked by Manager/Admin).
+    try {
+      const [rows] = await pool.query(
+        `SELECT is_active, session_revoked_at FROM dbo.UserAccounts WHERE user_id = ?`,
+        [req.user.user_id]
+      );
+      if (rows.length === 0) {
+        return res.status(401).json({ error: 'User account not found.', code: 'ACCOUNT_NOT_FOUND' });
+      }
+      const account = rows[0];
+      if (!account.is_active) {
+        return res.status(401).json({ error: 'Your account has been deactivated. Please contact your manager.', code: 'ACCOUNT_DEACTIVATED' });
+      }
+      if (account.session_revoked_at) {
+        const revokedAtSec = Math.floor(new Date(account.session_revoked_at).getTime() / 1000);
+        if (revokedAtSec > (req.user.iat || 0)) {
+          return res.status(401).json({ error: 'Your session has been revoked. Please log in again.', code: 'SESSION_REVOKED' });
+        }
+      }
+    } catch (dbErr) {
+      // Non-fatal: if DB check fails, fall through (don't block authenticated requests on DB hiccup)
+      console.warn('[authMiddleware] DB session check failed:', dbErr?.message);
+    }
 
     next();
   } catch (err) {
@@ -52,16 +79,14 @@ export const requireRole = (...allowedRoleIds) => (req, res, next) => {
 
 export const requireCustomer = requireRole(1);
 export const requireStaff    = requireRole(2);
-// role_id=3 (Kitchen Staff) deprecated — use requireKdsDevice from kdsAuth.js for KDS routes
-export const requireStaffOrKitchen = requireRole(2); // was (2,3); role 3 deprecated
-export const requireManager  = requireRole(4);
-export const requireAdmin    = requireRole(5);
-export const requireAny      = requireRole(1, 2, 4, 5); // 3 removed (deprecated)
+export const requireManager  = requireRole(3);
+export const requireAdmin    = requireRole(4);
+export const requireAny      = requireRole(1, 2, 3, 4);
 
 
 export const verifyAdmin = (req, res, next) => {
   const role = req.user?.role_id;
-  if (role === 5) {
+  if (role === 4) {
     next();
   } else {
     return res.status(403).json({ success: false, message: 'Forbidden: Requires Admin role' });

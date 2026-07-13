@@ -20,6 +20,7 @@ const PATHS = {
   plus: "M12 5v14M5 12h14",
   card: "M3 7h18v10H3zM3 10h18",
   chart: "M4 19V5M4 19h16M8 17V11M12 17V7M16 17v-4",
+  eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7zM12 15a3 3 0 100-6 3 3 0 000 6z",
 };
 
 function Icon({ name, size = 18, strokeWidth = 1.7, className = "", style }) {

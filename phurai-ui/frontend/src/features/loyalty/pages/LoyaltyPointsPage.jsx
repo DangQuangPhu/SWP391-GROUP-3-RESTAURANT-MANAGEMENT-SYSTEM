@@ -1,22 +1,39 @@
 import { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Gem, Award, Clock, Ticket, TrendingUp, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
+import { Gem, Clock, Ticket, TrendingUp, CheckCircle2, AlertTriangle, Loader2, Star } from 'lucide-react';
 import { getLoyaltyBalance, getLoyaltyCatalog, redeemVoucher, getMyVouchers } from '../services/loyaltyApi.js';
 import { format } from 'date-fns';
 import { useAuth } from '@/features/auth/context/AuthContext';
 
-// Simple self-contained animated counter component
+// ─── Design tokens (matching profile.css) ─────────────────────────────────────
+const T = {
+  bg: '#FAF7F2',
+  surface: '#FFFFFF',
+  primary: '#7A2E2E',
+  primaryLight: '#FDF3E7',
+  gold: '#C9A227',
+  goldLight: '#FEF3C7',
+  olive: '#8B7355',
+  success: '#5B8C5A',
+  danger: '#C1440E',
+  textMain: '#2B2118',
+  textMuted: '#8A7F73',
+  border: '#ECE5DA',
+  shadow: '0 2px 10px rgba(43,33,24,0.06)',
+  shadowHover: '0 8px 24px rgba(43,33,24,0.12)',
+  radius: '16px',
+  radiusSm: '10px',
+};
+
+// ─── Animated counter ──────────────────────────────────────────────────────────
 function AnimatedCounter({ value }) {
   const [count, setCount] = useState(0);
-
   useEffect(() => {
     let start = count;
-    const end = parseInt(value, 10);
+    const end = parseInt(value, 10) || 0;
     if (start === end) return;
-
-    const duration = 800; // ms
-    const increment = (end - start) / (duration / 16); // ~60fps
-    
+    const duration = 800;
+    const increment = (end - start) / (duration / 16);
     let timer = setInterval(() => {
       start += increment;
       if ((increment > 0 && start >= end) || (increment < 0 && start <= end)) {
@@ -26,90 +43,74 @@ function AnimatedCounter({ value }) {
         setCount(Math.floor(start));
       }
     }, 16);
-
     return () => clearInterval(timer);
   }, [value]);
-
   return <span>{count.toLocaleString()}</span>;
 }
 
-// Countdown timer component for individual active voucher cards
+// ─── Countdown for active vouchers ────────────────────────────────────────────
 function VoucherCountdown({ expiryDate, onExpired }) {
-  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
-
-  function calculateTimeLeft() {
+  const calcLeft = () => {
     const diff = new Date(expiryDate).getTime() - Date.now();
     if (diff <= 0) return null;
-
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-    const totalHours = new Date(expiryDate).getTime() - new Date().getTime();
-    return { hours, minutes, seconds, diff };
-  }
-
+    return {
+      hours: Math.floor(diff / 3600000),
+      minutes: Math.floor((diff % 3600000) / 60000),
+      seconds: Math.floor((diff % 60000) / 1000),
+      diff,
+    };
+  };
+  const [timeLeft, setTimeLeft] = useState(calcLeft());
   useEffect(() => {
-    const interval = setInterval(() => {
-      const remaining = calculateTimeLeft();
-      if (!remaining) {
-        clearInterval(interval);
-        setTimeLeft(null);
-        if (onExpired) onExpired();
-      } else {
-        setTimeLeft(remaining);
-      }
+    const id = setInterval(() => {
+      const r = calcLeft();
+      setTimeLeft(r);
+      if (!r) { clearInterval(id); onExpired?.(); }
     }, 1000);
-
-    return () => clearInterval(interval);
+    return () => clearInterval(id);
   }, [expiryDate]);
 
-  if (!timeLeft) {
-    return <span className="text-red-500 font-semibold">Expired</span>;
-  }
-
+  if (!timeLeft) return <span style={{ color: T.danger, fontWeight: 600, fontSize: '0.8rem' }}>Expired</span>;
   const { hours, minutes, seconds, diff } = timeLeft;
-  // Calculate percentage of time left assuming validity of 24h (86400000ms) as base limit
-  const maxLimit = 24 * 60 * 60 * 1000;
-  const percentage = Math.min((diff / maxLimit) * 100, 100);
-
-  let colorClass = "bg-green-500";
-  let textClass = "text-green-500";
-  if (percentage < 20) {
-    colorClass = "bg-red-500 animate-pulse";
-    textClass = "text-red-500 font-medium";
-  } else if (percentage < 50) {
-    colorClass = "bg-yellow-500";
-    textClass = "text-yellow-500";
-  }
+  const pct = Math.min((diff / (24 * 3600000)) * 100, 100);
+  const barColor = pct < 20 ? T.danger : pct < 50 ? '#D97706' : T.success;
 
   return (
-    <div className="w-full">
-      <div className="flex justify-between items-center text-xs mb-1">
-        <span className="flex items-center gap-1 font-medium">
-          <Clock size={12} /> Expiries in:
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: T.textMuted, marginBottom: 4 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Clock size={11} /> Expires in:
         </span>
-        <span className={`${textClass} font-semibold tabular-nums`}>
-          {hours.toString().padStart(2, '0')}:
-          {minutes.toString().padStart(2, '0')}:
-          {seconds.toString().padStart(2, '0')}
+        <span style={{ fontWeight: 700, color: barColor, fontVariantNumeric: 'tabular-nums' }}>
+          {String(hours).padStart(2, '0')}:{String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
         </span>
       </div>
-      <div className="w-full bg-gray-200 dark:bg-gray-700 h-1.5 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-1000 ${colorClass}`} style={{ width: `${percentage}%` }} />
+      <div style={{ width: '100%', height: 4, background: T.border, borderRadius: 99, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 99, transition: 'width 1s linear' }} />
       </div>
     </div>
   );
 }
 
+// ─── Section header ────────────────────────────────────────────────────────────
+function SectionHeader({ icon: Icon, title }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 12, borderBottom: `1px solid ${T.border}`, marginBottom: 20 }}>
+      <Icon size={18} style={{ color: T.gold }} />
+      <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: T.textMain }}>{title}</h3>
+    </div>
+  );
+}
+
+// ─── Main page ─────────────────────────────────────────────────────────────────
 export default function LoyaltyPointsPage() {
   const [balanceData, setBalanceData] = useState({ balance: 0, totalEarned: 0, totalRedeemed: 0 });
   const [catalog, setCatalog] = useState([]);
   const [myVouchers, setMyVouchers] = useState([]);
-  const [activeTab, setActiveTab] = useState('active'); // 'active' | 'used' | 'expired'
+  const [activeTab, setActiveTab] = useState('active');
   const [loading, setLoading] = useState(true);
   const [exchanging, setExchanging] = useState(false);
-  const [selectedVoucher, setSelectedVoucher] = useState(null); // for confirmation modal
+  const [selectedVoucher, setSelectedVoucher] = useState(null);
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
 
@@ -117,18 +118,14 @@ export default function LoyaltyPointsPage() {
   const userId = currentUser?.user_id || currentUser?.userId || currentUser?.id;
 
   const loadLoyaltyData = async () => {
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
+    if (!userId) { setLoading(false); return; }
     setLoading(true);
     try {
       const [balRes, catRes, vouchRes] = await Promise.all([
         getLoyaltyBalance(userId),
         getLoyaltyCatalog(userId),
-        getMyVouchers(userId)
+        getMyVouchers(userId),
       ]);
-
       if (balRes?.success) setBalanceData(balRes);
       if (catRes?.success) setCatalog(catRes.catalog || []);
       if (vouchRes?.success) setMyVouchers(vouchRes.vouchers || []);
@@ -139,212 +136,198 @@ export default function LoyaltyPointsPage() {
     }
   };
 
-  useEffect(() => {
-    loadLoyaltyData();
-  }, [userId]);
+  useEffect(() => { loadLoyaltyData(); }, [userId]);
 
-  // Determine membership levels based on total earned points
-  const pointsInfo = useMemo(() => {
-    const pts = balanceData.balance || 0;
-    let tier = 'Bronze';
-    let minPts = 0;
-    let maxPts = 500;
-    let iconColor = 'text-amber-700';
-
-    if (pts >= 1500) {
-      tier = 'Gold';
-      minPts = 1500;
-      maxPts = 5000;
-      iconColor = 'text-yellow-500';
-    } else if (pts >= 500) {
-      tier = 'Silver';
-      minPts = 500;
-      maxPts = 1500;
-      iconColor = 'text-gray-400';
-    }
-
-    const currentTierProgress = Math.min(((pts - minPts) / (maxPts - minPts)) * 100, 100);
-    return { tier, nextTierPoints: maxPts - pts, currentTierProgress, iconColor, maxPts };
-  }, [balanceData]);
-
-  // Handle points exchange
   const handleRedeem = async () => {
     if (!selectedVoucher || !userId) return;
     setExchanging(true);
     setActionError('');
     setActionSuccess('');
-
     try {
       const res = await redeemVoucher(userId, selectedVoucher.promotion_id);
       if (res?.success) {
-        setActionSuccess(`Successfully exchanged! Your code is: ${res.voucher.code}`);
+        setActionSuccess(`Redeemed! Your voucher code: ${res.voucher.code}`);
         setSelectedVoucher(null);
-        await loadLoyaltyData(); // reload
-        setTimeout(() => setActionSuccess(''), 5000);
+        await loadLoyaltyData();
+        setTimeout(() => setActionSuccess(''), 6000);
       } else {
         setActionError(res?.message || 'Failed to redeem voucher.');
         setTimeout(() => setActionError(''), 5000);
       }
     } catch (err) {
-      setActionError(err?.message || 'An error occurred during redemption.');
+      setActionError(err?.message || 'An error occurred.');
       setTimeout(() => setActionError(''), 5000);
     } finally {
       setExchanging(false);
     }
   };
 
-  // Filter user vouchers by status
-  const filteredVouchers = useMemo(() => {
-    return myVouchers.filter(v => v.status === activeTab);
-  }, [myVouchers, activeTab]);
+  const filteredVouchers = useMemo(() => myVouchers.filter(v => v.status === activeTab), [myVouchers, activeTab]);
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-500">
-        <Loader2 className="animate-spin text-yellow-500 mb-4" size={40} />
-        <p>Loading loyalty points and rewards...</p>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 0', color: T.textMuted, gap: 12 }}>
+        <Loader2 size={36} style={{ color: T.gold, animation: 'spin 1s linear infinite' }} />
+        <p style={{ margin: 0, fontSize: '0.9rem' }}>Loading loyalty points and rewards…</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 pt-8 pb-1 px-1 relative">
-      {/* Messages */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 32, padding: '28px 0 16px 0' }}>
+
+      {/* ── Toast messages ── */}
       {actionSuccess && (
-        <div className="flex items-center gap-3 bg-green-50 border border-green-200 text-green-700 p-4 rounded-xl shadow-sm animate-fade-in">
-          <CheckCircle2 className="text-green-500 shrink-0" />
-          <div>
-            <p className="font-semibold">Redemption Successful</p>
-            <p className="text-sm">{actionSuccess}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#F0FDF4', border: `1px solid #BBF7D0`, color: '#166534', padding: '12px 16px', borderRadius: T.radiusSm }}>
+          <CheckCircle2 size={18} style={{ color: T.success, flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem' }}>Redemption Successful</p>
+            <p style={{ margin: 0, fontSize: '0.8rem' }}>{actionSuccess}</p>
           </div>
-          <button onClick={() => setActionSuccess('')} className="ml-auto text-green-500 hover:text-green-700 font-bold">&times;</button>
+          <button onClick={() => setActionSuccess('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: T.success, lineHeight: 1 }}>×</button>
         </div>
       )}
-
       {actionError && (
-        <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl shadow-sm animate-fade-in">
-          <AlertTriangle className="text-red-500 shrink-0" />
-          <div>
-            <p className="font-semibold">Redemption Failed</p>
-            <p className="text-sm">{actionError}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#FFF5F5', border: `1px solid #FECACA`, color: '#991B1B', padding: '12px 16px', borderRadius: T.radiusSm }}>
+          <AlertTriangle size={18} style={{ color: T.danger, flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem' }}>Redemption Failed</p>
+            <p style={{ margin: 0, fontSize: '0.8rem' }}>{actionError}</p>
           </div>
-          <button onClick={() => setActionError('')} className="ml-auto text-red-500 hover:text-red-700 font-bold">&times;</button>
+          <button onClick={() => setActionError('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: T.danger, lineHeight: 1 }}>×</button>
         </div>
       )}
 
-      {/* Gold Card Section */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Tier Card */}
-        <div className="md:col-span-2 relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 p-6 text-white shadow-xl flex flex-col justify-between min-h-[200px]">
-          <div className="absolute top-0 right-0 transform translate-x-6 -translate-y-6 w-48 h-48 bg-white/10 rounded-full blur-xl pointer-events-none" />
-          
-          <div className="flex justify-between items-start">
-            <div>
-              <span className="text-xs uppercase tracking-widest text-white/80 font-medium">Point Balance</span>
-              <h2 className="text-4xl font-extrabold flex items-center gap-2 mt-1">
-                <AnimatedCounter value={balanceData.balance} />
-                <span className="text-xl font-medium text-white/90">Pts</span>
-              </h2>
-            </div>
-            <div className="flex flex-col items-end">
-              <span className="bg-white/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider backdrop-blur-sm flex items-center gap-1.5">
-                <Award size={14} className={pointsInfo.iconColor} /> {pointsInfo.tier} Member
-              </span>
-            </div>
+      {/* ── Balance + Stats ── */}
+      <section style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
+        {/* Balance card */}
+        <div style={{
+          position: 'relative',
+          overflow: 'hidden',
+          borderRadius: T.radius,
+          background: `linear-gradient(135deg, #92400E 0%, ${T.gold} 60%, #D97706 100%)`,
+          padding: '28px 28px 24px',
+          color: '#fff',
+          boxShadow: '0 8px 32px rgba(201,162,39,0.25)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          minHeight: 180,
+        }}>
+          {/* Decorative circles */}
+          <div style={{ position: 'absolute', top: -32, right: -32, width: 160, height: 160, background: 'rgba(255,255,255,0.08)', borderRadius: '50%', pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', bottom: -48, right: 60, width: 100, height: 100, background: 'rgba(255,255,255,0.05)', borderRadius: '50%', pointerEvents: 'none' }} />
+
+          <div>
+            <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.85, fontWeight: 600 }}>Point Balance</span>
+            <h2 style={{ margin: '6px 0 0', fontSize: '3rem', fontWeight: 800, display: 'flex', alignItems: 'baseline', gap: 8, lineHeight: 1 }}>
+              <AnimatedCounter value={balanceData.balance} />
+              <span style={{ fontSize: '1.1rem', fontWeight: 500, opacity: 0.9 }}>pts</span>
+            </h2>
           </div>
 
-          <div className="space-y-2 mt-6">
-            <div className="flex justify-between items-center text-xs text-white/90">
-              <span>Tier progress to next level</span>
-              {pointsInfo.tier !== 'Gold' ? (
-                <span>{pointsInfo.nextTierPoints} points needed</span>
-              ) : (
-                <span>Max tier achieved!</span>
-              )}
-            </div>
-            <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
-              <div className="bg-white h-full rounded-full transition-all duration-1000" style={{ width: `${pointsInfo.currentTierProgress}%` }} />
-            </div>
+          <div style={{ fontSize: '0.78rem', opacity: 0.8, marginTop: 16 }}>
+            <Star size={11} style={{ display: 'inline', marginRight: 4 }} />
+            1 Loyalty Point earned for every 10,000 VND paid at Phūrai checkout
           </div>
         </div>
 
-        {/* Stats Summary Card */}
-        <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
-          <div className="space-y-4">
-            <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Point Statistics</h4>
-            
-            <div className="flex justify-between items-center pb-3 border-b border-gray-50 dark:border-gray-700">
-              <div className="flex items-center gap-2">
-                <TrendingUp size={16} className="text-green-500" />
-                <span className="text-sm text-gray-600 dark:text-gray-300">Total points earned</span>
+        {/* Stats card */}
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: '20px 20px 16px', boxShadow: T.shadow, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 12 }}>
+          <p style={{ margin: 0, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, color: T.textMuted }}>Point Statistics</p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <TrendingUp size={14} style={{ color: T.success }} />
+                <span style={{ fontSize: '0.82rem', color: T.textMuted }}>Total earned</span>
               </div>
-              <span className="font-bold text-gray-800 dark:text-white">+{balanceData.totalEarned.toLocaleString()}</span>
+              <span style={{ fontWeight: 700, fontSize: '0.9rem', color: T.textMain }}>+{(balanceData.totalEarned || 0).toLocaleString()}</span>
             </div>
 
-            <div className="flex justify-between items-center pb-1">
-              <div className="flex items-center gap-2">
-                <Gem size={16} className="text-red-500" />
-                <span className="text-sm text-gray-600 dark:text-gray-300">Total points redeemed</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Gem size={14} style={{ color: T.danger }} />
+                <span style={{ fontSize: '0.82rem', color: T.textMuted }}>Total redeemed</span>
               </div>
-              <span className="font-bold text-gray-800 dark:text-white">-{balanceData.totalRedeemed.toLocaleString()}</span>
+              <span style={{ fontWeight: 700, fontSize: '0.9rem', color: T.textMain }}>-{(balanceData.totalRedeemed || 0).toLocaleString()}</span>
             </div>
           </div>
-
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">
-            * 1 Loyalty Point is earned for every 10,000 VND paid at Phūrai checkout.
-          </p>
         </div>
       </section>
 
-      {/* Rewards Catalog */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2 border-b border-gray-100 dark:border-gray-700 pb-3">
-          <Ticket className="text-yellow-500" />
-          <h3 className="text-lg font-bold text-black">Exchange Rewards Catalog</h3>
-        </div>
+      {/* ── Rewards Catalog ── */}
+      <section>
+        <SectionHeader icon={Ticket} title="Exchange Rewards Catalog" />
 
         {catalog.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400 text-sm py-4">No rewards available at the moment. Check back soon!</p>
+          <p style={{ color: T.textMuted, fontSize: '0.875rem', margin: '12px 0' }}>No rewards available at the moment. Check back soon!</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
             {catalog.map((promo) => {
               const userPoints = balanceData.balance || 0;
-              const hasEnoughPoints = userPoints >= promo.points_required;
-              const isOutOfStock = promo.remaining_quantity !== null && promo.remaining_quantity <= 0;
-              
+              const canRedeem = userPoints >= promo.points_required;
+              const outOfStock = promo.remaining_quantity !== null && promo.remaining_quantity <= 0;
+
               return (
-                <div key={promo.promotion_id} className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between space-y-4 relative">
-                  {isOutOfStock && (
-                    <span className="absolute top-3 right-3 bg-red-100 text-red-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+                <div key={promo.promotion_id} style={{
+                  background: T.surface,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: T.radius,
+                  padding: 20,
+                  boxShadow: T.shadow,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  gap: 14,
+                  position: 'relative',
+                  transition: 'box-shadow 0.2s, transform 0.2s',
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.boxShadow = T.shadowHover; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.boxShadow = T.shadow; e.currentTarget.style.transform = 'none'; }}
+                >
+                  {outOfStock && (
+                    <span style={{ position: 'absolute', top: 12, right: 12, background: '#FEE2E2', color: T.danger, fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '2px 8px', borderRadius: 99 }}>
                       Sold out
                     </span>
                   )}
-                  
-                  <div className="space-y-2">
-                    <span className="text-xs font-semibold px-2 py-1 rounded bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400">
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <span style={{ display: 'inline-block', background: T.goldLight, color: '#92400E', fontSize: '0.72rem', fontWeight: 700, padding: '3px 10px', borderRadius: 99 }}>
                       {promo.points_required} Points
                     </span>
-                    <h4 className="font-bold text-gray-800 dark:text-white text-base mt-2">{promo.promotion_name}</h4>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{promo.description || 'Redeem points for exclusive restaurant benefits.'}</p>
+                    <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: T.textMain }}>{promo.promotion_name}</h4>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: T.textMuted, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {promo.description || 'Redeem points for exclusive restaurant benefits.'}
+                    </p>
                   </div>
 
-                  <div className="pt-2 flex justify-between items-center text-xs text-gray-400 dark:text-gray-500 border-t border-gray-50 dark:border-gray-700/60">
+                  <div style={{ paddingTop: 10, borderTop: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: T.textMuted }}>
                     <span>Target: {promo.applicable_to === 'Both' ? 'All checkouts' : `${promo.applicable_to} only`}</span>
-                    {promo.remaining_quantity !== null && (
-                      <span>Stock: {promo.remaining_quantity} left</span>
-                    )}
+                    {promo.remaining_quantity !== null && <span>Stock: {promo.remaining_quantity} left</span>}
                   </div>
 
                   <button
                     onClick={() => setSelectedVoucher(promo)}
-                    disabled={!hasEnoughPoints || isOutOfStock}
-                    className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all ${
-                      hasEnoughPoints && !isOutOfStock
-                        ? 'bg-yellow-500 hover:bg-yellow-600 text-white shadow-sm hover:shadow'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                    }`}
+                    disabled={!canRedeem || outOfStock}
+                    style={{
+                      width: '100%',
+                      padding: '10px 0',
+                      border: 'none',
+                      borderRadius: T.radiusSm,
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      cursor: canRedeem && !outOfStock ? 'pointer' : 'not-allowed',
+                      background: canRedeem && !outOfStock
+                        ? `linear-gradient(135deg, #92400E, ${T.gold})`
+                        : T.border,
+                      color: canRedeem && !outOfStock ? '#fff' : T.textMuted,
+                      transition: 'opacity 0.2s',
+                    }}
+                    onMouseEnter={e => { if (canRedeem && !outOfStock) e.currentTarget.style.opacity = '0.88'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
                   >
-                    {!hasEnoughPoints ? 'Insufficient Points' : isOutOfStock ? 'Sold Out' : 'Redeem Now'}
+                    {!canRedeem ? 'Insufficient Points' : outOfStock ? 'Sold Out' : 'Redeem Now'}
                   </button>
                 </div>
               );
@@ -353,24 +336,33 @@ export default function LoyaltyPointsPage() {
         )}
       </section>
 
-      {/* User Vouchers List */}
-      <section className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 border-b border-gray-100 dark:border-gray-700 pb-3">
-          <div className="flex items-center gap-2">
-            <Ticket className="text-yellow-500" />
-            <h3 className="text-lg font-bold text-black">My Vouchers</h3>
+      {/* ── My Vouchers ── */}
+      <section>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, borderBottom: `1px solid ${T.border}`, marginBottom: 20, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Ticket size={18} style={{ color: T.gold }} />
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: T.textMain }}>My Vouchers</h3>
           </div>
-          
-          <div className="flex bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg text-xs self-start sm:self-auto">
-            {['active', 'used', 'expired'].map((tab) => (
+
+          {/* Tab switcher */}
+          <div style={{ display: 'flex', background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 3, gap: 2 }}>
+            {['active', 'used', 'expired'].map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-1.5 rounded-md font-semibold capitalize transition-all ${
-                  activeTab === tab
-                    ? 'bg-white dark:bg-gray-700 text-gray-800 dark:text-white shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                }`}
+                style={{
+                  padding: '5px 14px',
+                  border: 'none',
+                  borderRadius: 7,
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textTransform: 'capitalize',
+                  transition: 'all 0.15s',
+                  background: activeTab === tab ? T.surface : 'transparent',
+                  color: activeTab === tab ? T.textMain : T.textMuted,
+                  boxShadow: activeTab === tab ? T.shadow : 'none',
+                }}
               >
                 {tab}
               </button>
@@ -379,41 +371,46 @@ export default function LoyaltyPointsPage() {
         </div>
 
         {filteredVouchers.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400 text-sm py-4">No {activeTab} vouchers found.</p>
+          <p style={{ color: T.textMuted, fontSize: '0.875rem', margin: '8px 0' }}>No {activeTab} vouchers found.</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filteredVouchers.map((voucher) => (
-              <div key={voucher.customer_voucher_id} className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl p-5 shadow-sm flex flex-col justify-between space-y-4 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-500/5 rounded-full pointer-events-none translate-x-8 -translate-y-8" />
-                
-                <div className="flex justify-between items-start gap-4">
-                  <div className="space-y-1">
-                    <h5 className="font-bold text-gray-800 dark:text-white text-sm">{voucher.promotion_name}</h5>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{voucher.description}</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+            {filteredVouchers.map(voucher => (
+              <div key={voucher.customer_voucher_id} style={{
+                background: T.surface,
+                border: `1px solid ${T.border}`,
+                borderRadius: T.radius,
+                padding: 20,
+                boxShadow: T.shadow,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 14,
+                position: 'relative',
+                overflow: 'hidden',
+              }}>
+                {/* Decorative circle */}
+                <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, background: `${T.gold}0A`, borderRadius: '50%', pointerEvents: 'none' }} />
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <h5 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: T.textMain }}>{voucher.promotion_name}</h5>
+                    <p style={{ margin: 0, fontSize: '0.78rem', color: T.textMuted }}>{voucher.description}</p>
                   </div>
-                  <div className="text-right">
-                    <span className="font-mono bg-yellow-50 dark:bg-yellow-950/20 text-yellow-600 dark:text-yellow-400 px-2.5 py-1 rounded text-xs font-bold border border-yellow-100 dark:border-yellow-900/30">
-                      {voucher.voucher_code}
-                    </span>
-                  </div>
+                  <span style={{ fontFamily: 'monospace', background: T.goldLight, color: '#92400E', padding: '4px 10px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 700, border: `1px solid #FDE68A`, flexShrink: 0 }}>
+                    {voucher.voucher_code}
+                  </span>
                 </div>
 
-                <div className="pt-3 border-t border-gray-50 dark:border-gray-700/60 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
+                <div style={{ paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
                   {voucher.status === 'active' ? (
-                    <VoucherCountdown 
-                      expiryDate={voucher.expires_at} 
-                      onExpired={() => {
-                        // reload
-                        loadLoyaltyData();
-                      }}
-                    />
+                    <VoucherCountdown expiryDate={voucher.expires_at} onExpired={() => loadLoyaltyData()} />
                   ) : voucher.status === 'used' ? (
-                    <span className="text-gray-500 flex items-center gap-1 font-medium">
-                      <CheckCircle2 size={12} className="text-gray-500" /> Used on {voucher.used_at ? format(new Date(voucher.used_at), 'MMM d, yyyy') : 'checkout'}
+                    <span style={{ fontSize: '0.78rem', color: T.textMuted, display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <CheckCircle2 size={12} style={{ color: T.success }} />
+                      Used on {voucher.used_at ? format(new Date(voucher.used_at), 'MMM d, yyyy') : 'checkout'}
                     </span>
                   ) : (
-                    <span className="text-red-500 font-medium">
-                      Expired on {format(new Date(voucher.expires_at), 'MMM d, yyyy')}
+                    <span style={{ fontSize: '0.78rem', color: T.danger, fontWeight: 500 }}>
+                      Expired {format(new Date(voucher.expires_at), 'MMM d, yyyy')}
                     </span>
                   )}
                 </div>
@@ -423,57 +420,78 @@ export default function LoyaltyPointsPage() {
         )}
       </section>
 
-      {/* Confirmation Modal */}
+      {/* ── Confirmation Modal ── */}
       {selectedVoucher && createPortal(
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-6 animate-scale-up text-gray-800 dark:text-white">
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-500 rounded-full flex items-center justify-center mx-auto">
-                <Gem size={24} />
+        <div style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(43,33,24,0.55)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+        }}>
+          <div style={{
+            background: T.surface,
+            border: `1px solid ${T.border}`,
+            borderRadius: 20,
+            maxWidth: 400,
+            width: '100%',
+            padding: 28,
+            boxShadow: '0 20px 60px rgba(43,33,24,0.18)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 20,
+          }}>
+            {/* Header */}
+            <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 52, height: 52, background: T.goldLight, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Gem size={24} style={{ color: T.gold }} />
               </div>
-              <h3 className="text-lg font-bold">Confirm Points Exchange</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Are you sure you want to exchange points for this voucher?</p>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: T.textMain }}>Confirm Points Exchange</h3>
+              <p style={{ margin: 0, fontSize: '0.82rem', color: T.textMuted }}>This action cannot be undone. Your points will be deducted immediately.</p>
             </div>
 
-            <div className="bg-gray-50 dark:bg-gray-900 rounded-2xl p-4 space-y-3 text-xs">
-              <div className="flex justify-between items-center text-gray-600 dark:text-gray-400">
-                <span>Current points balance</span>
-                <span className="font-semibold">{(balanceData.balance || 0).toLocaleString()} Pts</span>
+            {/* Summary */}
+            <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: T.textMuted }}>
+                <span>Current balance</span>
+                <span style={{ fontWeight: 600, color: T.textMain }}>{(balanceData.balance || 0).toLocaleString()} pts</span>
               </div>
-              
-              <div className="flex justify-between items-center text-red-500">
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: T.danger }}>
                 <span>Points to deduct</span>
-                <span className="font-semibold">-{selectedVoucher.points_required} Pts</span>
+                <span style={{ fontWeight: 600 }}>−{selectedVoucher.points_required} pts</span>
               </div>
-
-              <div className="border-t border-gray-200 dark:border-gray-700 pt-3 flex justify-between items-center text-sm font-bold">
+              <div style={{ paddingTop: 10, borderTop: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: 700, color: T.textMain }}>
                 <span>Remaining balance</span>
-                <span className="text-green-500">
-                  <AnimatedCounter value={(balanceData.balance || 0) - selectedVoucher.points_required} /> Pts
-                </span>
+                <span style={{ color: T.success }}><AnimatedCounter value={(balanceData.balance || 0) - selectedVoucher.points_required} /> pts</span>
               </div>
             </div>
 
-            <div className="flex gap-4">
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 10 }}>
               <button
                 onClick={() => setSelectedVoucher(null)}
                 disabled={exchanging}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                style={{ flex: 1, padding: '11px 0', border: `1px solid ${T.border}`, borderRadius: T.radiusSm, background: T.surface, color: T.textMuted, fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', transition: 'background 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.background = T.bg; }}
+                onMouseLeave={e => { e.currentTarget.style.background = T.surface; }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleRedeem}
                 disabled={exchanging}
-                className="flex-1 py-2.5 rounded-xl bg-yellow-500 hover:bg-yellow-600 disabled:bg-yellow-400 text-white text-xs font-bold shadow-md shadow-yellow-500/10 flex items-center justify-center gap-1.5 transition"
+                style={{
+                  flex: 1, padding: '11px 0', border: 'none', borderRadius: T.radiusSm,
+                  background: `linear-gradient(135deg, #92400E, ${T.gold})`,
+                  color: '#fff', fontSize: '0.85rem', fontWeight: 700,
+                  cursor: exchanging ? 'not-allowed' : 'pointer',
+                  opacity: exchanging ? 0.7 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  transition: 'opacity 0.15s',
+                }}
               >
-                {exchanging ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" /> Exchanging...
-                  </>
-                ) : (
-                  'Confirm'
-                )}
+                {exchanging ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Exchanging…</> : 'Confirm Exchange'}
               </button>
             </div>
           </div>

@@ -5,8 +5,18 @@ function AuthSuccessOverlay({ isVisible, user, fading = false }) {
   if (!isVisible) {
     return null;
   }
+  const displayName = getDisplayName(user);
+  
+  // Decide whether to show "Welcome" or "Welcome Back," based on lastLoginAt.
+  const isFirstLogin = !user?.lastLoginAt;
+  const greetingPrefix = isFirstLogin ? "Welcome" : "Welcome Back,";
 
-  const name = getDisplayName(user);
+  // Check if it is a staff/manager/admin account (Roles 2, 3, 4)
+  const isStaffAccount = user?.roleId === 2 || user?.roleId === 3 || user?.roleId === 4;
+  let rolePrefix = "";
+  if (isStaffAccount && user?.roleName) {
+    rolePrefix = user.roleName === "Restaurant Staff" ? "Staff " : `${user.roleName} `;
+  }
 
   return createPortal(
     <div
@@ -24,7 +34,7 @@ function AuthSuccessOverlay({ isVisible, user, fading = false }) {
           </svg>
         </div>
         <p className="auth-welcome__line">
-          Welcome <span className="auth-welcome__name">{name}</span> to Phūrai
+          {greetingPrefix} <span className="auth-welcome__name">{rolePrefix}{displayName}</span> to <span className="auth-welcome__logo">Phūrai</span>
         </p>
       </div>
     </div>,

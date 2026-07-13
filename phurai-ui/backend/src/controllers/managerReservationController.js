@@ -45,6 +45,7 @@ export const getPendingReservations = async (req, res) => {
          r.reservation_end_at,
          r.guest_count,
          r.special_request,
+         r.occasion,
          r.reservation_status,
          r.reservation_source,
          r.created_at,
@@ -60,7 +61,7 @@ export const getPendingReservations = async (req, res) => {
        GROUP BY
          r.reservation_id, ua.full_name, r.contact_name, ua.phone, r.contact_phone,
          ua.email, r.contact_email, r.reservation_start_at, r.reservation_end_at,
-         r.guest_count, r.special_request, r.reservation_status, r.reservation_source,
+         r.guest_count, r.special_request, r.occasion, r.reservation_status, r.reservation_source,
          r.created_at, r.preferred_area_id, a.area_name
        ORDER BY r.reservation_start_at ASC`
     );
@@ -76,6 +77,73 @@ export const getPendingReservations = async (req, res) => {
 // ============================================================================
 export const getAllReservations = async (req, res) => {
   try {
+    const { page = 1, limit = 20, search = "", status = "all", startDate, endDate } = req.query;
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 20;
+    const offset = (pageNum - 1) * limitNum;
+
+    let whereConditions = ["1 = 1"];
+    let queryParams = [];
+
+    // Filter by status group or specific status
+    if (status !== "all" && status) {
+      if (status === "Pending") {
+        whereConditions.push("r.reservation_status IN (?, ?, ?)");
+        queryParams.push("Pending Request", "Awaiting Deposit", "Payment Pending");
+      } else if (status === "Upcoming") {
+        whereConditions.push("r.reservation_status = ?");
+        queryParams.push("Confirmed");
+      } else if (status === "In Progress") {
+        whereConditions.push("r.reservation_status IN (?, ?)");
+        queryParams.push("Check-in", "Dining");
+      } else if (status === "Completed") {
+        whereConditions.push("r.reservation_status = ?");
+        queryParams.push("Completed");
+      } else if (status === "Cancelled/Rejected") {
+        whereConditions.push("r.reservation_status IN (?, ?)");
+        queryParams.push("Cancelled", "No Show");
+      } else {
+        whereConditions.push("r.reservation_status = ?");
+        queryParams.push(status);
+      }
+    }
+
+    // Filter by date range
+    if (startDate && startDate !== "null") {
+      whereConditions.push("CAST(r.reservation_start_at AS DATE) >= ?");
+      queryParams.push(startDate);
+    }
+    if (endDate && endDate !== "null") {
+      whereConditions.push("CAST(r.reservation_start_at AS DATE) <= ?");
+      queryParams.push(endDate);
+    }
+
+    // Filter by search
+    if (search) {
+      whereConditions.push(`(
+        CAST(r.reservation_id AS VARCHAR) LIKE ? OR
+        ua.full_name LIKE ? OR
+        r.contact_name LIKE ? OR
+        ua.phone LIKE ? OR
+        r.contact_phone LIKE ?
+      )`);
+      const searchWild = `%${search}%`;
+      queryParams.push(searchWild, searchWild, searchWild, searchWild, searchWild);
+    }
+
+    const whereClause = whereConditions.join(" AND ");
+
+    // Get total count
+    const [countRows] = await pool.query(
+      `SELECT COUNT(DISTINCT r.reservation_id) AS totalCount
+       FROM dbo.Reservations r
+       LEFT JOIN dbo.UserAccounts ua ON r.customer_id = ua.user_id
+       WHERE ${whereClause}`,
+      queryParams
+    );
+    const totalCount = countRows[0]?.totalCount || 0;
+    const totalPages = Math.ceil(totalCount / limitNum);
+
     const [rows] = await pool.query(
       `SELECT
          r.reservation_id,
@@ -87,6 +155,7 @@ export const getAllReservations = async (req, res) => {
          r.reservation_end_at,
          r.guest_count,
          r.special_request,
+         r.occasion,
          r.reservation_status,
          CASE WHEN r.has_pending_request = 1
               THEN N'Request'
@@ -111,10 +180,11 @@ export const getAllReservations = async (req, res) => {
        LEFT JOIN dbo.RestaurantAreas a ON r.preferred_area_id = a.area_id
        LEFT JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
        LEFT JOIN dbo.RestaurantTables t ON rt.table_id = t.table_id
+       WHERE ${whereClause}
        GROUP BY
          r.reservation_id, r.customer_id, ua.full_name, r.contact_name, ua.phone, r.contact_phone,
          ua.email, r.contact_email, r.reservation_start_at, r.reservation_end_at,
-         r.guest_count, r.special_request, r.reservation_status, r.reservation_source,
+         r.guest_count, r.special_request, r.occasion, r.reservation_status, r.reservation_source,
          r.created_at, r.confirmed_at, r.checked_in_at, r.cancelled_at,
          r.cancel_reason, r.resolved_at, a.area_name,
          r.has_pending_request, r.request_type, r.edit_used_count, r.pending_changes_json
@@ -130,14 +200,25 @@ export const getAllReservations = async (req, res) => {
            WHEN N'Reject Request' THEN 8
            ELSE 9
          END ASC,
-         r.reservation_start_at ASC`
+         r.reservation_start_at DESC
+       OFFSET ? ROWS
+       FETCH NEXT ? ROWS ONLY`,
+      [...queryParams, offset, limitNum]
     );
-    res.json({ success: true, reservations: rows });
+
+    res.json({
+      success: true,
+      reservations: rows,
+      totalCount,
+      totalPages,
+      currentPage: pageNum
+    });
   } catch (error) {
     console.error("[CRITICAL BACKEND ERROR]: getAllReservations:", error.message, error.stack);
     res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
+
 
 // ============================================================================
 // GET /api/manager/reservations/:id
@@ -157,6 +238,7 @@ export const getReservationDetails = async (req, res) => {
          r.reservation_end_at,
          r.guest_count,
          r.special_request,
+         r.occasion,
          r.reservation_status,
          r.reservation_source,
          r.created_at,
@@ -764,11 +846,18 @@ export const updateReservation = async (req, res) => {
     "reservation_start_at", "reservation_end_at",
     "guest_count", "special_request", "reservation_status",
     "preferred_area_id", "table_id",
-    "contact_name", "contact_phone", "contact_email"
+    "contact_name", "contact_phone", "contact_email",
+    "occasion", "dining_purpose"
   ];
 
   const fieldEntries = [];
+  let occasionValue = req.body.occasion !== undefined ? req.body.occasion : (req.body.dining_purpose !== undefined ? req.body.dining_purpose : undefined);
+  if (occasionValue !== undefined) {
+    fieldEntries.push({ field: "occasion", value: occasionValue });
+  }
+
   for (const field of allowedFields) {
+    if (field === "occasion" || field === "dining_purpose") continue;
     if (req.body[field] !== undefined) {
       fieldEntries.push({ field, value: req.body[field] });
     }
@@ -1227,7 +1316,7 @@ export const resolveEditRequest = async (req, res) => {
     if (isConfirm) {
       // ── CONFIRM: apply changes ────────────────────────────────────────────
       // Build UPDATE SET clauses from pendingChanges
-      const allowedFields = ["guest_count", "reservation_start_at", "reservation_end_at", "special_request", "preferred_area_id"];
+      const allowedFields = ["guest_count", "reservation_start_at", "reservation_end_at", "special_request", "preferred_area_id", "occasion"];
       const setClauses = [];
       const reqUpdate = new sql.Request(transaction);
 
@@ -1248,6 +1337,9 @@ export const resolveEditRequest = async (req, res) => {
         } else if (field === "preferred_area_id") {
           reqUpdate.input("area_new", sql.SmallInt, parseInt(value, 10));
           setClauses.push("preferred_area_id = @area_new");
+        } else if (field === "occasion") {
+          reqUpdate.input("occ_new", sql.NVarChar, String(value));
+          setClauses.push("occasion = @occ_new");
         }
       }
 

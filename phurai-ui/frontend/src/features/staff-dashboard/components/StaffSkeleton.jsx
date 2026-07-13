@@ -220,7 +220,7 @@ export function TableCardSkeleton({ count = 12 }) {
  *     <YourContent />
  *   </SkeletonPresence>
  */
-export function SkeletonPresence({ loading, skeleton, children }) {
+export function SkeletonPresence({ loading, skeleton, children, className }) {
   return (
     <AnimatePresence mode="wait">
       {loading
@@ -228,6 +228,7 @@ export function SkeletonPresence({ loading, skeleton, children }) {
         : (
           <motion.div
             key="sk-content"
+            className={className}
             variants={fadeScaleVariants}
             initial="hidden"
             animate="visible"

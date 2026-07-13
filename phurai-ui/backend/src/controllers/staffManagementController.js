@@ -7,8 +7,8 @@ import bcrypt from 'bcryptjs';
 const getRoleId = (roleName) => {
     switch(roleName) {
         case 'Restaurant Staff': return 2;
-        case 'Manager': return 4;
-        case 'Admin': return 5;
+        case 'Manager': return 3;
+        case 'Admin': return 4;
         default: return 2; // Default to Restaurant Staff
     }
 };
@@ -158,8 +158,8 @@ export const updateStaffAccount = async (req, res) => {
             const oldRoleId = userCheck.recordset[0].role_id;
             const oldIsActive = userCheck.recordset[0].is_active;
 
-            // Active duty check (role_id=3 Kitchen Staff check removed — KDS is device-based)
-            if (oldRoleId === 2 || oldRoleId === 4 || oldRoleId === 5) {
+            // Active duty check
+            if (oldRoleId === 2 || oldRoleId === 3 || oldRoleId === 4) {
                 const restaurantCheck = await transaction.request()
                     .input('userId', sql.Int, userId)
                     .query(`
@@ -269,8 +269,8 @@ export const deleteStaffAccount = async (req, res) => {
             
             const oldRoleId = userCheck.recordset[0].role_id;
 
-            // Active duty check before deleting (role_id=3 check removed — KDS is device-based)
-            if (oldRoleId === 2 || oldRoleId === 4 || oldRoleId === 5) {
+            // Active duty check before deleting
+            if (oldRoleId === 2 || oldRoleId === 3 || oldRoleId === 4) {
 
                 const restaurantCheck = await transaction.request()
                     .input('userId', sql.Int, userId)

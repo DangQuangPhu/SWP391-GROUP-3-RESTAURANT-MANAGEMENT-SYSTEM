@@ -156,13 +156,20 @@ export function authHeaders(extra = {}) {
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
+  // Inject user ID header automatically if a session exists in local dev
+  const user = loadAuthUser();
+  const userId = user?.id ?? user?.userId ?? user?.user_id;
+  if (userId) {
+    headers["X-User-Id"] = String(userId);
+  }
   return headers;
 }
 
 export function profileRequestHeaders(userId, extra = {}) {
   const headers = authHeaders(extra);
-  if (userId) {
-    headers["X-User-Id"] = String(userId);
+  const resolvedId = userId ?? loadAuthUser()?.id ?? loadAuthUser()?.userId ?? loadAuthUser()?.user_id;
+  if (resolvedId) {
+    headers["X-User-Id"] = String(resolvedId);
   }
   return headers;
 }

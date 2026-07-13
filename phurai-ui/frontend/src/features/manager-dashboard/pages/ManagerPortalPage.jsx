@@ -509,13 +509,8 @@ function ManagerPortalPage({
     if (!hasAccess || !socket) return;
 
     const handleNewReservation = (payload) => {
-      // ── Normalise raw socket payload → canonical ReservationRow shape ──────
-      // The DB stores everything in special_request as a tagged string, e.g.:
-      //   "[Dining Purpose: Birthday] [Hold: 30m]"
-      // We parse the occasion out and keep the rest as notes.
       const rawSpecial = payload.special_request || "";
-      const occasionMatch = rawSpecial.match(/\[Dining Purpose:\s*([^\]]+)\]/i);
-      const occasion = occasionMatch ? occasionMatch[1].trim() : (payload.occasion || "—");
+      const occasion = payload.occasion || "—";
 
       // Derive reservation_date and start_time from reservation_start_at if not
       // already present (real-time payloads include them; history rows may not).

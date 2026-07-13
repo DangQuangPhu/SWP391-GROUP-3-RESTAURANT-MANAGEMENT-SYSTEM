@@ -38,6 +38,7 @@ import {
   assignTable,
   createWalkInReservation,
 } from "../controllers/staffReservationController.js";
+import { updateReservation } from "../controllers/managerReservationController.js";
 import {
   mergeTables,
   unmergeTable,
@@ -831,108 +832,387 @@ router.get("/staff", async (_req, res) => {
 
 router.get("/reports/revenue", async (_req, res) => {
   try {
-    const today = new Date();
+    const [rows] = await pool.query(`
+      SELECT 
+        FORMAT(d.date_day, 'yyyy-MM-dd') AS date,
+        ISNULL(p.revenue, 0) AS revenue,
+        ISNULL(r.reservations, 0) AS reservations
+      FROM (
+        SELECT DATEADD(day, -number, CAST(SYSDATETIME() AS DATE)) AS date_day
+        FROM master.dbo.spt_values
+        WHERE type = 'P' AND number <= 365
+      ) d
+      LEFT JOIN (
+        SELECT CAST(paid_at AS DATE) AS paid_date, SUM(amount_paid) AS revenue
+        FROM dbo.Payments
+        WHERE payment_status = N'Completed'
+          AND paid_at >= DATEADD(day, -365, CAST(SYSDATETIME() AS DATE))
+        GROUP BY CAST(paid_at AS DATE)
+      ) p ON d.date_day = p.paid_date
+      LEFT JOIN (
+        SELECT CAST(reservation_start_at AS DATE) AS res_date, COUNT(*) AS reservations
+        FROM dbo.Reservations
+        WHERE reservation_status <> N'Cancelled'
+          AND reservation_start_at >= DATEADD(day, -365, CAST(SYSDATETIME() AS DATE))
+        GROUP BY CAST(reservation_start_at AS DATE)
+      ) r ON d.date_day = r.res_date
+      ORDER BY d.date_day ASC;
+    `);
 
-    const [snapshotRows] = await pool.query(
-      `SELECT TOP 1 snapshot_json, report_type, report_date
-       FROM dbo.ReportSnapshots
-       WHERE report_type IN (N'Daily Revenue', N'Weekly Revenue', N'Monthly Revenue')
-       ORDER BY generated_at DESC;`
-    );
-
-    if (snapshotRows[0]?.snapshot_json) {
-      try {
-        const parsed = JSON.parse(snapshotRows[0].snapshot_json);
-        if (parsed && (parsed.day || parsed.week || parsed.month)) {
-          return jsonOk(res, {
-            source: "snapshot",
-            snapshot_type: snapshotRows[0].report_type,
-            snapshot_date: snapshotRows[0].report_date,
-            series: {
-              day: parsed.day || [],
-              week: parsed.week || [],
-              month: parsed.month || [],
-            },
-          });
-        }
-      } catch {
-        /* fall through to live aggregation */
-      }
-    }
-
-    const [hourlyRows] = await pool.query(
-      `SELECT
-         DATEPART(hour, p.paid_at) AS bucket_hour,
-         ISNULL(SUM(p.amount_paid), 0) AS revenue
-       FROM dbo.Payments p
-       WHERE p.payment_status = N'Completed'
-         AND p.paid_at IS NOT NULL
-         AND CAST(p.paid_at AS DATE) = CAST(SYSDATETIME() AS DATE)
-       GROUP BY DATEPART(hour, p.paid_at)
-       ORDER BY bucket_hour ASC;`
-    );
-
-    const [dailyRows] = await pool.query(
-      `SELECT
-         CAST(p.paid_at AS DATE) AS bucket_date,
-         ISNULL(SUM(p.amount_paid), 0) AS revenue
-       FROM dbo.Payments p
-       WHERE p.payment_status = N'Completed'
-         AND p.paid_at IS NOT NULL
-         AND CAST(p.paid_at AS DATE) >= DATEADD(day, -6, CAST(SYSDATETIME() AS DATE))
-       GROUP BY CAST(p.paid_at AS DATE)
-       ORDER BY bucket_date ASC;`
-    );
-
-    const [weeklyRows] = await pool.query(
-      `SELECT
-         DATEPART(week, p.paid_at) AS bucket_week,
-         MIN(CAST(p.paid_at AS DATE)) AS week_start,
-         ISNULL(SUM(p.amount_paid), 0) AS revenue
-       FROM dbo.Payments p
-       WHERE p.payment_status = N'Completed'
-         AND p.paid_at IS NOT NULL
-         AND p.paid_at >= DATEADD(week, -3, CAST(SYSDATETIME() AS DATE))
-       GROUP BY DATEPART(week, p.paid_at), YEAR(p.paid_at)
-       ORDER BY week_start ASC;`
-    );
-
-    const formatHourLabel = (hour) => {
-      const h = toNumber(hour);
-      if (h === 0) return "12a";
-      if (h < 12) return `${h}a`;
-      if (h === 12) return "12p";
-      return `${h - 12}p`;
-    };
-
-    const day = hourlyRows.map((row) => ({
-      label: formatHourLabel(row.bucket_hour),
-      value: Math.round((toNumber(row.revenue) / 1_000_000) * 10) / 10,
-    }));
-
-    const weekDayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const week = dailyRows.map((row) => {
-      const date = parseDbDate(row.bucket_date);
-      const label = date ? weekDayNames[date.getDay()] : String(row.bucket_date);
-      return {
-        label,
-        value: Math.round((toNumber(row.revenue) / 1_000_000) * 10) / 10,
-      };
-    });
-
-    const month = weeklyRows.map((row, index) => ({
-      label: `W${index + 1}`,
-      value: Math.round((toNumber(row.revenue) / 1_000_000) * 10) / 10,
-    }));
-
-    return jsonOk(res, {
-      source: "live",
-      as_of: today.toISOString(),
-      series: { day, week, month },
-    });
+    return jsonOk(res, rows);
   } catch (error) {
     console.error("Staff reports/revenue failed:", error);
     return jsonError(res, "Could not load revenue report.");
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/* Phase 1 — Change Request Workflow (Staff Endpoints)                 */
+/* ------------------------------------------------------------------ */
+
+// Price tier rank map for financial impact computation
+const TIER_RANK = { Standard: 0, Premium: 1, VIP: 2 };
+
+/**
+ * GET /api/staff/reservation-requests
+ * Returns pending change requests for Staff review.
+ * Query params: status (default 'Pending'), page, limit
+ */
+router.get("/reservation-requests", resolveUserId, requireUserId, async (req, res) => {
+  try {
+    const status = req.query.status || "Pending";
+    const page   = Math.max(1, Number(req.query.page) || 1);
+    const limit  = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+
+    const [rows] = await pool.query(
+      `SELECT
+         rcr.request_id,
+         rcr.reservation_id,
+         rcr.request_type,
+         rcr.reason,
+         rcr.request_status,
+         rcr.requires_financial_approval,
+         rcr.created_at,
+         rcr.requested_start_at,
+         rcr.requested_end_at,
+         rcr.requested_party_size,
+         rcr.requested_table_id,
+         -- New table info
+         rt_new.table_number AS new_table_number,
+         rt_new.price_tier   AS new_table_tier,
+         -- Reservation snapshot
+         r.reservation_start_at,
+         r.reservation_end_at,
+         r.guest_count,
+         r.reservation_status,
+         -- Assigned table (current)
+         (SELECT TOP 1 t.table_number FROM dbo.ReservationTables rtbl
+          JOIN dbo.RestaurantTables t ON rtbl.table_id = t.table_id
+          WHERE rtbl.reservation_id = r.reservation_id) AS current_table_number,
+         (SELECT TOP 1 t.price_tier FROM dbo.ReservationTables rtbl
+          JOIN dbo.RestaurantTables t ON rtbl.table_id = t.table_id
+          WHERE rtbl.reservation_id = r.reservation_id) AS current_table_tier,
+         -- Customer info
+         COALESCE(ua.full_name, r.contact_name, N'Guest') AS customer_name,
+         COALESCE(ua.email, r.contact_email) AS customer_email,
+         r.contact_phone
+       FROM dbo.ReservationChangeRequests rcr
+       JOIN dbo.Reservations r ON rcr.reservation_id = r.reservation_id
+       LEFT JOIN dbo.UserAccounts ua ON ua.user_id = rcr.requested_by_customer_id
+       LEFT JOIN dbo.RestaurantTables rt_new ON rt_new.table_id = rcr.requested_table_id
+       WHERE rcr.request_status = ?
+       ORDER BY rcr.created_at ASC
+       OFFSET ? ROWS FETCH NEXT ? ROWS ONLY`,
+      [status, offset, limit]
+    );
+
+    const [[{ total }]] = await pool.query(
+      `SELECT COUNT(*) AS total FROM dbo.ReservationChangeRequests WHERE request_status = ?`,
+      [status]
+    );
+
+    return jsonOk(res, {
+      requests: rows,
+      totalCount: total,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page,
+    });
+  } catch (err) {
+    console.error("[GET /staff/reservation-requests] Error:", err);
+    return jsonError(res, "Could not load reservation requests.");
+  }
+});
+
+/**
+ * PATCH /api/staff/reservations/:id/full-edit
+ * Allows staff to fully edit a reservation using the manager's logic.
+ */
+router.patch("/reservations/:id/full-edit", resolveUserId, requireUserId, updateReservation);
+
+/**
+ * PATCH /api/staff/reservations/:id/direct-edit
+ * Staff direct edit of a reservation with financial impact guard.
+ * Allowed fields: guest_count, reservation_start_at, reservation_end_at, special_request, contact_phone.
+ * Table changes (table_id) are allowed ONLY if no price-tier upgrade; otherwise 403.
+ */
+router.patch("/reservations/:id/direct-edit", resolveUserId, requireUserId, async (req, res) => {
+  const reservationId = Number(req.params.id);
+  const staffId = req.userId;
+  const { table_id: newTableId, guest_count, reservation_start_at, reservation_end_at, special_request, contact_phone } = req.body;
+
+  try {
+    // Load current reservation + assigned table tier
+    const [resRows] = await pool.query(
+      `SELECT r.reservation_id, r.reservation_status, r.guest_count,
+              t.table_id AS current_table_id, t.price_tier AS current_tier
+       FROM dbo.Reservations r
+       LEFT JOIN dbo.ReservationTables rt ON rt.reservation_id = r.reservation_id
+       LEFT JOIN dbo.RestaurantTables t ON t.table_id = rt.table_id
+       WHERE r.reservation_id = ?`,
+      [reservationId]
+    );
+
+    if (resRows.length === 0) {
+      return res.status(404).json({ success: false, code: "NOT_FOUND", message: "Reservation not found." });
+    }
+
+    const current = resRows[0];
+
+    // Financial impact guard — compare price tiers if a table change is requested
+    if (newTableId && newTableId !== current.current_table_id) {
+      const [newTableRows] = await pool.query(
+        `SELECT price_tier FROM dbo.RestaurantTables WHERE table_id = ?`,
+        [newTableId]
+      );
+      if (newTableRows.length === 0) {
+        return res.status(400).json({ success: false, code: "INVALID_TABLE", message: "Requested table not found." });
+      }
+      const newTier = newTableRows[0].price_tier;
+      const currentTierRank = TIER_RANK[current.current_tier ?? "Standard"] ?? 0;
+      const newTierRank     = TIER_RANK[newTier] ?? 0;
+
+      if (newTierRank > currentTierRank) {
+        return res.status(403).json({
+          success: false,
+          code: "REQUIRES_MANAGER_APPROVAL",
+          message: `This table change (${current.current_tier || "Standard"} → ${newTier}) involves a price-tier upgrade and must be approved by a Manager. Create a change request instead.`,
+          current_tier: current.current_tier,
+          requested_tier: newTier,
+        });
+      }
+    }
+
+    // Apply allowed field updates
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const updates = [];
+      const params = [];
+
+      if (guest_count != null) { updates.push("guest_count = ?"); params.push(guest_count); }
+      if (reservation_start_at) { updates.push("reservation_start_at = ?"); params.push(reservation_start_at); }
+      if (reservation_end_at)   { updates.push("reservation_end_at = ?");   params.push(reservation_end_at); }
+      if (special_request != null) { updates.push("special_request = ?"); params.push(special_request); }
+      if (contact_phone != null)   { updates.push("contact_phone = ?");   params.push(contact_phone); }
+
+      if (updates.length > 0) {
+        updates.push("updated_at = SYSDATETIME()");
+        params.push(reservationId);
+        await connection.query(
+          `UPDATE dbo.Reservations SET ${updates.join(", ")} WHERE reservation_id = ?`,
+          params
+        );
+      }
+
+      // Table reassignment (same or lower tier already validated above)
+      if (newTableId && newTableId !== current.current_table_id) {
+        await connection.query(
+          `UPDATE dbo.ReservationTables SET table_id = ? WHERE reservation_id = ?`,
+          [newTableId, reservationId]
+        );
+      }
+
+      // Audit log
+      await connection.query(
+        `INSERT INTO dbo.AuditLogs
+           (user_id, action_name, target_table, target_id, old_value_json, new_value_json, ip_address, created_at)
+         VALUES (?, N'STAFF_DIRECT_EDIT_RESERVATION', N'Reservations', ?, NULL, ?, ?, SYSDATETIME())`,
+        [staffId, reservationId, JSON.stringify(req.body), req.ip || null]
+      );
+
+      await connection.commit();
+      connection.release();
+
+      return jsonOk(res, { message: "Reservation updated successfully." });
+    } catch (err) {
+      try { await connection.rollback(); } catch { /* ignore */ }
+      connection.release();
+      throw err;
+    }
+  } catch (err) {
+    console.error("[PATCH /staff/reservations/:id/direct-edit] Error:", err);
+    return jsonError(res, "Could not update reservation.");
+  }
+});
+
+/**
+ * POST /api/staff/reservation-requests/:id/resolve
+ * Staff resolves a non-financial pending request by applying the change.
+ * Blocked on requires_financial_approval=true requests (403).
+ * Body: { staff_note?: string }
+ */
+router.post("/reservation-requests/:id/resolve", resolveUserId, requireUserId, async (req, res) => {
+  const requestId = Number(req.params.id);
+  const staffId   = req.userId;
+  const { staff_note } = req.body;
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Lock and load the request
+    const [reqRows] = await connection.query(
+      `SELECT
+         rcr.request_id, rcr.reservation_id, rcr.request_type, rcr.request_status,
+         rcr.requires_financial_approval,
+         rcr.requested_table_id, rcr.requested_start_at, rcr.requested_end_at,
+         rcr.requested_party_size,
+         rcr.requested_by_customer_id,
+         r.reservation_status
+       FROM dbo.ReservationChangeRequests rcr WITH (UPDLOCK, ROWLOCK)
+       JOIN dbo.Reservations r ON rcr.reservation_id = rcr.reservation_id
+       WHERE rcr.request_id = ?`,
+      [requestId]
+    );
+
+    if (reqRows.length === 0) {
+      await connection.rollback(); connection.release();
+      return res.status(404).json({ success: false, code: "NOT_FOUND", message: "Request not found." });
+    }
+
+    const rcr = reqRows[0];
+
+    if (rcr.request_status !== "Pending") {
+      await connection.rollback(); connection.release();
+      return res.status(409).json({ success: false, code: "ALREADY_RESOLVED", message: "This request has already been resolved." });
+    }
+
+    if (rcr.requires_financial_approval) {
+      await connection.rollback(); connection.release();
+      return res.status(403).json({
+        success: false,
+        code: "REQUIRES_MANAGER_APPROVAL",
+        message: "This request requires Manager financial approval. Staff cannot resolve it directly.",
+      });
+    }
+
+    // Apply the requested changes to Reservations
+    const resUpdates = [];
+    const resParams  = [];
+
+    if (rcr.request_type === "TableChange" && rcr.requested_table_id) {
+      await connection.query(
+        `UPDATE dbo.ReservationTables SET table_id = ?, assigned_by_staff_id = ?
+         WHERE reservation_id = ?`,
+        [rcr.requested_table_id, staffId, rcr.reservation_id]
+      );
+    }
+    if (rcr.requested_start_at) { resUpdates.push("reservation_start_at = ?"); resParams.push(rcr.requested_start_at); }
+    if (rcr.requested_end_at)   { resUpdates.push("reservation_end_at = ?");   resParams.push(rcr.requested_end_at); }
+    if (rcr.requested_party_size) { resUpdates.push("guest_count = ?"); resParams.push(rcr.requested_party_size); }
+
+    if (resUpdates.length > 0) {
+      resUpdates.push("updated_at = SYSDATETIME()");
+      resParams.push(rcr.reservation_id);
+      await connection.query(
+        `UPDATE dbo.Reservations SET ${resUpdates.join(", ")} WHERE reservation_id = ?`,
+        resParams
+      );
+    }
+
+    // Mark request as StaffResolved
+    await connection.query(
+      `UPDATE dbo.ReservationChangeRequests
+       SET request_status = N'StaffResolved',
+           resolved_by_staff_id = ?,
+           manager_reason = ?,
+           resolved_at = SYSDATETIME()
+       WHERE request_id = ?`,
+      [staffId, staff_note || null, requestId]
+    );
+
+    // Audit log
+    await connection.query(
+      `INSERT INTO dbo.AuditLogs
+         (user_id, action_name, target_table, target_id, old_value_json, new_value_json, ip_address, created_at)
+       VALUES (?, N'STAFF_RESOLVED_CHANGE_REQUEST', N'ReservationChangeRequests', ?, NULL, ?, ?, SYSDATETIME())`,
+      [staffId, requestId, JSON.stringify({ request_type: rcr.request_type, note: staff_note }), req.ip || null]
+    );
+
+    await connection.commit();
+    connection.release();
+
+    // Fire-and-forget: notify customer
+    try {
+      const io = (await import("../socket.js")).getIO();
+      if (io && rcr.requested_by_customer_id) {
+        io.to(`room:user:${rcr.requested_by_customer_id}`).emit("reservation:request_resolved", {
+          reservation_id: rcr.reservation_id,
+          request_id: requestId,
+          request_type: rcr.request_type,
+          decision: "StaffResolved",
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (io) {
+        io.to("room:manager").emit("reservation:request_resolved", {
+          reservation_id: rcr.reservation_id,
+          request_id: requestId,
+          decision: "StaffResolved",
+        });
+      }
+    } catch { /* non-critical */ }
+
+    return jsonOk(res, { message: "Change request resolved and applied successfully." });
+  } catch (err) {
+    try { await connection.rollback(); } catch { /* ignore */ }
+    connection.release();
+    console.error("[POST /staff/reservation-requests/:id/resolve] Error:", err);
+    return jsonError(res, "Could not resolve change request.");
+  }
+});
+
+/**
+ * GET /api/staff/no-show-candidates
+ * Returns reservations past their no-show grace period that still have no check-in.
+ * Does NOT auto-transition — Staff must confirm individually.
+ */
+router.get("/no-show-candidates", resolveUserId, requireUserId, async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT
+         r.reservation_id,
+         r.reservation_status,
+         r.reservation_start_at,
+         r.no_show_grace_minutes,
+         r.guest_count,
+         COALESCE(ua.full_name, r.contact_name, N'Guest') AS customer_name,
+         COALESCE(ua.email, r.contact_email) AS customer_email,
+         r.contact_phone,
+         DATEDIFF(minute, r.reservation_start_at, SYSDATETIME()) AS minutes_past_start
+       FROM dbo.Reservations r
+       LEFT JOIN dbo.UserAccounts ua ON ua.user_id = r.customer_id
+       WHERE r.reservation_status = N'Confirmed'
+         AND r.checked_in_at IS NULL
+         AND SYSDATETIME() > DATEADD(minute, r.no_show_grace_minutes, r.reservation_start_at)
+       ORDER BY r.reservation_start_at ASC`
+    );
+    return jsonOk(res, { candidates: rows, count: rows.length });
+  } catch (err) {
+    console.error("[GET /staff/no-show-candidates] Error:", err);
+    return jsonError(res, "Could not load no-show candidates.");
   }
 });
 

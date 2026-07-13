@@ -817,7 +817,7 @@
 
 .auth-welcome__line {
   margin: 0;
-  font-family: var(--font-serif);
+  font-family: Arial, sans-serif;
   font-size: clamp(1.75rem, 4vw, 2.75rem);
   font-weight: 400;
   line-height: 1.25;
@@ -825,9 +825,15 @@
 }
 
 .auth-welcome__name {
+  font-family: Arial, sans-serif;
+  font-weight: 600;
+  color: #f3e2ac;
+}
+
+.auth-welcome__logo {
   font-family: var(--font-script);
   font-size: clamp(2rem, 5vw, 3.25rem);
-  color: #f3e2ac;
+  color: #ffffff;
 }
 
 .auth-welcome--fade-out {

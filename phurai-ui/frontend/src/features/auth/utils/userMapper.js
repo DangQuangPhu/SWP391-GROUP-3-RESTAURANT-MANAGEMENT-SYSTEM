@@ -28,6 +28,8 @@ export function mapApiUserToFrontend(raw) {
     roleId: raw.role_id ?? raw.roleId,
     roleName: raw.role_name ?? raw.roleName,
     fullName: raw.full_name ?? raw.fullName ?? "",
+    firstName: raw.first_name ?? raw.firstName ?? "",
+    lastName: raw.last_name ?? raw.lastName ?? "",
     email: raw.email ?? "",
     phone: raw.phone ?? raw.phoneNumber ?? "",
     phoneNumber: raw.phone ?? raw.phoneNumber ?? "",
@@ -44,5 +46,6 @@ export function mapApiUserToFrontend(raw) {
     googleAvatarUrl: raw.google_avatar_url ?? raw.googleAvatarUrl ?? "",
     avatarSource: raw.avatar_source ?? raw.avatarSource ?? "",
     created_at: raw.created_at ?? null,
+    lastLoginAt: raw.last_login_at ?? raw.lastLoginAt ?? null,
   };
 }

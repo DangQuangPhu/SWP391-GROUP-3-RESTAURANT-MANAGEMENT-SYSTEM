@@ -384,5 +384,3 @@ function SettingsPage({
 }
 
 export default SettingsPage;
-
-export { resolveSection };

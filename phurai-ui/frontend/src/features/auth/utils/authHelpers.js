@@ -146,17 +146,19 @@ export function composeFullName(firstName, lastName) {
 }
 
 export function getDisplayName(user) {
-  const fromFull = user?.fullName?.trim();
+  const fromFull = user?.fullName?.trim() || user?.full_name?.trim();
   if (fromFull) return fromFull;
-  const composed = composeFullName(user?.firstName, user?.lastName);
+  const composed = composeFullName(user?.firstName || user?.first_name, user?.lastName || user?.last_name);
   if (composed) return composed;
   return user?.username?.trim() || "Guest";
 }
 
 export function getInitials(user) {
-  if (user?.firstName) {
-    const first = user.firstName[0] ?? "";
-    const last = user.lastName?.[0] ?? "";
+  const firstName = user?.firstName || user?.first_name;
+  const lastName = user?.lastName || user?.last_name;
+  if (firstName) {
+    const first = firstName[0] ?? "";
+    const last = lastName?.[0] ?? "";
     return `${first}${last}`.toUpperCase() || "PH";
   }
   const name = getDisplayName(user);

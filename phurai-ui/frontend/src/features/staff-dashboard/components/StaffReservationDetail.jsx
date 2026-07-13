@@ -66,37 +66,7 @@ function fmtDateTime(iso) {
   if (!iso) return "—";
   try { return format(new Date(iso), "dd/MM/yyyy HH:mm"); } catch { return "—"; }
 }
-function parseDiningPurpose(specialRequestRaw) {
-  if (!specialRequestRaw) return null;
-  const specialRequest = specialRequestRaw.trim();
-  const m = specialRequest.match(/\[Dining Purpose:\s*(.+?)\]/i);
-  if (m) return m[1].trim();
-  // Legacy fallback: [Casual Dinner] or [Casual Dinner
-  const mLegacy = specialRequest.match(/^\[([^\]]+)(?:\]|$)/);
-  if (mLegacy && !mLegacy[1].includes(':')) return mLegacy[1].trim();
-  return null;
-}
-function parseNotes(specialRequestRaw) {
-  if (!specialRequestRaw) return null;
-  const specialRequest = specialRequestRaw.trim();
-  const m = specialRequest.match(/\[Notes:\s*(.+?)\]/i);
-  if (m) return m[1].trim();
-  
-  // Legacy fallback: strip all known tags, then strip legacy tag
-  const cleaned = specialRequest
-    .replace(/\[Dining Purpose:[^\]]*\]/gi, "")
-    .replace(/\[Hold:[^\]]*\]/gi, "")
-    .replace(/\[Guest Name:[^\]]*\]/gi, "")
-    .replace(/\[Guest Email:[^\]]*\]/gi, "")
-    .replace(/\[Guest Phone:[^\]]*\]/gi, "")
-    .trim()
-    .replace(/^\[[^\]]+(?:\]|$)\s*/, (match) => {
-      return match.includes(':') ? match : "";
-    })
-    .trim();
-    
-  return cleaned || null;
-}
+
 function parseHoldMinutes(specialRequest) {
   if (!specialRequest) return null;
   const m = specialRequest.match(/\[Hold:\s*(\d+)m\]/i);
@@ -250,8 +220,8 @@ function StaffReservationDetail({ reservation, userId, checkedInAt: checkedInAtP
 
   const checkedInAt = checkedInAtProp || checked_in_at;
 
-  const diningPurpose = dining_purpose || occasion || parseDiningPurpose(special_request);
-  const noteText = parseNotes(special_request || notes) || null;
+  const diningPurpose = dining_purpose || occasion || null;
+  const noteText = special_request || notes || null;
   const holdMins = parseHoldMinutes(special_request);
   const duration = formatDuration(reservation_start_at, reservation_end_at, holdMins);
 

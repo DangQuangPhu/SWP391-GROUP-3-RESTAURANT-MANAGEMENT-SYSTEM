@@ -37,7 +37,6 @@ export default function ReservationDetails({
   selectedTableId,
   onSelectTable,
   tablesLoading,
-  membershipTier,
   isAuthenticated,
   onUpdateForm,
   tableHoldMin = 15
@@ -199,6 +198,7 @@ export default function ReservationDetails({
   })();
 
   const fieldRefs = useRef({});
+  const isTransitioningRef = useRef(false);
 
   const registerRef = useCallback((name) => (el) => {
     fieldRefs.current[name] = el;
@@ -216,7 +216,7 @@ export default function ReservationDetails({
     if (onUpdateForm) onUpdateForm(name, value);
   };
 
-  const handleFocusScroll = (name) => () => scrollFieldIntoView(name);
+
 
   const adjustGuests = (delta) => {
     // Compute new value first (read from current form ref, not inside setForm updater)
@@ -229,8 +229,12 @@ export default function ReservationDetails({
     scrollFieldIntoView('guests');
   };
 
-  const handleConfirmSummary = (e) => {
-    e.preventDefault();
+  const handleConfirmSummary = async (e) => {
+    if (e) e.preventDefault();
+    if (isTransitioningRef.current) {
+      console.log("Already transitioning. Ignoring click.");
+      return;
+    }
     const newErrors = {};
 
     // Validate Guests
@@ -320,16 +324,28 @@ export default function ReservationDetails({
       newErrors.startTime = "Booking start time plus hold duration exceeds midnight.";
     }
 
+    console.log("handleConfirmSummary invoked. newErrors:", newErrors, "isCase3Invalid:", isCase3Invalid, "selectedTableId:", selectedTableId);
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length === 0 && !isCase3Invalid) {
-      const payload = {
-        ...form,
-        selectedTable: selectedTableId
-      };
+      console.log("Validation passed. Calling onContinue with form payload...");
+      isTransitioningRef.current = true;
+      try {
+        const payload = {
+          ...form,
+          selectedTable: selectedTableId
+        };
 
-      if (onContinue) onContinue(payload);
+        if (onContinue) {
+          await onContinue(payload);
+        }
+      } catch (err) {
+        console.error("Transition failed:", err);
+      } finally {
+        isTransitioningRef.current = false;
+      }
     } else {
+      console.log("Validation failed. Errors found:", Object.keys(newErrors));
       // Scroll to the first error
       const firstErrorField = Object.keys(newErrors)[0];
       scrollFieldIntoView(firstErrorField);
@@ -350,7 +366,6 @@ export default function ReservationDetails({
             max={getMaxDateString()}
             value={form.date}
             onChange={(e) => updateField('date', e.target.value)}
-            onFocus={handleFocusScroll('date')}
             className={errors.date ? 'border-red-500 border-2' : ''}
           />
           {errors.date && <p className="text-red-500 text-sm mt-1">{errors.date}</p>}
@@ -370,7 +385,6 @@ export default function ReservationDetails({
                 max="22:00"
                 value={form.startTime}
                 onChange={(e) => handleStartTimeChange(e.target.value)}
-                onFocus={handleFocusScroll('startTime')}
                 className={`w-full px-4 py-2 mt-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 ${errors.startTime ? 'border-red-500 border-2' : 'border-gray-300'}`}
               />
               {errors.startTime && <p className="text-red-500 text-sm mt-1">{errors.startTime}</p>}
@@ -389,7 +403,6 @@ export default function ReservationDetails({
                 max="23:45"
                 value={form.endTime}
                 onChange={(e) => handleEndTimeChange(e.target.value)}
-                onFocus={handleFocusScroll('endTime')}
                 disabled={!form.startTime}
                 className={`w-full px-4 py-2 mt-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 ${errors.endTime ? 'border-red-500 border-2' : 'border-gray-300'} ${!form.startTime ? 'bg-gray-100 cursor-not-allowed' : ''}`}
               />
@@ -456,7 +469,6 @@ export default function ReservationDetails({
                         }}
                         loading={tablesLoading}
                         guestCount={form.guests}
-                        membershipTier={membershipTier}
                         isAuthenticated={isAuthenticated}
                         onNavigateLogin={() => navigate('/login')}
                         onNavigateRegister={() => navigate('/register')}
@@ -508,7 +520,6 @@ export default function ReservationDetails({
                         }}
                         loading={tablesLoading}
                         guestCount={form.guests}
-                        membershipTier={membershipTier}
                         isAuthenticated={isAuthenticated}
                         onNavigateLogin={() => navigate('/login')}
                         onNavigateRegister={() => navigate('/register')}
@@ -529,7 +540,6 @@ export default function ReservationDetails({
           <select
             value={form.duration}
             onChange={(e) => handleDurationChange(e.target.value)}
-            onFocus={handleFocusScroll('duration')}
             className={`w-full px-4 py-2 mt-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 ${errors.duration ? 'border-red-500 border-2' : 'border-gray-300'}`}
           >
             <option value="15">15 Mins</option>
@@ -547,7 +557,6 @@ export default function ReservationDetails({
         <select
           value={form.diningPurpose}
           onChange={(e) => updateField('diningPurpose', e.target.value)}
-          onFocus={handleFocusScroll('diningPurpose')}
         >
           <option>Casual Dinner</option>
           <option>Casual Date</option>
@@ -579,7 +588,6 @@ export default function ReservationDetails({
           placeholder="Your Full Name"
           value={form.fullName}
           onChange={(e) => updateField('fullName', e.target.value)}
-          onFocus={handleFocusScroll('fullName')}
           className={errors.fullName ? 'border-red-500 border-2' : ''}
         />
         {errors.fullName && <p className="text-red-500 text-sm mt-1">{errors.fullName}</p>}
@@ -593,7 +601,6 @@ export default function ReservationDetails({
             placeholder="Your Email"
             value={form.email}
             onChange={(e) => updateField('email', e.target.value)}
-            onFocus={handleFocusScroll('email')}
             className={errors.email ? 'border-red-500 border-2' : ''}
           />
           {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
@@ -605,7 +612,6 @@ export default function ReservationDetails({
             placeholder="Your Phone Number"
             value={form.phone}
             onChange={(e) => updateField('phone', e.target.value)}
-            onFocus={handleFocusScroll('phone')}
             className={errors.phone ? 'border-red-500 border-2' : ''}
           />
           {errors.phone && <p className="text-red-500 text-sm mt-1">{errors.phone}</p>}

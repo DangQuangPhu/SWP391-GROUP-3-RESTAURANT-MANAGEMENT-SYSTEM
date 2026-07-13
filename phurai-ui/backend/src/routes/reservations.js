@@ -2,7 +2,7 @@ import express from "express";
 
 import pool from "../db.js";
 import { resolveUserId, requireUserId } from "../middleware/authMiddleware.js";
-import { getMembershipInfo, canAccessArea } from "../utils/membership.js";
+
 import {
   getKitchenViewPlaceholderTableId,
   getKitchenViewSeatsBooked,
@@ -659,23 +659,8 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
       });
     }
 
-    let assembledSpecialRequest = [];
-    const effectiveDiningPurpose = dining_purpose || occasion;
-    // Only store dining purpose if customer explicitly picked a non-default purpose
-    if (effectiveDiningPurpose && effectiveDiningPurpose.toLowerCase() !== 'casual dinner') {
-      assembledSpecialRequest.push(`[Dining Purpose: ${effectiveDiningPurpose}]`);
-    }
-    // Only store hold time if there's also a real user note
-    const userNoteText = special_request && special_request.trim();
-    if (userNoteText) {
-      if (req.body.hold_time || durationMinutes) {
-        assembledSpecialRequest.push(`[Hold: ${req.body.hold_time || durationMinutes + 'm'}]`);
-      }
-      assembledSpecialRequest.push(`[Notes: ${userNoteText}]`);
-    }
-    const finalSpecialRequest = assembledSpecialRequest.length > 0 
-      ? assembledSpecialRequest.join('\n').slice(0, 1000) 
-      : null;
+    const effectiveDiningPurpose = dining_purpose || occasion || null;
+    const finalSpecialRequest = special_request && special_request.trim() ? special_request.trim() : null;
 
     const connection = await pool.getConnection();
 
@@ -833,7 +818,6 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
         }
       }
 
-      let currentTier = "Bronze";
 
       if (customerId) {
         const [accountRows] = await connection.query(
@@ -848,12 +832,9 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
           console.warn(
             `User id ${customerId} from token does not exist in dbo.UserAccounts. Creating reservation as guest.`
           );
-
           customerId = null;
         }
       }
-
-      // membership_tier removed per Fine-Dining equality architecture
 
       const conflict = kitchenViewBooking
         ? null
@@ -869,19 +850,6 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
           message:
             "This table has just been booked or is unavailable. Please choose another table.",
         });
-      }
-
-      for (const row of checkRows) {
-        const areaName = kitchenViewBooking ? KITCHEN_VIEW_AREA_NAME : row.area_name;
-        if (!canAccessArea(currentTier, areaName)) {
-          await connection.rollback();
-          connection.release();
-
-          return res.status(403).json({
-            success: false,
-            message: "Your membership tier is not eligible for this table.",
-          });
-        }
       }
 
       const totalCapacity = kitchenViewBooking
@@ -906,9 +874,9 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
         `INSERT INTO dbo.Reservations
            (customer_id, contact_name, contact_phone, contact_email, preferred_area_id,
             reservation_start_at, reservation_end_at,
-            guest_count, special_request, reservation_status, reservation_source,
+            guest_count, special_request, occasion, reservation_status, reservation_source,
             confirmed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, N'Online', SYSDATETIME());
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, N'Online', SYSDATETIME());
          SELECT CAST(SCOPE_IDENTITY() AS INT) AS reservation_id;`,
         [
           customerId,
@@ -924,6 +892,7 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
           slotEnd,
           guestCount,
           finalSpecialRequest,
+          effectiveDiningPurpose || null,
           initialStatus
         ]
       );
@@ -1272,6 +1241,7 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
          r.reservation_end_at,
          r.guest_count,
          r.special_request,
+         r.occasion,
          r.reservation_status AS status,
          r.created_at AS created_time,
          r.cancelled_at,
@@ -1355,6 +1325,7 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
         reservation_end_at: r.reservation_end_at,
         guest_count: r.guest_count,
         special_request: r.special_request,
+        occasion: r.occasion,
         reservation_status: r.status,
         status: r.status,
         created_time: r.created_time,

@@ -18,6 +18,7 @@ export const createPreSaveReservation = async (req, res) => {
       preorder_items = [],
       promo_code,
       table_ids = [],
+      dining_purpose,
     } = req.body;
 
     if (!reservation_start_at || !guest_count || table_ids.length === 0) {
@@ -100,6 +101,7 @@ export const createPreSaveReservation = async (req, res) => {
         .input('reservation_end_at', sql.DateTime2, computed_end_at)
         .input('guest_count', sql.TinyInt, guest_count)
         .input('special_request', sql.NVarChar(1000), special_request || null)
+        .input('dining_purpose', sql.NVarChar(100), dining_purpose || null)
         .input('deposit_amount', sql.Decimal(12, 2), deposit_amount)
         .input('final_total', sql.Decimal(12, 2), final_total)
         .input('applied_promo_code', sql.VarChar(50), promo_code || null)
@@ -108,18 +110,18 @@ export const createPreSaveReservation = async (req, res) => {
         .query(`
           INSERT INTO dbo.Reservations (
             order_code, customer_id, contact_name, contact_phone, contact_email,
-            reservation_start_at, reservation_end_at, guest_count, special_request,
+            reservation_start_at, reservation_end_at, guest_count, special_request, dining_purpose,
             deposit_amount, final_total, applied_promo_code,
             reservation_status, reservation_source, created_at, updated_at,
-            reminder_sent, has_pending_request, edit_used_count
+            reminder_sent, edit_used_count
           )
           OUTPUT inserted.reservation_id
           VALUES (
             @order_code, @customer_id, @contact_name, @contact_phone, @contact_email,
-            @reservation_start_at, @reservation_end_at, @guest_count, @special_request,
+            @reservation_start_at, @reservation_end_at, @guest_count, @special_request, @dining_purpose,
             @deposit_amount, @final_total, @applied_promo_code,
             @reservation_status, @reservation_source, SYSDATETIME(), SYSDATETIME(),
-            0, 0, 0
+            0, 0
           )
         `);
 
@@ -222,12 +224,17 @@ export const createPreSaveReservation = async (req, res) => {
 
     } catch (transactionError) {
       await transaction.rollback();
+      console.error("[pre-save] Transaction error:", transactionError);
       throw transactionError;
     }
 
   } catch (error) {
     console.error("Error creating pre-save reservation:", error);
-    res.status(500).json({ success: false, message: "Failed to process reservation payment setup" });
+    res.status(500).json({
+      success: false,
+      message: "Failed to process reservation payment setup",
+      detail: process.env.NODE_ENV !== 'production' ? (error?.message || String(error)) : undefined,
+    });
   }
 };
 

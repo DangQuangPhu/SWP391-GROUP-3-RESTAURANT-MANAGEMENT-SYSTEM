@@ -29,6 +29,8 @@ const EDIT_REQUEST_ALLOWED_FIELDS = new Set([
   "special_request",
   "contact_phone",
   "preorder_items",
+  "occasion",
+  "dining_purpose",
 ]);
 
 /**
@@ -40,7 +42,15 @@ const EDIT_REQUEST_ALLOWED_FIELDS = new Set([
 function sanitizeEditChanges(changes) {
   const sanitized = {};
   const rejectedKeys = [];
-  for (const [key, val] of Object.entries(changes || {})) {
+  
+  // Normalise dining_purpose to occasion
+  const normalisedChanges = { ...changes };
+  if (normalisedChanges.dining_purpose !== undefined && normalisedChanges.occasion === undefined) {
+    normalisedChanges.occasion = normalisedChanges.dining_purpose;
+    delete normalisedChanges.dining_purpose;
+  }
+
+  for (const [key, val] of Object.entries(normalisedChanges || {})) {
     if (EDIT_REQUEST_ALLOWED_FIELDS.has(key)) {
       sanitized[key] = val;
     } else {

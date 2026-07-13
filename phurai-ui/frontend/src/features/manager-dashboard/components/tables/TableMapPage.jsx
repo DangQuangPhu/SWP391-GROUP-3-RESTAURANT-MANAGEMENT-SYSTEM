@@ -324,12 +324,18 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
 
   return (
     <div className="sfx-stack">
-      <SectionHead
-        title="Table Map"
-        subtitle={`${tableList.length} tables across ${areaCount} areas`}
+      <TableMapFilterBar
+        search={searchInput}
+        onSearchChange={setSearchInput}
+        areaId={areaId}
+        onAreaChange={setAreaId}
+        areas={areas}
+        areasLoading={areasLoading}
+        selectedStatuses={selectedStatuses}
+        onToggleStatus={toggleStatusFilter}
         actions={
           isManager ? (
-            <Button variant="gold" icon="plus" onClick={() => setAddModalOpen(true)}>
+            <Button variant="gold" icon="plus" onClick={() => setAddModalOpen(true)} style={{ height: "40px", display: "inline-flex", alignItems: "center" }}>
               Add Table
             </Button>
           ) : null
@@ -337,17 +343,6 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
       />
 
       <ContentPanel compact>
-        <TableMapFilterBar
-          search={searchInput}
-          onSearchChange={setSearchInput}
-          areaId={areaId}
-          onAreaChange={setAreaId}
-          areas={areas}
-          areasLoading={areasLoading}
-          selectedStatuses={selectedStatuses}
-          onToggleStatus={toggleStatusFilter}
-        />
-
         <div className={`sfx-tablemap-wrap ${listLoading ? "is-loading" : ""}`}>
           {!listLoading && groupedEntries.length === 0 ? (
             <div className="sfx-card">

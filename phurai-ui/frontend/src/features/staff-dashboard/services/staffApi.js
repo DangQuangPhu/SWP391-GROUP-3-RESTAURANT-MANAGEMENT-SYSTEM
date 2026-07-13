@@ -278,14 +278,10 @@ export function unwrapReservationList(res) {
 }
 
 /** Full today's reservation list for host check-in (all statuses). */
-export async function fetchTodayReservations(userId, startDate, endDate) {
+export async function fetchTodayReservations(userId, params = {}) {
   try {
-    let url = `/staff/reservations/today-shift`;
-    if (startDate && endDate) {
-      url += `?startDate=${startDate}&endDate=${endDate}`;
-    } else if (startDate) {
-      url += `?startDate=${startDate}`;
-    }
+    const queryStr = new URLSearchParams(params).toString();
+    const url = `/manager/reservations/all?${queryStr}`;
 
     const res = await request(url, {
       method: "GET",
@@ -297,6 +293,9 @@ export async function fetchTodayReservations(userId, startDate, endDate) {
         source: "api",
         data: sortReservationsChronologically(apiRows),
         current_shift: res.current_shift,
+        totalCount: res.totalCount,
+        totalPages: res.totalPages,
+        currentPage: res.currentPage
       };
     }
   } catch (error) {
@@ -304,7 +303,7 @@ export async function fetchTodayReservations(userId, startDate, endDate) {
   }
 
   // No mock fallback — show empty state rather than fake data
-  return { source: "api", data: [] };
+  return { source: "api", data: [], totalCount: 0, totalPages: 1, currentPage: 1 };
 }
 
 /** Alias for fetchTodayReservations (legacy naming). */
@@ -396,7 +395,7 @@ export async function rejectStaffReservation(reservationId, userId, { reason, ne
 
 export async function editStaffReservation(reservationId, userId, payload) {
   const res = await staffPatch(
-    `/staff/reservations/${reservationId}/edit`,
+    `/staff/reservations/${reservationId}/direct-edit`,
     userId,
     payload
   );

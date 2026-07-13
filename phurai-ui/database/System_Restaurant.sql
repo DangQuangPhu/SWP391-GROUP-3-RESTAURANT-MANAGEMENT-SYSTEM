@@ -74,19 +74,20 @@ CREATE TABLE dbo.Roles (
 GO
 
 CREATE TABLE dbo.UserAccounts (
-    user_id          INT IDENTITY(1,1) NOT NULL,
-    role_id          TINYINT NOT NULL,
-    full_name        NVARCHAR(120) NOT NULL,
-    email            NVARCHAR(180) NOT NULL,
-    phone            VARCHAR(25) NULL,
-    password_hash    NVARCHAR(255) NOT NULL,
-    avatar_url       NVARCHAR(500) NULL,
-    is_active        BIT NOT NULL CONSTRAINT DF_UserAccounts_is_active DEFAULT 1,
-    email_verified   BIT NOT NULL CONSTRAINT DF_UserAccounts_email_verified DEFAULT 0,
+    user_id              INT IDENTITY(1,1) NOT NULL,
+    role_id              TINYINT NOT NULL,
+    full_name            NVARCHAR(120) NOT NULL,
+    email                NVARCHAR(180) NOT NULL,
+    phone                VARCHAR(25) NULL,
+    password_hash        NVARCHAR(255) NOT NULL,
+    avatar_url           NVARCHAR(500) NULL,
+    is_active            BIT NOT NULL CONSTRAINT DF_UserAccounts_is_active DEFAULT 1,
+    email_verified       BIT NOT NULL CONSTRAINT DF_UserAccounts_email_verified DEFAULT 0,
     force_password_reset BIT NOT NULL CONSTRAINT DF_UserAccounts_force_pw_reset DEFAULT 0,
-    last_login_at    DATETIME2(0) NULL,
-    created_at       DATETIME2(0) NOT NULL CONSTRAINT DF_UserAccounts_created_at DEFAULT SYSDATETIME(),
-    updated_at       DATETIME2(0) NOT NULL CONSTRAINT DF_UserAccounts_updated_at DEFAULT SYSDATETIME(),
+    session_revoked_at   DATETIME2(0) NULL,   -- Phase 2: force-logout on access revocation
+    last_login_at        DATETIME2(0) NULL,
+    created_at           DATETIME2(0) NOT NULL CONSTRAINT DF_UserAccounts_created_at DEFAULT SYSDATETIME(),
+    updated_at           DATETIME2(0) NOT NULL CONSTRAINT DF_UserAccounts_updated_at DEFAULT SYSDATETIME(),
 
     CONSTRAINT PK_UserAccounts PRIMARY KEY (user_id),
     CONSTRAINT UQ_UserAccounts_email UNIQUE (email),
@@ -108,7 +109,7 @@ CREATE TABLE dbo.OtpTokens (
     CONSTRAINT PK_OtpTokens PRIMARY KEY (otp_id),
     CONSTRAINT FK_OtpTokens_UserAccounts FOREIGN KEY (user_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE CASCADE,
     CONSTRAINT CK_OtpTokens_purpose CHECK (purpose IN
-        (N'EMAIL_VERIFY', N'PASSWORD_RESET', N'LOGIN_VERIFY', N'CHANGE_PASSWORD')),
+        (N'EMAIL_VERIFY', N'PASSWORD_RESET', N'LOGIN_VERIFY', N'CHANGE_PASSWORD', N'FIRST_LOGIN')),
     CONSTRAINT CK_OtpTokens_expiry CHECK (expires_at > created_at)
 );
 GO
@@ -139,8 +140,11 @@ GO
 -- Job Titles lookup table (Employee Registry — KDS Plan Part B)
 -- ============================================================================
 CREATE TABLE dbo.JobTitles (
-    job_title_id TINYINT IDENTITY(1,1) NOT NULL,
-    title_name   NVARCHAR(80) NOT NULL,
+    job_title_id           TINYINT IDENTITY(1,1) NOT NULL,
+    title_name             NVARCHAR(80) NOT NULL,
+    -- Phase 2: Slot-based access control per job title
+    requires_system_access BIT NOT NULL CONSTRAINT DF_JobTitles_sys_access DEFAULT 0,
+    default_role_id        TINYINT NULL,   -- FK set after Roles table is created
     CONSTRAINT PK_JobTitles PRIMARY KEY (job_title_id),
     CONSTRAINT UQ_JobTitles_title_name UNIQUE (title_name)
 );
@@ -229,22 +233,25 @@ CREATE TABLE dbo.RestaurantAreas (
 GO
 
 CREATE TABLE dbo.RestaurantTables (
-    table_id       SMALLINT IDENTITY(1,1) NOT NULL,
-    area_id        SMALLINT NOT NULL,
-    table_number   NVARCHAR(20) NOT NULL,
-    capacity       TINYINT NOT NULL,
-    table_status   NVARCHAR(20) NOT NULL CONSTRAINT DF_RestaurantTables_status DEFAULT N'Available',
-    static_qr_code NVARCHAR(120) NULL,
-    notes          NVARCHAR(255) NULL,
-    is_counter     BIT NOT NULL CONSTRAINT DF_RestaurantTables_is_counter DEFAULT 0,
+    table_id             SMALLINT IDENTITY(1,1) NOT NULL,
+    area_id              SMALLINT NOT NULL,
+    table_number         NVARCHAR(20) NOT NULL,
+    capacity             TINYINT NOT NULL,
+    table_status         NVARCHAR(20) NOT NULL CONSTRAINT DF_RestaurantTables_status DEFAULT N'Available',
+    -- Phase 1: Structured price tier for financial impact checks (not string-matching area names)
+    price_tier           NVARCHAR(20) NOT NULL CONSTRAINT DF_RestaurantTables_tier DEFAULT N'Standard',
+    static_qr_code       NVARCHAR(120) NULL,
+    notes                NVARCHAR(255) NULL,
+    is_counter           BIT NOT NULL CONSTRAINT DF_RestaurantTables_is_counter DEFAULT 0,
     merged_into_table_id SMALLINT NULL REFERENCES dbo.RestaurantTables(table_id),
-    created_at     DATETIME2(0) NOT NULL CONSTRAINT DF_RestaurantTables_created_at DEFAULT SYSDATETIME(),
-    updated_at     DATETIME2(0) NOT NULL CONSTRAINT DF_RestaurantTables_updated_at DEFAULT SYSDATETIME(),
+    created_at           DATETIME2(0) NOT NULL CONSTRAINT DF_RestaurantTables_created_at DEFAULT SYSDATETIME(),
+    updated_at           DATETIME2(0) NOT NULL CONSTRAINT DF_RestaurantTables_updated_at DEFAULT SYSDATETIME(),
     CONSTRAINT PK_RestaurantTables PRIMARY KEY (table_id),
     CONSTRAINT UQ_RestaurantTables_table_number UNIQUE (table_number),
     CONSTRAINT UQ_RestaurantTables_static_qr_code UNIQUE (static_qr_code),
     CONSTRAINT FK_RestaurantTables_RestaurantAreas FOREIGN KEY (area_id) REFERENCES dbo.RestaurantAreas(area_id),
     CONSTRAINT CK_RestaurantTables_capacity CHECK (capacity > 0),
+    CONSTRAINT CK_RestaurantTables_tier CHECK (price_tier IN (N'Standard', N'Premium', N'VIP')),
     CONSTRAINT CK_RestaurantTables_status CHECK (table_status IN
         (N'Available', N'Reserved', N'Occupied', N'Cleaning', N'Inactive', N'Overdue'))
 );
@@ -364,7 +371,10 @@ CREATE TABLE dbo.Reservations (
     reservation_end_at    DATETIME2(0) NOT NULL,
     guest_count           TINYINT NOT NULL,
     special_request       NVARCHAR(1000) NULL,
+    dining_purpose        NVARCHAR(100) NULL,
     deposit_amount        DECIMAL(12, 2) NULL,
+    -- Phase 1: deposit_required computed from settings at creation time
+    deposit_required      BIT NOT NULL CONSTRAINT DF_Reservations_deposit_req DEFAULT 0,
     final_total           DECIMAL(12, 2) NULL,
     applied_promo_code    VARCHAR(50) NULL,
     preorder_json         NVARCHAR(MAX) NULL,
@@ -374,14 +384,19 @@ CREATE TABLE dbo.Reservations (
     confirmed_by_staff_id INT NULL,
     confirmed_at          DATETIME2(0) NULL,
     checked_in_at         DATETIME2(0) NULL,
+    seated_at             DATETIME2(0) NULL,
     cancelled_at          DATETIME2(0) NULL,
     checked_out_at        DATETIME2(0) NULL,
+    completed_at          DATETIME2(0) NULL,
     cancel_reason         NVARCHAR(255) NULL,
     reminder_sent         BIT NOT NULL CONSTRAINT DF_Reservations_reminder DEFAULT 0,
-    has_pending_request   BIT NOT NULL CONSTRAINT DF_Reservations_HasPendingRequest DEFAULT 0,
-    pending_changes_json  NVARCHAR(MAX) NULL,
+    -- Phase 1: has_pending_request derived from ReservationChangeRequests (no dual-write)
+    -- NOTE: computed column added after ReservationChangeRequests is created (see ALTER below)
+    pending_changes_json  NVARCHAR(MAX) NULL,     -- kept for backward compat with editRequest flow
     edit_used_count       INT NOT NULL CONSTRAINT DF_Reservations_EditUsedCount DEFAULT 0,
-    request_type          NVARCHAR(20) NULL,
+    request_type          NVARCHAR(20) NULL,       -- kept for backward compat
+    -- Phase 1: no-show grace period (minutes), configurable per-reservation
+    no_show_grace_minutes INT NOT NULL CONSTRAINT DF_Reservations_NoShowGrace DEFAULT 20,
     rejected_at           DATETIME2(0) NULL,
     rejected_by           INT NULL,
     resolved_at           DATETIME2(0) NULL,
@@ -399,8 +414,8 @@ CREATE TABLE dbo.Reservations (
     CONSTRAINT CK_Reservations_guest_count CHECK (guest_count > 0),
     CONSTRAINT CK_Reservations_time CHECK (reservation_end_at > reservation_start_at),
     CONSTRAINT CK_Reservations_status CHECK (reservation_status IN (
-        N'Pending Request', N'Awaiting Deposit', N'Confirmed', 
-        N'Check-in', N'Dining', N'Payment Pending', 
+        N'Pending Request', N'Awaiting Deposit', N'Confirmed',
+        N'Check-in', N'Dining', N'Payment Pending',
         N'Completed', N'Cancelled', N'No Show'
     )),
     CONSTRAINT CK_Reservations_source CHECK (reservation_source IN (N'Online', N'Walk-in', N'Phone')),
@@ -431,6 +446,76 @@ CREATE TABLE dbo.ReservationTimelines (
     CONSTRAINT FK_ReservationTimelines_Reservations FOREIGN KEY (reservation_id) REFERENCES dbo.Reservations(reservation_id) ON DELETE CASCADE,
     CONSTRAINT FK_ReservationTimelines_UserAccounts FOREIGN KEY (performed_by) REFERENCES dbo.UserAccounts(user_id)
 );
+GO
+
+-- ============================================================================
+-- MODULE 4b: RESERVATION CHANGE REQUESTS (Phase 1 — replaces dual-write flag)
+-- ============================================================================
+-- This table is the single source of truth for pending requests.
+-- Reservations.has_pending_request is a computed column derived from this table.
+-- ============================================================================
+CREATE TABLE dbo.ReservationChangeRequests (
+    request_id                   INT IDENTITY(1,1) NOT NULL,
+    reservation_id               INT NOT NULL,
+    -- Requestor info (customer_id OR contact details for guest bookings)
+    requested_by_customer_id     INT NULL,
+    requested_by_contact_email   NVARCHAR(100) NULL,
+    request_type                 NVARCHAR(20) NOT NULL,
+    -- Requested new values (nullable — only the changed fields are populated)
+    requested_table_id           SMALLINT NULL,
+    requested_start_at           DATETIME2(0) NULL,
+    requested_end_at             DATETIME2(0) NULL,
+    requested_party_size         TINYINT NULL,
+    reason                       NVARCHAR(500) NULL,
+    -- Status lifecycle: Pending → StaffResolved | PendingManagerApproval
+    --   PendingManagerApproval → ManagerApproved | ManagerRejected
+    request_status               NVARCHAR(30) NOT NULL CONSTRAINT DF_RCR_status DEFAULT N'Pending',
+    requires_financial_approval  BIT NOT NULL CONSTRAINT DF_RCR_financial DEFAULT 0,
+    -- Resolution tracking
+    resolved_by_staff_id         INT NULL,
+    resolved_by_manager_id       INT NULL,
+    manager_reason               NVARCHAR(500) NULL,
+    created_at                   DATETIME2(0) NOT NULL CONSTRAINT DF_RCR_created_at DEFAULT SYSDATETIME(),
+    resolved_at                  DATETIME2(0) NULL,
+    CONSTRAINT PK_ReservationChangeRequests PRIMARY KEY (request_id),
+    CONSTRAINT FK_RCR_Reservations FOREIGN KEY (reservation_id) REFERENCES dbo.Reservations(reservation_id) ON DELETE CASCADE,
+    CONSTRAINT FK_RCR_Customer FOREIGN KEY (requested_by_customer_id) REFERENCES dbo.UserAccounts(user_id),
+    CONSTRAINT FK_RCR_ResolvedTable FOREIGN KEY (requested_table_id) REFERENCES dbo.RestaurantTables(table_id),
+    CONSTRAINT FK_RCR_StaffResolver FOREIGN KEY (resolved_by_staff_id) REFERENCES dbo.UserAccounts(user_id),
+    CONSTRAINT FK_RCR_ManagerResolver FOREIGN KEY (resolved_by_manager_id) REFERENCES dbo.UserAccounts(user_id),
+    CONSTRAINT CK_RCR_type CHECK (request_type IN (N'TableChange', N'TimeChange', N'PartySizeChange', N'Cancel', N'edit', N'cancel')),
+    CONSTRAINT CK_RCR_status CHECK (request_status IN (
+        N'Pending', N'StaffResolved', N'PendingManagerApproval',
+        N'ManagerApproved', N'ManagerRejected', N'Rejected'
+    ))
+);
+GO
+
+-- ── Computed has_pending_request derived from ReservationChangeRequests ───────
+-- This runs AFTER both Reservations AND ReservationChangeRequests are created.
+-- Eliminates the dual-write race condition entirely.
+CREATE OR ALTER FUNCTION dbo.fn_HasPendingRequest (@res_id INT)
+RETURNS BIT
+AS
+BEGIN
+    DECLARE @res BIT = 0;
+    IF EXISTS (
+        SELECT 1 FROM dbo.ReservationChangeRequests rcr
+        WHERE rcr.reservation_id = @res_id
+          AND rcr.request_status = N'Pending'
+    )
+        SET @res = 1;
+    RETURN @res;
+END;
+GO
+
+ALTER TABLE dbo.Reservations
+ADD has_pending_request AS dbo.fn_HasPendingRequest(reservation_id);
+GO
+
+-- ── FK: JobTitles.default_role_id → Roles (added after Roles table exists) ───
+ALTER TABLE dbo.JobTitles
+ADD CONSTRAINT FK_JobTitles_DefaultRole FOREIGN KEY (default_role_id) REFERENCES dbo.Roles(role_id);
 GO
 
 CREATE TABLE dbo.PreorderItems (
@@ -973,9 +1058,8 @@ SET IDENTITY_INSERT dbo.Roles ON;
 INSERT INTO dbo.Roles (role_id, role_name, description) VALUES
 (1, N'Customer', N'Registered customer using the public web app'),
 (2, N'Restaurant Staff', N'Receptionist, waiter, cashier and floor staff'),
-(3, N'Kitchen Staff', N'Kitchen users working with the Kitchen Display System'),
-(4, N'Manager', N'Restaurant manager with operational and reporting access'),
-(5, N'Admin', N'System administrator or restaurant owner');
+(3, N'Manager', N'Restaurant manager with operational and reporting access'),
+(4, N'Admin', N'System administrator or restaurant owner');
 SET IDENTITY_INSERT dbo.Roles OFF;
 GO
 
@@ -983,23 +1067,29 @@ SET IDENTITY_INSERT dbo.UserAccounts ON;
 INSERT INTO dbo.UserAccounts
 (user_id, role_id, full_name, email, phone, password_hash, is_active, email_verified, last_login_at)
 VALUES
-(1, 5, N'Dang Quang Phu',  N'phuadmin@phurai.vn',    '0901000001', N'scrypt$4f2ab2ac57cea58a40e76477d53f3e61$d38e5d2db24cd605a3d29eaf79e1b0429e7c7f5fce28c47faf59126fdd15029828447e1b56d0886c74f888ff7ac6693d7b33e0371ac39c9ff0b55385a0ca547e',   1, 1, '2026-05-18T08:00:00'),
+(1, 4, N'Dang Quang Phu',  N'phuadmin@phurai.vn',    '0901000001', N'scrypt$4f2ab2ac57cea58a40e76477d53f3e61$d38e5d2db24cd605a3d29eaf79e1b0429e7c7f5fce28c47faf59126fdd15029828447e1b56d0886c74f888ff7ac6693d7b33e0371ac39c9ff0b55385a0ca547e',   1, 1, '2026-05-18T08:00:00'),
 
-(2, 4, N'Dang Quang Phu',  N'phumanager@phurai.vn',  '0901000002', N'scrypt$8b83430313edc67abc8eadeefc31e841$ce82bbdd63b2f38cc66e8cb939a52599c91f53a8396a40ec2ee1d3d28dd106eedb890ddbe0a4b462080f268b0f848fc5d3f1974aa3930dab29612cb25cb887f0', 1, 1, '2026-05-18T08:10:00'),
+(2, 3, N'Dang Quang Phu',  N'phumanager@phurai.vn',  '0901000002', N'scrypt$8b83430313edc67abc8eadeefc31e841$ce82bbdd63b2f38cc66e8cb939a52599c91f53a8396a40ec2ee1d3d28dd106eedb890ddbe0a4b462080f268b0f848fc5d3f1974aa3930dab29612cb25cb887f0', 1, 1, '2026-05-18T08:10:00'),
 (3, 2, N'Dang Quang Phu',       N'phustaff1@phurai.vn',   '0901000003', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, '2026-05-18T08:30:00'),
 (4, 2, N'Pham Thi Thuy',    N'thuystaff@phurai.vn',   '0901000004', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, NULL),
--- Kitchen Staff accounts (role_id=3) soft-deleted — KDS is device-based; individual user accounts deprecated.
-(5, 3, N'Hoang Van Tho',    N'kitchen1@phurai.vn', '0901000005', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',   0, 1, '2026-05-18T09:00:00'),
-(6, 3, N'Do Thi Hao',       N'kitchen2@phurai.vn', '0901000006', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',   0, 1, NULL),
+-- Kitchen Staff accounts soft-deleted — KDS is device-based; mapped to Restaurant Staff role (role_id=2) with suspended status.
+(5, 2, N'Hoang Van Tho',    N'kitchen1@phurai.vn', '0901000005', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',   0, 1, '2026-05-18T09:00:00'),
+(6, 2, N'Do Thi Hao',       N'kitchen2@phurai.vn', '0901000006', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',   0, 1, NULL),
 (7, 1, N'Minh Khoa',         N'khoa@gmail.com',     '0908000001', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6',   1, 1, '2026-05-17T20:00:00'),
 (8, 1, N'Thu Huong',         N'huong@gmail.com',    '0908000002', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6',   1, 1, '2026-05-17T21:00:00'),
 (9, 1, N'Bao Nguyen',        N'bao@gmail.com',      '0908000003', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6',   1, 0, NULL),
 (10,1, N'Lan Anh',           N'lananh@gmail.com',   '0908000004', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6',   1, 1, NULL),
 (11,1, N'Nguyen Minh An',    N'nguyenminhan@gmail.com', '0909000001', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
-(12,1, N'Tran My Linh',       N'tranmylinh@gmail.com',   '0909000002', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(12,1, N'Tran My Linh',       N'tranmylinh@gmail.com',   '0909000002', N'$2b$10$Al78.9LQ9vPbFK9gnbV8Z.sjNOz28idW6tqD5Y5Am8Kc.1jYENt7K', 1, 1, NULL),
 (13,1, N'Le Bao Khanh',       N'lebaokhanh@gmail.com',   '0909000003', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
-(14, 2, N'Le Huy Manh Tan',    N'tanstaff@phurai.vn',   '0901000004', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, NULL);
+(14, 2, N'Le Huy Manh Tan',    N'tanstaff@phurai.vn',   '0901000004', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, NULL),
+(15, 1, N'Đặng Quang Phú',    N'quagphu159@gmail.com', '0964813966', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL);
 SET IDENTITY_INSERT dbo.UserAccounts OFF;
+GO
+
+UPDATE dbo.UserAccounts
+SET created_at = '2025-07-13T00:00:00', updated_at = '2025-07-13T00:00:00'
+WHERE user_id = 15;
 GO
 
 SET IDENTITY_INSERT dbo.CustomerProfiles ON;
@@ -1011,10 +1101,27 @@ VALUES
 (3, 9,  N'baonguyen', '2004-01-20', N'Male',   N'Vietnam', N'Vietnamese', N'Prefers simple food and no spicy dishes.', 80,   N'["No spicy food","Main dining","Orange juice"]'),
 (4, 10, N'lananh',    '2001-12-15', N'Female', N'Vietnam', N'English', N'Usually books private rooms for business dinners.', 980,  N'["Private room","Business dinner","Chef recommendation"]'),
 (5, 11, N'annguyen',  '2004-01-12', N'Male',   N'Vietnam', N'Vietnamese', N'Enjoys casual dining and signature dishes.', 120,  N'["Window seat","Mild spicy","Salmon sushi"]'),
-(6, 12, N'linhtran',  '2003-08-21', N'Female', N'Vietnam', N'English', N'Prefers elegant seating and light desserts.', 620,  N'["VIP area","Desserts","No seafood allergy"]'),
-(7, 13, N'baokhanh',  '2001-12-05', N'Other',  N'Vietnam', N'Vietnamese', N'Guest who often books private rooms.', 1800, N'["Private room","Chef recommendation","Premium wine pairing"]');
+(6, 12, N'linhtran',  '2003-08-21', N'Female', N'Vietnam', N'English', N'Prefers elegant seating and light desserts.', 823,  N'["VIP area","Desserts","No seafood allergy"]'),
+(7, 13, N'baokhanh',  '2001-12-05', N'Other',  N'Vietnam', N'Vietnamese', N'Guest who often books private rooms.', 1800, N'["Private room","Chef recommendation","Premium wine pairing"]'),
+(8, 15, N'dangquangphu', '2004-12-29', N'Male',   N'Vietnam', N'Vietnamese', N'VIP customer since 2025.', 1250, N'["Quiet seating","Window seat"]');
 SET IDENTITY_INSERT dbo.CustomerProfiles OFF;
 GO
+
+UPDATE dbo.UserAccounts
+SET avatar_url = N'/avatars/avatar-2.svg', created_at = '2025-07-13T00:00:00', updated_at = '2025-07-13T00:00:00'
+WHERE user_id = 12;
+GO
+
+UPDATE dbo.CustomerProfiles
+SET created_at = '2025-07-13T00:00:00', updated_at = '2025-07-13T00:00:00'
+WHERE user_id = 12;
+GO
+
+UPDATE dbo.CustomerProfiles
+SET created_at = '2025-07-13T00:00:00', updated_at = '2025-07-13T00:00:00'
+WHERE customer_id = 8;
+GO
+
 
 INSERT INTO dbo.LoyaltyTransactions (customer_id, points, transaction_type, reference_type, reference_id, description, created_at) VALUES
 (7, 150, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', DATEADD(day, -5, SYSDATETIME())),
@@ -1022,26 +1129,32 @@ INSERT INTO dbo.LoyaltyTransactions (customer_id, points, transaction_type, refe
 (9, 80, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', DATEADD(day, -5, SYSDATETIME())),
 (10, 980, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', DATEADD(day, -5, SYSDATETIME())),
 (11, 120, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', DATEADD(day, -5, SYSDATETIME())),
-(12, 620, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', DATEADD(day, -5, SYSDATETIME())),
-(13, 1800, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', DATEADD(day, -5, SYSDATETIME()));
+(12, 620, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', '2025-07-13T20:00:00'),
+(12, 132, N'Earn', N'Payment', NULL, N'Loyalty points earned from dining order', DATEADD(day, -5, SYSDATETIME())),
+(12, 71, N'Earn', N'Payment', NULL, N'Loyalty points earned from dining order', DATEADD(day, -12, SYSDATETIME())),
+(13, 1800, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', DATEADD(day, -5, SYSDATETIME())),
+(8, 1250, N'Earn', N'Payment', NULL, N'Initial loyalty points seeder', '2025-07-13T21:00:00');
 GO
 
 -- ── Seed: JobTitles lookup ──────────────────────────────────────────────────
+-- Columns: (job_title_id, title_name, requires_system_access, default_role_id)
+-- requires_system_access=1 → Manager/Admin should grant a system account for this role
+-- default_role_id: 2=Staff, 3=Manager, 4=Admin, NULL=no system access
 SET IDENTITY_INSERT dbo.JobTitles ON;
-INSERT INTO dbo.JobTitles (job_title_id, title_name) VALUES
-(1,  N'System Admin'),
-(2,  N'Restaurant Manager'),
-(3,  N'Receptionist'),
-(4,  N'Waiter'),
-(5,  N'Head Chef'),
-(6,  N'Sous Chef'),
-(7,  N'Bartender'),
-(8,  N'Host/Hostess'),
-(9,  N'Cashier'),
-(10, N'Kitchen Porter'),
-(11, N'Pastry Chef'),
-(12, N'Line Cook'),
-(13, N'Server');
+INSERT INTO dbo.JobTitles (job_title_id, title_name, requires_system_access, default_role_id) VALUES
+(1,  N'System Admin',        1, 4),
+(2,  N'Manager',  1, 3),
+(3,  N'Receptionist',        1, 2),
+(4,  N'Waiter',              1, 2),
+(5,  N'Head Chef',           0, NULL),
+(6,  N'Sous Chef',           0, NULL),
+(7,  N'Bartender',           1, 2),
+(8,  N'Host/Hostess',        1, 2),
+(9,  N'Cashier',             1, 2),
+(10, N'Kitchen Porter',      0, NULL),
+(11, N'Pastry Chef',         0, NULL),
+(12, N'Line Cook',           0, NULL),
+(13, N'Server',              1, 2);
 SET IDENTITY_INSERT dbo.JobTitles OFF;
 GO
 
@@ -1065,17 +1178,21 @@ GO
 
 
 INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description, updated_by) VALUES
-(N'restaurant_name',  N'Phūrai Premium Restaurant', N'Display name', 1),
-(N'open_time',        N'10:00',                     N'Opening time', 1),
-(N'close_time',       N'22:00',                     N'Closing time', 1),
-(N'table_hold_min',   N'15',                        N'Minutes to hold reserved table', 1),
-(N'service_charge',   N'5',                         N'Service charge percent', 1),
-(N'max_guests',       N'12',                        N'Max guests per reservation', 1),
-(N'cancel_deadline_h',N'2',                         N'Hours before reservation to cancel', 1),
-(N'hours_mon_thu',    N'7:00 AM — 12:00 AM',        N'Opening hours: Monday to Thursday', 1),
-(N'hours_fri_sat',    N'7:00 AM — 12:00 AM',        N'Opening hours: Friday to Saturday', 1),
-(N'hours_sunday',     N'7:00 PM — 10:00 PM',        N'Opening hours: Sunday', 1),
-(N'hours_happy',      N'4:00 PM — 7:00 PM Daily',   N'Happy Hour timing', 1);
+(N'restaurant_name',             N'Phūrai Premium Restaurant', N'Display name', 1),
+(N'open_time',                   N'10:00',                     N'Opening time', 1),
+(N'close_time',                  N'22:00',                     N'Closing time', 1),
+(N'table_hold_min',              N'15',                        N'Minutes to hold reserved table', 1),
+(N'service_charge',              N'5',                         N'Service charge percent', 1),
+(N'max_guests',                  N'12',                        N'Max guests per reservation', 1),
+(N'cancel_deadline_h',           N'2',                         N'Hours before reservation to cancel', 1),
+(N'hours_mon_thu',               N'7:00 AM — 12:00 AM',        N'Opening hours: Monday to Thursday', 1),
+(N'hours_fri_sat',               N'7:00 AM — 12:00 AM',        N'Opening hours: Friday to Saturday', 1),
+(N'hours_sunday',                N'7:00 PM — 10:00 PM',        N'Opening hours: Sunday', 1),
+(N'hours_happy',                 N'4:00 PM — 7:00 PM Daily',   N'Happy Hour timing', 1),
+-- Phase 1: Deposit threshold configuration (editable via Admin Settings UI)
+(N'deposit_party_size_threshold',N'8',                         N'Min party size to require a deposit', 1),
+(N'deposit_min_table_tier',      N'VIP',                       N'Min table tier (Standard/Premium/VIP) to require a deposit', 1),
+(N'no_show_grace_default_min',   N'20',                        N'Default grace period in minutes before marking No Show', 1);
 GO
 
 SET IDENTITY_INSERT dbo.Shifts ON;
@@ -1103,50 +1220,50 @@ GO
 
 SET IDENTITY_INSERT dbo.RestaurantTables ON;
 INSERT INTO dbo.RestaurantTables
-(table_id, area_id, table_number, capacity, table_status, static_qr_code, is_counter)
+(table_id, area_id, table_number, capacity, table_status, price_tier, static_qr_code, is_counter)
 VALUES
 -- Area 1: Window Area (Cửa sổ: 2, 4, 6, 8 ghế)
-(1,  1, N'WIN-A', 2, N'Available', N'qr-win-a', 0),
-(2,  1, N'WIN-B', 4, N'Available', N'qr-win-b', 0),
-(3,  1, N'WIN-C', 6, N'Available', N'qr-win-c', 0),
-(4,  1, N'WIN-D', 8, N'Available', N'qr-win-d', 0),
+(1,  1, N'WIN-A', 2, N'Available', N'Standard', N'qr-win-a', 0),
+(2,  1, N'WIN-B', 4, N'Available', N'Standard', N'qr-win-b', 0),
+(3,  1, N'WIN-C', 6, N'Available', N'Standard', N'qr-win-c', 0),
+(4,  1, N'WIN-D', 8, N'Available', N'Standard', N'qr-win-d', 0),
 
--- Area 4: VIP Lounge (Phòng VIP: 3 phòng x 6 ghế)
-(5,  4, N'VIP-1', 6, N'Available', N'qr-vip-1', 0),
-(6,  4, N'VIP-2', 6, N'Occupied',  N'qr-vip-2', 0), -- Khớp UI: Đang có khách
-(7,  4, N'VIP-3', 6, N'Available', N'qr-vip-3', 0),
+-- Area 4: VIP Lounge (Phòng VIP: 3 phòng x 6 ghế) — price_tier = VIP
+(5,  4, N'VIP-1', 6, N'Available', N'VIP',      N'qr-vip-1', 0),
+(6,  4, N'VIP-2', 6, N'Occupied',  N'VIP',      N'qr-vip-2', 0), -- Khớp UI: Đang có khách
+(7,  4, N'VIP-3', 6, N'Available', N'VIP',      N'qr-vip-3', 0),
 
 -- Area 2: Standard Dining Area (Sảnh thường: 12 bàn x 4 ghế)
-(8,  2, N'S-01',  4, N'Available', N'qr-s-01', 0),
-(9,  2, N'S-02',  4, N'Available', N'qr-s-02', 0),
-(10, 2, N'S-03',  4, N'Occupied',  N'qr-s-03', 0), -- Khớp UI: Đang có khách
-(11, 2, N'S-04',  4, N'Available', N'qr-s-04', 0),
-(12, 2, N'S-05',  4, N'Available', N'qr-s-05', 0),
-(13, 2, N'S-06',  4, N'Available', N'qr-s-06', 0),
-(14, 2, N'S-07',  4, N'Occupied',  N'qr-s-07', 0), -- Khớp UI: Đang có khách
-(15, 2, N'S-08',  4, N'Available', N'qr-s-08', 0),
-(16, 2, N'S-09',  4, N'Available', N'qr-s-09', 0),
-(17, 2, N'S-10',  4, N'Available', N'qr-s-10', 0),
-(18, 2, N'S-11',  4, N'Available', N'qr-s-11', 0),
-(19, 2, N'S-12',  4, N'Available', N'qr-s-12', 0),
+(8,  2, N'S-01',  4, N'Available', N'Standard', N'qr-s-01', 0),
+(9,  2, N'S-02',  4, N'Available', N'Standard', N'qr-s-02', 0),
+(10, 2, N'S-03',  4, N'Occupied',  N'Standard', N'qr-s-03', 0), -- Khớp UI: Đang có khách
+(11, 2, N'S-04',  4, N'Available', N'Standard', N'qr-s-04', 0),
+(12, 2, N'S-05',  4, N'Available', N'Standard', N'qr-s-05', 0),
+(13, 2, N'S-06',  4, N'Available', N'Standard', N'qr-s-06', 0),
+(14, 2, N'S-07',  4, N'Occupied',  N'Standard', N'qr-s-07', 0), -- Khớp UI: Đang có khách
+(15, 2, N'S-08',  4, N'Available', N'Standard', N'qr-s-08', 0),
+(16, 2, N'S-09',  4, N'Available', N'Standard', N'qr-s-09', 0),
+(17, 2, N'S-10',  4, N'Available', N'Standard', N'qr-s-10', 0),
+(18, 2, N'S-11',  4, N'Available', N'Standard', N'qr-s-11', 0),
+(19, 2, N'S-12',  4, N'Available', N'Standard', N'qr-s-12', 0),
 
--- Area 3: Premium Area (Sảnh Premium: 4 bàn x 4 ghế)
-(20, 3, N'PRE-01',4, N'Available', N'qr-pre-01', 0),
-(21, 3, N'PRE-02',4, N'Available', N'qr-pre-02', 0),
-(22, 3, N'PRE-03',4, N'Available', N'qr-pre-03', 0),
-(23, 3, N'PRE-04',4, N'Available', N'qr-pre-04', 0),
+-- Area 3: Premium Area (Sảnh Premium: 4 bàn x 4 ghế) — price_tier = Premium
+(20, 3, N'PRE-01',4, N'Available', N'Premium',  N'qr-pre-01', 0),
+(21, 3, N'PRE-02',4, N'Available', N'Premium',  N'qr-pre-02', 0),
+(22, 3, N'PRE-03',4, N'Available', N'Premium',  N'qr-pre-03', 0),
+(23, 3, N'PRE-04',4, N'Available', N'Premium',  N'qr-pre-04', 0),
 
--- Area 5: Private Rooms (Phòng riêng: 2, 4, 6, 8 ghế)
-(24, 5, N'PR-01', 2, N'Occupied',  N'qr-pr-01', 0), -- Khớp UI: Đang có khách
-(25, 5, N'PR-02', 4, N'Available', N'qr-pr-02', 0),
-(26, 5, N'PR-03', 6, N'Available', N'qr-pr-03', 0),
-(27, 5, N'PR-04', 8, N'Available', N'qr-pr-04', 0),
+-- Area 5: Private Rooms (Phòng riêng: 2, 4, 6, 8 ghế) — price_tier = VIP
+(24, 5, N'PR-01', 2, N'Occupied',  N'VIP',      N'qr-pr-01', 0), -- Khớp UI: Đang có khách
+(25, 5, N'PR-02', 4, N'Available', N'VIP',      N'qr-pr-02', 0),
+(26, 5, N'PR-03', 6, N'Available', N'VIP',      N'qr-pr-03', 0),
+(27, 5, N'PR-04', 8, N'Available', N'VIP',      N'qr-pr-04', 0),
 
 -- Area 6: Kitchen View Area (Khu sát bếp: 4 bàn x 4 ghế)
-(28, 6, N'K-01',  4, N'Available', N'qr-k-01', 1),
-(29, 6, N'K-02',  4, N'Available', N'qr-k-02', 1),
-(30, 6, N'K-03',  4, N'Available', N'qr-k-03', 1),
-(31, 6, N'K-04',  4, N'Available', N'qr-k-04', 1);
+(28, 6, N'K-01',  4, N'Available', N'Standard', N'qr-k-01', 1),
+(29, 6, N'K-02',  4, N'Available', N'Standard', N'qr-k-02', 1),
+(30, 6, N'K-03',  4, N'Available', N'Standard', N'qr-k-03', 1),
+(31, 6, N'K-04',  4, N'Available', N'Standard', N'qr-k-04', 1);
 SET IDENTITY_INSERT dbo.RestaurantTables OFF;
 GO
 
@@ -1220,26 +1337,29 @@ GO
 SET IDENTITY_INSERT dbo.Reservations ON;
 INSERT INTO dbo.Reservations
 (reservation_id, customer_id, created_by_staff_id, preferred_area_id, reservation_start_at, reservation_end_at,
- guest_count, special_request, reservation_status, reservation_source, confirmed_by_staff_id, confirmed_at, checked_in_at)
+ guest_count, special_request, reservation_status, reservation_source, confirmed_by_staff_id, confirmed_at, checked_in_at,
+ contact_name, contact_phone, contact_email)
 VALUES
-(1,  7, NULL, 1, '2026-05-20T18:30:00', '2026-05-20T20:30:00', 2, N'Window seat if possible', N'Confirmed',  N'Online',  3, '2026-05-18T09:15:00', NULL),
-(2,  8, NULL, 4, '2026-05-20T19:00:00', '2026-05-20T21:00:00', 4, N'VIP area requested',       N'Confirmed',  N'Online',  3, '2026-05-18T10:00:00', NULL),
-(3,  9, NULL, 2, '2026-05-21T12:00:00', '2026-05-21T14:00:00', 3, NULL,                        N'Pending Request',     N'Online',  NULL, NULL, NULL),
-(4, 10, NULL, 5, '2026-05-21T20:00:00', '2026-05-21T22:00:00', 6, N'Business dinner',          N'Confirmed',  N'Online',  4, '2026-05-19T08:00:00', NULL),
-(5, NULL,3,    2, '2026-05-18T18:00:00', '2026-05-18T20:00:00', 2, N'Walk-in guest',            N'Check-in', N'Walk-in', 3, '2026-05-18T17:55:00', '2026-05-18T18:00:00'),
-(6,  7, NULL, 2, '2026-04-10T19:00:00', '2026-04-10T21:00:00', 2, NULL,                        N'Completed',  N'Online',  3, '2026-04-08T10:00:00', '2026-04-10T18:55:00'),
-(7,  8, NULL, 4, '2026-04-15T20:00:00', '2026-04-15T22:00:00', 4, N'VIP birthday dinner',      N'Completed',  N'Online',  4, '2026-04-13T09:30:00', '2026-04-15T19:55:00'),
-(8, 10, NULL, 1, '2026-06-25T19:00:00', '2026-06-25T21:00:00', 3, N'Customer requested date change', N'Pending Request', N'Online', 3, '2026-06-18T10:00:00', NULL),
-(9,  7, NULL, 1, '2026-06-24T18:30:00', '2026-06-24T20:30:00', 2, N'[Dining Purpose: Casual Date]', N'Confirmed',  N'Online',  3, '2026-06-20T09:15:00', NULL),
-(10, 8, NULL, 4, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 4, N'[Dining Purpose: Business] window seat', N'Pending Request', N'Online', NULL, NULL, NULL),
-(11, 9, NULL, 2, '2026-06-24T12:00:00', '2026-06-24T14:00:00', 3, N'[Dining Purpose: Casual Dining]', N'Awaiting Deposit', N'Online', NULL, NULL, NULL),
-(12, 10, NULL, 5, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 6, N'[Dining Purpose: Birthday] extra cake', N'Check-in', N'Online', 4, '2026-06-24T08:00:00', '2026-06-24T19:55:00'),
-(13, NULL, 3, 2, '2026-06-24T18:00:00', '2026-06-24T20:00:00', 2, N'[Dining Purpose: Anniversary]', N'Dining', N'Walk-in', 3, '2026-06-24T17:55:00', '2026-06-24T18:00:00'),
-(14, 7, NULL, 2, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 2, N'[Dining Purpose: Casual Dining]', N'Payment Pending', N'Online', 3, '2026-06-20T10:00:00', '2026-06-24T18:55:00'),
-(15, 8, NULL, 4, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 4, N'[Dining Purpose: Celebration]', N'Completed', N'Online', 4, '2026-06-20T09:30:00', '2026-06-24T19:55:00'),
-(16, 10, NULL, 1, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 3, N'[Dining Purpose: Casual Date]', N'Cancelled', N'Online', 3, '2026-06-20T10:00:00', NULL),
-(17, 9, NULL, 2, '2026-06-24T18:30:00', '2026-06-24T20:30:00', 2, N'[Dining Purpose: Business]', N'No Show', N'Online', 3, '2026-06-20T11:00:00', NULL),
-(18, 7, NULL, 1, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 2, N'[Dining Purpose: Casual Dining]', N'Confirmed', N'Online', 3, '2026-06-20T12:00:00', NULL);
+(1,  7, NULL, 1, '2026-05-20T18:30:00', '2026-05-20T20:30:00', 2, N'[Dining Purpose: Casual Dining] Window seat if possible', N'Confirmed',  N'Online',  3, '2026-05-18T09:15:00', NULL, NULL, NULL, NULL),
+(2,  8, NULL, 4, '2026-05-20T19:00:00', '2026-05-20T21:00:00', 4, N'[Dining Purpose: Anniversary] VIP area requested',       N'Confirmed',  N'Online',  3, '2026-05-18T10:00:00', NULL, NULL, NULL, NULL),
+(3,  9, NULL, 2, '2026-05-21T12:00:00', '2026-05-21T14:00:00', 3, N'[Dining Purpose: Casual Dining]',                        N'Pending Request',     N'Online',  NULL, NULL, NULL, NULL, NULL, NULL),
+(4, 10, NULL, 5, '2026-05-21T20:00:00', '2026-05-21T22:00:00', 6, N'[Dining Purpose: Business] Business dinner',          N'Confirmed',  N'Online',  4, '2026-05-19T08:00:00', NULL, NULL, NULL, NULL),
+(5, NULL,3,    2, '2026-05-18T18:00:00', '2026-05-18T20:00:00', 2, N'[Dining Purpose: Casual Dining] Walk-in guest',            N'Check-in', N'Walk-in', 3, '2026-05-18T17:55:00', '2026-05-18T18:00:00', N'Nguyen Hoang An', '0908111222', 'hoangan@gmail.com'),
+(6,  7, NULL, 2, '2026-04-10T19:00:00', '2026-04-10T21:00:00', 2, N'[Dining Purpose: Casual Dining]',                        N'Completed',  N'Online',  3, '2026-04-08T10:00:00', '2026-04-10T18:55:00', NULL, NULL, NULL),
+(7,  12, NULL, 4, '2026-04-15T20:00:00', '2026-04-15T22:00:00', 4, N'[Dining Purpose: Birthday] VIP birthday dinner',      N'Completed',  N'Online',  4, '2026-04-13T09:30:00', '2026-04-15T19:55:00', NULL, NULL, NULL),
+(8, 10, NULL, 1, '2026-06-25T19:00:00', '2026-06-25T21:00:00', 3, N'[Dining Purpose: Casual Dining] Customer requested date change', N'Pending Request', N'Online', 3, '2026-06-18T10:00:00', NULL, NULL, NULL, NULL),
+(9,  7, NULL, 1, '2026-06-24T18:30:00', '2026-06-24T20:30:00', 2, N'[Dining Purpose: Casual Date]', N'Confirmed',  N'Online',  3, '2026-06-20T09:15:00', NULL, NULL, NULL, NULL),
+(10, 8, NULL, 4, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 4, N'[Dining Purpose: Business] window seat', N'Pending Request', N'Online', NULL, NULL, NULL, NULL, NULL, NULL),
+(11, 9, NULL, 2, '2026-06-24T12:00:00', '2026-06-24T14:00:00', 3, N'[Dining Purpose: Casual Dining]', N'Awaiting Deposit', N'Online', NULL, NULL, NULL, NULL, NULL, NULL),
+(12, 12, NULL, 5, DATEADD(hour, 1, SYSDATETIME()), DATEADD(hour, 3, SYSDATETIME()), 6, N'[Dining Purpose: Birthday] extra cake', N'Check-in', N'Online', 4, DATEADD(day, -1, SYSDATETIME()), NULL, NULL, NULL, NULL),
+(13, NULL, 3, 2, '2026-06-24T18:00:00', '2026-06-24T20:00:00', 2, N'[Dining Purpose: Anniversary]', N'Dining', N'Walk-in', 3, '2026-06-24T17:55:00', '2026-06-24T18:00:00', N'Pham Minh Tuan', '0909555666', 'minhtuan@gmail.com'),
+(14, 7, NULL, 2, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 2, N'[Dining Purpose: Casual Dining]', N'Payment Pending', N'Online', 3, '2026-06-20T10:00:00', '2026-06-24T18:55:00', NULL, NULL, NULL),
+(15, 8, NULL, 4, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 4, N'[Dining Purpose: Celebration]', N'Completed', N'Online', 4, '2026-06-20T09:30:00', '2026-06-24T19:55:00', NULL, NULL, NULL),
+(16, 10, NULL, 1, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 3, N'[Dining Purpose: Casual Date]', N'Cancelled', N'Online', 3, '2026-06-20T10:00:00', NULL, NULL, NULL, NULL),
+(17, 9, NULL, 2, '2026-06-24T18:30:00', '2026-06-24T20:30:00', 2, N'[Dining Purpose: Business]', N'No Show', N'Online', 3, '2026-06-20T11:00:00', NULL, NULL, NULL, NULL),
+(18, 7, NULL, 1, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 2, N'[Dining Purpose: Casual Dining]', N'Confirmed', N'Online', 3, '2026-06-20T12:00:00', NULL, NULL, NULL, NULL),
+(19, 12, NULL, 1, DATEADD(day, -2, SYSDATETIME()), DATEADD(hour, 2, DATEADD(day, -2, SYSDATETIME())), 2, N'[Dining Purpose: Anniversary]', N'Completed', N'Online', 3, DATEADD(day, -4, SYSDATETIME()), DATEADD(minute, -5, DATEADD(day, -2, SYSDATETIME())), NULL, NULL, NULL);
+
 SET IDENTITY_INSERT dbo.Reservations OFF;
 GO
 
@@ -1249,7 +1369,8 @@ INSERT INTO dbo.ReservationTables (reservation_id, table_id, assigned_by_staff_i
 (4, 24, 4),  -- Res 4 gán vào PR-01 (ID 24 - Đang có khách)
 (5, 10, 3),  -- Res 5 gán vào S-03 (ID 10 - Đang có khách)
 (6, 14, 3),  -- Res 6 gán vào S-07 (ID 14 - Đang có khách)
-(7, 6, 4);   -- Res 7 gán vào VIP-2 (ID 6 - Đang có khách)
+(7, 6, 4),   -- Res 7 gán vào VIP-2 (ID 6 - Đang có khách)
+(19, 1, 3);
 GO
 
 SET IDENTITY_INSERT dbo.PreorderItems ON;
@@ -1279,11 +1400,17 @@ INSERT INTO dbo.Orders
 VALUES
 (1, 5, 10, NULL, 3, NULL, N'Dine In',  N'Paid',             444000,     0, 22200,  466200, '2026-05-18T18:10:00'), -- Khớp S-03
 (2, 6, 14, 7,    3, NULL, N'Dine In',  N'Paid',            1316000, 50000, 63300, 1329300, '2026-04-10T19:10:00'), -- Khớp S-07
-(3, 7, 6,  8,    4, NULL, N'Dine In',  N'Paid',            1380000, 50000, 66500, 1396500, '2026-04-15T20:10:00'), -- Khớp VIP-2
+(3, 7, 6,  12,    4, NULL, N'Dine In',  N'Paid',            1380000, 50000, 66500, 1396500, '2026-04-15T20:10:00'), -- Khớp VIP-2
 (4, 1, 1,  7,    3, NULL, N'Dine In',  N'Open',             425000,     0,     0,  425000, '2026-05-20T18:40:00'), -- Khớp WIN-A
 (5, 2, 5,  8,    3, 2,    N'Preorder', N'Sent To Kitchen', 1567000,     0, 78350, 1645350, '2026-05-20T19:00:00'), -- Khớp VIP-1
 (6, NULL, 10, NULL, NULL, 1,  N'QR Self',  N'Sent To Kitchen',  336000,     0,     0,  336000, '2026-05-18T19:05:00'), -- Khớp S-03
-(7, 9, 1, NULL, NULL, 3,  N'QR Self',  N'Sent To Kitchen',  747000,     0,     0,  747000, SYSDATETIME()); -- Live QR Order cho Bàn WIN-A (KDS Test)
+(7, 9, 1, NULL, NULL, 3,  N'QR Self',  N'Sent To Kitchen',  747000,     0,     0,  747000, SYSDATETIME()), -- Live QR Order cho Bàn WIN-A (KDS Test)
+(8, 19, 1, 12, 3, NULL, N'Dine In',  N'Paid',            1250000,     0, 62500, 1312500, DATEADD(minute, 10, DATEADD(day, -2, SYSDATETIME()))),
+(9, NULL, 2, 12, 3, NULL, N'Dine In', N'Paid',             800000,  0, 40000, 840000,  '2026-01-20T19:30:00'),
+(10, NULL, 3, 12, 3, NULL, N'Dine In', N'Paid',            1200000, 0, 60000, 1260000, '2026-02-18T18:45:00'),
+(11, NULL, 1, 12, 4, NULL, N'Dine In', N'Paid',            950000,  0, 47500, 997500,  '2026-03-22T20:15:00'),
+(12, NULL, 2, 12, 3, NULL, N'Dine In', N'Paid',            1100000, 0, 55000, 1155000, '2026-05-25T19:10:00'),
+(13, NULL, 4, 12, 4, NULL, N'Dine In', N'Paid',            1400000, 0, 70000, 1470000, '2026-06-15T20:30:00');
 SET IDENTITY_INSERT dbo.Orders OFF;
 GO
 
@@ -1307,7 +1434,10 @@ VALUES
 (14, 6,  7, 1, 188000, NULL,             N'Preparing'),
 (15, 6,  6, 1, 148000, N'No mushrooms', N'Pending'),
 (16, 7,  9, 1, 499000, N'QR Món 1 (Live)', N'Sent To Kitchen'),
-(17, 7, 12, 1, 248000, N'QR Món 2 (Live)', N'Sent To Kitchen');
+(17, 7, 12, 1, 248000, N'QR Món 2 (Live)', N'Sent To Kitchen'),
+(18, 8, 13, 1, 890000, N'Completed order', N'Served'),
+(19, 8, 18, 2,  89000, NULL,              N'Served'),
+(20, 8,  7, 1, 182000, NULL,              N'Served');
 SET IDENTITY_INSERT dbo.OrderItems OFF;
 GO
 
@@ -1351,11 +1481,17 @@ GO
 
 SET IDENTITY_INSERT dbo.Payments ON;
 INSERT INTO dbo.Payments
-(payment_id, order_id, payment_method_id, amount_paid, change_given, payment_status, transaction_ref, processed_by_staff_id, paid_at)
+(payment_id, order_id, payment_method_id, amount_paid, change_given, payment_status, transaction_ref, processed_by_staff_id, paid_at, created_at)
 VALUES
-(1, 1, 1, 466200, 0, N'Completed', NULL,                  3, '2026-05-18T20:30:00'),
-(2, 2, 2, 1329300, 0, N'Completed', N'QR-20260410-001',   3, '2026-04-10T21:00:00'),
-(3, 3, 3, 1396500, 0, N'Completed', N'CARD-20260415-001', 4, '2026-04-15T21:30:00');
+(1, 1, 1, 466200, 0, N'Completed', NULL,                  3, '2026-05-18T20:30:00', '2026-05-18T20:30:00'),
+(2, 2, 2, 1329300, 0, N'Completed', N'QR-20260410-001',   3, '2026-04-10T21:00:00', '2026-04-10T21:00:00'),
+(3, 3, 3, 1396500, 0, N'Completed', N'CARD-20260415-001', 4, '2026-04-15T21:30:00', '2026-04-15T21:30:00'),
+(4, 8, 2, 1312500, 0, N'Completed', N'QR-LIVE-001',   3, DATEADD(minute, 15, DATEADD(day, -2, SYSDATETIME())), DATEADD(minute, 15, DATEADD(day, -2, SYSDATETIME()))),
+(5, 9,  2, 840000,  0, N'Completed', N'CARD-20260120-001', 3, '2026-01-20T21:00:00', '2026-01-20T21:00:00'),
+(6, 10, 1, 1260000, 0, N'Completed', N'QR-20260218-001',   3, '2026-02-18T20:15:00', '2026-02-18T20:15:00'),
+(7, 11, 2, 997500,  0, N'Completed', N'CARD-20260322-001', 4, '2026-03-22T21:45:00', '2026-03-22T21:45:00'),
+(8, 12, 2, 1155000, 0, N'Completed', N'QR-20260525-001',   3, '2026-05-25T20:30:00', '2026-05-25T20:30:00'),
+(9, 13, 3, 1470000, 0, N'Completed', N'CARD-20260615-001', 4, '2026-06-15T22:00:00', '2026-06-15T22:00:00');
 SET IDENTITY_INSERT dbo.Payments OFF;
 GO
 
@@ -1592,3 +1728,181 @@ GO
 SELECT review_id, staff_id, rating, notes, reviewed_by, review_date, created_at FROM dbo.PerformanceReviews;
 GO
 
+-- ============================================================================
+-- seed-demo.sql — Production / Staging Demo Seed
+-- 
+-- PURPOSE : Give the live server enough realistic data to make the
+--           dashboard, charts and tables look populated.
+--           ~60 rows total, runs in < 2 seconds.
+--
+-- USAGE   : Called automatically by `npm run db:init:prod`
+--           DO NOT run this on local — use `npm run db:init:local` instead.
+-- ============================================================================
+
+-- ---------------------------------------------------------------------------
+-- Phu / Admin test accounts (always upsert so they survive re-init)
+-- ---------------------------------------------------------------------------
+SET IDENTITY_INSERT dbo.UserAccounts ON;
+MERGE dbo.UserAccounts AS target
+USING (VALUES
+  (1,  4, N'Dang Quang Phu',     N'phuadmin@phurai.vn',  '0901000001',
+      N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1),
+  (2,  3, N'Dang Quang Phu',     N'phumanager@phurai.vn', '0901000002',
+      N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1),
+  (3,  2, N'Dang Quang Phu',     N'phustaff1@phurai.vn',  '0901000003',
+      N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1)
+) AS source (user_id, role_id, full_name, email, phone, password_hash, is_active, email_verified)
+ON target.user_id = source.user_id
+WHEN MATCHED THEN UPDATE SET
+  role_id = source.role_id, full_name = source.full_name,
+  email = source.email, is_active = 1, email_verified = 1
+WHEN NOT MATCHED THEN INSERT
+  (user_id, role_id, full_name, email, phone, password_hash, is_active, email_verified)
+  VALUES (source.user_id, source.role_id, source.full_name, source.email,
+          source.phone, source.password_hash, source.is_active, source.email_verified);
+SET IDENTITY_INSERT dbo.UserAccounts OFF;
+GO
+
+-- ---------------------------------------------------------------------------
+-- 30 daily revenue rows for the Revenue Overview chart
+-- Uses a tally-table trick — no loops, no stored procedures needed
+-- ---------------------------------------------------------------------------
+WITH Days AS (
+  SELECT TOP 30 ROW_NUMBER() OVER (ORDER BY object_id) AS n FROM sys.objects
+)
+INSERT INTO dbo.Payments
+  (order_id, payment_method_id, amount_paid, change_given,
+   payment_status, paid_at, created_at)
+SELECT
+  (n % 3) + 1                                                   AS order_id,
+  (n % 2) + 1                                                   AS payment_method_id,
+  CAST(300000 + (n * 51300 % 1500000) AS DECIMAL(18,2))         AS amount_paid,
+  0                                                             AS change_given,
+  N'Completed'                                                  AS payment_status,
+  DATEADD(day, -(30 - n), CAST(GETDATE() AS DATE))              AS paid_at,
+  DATEADD(day, -(30 - n), CAST(GETDATE() AS DATE))              AS created_at
+FROM Days
+WHERE NOT EXISTS (
+  SELECT 1 FROM dbo.Payments p
+  WHERE CAST(p.paid_at AS DATE) = DATEADD(day, -(30 - n), CAST(GETDATE() AS DATE))
+    AND p.payment_status = N'Completed'
+);
+GO
+
+-- ---------------------------------------------------------------------------
+-- Demo Reservations — IDs start at 100 to avoid conflict with static data
+-- ---------------------------------------------------------------------------
+SET IDENTITY_INSERT dbo.Reservations ON;
+INSERT INTO dbo.Reservations
+  (reservation_id, customer_id, contact_name, contact_phone,
+   reservation_start_at, reservation_end_at, guest_count,
+   reservation_status, reservation_source, confirmed_by_staff_id, confirmed_at, created_at)
+VALUES
+-- Upcoming Confirmed
+(100, 7,  N'Nguyen Minh Khoa', '0901111001', DATEADD(day,1,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,1,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 2, N'Confirmed',       N'Online', 3, GETDATE(), GETDATE()),
+(101, 8,  N'Pham Thu Huong',   '0901111002', DATEADD(day,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,2,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 4, N'Confirmed',       N'Online', 3, GETDATE(), GETDATE()),
+(102, 9,  N'Le Bao Nguyen',    '0901111003', DATEADD(day,3,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,3,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 3, N'Pending Request', N'Online', NULL, NULL, GETDATE()),
+(103, 10, N'Nguyen Lan Anh',   '0901111004', DATEADD(day,5,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,5,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 6, N'Confirmed',       N'Online', 4, GETDATE(), GETDATE()),
+-- Pending (manager needs to action)
+(104, 11, N'Tran An Nguyen',   '0901111005', DATEADD(day,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,2,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 4, N'Pending Request', N'Online', NULL, NULL, GETDATE()),
+(105, 12, N'Tran My Linh',     '0909000002', DATEADD(day,4,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,4,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 2, N'Pending Request', N'Online', NULL, NULL, GETDATE()),
+-- Recent Completed
+(106, 8,  N'Pham Thu Huong',   '0901111002', DATEADD(day,-3, CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,-3, DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 4, N'Completed', N'Online', 3, DATEADD(day,-5,GETDATE()), DATEADD(day,-5,GETDATE())),
+(107, 9,  N'Le Bao Nguyen',    '0901111003', DATEADD(day,-7, CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,-7, DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 3, N'Completed', N'Online', 4, DATEADD(day,-9,GETDATE()), DATEADD(day,-9,GETDATE())),
+(108, 10, N'Nguyen Lan Anh',   '0901111004', DATEADD(day,-10,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,-10,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 5, N'Completed', N'Online', 3, DATEADD(day,-12,GETDATE()), DATEADD(day,-12,GETDATE())),
+(109, 7,  N'Nguyen Minh Khoa', '0901111001', DATEADD(day,-14,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,-14,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 2, N'Completed', N'Online', 3, DATEADD(day,-16,GETDATE()), DATEADD(day,-16,GETDATE())),
+-- Cancelled / No Show
+(110, 12, N'Tran My Linh',     '0909000002', DATEADD(day,-2, CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,-2, DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 2, N'Cancelled', N'Online', NULL, NULL, DATEADD(day,-4,GETDATE())),
+(111, 8,  N'Pham Thu Huong',   '0901111002', DATEADD(day,-5, CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,-5, DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 3, N'No Show',   N'Online', 3,    DATEADD(day,-7,GETDATE()), DATEADD(day,-7,GETDATE())),
+-- Realistic Completed Dining for customer 12 (Tran My Linh)
+(112, 12, N'Tran My Linh',     '0909000002', DATEADD(day,-5, DATEADD(hour,19,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), DATEADD(day,-5, DATEADD(hour,21,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 2, N'Completed', N'Online', 3, DATEADD(day,-6,GETDATE()), DATEADD(day,-5,GETDATE())),
+(113, 12, N'Tran My Linh',     '0909000002', DATEADD(day,-12,DATEADD(hour,18,DATEADD(minute,30,CAST(CAST(GETDATE() AS DATE) AS DATETIME)))), DATEADD(day,-12,DATEADD(hour,20,DATEADD(minute,30,CAST(CAST(GETDATE() AS DATE) AS DATETIME)))), 2, N'Completed', N'Online', 3, DATEADD(day,-13,GETDATE()), DATEADD(day,-12,GETDATE()));
+SET IDENTITY_INSERT dbo.Reservations OFF;
+GO
+
+-- Assign demo reservations to tables
+INSERT INTO dbo.ReservationTables (reservation_id, table_id, assigned_by_staff_id) VALUES
+(100, 1,  3), (101, 5,  3), (103, 24, 4),
+(106, 5,  3), (107, 11, 4), (108, 24, 3), (109, 1, 3),
+(112, 5,  3), (113, 1,  3);
+GO
+
+-- ---------------------------------------------------------------------------
+-- Demo Orders + Payments for completed reservations
+-- ---------------------------------------------------------------------------
+SET IDENTITY_INSERT dbo.Orders ON;
+INSERT INTO dbo.Orders
+  (order_id, reservation_id, table_id, customer_id, created_by_staff_id,
+   order_type, order_status, subtotal, discount_amount, service_charge, total_amount, created_at)
+VALUES
+(100, 106, 5,  8, 3, N'Dine In', N'Paid', 1316000, 50000, 63300, 1329300, DATEADD(day,-3, GETDATE())),
+(101, 107, 11, 9, 4, N'Dine In', N'Paid', 1030000,     0, 51500, 1081500, DATEADD(day,-7, GETDATE())),
+(102, 108, 24,10, 3, N'Dine In', N'Paid', 1890000, 50000, 92000, 1932000, DATEADD(day,-10,GETDATE())),
+(103, 109, 1,  7, 3, N'Dine In', N'Paid',  680000,     0, 34000,  714000, DATEADD(day,-14,GETDATE())),
+(104, 112, 5, 12, 3, N'Dine In', N'Paid', 1316000, 50000, 63300, 1329300, DATEADD(day,-5, DATEADD(hour,19,CAST(CAST(GETDATE() AS DATE) AS DATETIME)))),
+(105, 113, 1, 12, 3, N'Dine In', N'Paid',  680000,     0, 34000,  714000, DATEADD(day,-12,DATEADD(hour,18,DATEADD(minute,30,CAST(CAST(GETDATE() AS DATE) AS DATETIME)))));
+SET IDENTITY_INSERT dbo.Orders OFF;
+GO
+
+INSERT INTO dbo.Payments
+  (order_id, payment_method_id, amount_paid, change_given, payment_status, paid_at, created_at)
+VALUES
+(100, 2, 1329300,      0, N'Completed', DATEADD(day,-3, GETDATE()), DATEADD(day,-3, GETDATE())),
+(101, 1, 1100000,  18500, N'Completed', DATEADD(day,-7, GETDATE()), DATEADD(day,-7, GETDATE())),
+(102, 2, 1932000,      0, N'Completed', DATEADD(day,-10,GETDATE()), DATEADD(day,-10,GETDATE())),
+(103, 1,  714000,      0, N'Completed', DATEADD(day,-14,GETDATE()), DATEADD(day,-14,GETDATE())),
+(104, 2, 1329300,      0, N'Completed', DATEADD(day,-5, DATEADD(hour,19,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), DATEADD(day,-5, DATEADD(hour,19,CAST(CAST(GETDATE() AS DATE) AS DATETIME)))),
+(105, 1,  714000,      0, N'Completed', DATEADD(day,-12,DATEADD(hour,18,DATEADD(minute,30,CAST(CAST(GETDATE() AS DATE) AS DATETIME)))), DATEADD(day,-12,DATEADD(hour,18,DATEADD(minute,30,CAST(CAST(GETDATE() AS DATE) AS DATETIME)))));
+GO
+
+SET IDENTITY_INSERT dbo.OrderItems ON;
+INSERT INTO dbo.OrderItems
+  (order_item_id, order_id, dish_id, quantity, unit_price, item_status)
+VALUES
+(1000, 100, 13, 1, 890000, N'Served'),
+(1001, 100, 12, 1, 248000, N'Served'),
+(1002, 100, 17, 2,  89000, N'Served'),
+(1003, 101, 11, 1, 690000, N'Served'),
+(1004, 101, 15, 1,  98000, N'Served'),
+(1005, 101, 18, 3,  89000, N'Served'),
+(1006, 102, 19, 1,1290000, N'Served'),
+(1007, 102, 10, 1, 690000, N'Served'),
+(1008, 103,  1, 2, 168000, N'Served'),
+(1009, 103, 15, 1,  98000, N'Served'),
+(1010, 103, 17, 2,  89000, N'Served'),
+(1011, 104, 13, 1, 890000, N'Served'),
+(1012, 104, 12, 1, 248000, N'Served'),
+(1013, 104, 17, 2,  89000, N'Served'),
+(1014, 105,  1, 2, 168000, N'Served'),
+(1015, 105, 15, 1,  98000, N'Served'),
+(1016, 105, 17, 2,  89000, N'Served');
+SET IDENTITY_INSERT dbo.OrderItems OFF;
+GO
+
+-- Demo reviews
+SET IDENTITY_INSERT dbo.CustomerReviews ON;
+INSERT INTO dbo.CustomerReviews
+  (review_id, customer_id, order_id, food_rating, service_rating, ambiance_rating, comment)
+VALUES
+(100, 8, 100, 5, 5, 4, N'Absolutely stunning. Japanese A5 Wagyu was perfect.'),
+(101, 9, 101, 4, 5, 5, N'Black Cod Miso was divine. Staff were warm throughout.'),
+(102,10, 102, 5, 4, 5, N'Best tasting menu in the city. Every dish was a work of art.'),
+(103, 7, 103, 4, 5, 4, N'Salmon Mentaiko beautifully presented. Will return for omakase.'),
+(104,12, 104, 5, 5, 5, N'Wonderful service and Wagyu was incredibly delicious!');
+SET IDENTITY_INSERT dbo.CustomerReviews OFF;
+GO
+
+-- Demo performance reviews
+INSERT INTO dbo.PerformanceReviews (staff_id, rating, notes, reviewed_by, review_date, created_at)
+SELECT sp.staff_id, 4.5, N'Strong performance this period.', 2, GETDATE(), GETDATE()
+FROM dbo.StaffProfiles sp
+WHERE sp.employment_status = N'Active'
+  AND NOT EXISTS (
+    SELECT 1 FROM dbo.PerformanceReviews pr
+    WHERE pr.staff_id = sp.staff_id
+      AND CAST(pr.review_date AS DATE) = CAST(GETDATE() AS DATE)
+  );
+GO
+
+PRINT N'✅ seed-demo.sql complete — production demo data inserted.';
+GO

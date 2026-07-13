@@ -73,25 +73,17 @@ function StaffReportTab({ toast, onRefresh, refreshing }) {
 
   return (
     <div className="staff-report-tab">
-      <SectionHead
-        title="Shift Reports"
-        subtitle="Daily revenue summary and activity log"
-        actions={
-          <Button
-            variant="ghost"
-            size="sm"
-            icon="refresh"
-            onClick={handleRefresh}
-            disabled={refreshing || loading}
-          >
-            Refresh
-          </Button>
-        }
-      />
-
-      {dataSource === "mock" ? (
-        <NotConnectedNote>{DEMO_NOTICE}</NotConnectedNote>
-      ) : null}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
+        <Button
+          variant="ghost"
+          size="sm"
+          icon="refresh"
+          onClick={handleRefresh}
+          disabled={refreshing || loading}
+        >
+          Refresh
+        </Button>
+      </div>
 
       {loading ? (
         <div className="sfx-loading staff-report-tab__loading">

@@ -34,7 +34,8 @@ function formatMoney(value) {
 }
 
 function isManagerUser(user) {
-  return Number(user?.roleId ?? user?.role_id) === 4;
+  const r = Number(user?.roleId ?? user?.role_id);
+  return r === 3 || r === 4;
 }
 
 function isOccupiedTable(table) {
@@ -218,27 +219,8 @@ function StaffPaymentTab({
 
   return (
     <div className={`staff-payment-wrap${refreshing || billLoading ? " is-loading" : ""}`}>
-      <div className="staff-card staff-payment-intro">
-        <SectionHead
-          title="Payments"
-          subtitle="View bill, apply vouchers, collect payment, and close the table QR session."
-          actions={
-            <Button
-              variant="ghost"
-              icon="refresh"
-              onClick={onRefresh}
-              disabled={refreshing}
-            >
-              Refresh
-            </Button>
-          }
-        />
-
-        {dataSource === "mock" ? (
-          <NotConnectedNote>{DEMO_NOTICE}</NotConnectedNote>
-        ) : null}
-
-        {checkoutSuccess ? (
+      {checkoutSuccess ? (
+        <div className="staff-card staff-payment-success-card" style={{ marginBottom: "16px" }}>
           <div className="staff-payment-success" role="status">
             Paid table {checkoutSuccess.table_number} —{" "}
             {formatMoney(checkoutSuccess.total_amount)}
@@ -246,8 +228,8 @@ function StaffPaymentTab({
               ? ` · Change ${formatMoney(checkoutSuccess.change_given)}`
               : ""}
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {!occupiedTables.length ? (
         <div className="staff-card">
@@ -259,19 +241,31 @@ function StaffPaymentTab({
         </div>
       ) : (
         <div className="staff-payment-layout">
-          <aside className="staff-payment-sidebar staff-card staff-card--compact staff-card--flush">
-            <label htmlFor="staff-payment-table-select">Select table</label>
-            <select
-              id="staff-payment-table-select"
-              value={selectedTableId}
-              onChange={(e) => setSelectedTableId(e.target.value)}
-            >
-              {occupiedTables.map((table) => (
-                <option key={table.table_id} value={table.table_id}>
-                  {table.table_number} · {table.area_name}
-                </option>
-              ))}
-            </select>
+          <aside className="staff-payment-sidebar staff-card staff-card--compact staff-card--flush" style={{ display: "flex", gap: "8px", alignItems: "center", padding: "12px 16px" }}>
+            <div style={{ flex: 1 }}>
+              <label htmlFor="staff-payment-table-select" style={{ display: "block", marginBottom: "4px" }}>Select table</label>
+              <select
+                id="staff-payment-table-select"
+                value={selectedTableId}
+                onChange={(e) => setSelectedTableId(e.target.value)}
+                style={{ width: "100%" }}
+              >
+                {occupiedTables.map((table) => (
+                  <option key={table.table_id} value={table.table_id}>
+                    {table.table_number} · {table.area_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ alignSelf: "flex-end" }}>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="refresh"
+                onClick={onRefresh}
+                disabled={refreshing}
+              />
+            </div>
           </aside>
 
           <div className="staff-payment-main">

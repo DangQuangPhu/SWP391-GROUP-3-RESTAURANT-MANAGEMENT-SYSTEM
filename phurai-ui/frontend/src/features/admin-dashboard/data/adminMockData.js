@@ -7,9 +7,8 @@
 export const ROLE_OPTIONS = [
   { id: 1, label: 'Customer' },
   { id: 2, label: 'Staff' },
-  { id: 3, label: 'Kitchen' },
-  { id: 4, label: 'Manager' },
-  { id: 5, label: 'Admin' },
+  { id: 3, label: 'Manager' },
+  { id: 4, label: 'Admin' },
 ];
 
 export function getRoleLabel(roleId) {
@@ -19,7 +18,7 @@ export function getRoleLabel(roleId) {
 export const MOCK_ACCOUNTS = [
   {
     id: 1,
-    roleId: 5,
+    roleId: 4,
     fullName: 'Dang Quang Phu',
     email: 'phuadmin@phurai.vn',
     phone: '0901000001',
@@ -28,7 +27,7 @@ export const MOCK_ACCOUNTS = [
   },
   {
     id: 2,
-    roleId: 4,
+    roleId: 3,
     fullName: 'Tran Minh',
     email: 'tranminh@phurai.vn',
     phone: '0901000002',

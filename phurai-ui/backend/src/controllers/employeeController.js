@@ -30,15 +30,15 @@ const generateTempPassword = () => {
 };
 
 const MANAGER_GRANTABLE_ROLES  = [2];       // Staff only
-const ADMIN_GRANTABLE_ROLES    = [2, 4];    // Staff + Manager
-// role_id=3 blocked (deprecated); role_id=5 blocked for all via this endpoint
+const ADMIN_GRANTABLE_ROLES    = [2, 3];    // Staff + Manager
+// role_id=4 blocked for all via this endpoint
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/manager/employees
 // ─────────────────────────────────────────────────────────────
 export const listEmployees = async (req, res) => {
   const callerRoleId = req.user?.role_id;
-  const includeSalary = [4, 5].includes(callerRoleId);
+  const includeSalary = [3, 4].includes(callerRoleId);
 
   try {
     const pool = await getRawPool();
@@ -138,7 +138,7 @@ export const createEmployee = async (req, res) => {
       }
     }
 
-    const callerIncludeSalary = [4, 5].includes(req.user?.role_id);
+    const callerIncludeSalary = [3, 4].includes(req.user?.role_id);
     const salaryVal = callerIncludeSalary ? (salary ?? null) : null;
 
     const result = await pool.request()
@@ -185,7 +185,7 @@ export const updateEmployee = async (req, res) => {
 
   const { full_name, email, phone, job_title_id, salary, department } = req.body ?? {};
   const callerRoleId = req.user?.role_id;
-  const includeSalary = [4, 5].includes(callerRoleId);
+  const includeSalary = [3, 4].includes(callerRoleId);
 
   try {
     const pool = await getRawPool();
@@ -241,17 +241,14 @@ export const grantSystemAccess = async (req, res) => {
   const callerRoleId = req.user?.role_id;
 
   // ── Privilege guards ────────────────────────────────────────
-  if (requestedRoleId === 3) {
-    return res.status(400).json({ success: false, message: 'role_id=3 (Kitchen Staff) is deprecated and cannot be granted.' });
-  }
-  if (requestedRoleId === 5) {
+  if (requestedRoleId === 4) {
     return res.status(403).json({ success: false, message: 'Admin role cannot be granted via this endpoint.' });
   }
-  if (callerRoleId === 4 && !MANAGER_GRANTABLE_ROLES.includes(requestedRoleId)) {
+  if (callerRoleId === 3 && !MANAGER_GRANTABLE_ROLES.includes(requestedRoleId)) {
     return res.status(403).json({ success: false, message: 'Managers can only grant the Restaurant Staff role (role_id=2).' });
   }
-  if (callerRoleId === 5 && !ADMIN_GRANTABLE_ROLES.includes(requestedRoleId)) {
-    return res.status(403).json({ success: false, message: 'Admins can grant Restaurant Staff (2) or Manager (4) roles via this endpoint.' });
+  if (callerRoleId === 4 && !ADMIN_GRANTABLE_ROLES.includes(requestedRoleId)) {
+    return res.status(403).json({ success: false, message: 'Admins can grant Restaurant Staff (2) or Manager (3) roles via this endpoint.' });
   }
 
   try {
@@ -384,10 +381,15 @@ export const revokeSystemAccess = async (req, res) => {
 
     const linkedUserId = employee.user_id;
 
-    // Soft-revoke: deactivate account
+    // Soft-revoke: deactivate account AND set session_revoked_at so all existing JWTs are invalidated
+    // Phase 2: session_revoked_at > JWT.iat → all active tokens for this user are rejected
     await pool.request()
       .input('userId', sql.Int, linkedUserId)
-      .query(`UPDATE dbo.UserAccounts SET is_active = 0, updated_at = SYSDATETIME() WHERE user_id = @userId`);
+      .query(`
+        UPDATE dbo.UserAccounts
+        SET is_active = 0, session_revoked_at = SYSDATETIME(), updated_at = SYSDATETIME()
+        WHERE user_id = @userId
+      `);
 
     // Unlink from StaffProfiles (keep user_id row for AuditLogs FK preservation)
     await pool.request()
@@ -398,13 +400,15 @@ export const revokeSystemAccess = async (req, res) => {
         WHERE staff_id = @staffId
       `);
 
-    // Emit auth:force_logout via socket (frontend listener confirmed in StaffNotificationListener.jsx)
+    // Phase 2: Emit auth:session_revoked to the user's socket room → frontend redirects to Home
+    // Room name must match the convention in AuthContext: room:user:{user_id}
     try {
       const { getIO } = await import('../socket.js');
       const io = getIO();
       if (io) {
-        io.to(`user:${linkedUserId}`).emit('auth:force_logout', {
-          reason: 'Account access has been revoked by an administrator.',
+        io.to(`room:user:${linkedUserId}`).emit('auth:session_revoked', {
+          reason: 'Your system access has been revoked by an administrator.',
+          code: 'ACCESS_REVOKED',
         });
       }
     } catch (socketErr) {
@@ -421,7 +425,7 @@ export const revokeSystemAccess = async (req, res) => {
         VALUES (@actorId, N'REVOKE_SYSTEM_ACCESS', N'StaffProfiles', @staffId, @payload, SYSDATETIME())
       `);
 
-    return res.json({ success: true, message: 'System access revoked.' });
+    return res.json({ success: true, message: 'System access revoked. Employee session has been terminated.' });
   } catch (err) {
     console.error('[employeeController] revokeSystemAccess error:', err);
     return res.status(500).json({ success: false, message: 'Failed to revoke system access.' });

@@ -18,61 +18,12 @@ import {
 import { RESERVATION_STATUS_META, RESERVATION_STATUS, FILTER_GROUPS, ALL_RESERVATION_STATUSES } from "@/shared/reservationStatus.js";
 import { getReservationsFilterFromSearch } from "../../config/managerRoutes.js";
 import {
-  confirmReservation, rejectReservation, cancelReservation, getReservationDetails, updateReservation, getReservationHistory, resolveEditRequest,
+  confirmReservation, rejectReservation, cancelReservation, getReservationDetails, updateReservation, getReservationHistory, resolveEditRequest, fetchAllReservations,
 } from "../../services/managerApi.js";
 import { useManagerPortal } from "../../context/ManagerPortalContext.jsx";
 import ReservationStatusBadge from "@/components/shared/ReservationStatusBadge.jsx";
 import EmptyVal from "@/components/shared/EmptyVal.jsx";
-
-/**
- * Parse the encoded special_request string.
- * Format: [Dining Purpose: X]\n[Hold: Ym]\n[Notes: user text]\n[Guest Name: ...]...
- * Returns { diningPurpose, holdMinutes, notes, guestName, guestEmail, guestPhone }.
- */
-function parseSpecialRequest(raw) {
-  const str = String(raw || "").trim();
-  const extract = (tag) => {
-    const re = new RegExp(`\\[${tag}:\\s*(.+?)\\]`, "i");
-    const m = str.match(re);
-    return m ? m[1].trim() : null;
-  };
-  
-  let diningPurpose = extract("Dining Purpose");
-  let notesTag = extract("Notes");
-  
-  // Legacy fallback: [Casual Dinner] or [Casual Dinner Notes...
-  if (!diningPurpose) {
-    const mLegacy = str.match(/^\[([^\]]+)(?:\]|$)/);
-    if (mLegacy && !mLegacy[1].includes(':')) {
-      diningPurpose = mLegacy[1].trim();
-    }
-  }
-
-  const holdRaw = extract("Hold");
-  const holdMinutes = holdRaw ? parseInt(holdRaw, 10) || null : null;
-  
-  // Strip all known tags to get remaining "clean" text
-  const cleaned = str
-    .replace(/\[Dining Purpose:[^\]]*\]/gi, "")
-    .replace(/\[Hold:[^\]]*\]/gi, "")
-    .replace(/\[Notes:[^\]]*\]/gi, "")
-    .replace(/\[Guest Name:[^\]]*\]/gi, "")
-    .replace(/\[Guest Email:[^\]]*\]/gi, "")
-    .replace(/\[Guest Phone:[^\]]*\]/gi, "")
-    // Strip legacy tag if matched
-    .trim()
-    .replace(/^\[[^\]]+(?:\]|$)\s*/, (match) => {
-      // Only strip if it doesn't contain a colon (legacy format)
-      return match.includes(':') ? match : "";
-    })
-    .replace(/\n+/g, "\n")
-    .trim();
-    
-  // Prefer the explicit [Notes: ...] tag, fall back to remaining cleaned text
-  const notes = notesTag || cleaned || null;
-  console.log("[parseSpecialRequest] raw=", JSON.stringify(raw), " => ", JSON.stringify({ diningPurpose, holdMinutes, notes }));
-  return { diningPurpose, holdMinutes, notes };
-}
+import { Pagination } from "@/components/ui/Pagination.jsx";
 
 
 
@@ -108,6 +59,9 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [active, setActive] = useState(null);
   const [pendingAction, setPendingAction] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -181,69 +135,51 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setStatusFilter(newStatus);
+    setCurrentPage(1);
   }, [urlFilter]);
 
-  /* ── Filtered list (date range) ── */
-  const filtered = useMemo(() => {
-    const base = reservationList.filter((r) => {
-      const kw = search.trim().toLowerCase();
-      const matchKw =
-        !kw ||
-        r.customer_name?.toLowerCase().includes(kw) ||
-        r.table_label?.toLowerCase().includes(kw) ||
-        String(r.customer_phone || r.phone || "").includes(kw) ||
-        String(r.reservation_id || "").includes(kw);
-      const statusMatchVal = (r.status || r.reservation_status || "").trim();
-      let matchStatus = false;
-      if (statusFilter === "all") {
-        matchStatus = true;
-      } else if (FILTER_GROUPS[statusFilter]) {
-        matchStatus = FILTER_GROUPS[statusFilter].includes(statusMatchVal);
-      } else {
-        matchStatus = statusMatchVal.toLowerCase() === statusFilter.toLowerCase();
-      }
-
-      let matchDate = true;
+  /* ── Server-side Fetching ── */
+  const fetchPaginatedData = useCallback(async () => {
+    try {
+      const params = {
+        page: currentPage,
+        limit: 20,
+        search,
+        status: statusFilter,
+      };
+      
       const sd = appliedRange?.startDate;
       const ed = appliedRange?.endDate;
       if (sd && ed && sd !== "all" && sd !== "All Dates" && String(sd).trim() !== "") {
-        try {
-          const rawIso = r.reservation_start_at;
-          if (rawIso) {
-            const resDateStr = String(rawIso).slice(0, 10);
-            const startStr = format(new Date(sd), "yyyy-MM-dd");
-            const endStr = format(new Date(ed), "yyyy-MM-dd");
-            matchDate = resDateStr >= startStr && resDateStr <= endStr;
-          }
-        } catch { matchDate = true; }
+        params.startDate = format(new Date(sd), "yyyy-MM-dd");
+        params.endDate = format(new Date(ed), "yyyy-MM-dd");
       }
 
-      return matchKw && matchStatus && matchDate;
-    });
+      const res = await fetchAllReservations(user?.userId || user?.user_id, params);
+      if (res?.source === "api") {
+        setReservations(res.data);
+        setTotalCount(res.totalCount || 0);
+        setTotalPages(res.totalPages || 1);
+      }
+    } catch (error) {
+      console.error("Failed to fetch paginated reservations:", error);
+    }
+  }, [currentPage, search, statusFilter, appliedRange, user, setReservations]);
 
-    const MANAGER_STATUS_ORDER = {
-      [RESERVATION_STATUS.PENDING_REQUEST]: 1,
-      [RESERVATION_STATUS.PENDING_PAYMENT]: 2,
-      [RESERVATION_STATUS.RESERVED]: 3,
-      [RESERVATION_STATUS.CONFIRMED]: 4,
-      [RESERVATION_STATUS.SEATED]: 5,
-      [RESERVATION_STATUS.CLEANING]: 6,
-      [RESERVATION_STATUS.CHECK_OUT]: 7,
-      [RESERVATION_STATUS.COMPLETED]: 8,
-    };
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, appliedRange]);
 
-    return base.sort((a, b) => {
-      const statusA = (a.display_status || a.reservation_status || a.status || "").toLowerCase();
-      const statusB = (b.display_status || b.reservation_status || b.status || "").toLowerCase();
-      const orderA = MANAGER_STATUS_ORDER[statusA] || 99;
-      const orderB = MANAGER_STATUS_ORDER[statusB] || 99;
-      if (orderA !== orderB) return orderA - orderB;
-      return (b.reservation_id || 0) - (a.reservation_id || 0);
-    });
-  }, [reservationList, search, statusFilter, appliedRange]);
+  // Fetch data on page or filter changes
+  useEffect(() => {
+    fetchPaginatedData();
+  }, [fetchPaginatedData]);
 
-  /* ── KPI counts ── */
-  const kpiTotalBookings = filtered.length;
+  const filtered = reservationList;
+
+  /* ── KPI counts (now using totalCount from server for total bookings) ── */
+  const kpiTotalBookings = totalCount;
   const kpiPendingRequests = useMemo(
     () => filtered.filter((r) => r.reservation_status === "Pending Request").length,
     [filtered]
@@ -280,13 +216,13 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
         customer_email: full.customer_email || full.email || "",
         guest_count: full.guest_count || 1,
         table_id: full.table_id || "",
-        occasion: full.dining_purpose || full.occasion || parseSpecialRequest(full.special_request || full.notes || "").diningPurpose || "",
+        occasion: full.dining_purpose || full.occasion || "",
         promotions: full.promotions || "",
-        notes: parseSpecialRequest(full.special_request || full.notes || "").notes || "",
+        notes: full.special_request || full.notes || "",
         status: (full.status || full.reservation_status || "").toLowerCase(),
         edit_reason: "",
         reservation_start_at: full.reservation_start_at ? new Date(new Date(full.reservation_start_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
-        duration: full.reservation_start_at && full.reservation_end_at ? Math.max(15, Math.round((new Date(full.reservation_end_at) - new Date(full.reservation_start_at)) / 60000) - 90) : (parseSpecialRequest(full.special_request || full.notes || "").holdMins || 30)
+        duration: full.reservation_start_at && full.reservation_end_at ? Math.max(15, Math.round((new Date(full.reservation_end_at) - new Date(full.reservation_start_at)) / 60000) - 90) : 30
       });
       const hist = await getReservationHistory(fetchId, user?.userId || user?.user_id);
       setHistory(hist || []);
@@ -298,13 +234,13 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
         customer_email: row.customer_email || row.email || "",
         guest_count: row.guest_count || 1,
         table_id: row.table_id || "",
-        occasion: row.dining_purpose || row.occasion || parseSpecialRequest(row.special_request || row.notes || "").diningPurpose || "",
+        occasion: row.dining_purpose || row.occasion || "",
         promotions: row.promotions || "",
-        notes: parseSpecialRequest(row.special_request || row.notes || "").notes || "",
+        notes: row.special_request || row.notes || "",
         status: (row.status || row.reservation_status || "").toLowerCase(),
         edit_reason: "",
         reservation_start_at: row.reservation_start_at ? new Date(new Date(row.reservation_start_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "",
-        duration: row.reservation_start_at && row.reservation_end_at ? Math.max(15, Math.round((new Date(row.reservation_end_at) - new Date(row.reservation_start_at)) / 60000) - 90) : (parseSpecialRequest(row.special_request || row.notes || "").holdMins || 30)
+        duration: row.reservation_start_at && row.reservation_end_at ? Math.max(15, Math.round((new Date(row.reservation_end_at) - new Date(row.reservation_start_at)) / 60000) - 90) : 30
       });
       setHistory([]);
     } finally {
@@ -435,17 +371,13 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
     }
     const editId = active.reservation_id || active.id;
     try {
-      let reconstructedNotes = editForm.notes || "";
-      if (editForm.occasion) {
-        reconstructedNotes = `[Dining Purpose: ${editForm.occasion}]\n${reconstructedNotes}`.trim();
-      }
-
       const payload = {
         contact_name: editForm.customer_name,
         contact_phone: editForm.customer_phone,
         contact_email: editForm.customer_email,
         guest_count: editForm.guest_count,
-        special_request: reconstructedNotes,
+        special_request: editForm.notes || null,
+        occasion: editForm.occasion || null,
         reservation_status: editForm.status === "reject check-in" ? RESERVATION_STATUS.REJECT_CHECK_IN : (editForm.status === "await check-in" ? RESERVATION_STATUS.AWAIT_CHECK_IN : editForm.status),
         preferred_area_id: active.preferred_area_id,
         reservation_start_at: new Date(editForm.reservation_start_at).toISOString(),
@@ -568,7 +500,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
             <span className="sfx-kpi__icon" aria-hidden="true"><Icon name="calendar" size={18} /></span>
           </div>
           <p className="sfx-kpi__value">{kpiTotalBookings}</p>
-          <p className="sfx-kpi__label">Total Bookings</p>
+          <p className="sfx-kpi__label">Total Reservations</p>
         </article>
 
         <article className="sfx-kpi sfx-kpi--amber">
@@ -592,7 +524,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
             <span className="sfx-kpi__icon" aria-hidden="true"><Icon name="close" size={18} /></span>
           </div>
           <p className="sfx-kpi__value">{kpiLostBookings}</p>
-          <p className="sfx-kpi__label">Lost Bookings</p>
+          <p className="sfx-kpi__label">Lost Reservations</p>
         </article>
       </div>
 
@@ -604,7 +536,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
               {`Reservations for ${selectedDateLabel}`}
             </p>
           </div>
-          <span className="sfx-muted" style={{ fontSize: 13 }}>{filtered.length} reservations</span>
+          <span className="sfx-muted" style={{ fontSize: 13 }}>{totalCount} reservations</span>
         </header>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 24, position: "relative", zIndex: 50, alignItems: "center" }}>
@@ -783,6 +715,15 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
             </motion.tbody>
           </table>
         </div>
+        {filtered.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalCount={totalCount}
+            limit={20}
+          />
+        )}
         {filtered.length === 0 ? (
           <EmptyState
             title="No reservations match your filters"
@@ -879,8 +820,8 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                   { label: "End Time", oldVal: active.reservation_end_at ? fmt(active.reservation_end_at) : <EmptyVal val="" />, newVal: pendingChanges.reservation_end_at ? fmt(pendingChanges.reservation_end_at) : null },
                   { label: "Guests", oldVal: <EmptyVal val={String(active.guest_count || "")} />, newVal: pendingChanges.guest_count != null ? String(pendingChanges.guest_count) : null },
                   { label: "Tables", oldVal: active.assigned_tables || active.table_label || "Unassigned", newVal: pendingChanges.table_ids ? `Table #${pendingChanges.table_ids.join(", ")}` : null },
-                  { label: "Dining Purpose", oldVal: active.dining_purpose || active.occasion || parseSpecialRequest(active.special_request).diningPurpose || "None", newVal: pendingChanges.dining_purpose || null },
-                  { label: "Notes", oldVal: parseSpecialRequest(active.special_request).notes || "None", newVal: pendingChanges.special_request ? parseSpecialRequest(pendingChanges.special_request).notes : null },
+                  { label: "Dining Purpose", oldVal: active.dining_purpose || active.occasion || "None", newVal: pendingChanges.dining_purpose || pendingChanges.occasion || null },
+                  { label: "Notes", oldVal: active.special_request || active.notes || "None", newVal: pendingChanges.special_request || pendingChanges.notes || null },
                 ].filter(f => f.newVal != null);
 
                 return (
@@ -997,13 +938,30 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
                   <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Dining Purpose</span>
-                  <strong style={{ fontWeight: "bold", fontSize: "14px" }}>
-                    {(() => {
-                      const parsed = parseSpecialRequest(active.special_request || active.notes);
-                      const dp = active.dining_purpose || active.occasion || parsed.diningPurpose;
-                      return <EmptyVal val={dp} fallback="None" />;
-                    })()}
-                  </strong>
+                  {isEditing ? (
+                    <select
+                      className="sfx-select"
+                      value={editForm.occasion}
+                      onChange={e => setEditForm(p => ({ ...p, occasion: e.target.value }))}
+                    >
+                      <option value="Casual Dinner">Casual Dinner</option>
+                      <option value="Casual Date">Casual Date</option>
+                      <option value="Date Night">Date Night</option>
+                      <option value="Birthday">Birthday</option>
+                      <option value="Anniversary">Anniversary</option>
+                      <option value="Business Meeting">Business Meeting</option>
+                      <option value="Family Gathering">Family Gathering</option>
+                      <option value="Special Occasion">Special Occasion</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  ) : (
+                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}>
+                      {(() => {
+                        const dp = active.dining_purpose || active.occasion;
+                        return <EmptyVal val={dp} fallback="None" />;
+                      })()}
+                    </strong>
+                  )}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
                   <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Duration</span>
@@ -1022,8 +980,6 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                           const mins = Math.round(diffMs / 60000);
                           if (mins > 0) return `${mins} minutes`;
                         }
-                        const parsed = parseSpecialRequest(active.special_request);
-                        if (parsed.holdMins) return `${parsed.holdMins} minutes`;
                         return <EmptyVal val="" fallback="None" />;
                       })()}
                     </strong>
@@ -1054,8 +1010,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                   {isEditing ? (
                     <textarea className="sfx-input" rows="3" value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} />
                   ) : (() => {
-                    const parsed = parseSpecialRequest(active.special_request || active.notes);
-                    const cleanNote = parsed.notes;
+                    const cleanNote = active.special_request || active.notes;
                     return cleanNote ? (
                       <strong style={{ fontWeight: "bold", fontSize: "14px", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
                         {cleanNote}

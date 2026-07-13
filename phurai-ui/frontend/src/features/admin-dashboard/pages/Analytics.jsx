@@ -174,7 +174,7 @@ function deriveKpis(data, type) {
       const completed = data.find(d => d.reservation_status === 'Completed')?.count || 0;
       const pending = data.find(d => d.reservation_status === 'Pending')?.count || 0;
       return [
-        { icon: 'calendar', label: 'Total Bookings', color: 'blue', value: total },
+        { icon: 'calendar', label: 'Total Reservations', color: 'blue', value: total },
         { icon: 'check', label: 'Completed', color: 'green', value: completed },
         { icon: 'clock', label: 'Pending', color: 'amber', value: pending },
         { icon: 'close', label: 'Statuses', color: 'purple', value: data.length },

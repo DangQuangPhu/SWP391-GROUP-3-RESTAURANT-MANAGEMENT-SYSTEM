@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { MonitorSmartphone, CreditCard, LayoutDashboard, Gem, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import CustomerDashboard from "../components/CustomerDashboard";
 import LoyaltyPointsPage from "@/features/loyalty/pages/LoyaltyPointsPage";
+
 import { getProfilePayments } from "../services/profileApi.js";
 import {
   getDisplayName,
@@ -634,6 +635,10 @@ function ProfilePage({
   onNavigateHome,
   onPasswordReset,
 }) {
+  const { currentUser: authUser } = useAuth();
+  const roleId = Number(authUser?.roleId ?? authUser?.role_id);
+  const isCustomer = roleId === 1;
+
   const [isEditing, setIsEditing] = useState(initialEditMode);
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -652,6 +657,21 @@ function ProfilePage({
   } else if (pathParts.length > 1 && pathParts[1]) {
     activePanel = pathParts[1];
   }
+
+  useEffect(() => {
+    if (authUser && !isCustomer && (activePanel === "loyalty" || activePanel === "payments")) {
+      navigate("/profile", { replace: true });
+    }
+  }, [authUser, isCustomer, activePanel, navigate]);
+
+  const sidebarItems = useMemo(() => {
+    return DASHBOARD_ITEMS.filter((item) => {
+      if (item.key === "loyalty" || item.key === "payments") {
+        return isCustomer;
+      }
+      return true;
+    });
+  }, [isCustomer]);
 
   const [fieldErrors, setFieldErrors] = useState({});
 
@@ -1018,7 +1038,7 @@ function ProfilePage({
           <div className="profile-sidebar__home-wrapper">
             <AccountBackHome onNavigateHome={onNavigateHome} className="profile-page__back-home" />
           </div>
-          {SIDEBAR_ITEMS.map((item, index) => {
+          {sidebarItems.map((item, index) => {
             const Icon = item.icon;
             return (
               <button
@@ -1080,7 +1100,7 @@ function ProfilePage({
           ) : null}
 
           <div className={`profile-dashboard__content ${activePanel === "dashboard" ? "flex flex-col h-full overflow-hidden" : ""}`}>
-            <article className={`profile-dashboard__card mac-animate animate-scale ${activePanel === "dashboard" ? "flex flex-col h-full overflow-hidden flex-1 min-h-0" : ""}`} style={{ "--delay": "100ms" }}>
+            <article className={`profile-dashboard__card mac-animate animate-scale ${activePanel === "dashboard" ? "flex flex-col h-full overflow-hidden flex-1 min-h-0" : ""}`} style={{ "--delay": "100ms", ...(activePanel === "loyalty" ? { minHeight: "unset", overflow: "visible" } : {}) }}>
             {activePanel !== "dashboard" && activePanel !== "loyalty" && (
               <div
                 className="profile-dashboard__cover"
@@ -1155,7 +1175,7 @@ function ProfilePage({
             </div>
             )}
 
-            <div className={`profile-dashboard__card-body ${activePanel === "dashboard" ? "p-0 flex-1 flex flex-col min-h-0 overflow-hidden" : ""}`}>
+            <div className={`profile-dashboard__card-body ${activePanel === "dashboard" ? "p-0 flex-1 flex flex-col min-h-0 overflow-hidden" : ""}`} style={activePanel === "loyalty" ? { paddingTop: 28 } : {}}>
               <div key={activePanel} className={`profile-content-panel mac-animate animate-up ${activePanel === "dashboard" ? "flex-1 flex flex-col min-h-0 overflow-hidden" : ""}`} style={{ "--delay": "250ms" }}>
                 {showSkeleton ? <ProfileContentSkeleton /> : renderPanelContent()}
               </div>

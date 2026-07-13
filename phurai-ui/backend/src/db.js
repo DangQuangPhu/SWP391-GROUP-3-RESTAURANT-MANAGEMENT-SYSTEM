@@ -18,6 +18,15 @@ let poolPromise;
 function getPool() {
   if (!poolPromise) {
     poolPromise = sql.connect(config).then(async (pool) => {
+      const isInitScript = process.argv.some(arg =>
+        arg.includes("run_master_schema") ||
+        arg.includes("seed") ||
+        arg.includes("migrate")
+      );
+      if (isInitScript) {
+        return pool;
+      }
+
       // ── Fast startup: run all schema migrations in 2 parallel batches ─────
       // Batch 1: structural schema changes (idempotent)
       const schemaBatch = pool.request().query(`
@@ -73,6 +82,10 @@ function getPool() {
           ALTER TABLE dbo.KitchenTickets ADD device_id INT NULL;
         IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name=N'updated_at' AND Object_ID=OBJECT_ID(N'dbo.KitchenTickets'))
           ALTER TABLE dbo.KitchenTickets ADD updated_at DATETIME2(0) NOT NULL CONSTRAINT DF_KitchenTickets_updated_at DEFAULT SYSDATETIME();
+
+        -- 7. Reservations occasion column
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name=N'occasion' AND Object_ID=OBJECT_ID(N'dbo.Reservations'))
+          ALTER TABLE dbo.Reservations ADD occasion NVARCHAR(100) NULL;
       `).then(() => console.log("[DB] Schema synchronized."))
         .catch((err) => console.error("[DB] Schema sync error:", err.message));
 
@@ -82,21 +95,21 @@ function getPool() {
         MERGE dbo.UserAccounts AS target
         USING (SELECT N'phuadmin@phurai.vn' AS email) AS src ON target.email = src.email
         WHEN MATCHED THEN UPDATE SET
-          role_id=5, full_name=N'Dang Quang Phu', is_active=1, email_verified=1,
+          role_id=4, full_name=N'Dang Quang Phu', is_active=1, email_verified=1,
           password_hash=N'scrypt$4f2ab2ac57cea58a40e76477d53f3e61$d38e5d2db24cd605a3d29eaf79e1b0429e7c7f5fce28c47faf59126fdd15029828447e1b56d0886c74f888ff7ac6693d7b33e0371ac39c9ff0b55385a0ca547e',
           updated_at=SYSDATETIME()
         WHEN NOT MATCHED THEN INSERT (role_id, full_name, email, phone, password_hash, is_active, email_verified)
-          VALUES (5, N'Dang Quang Phu', N'phuadmin@phurai.vn', '0901000001',
+          VALUES (4, N'Dang Quang Phu', N'phuadmin@phurai.vn', '0901000001',
             N'scrypt$4f2ab2ac57cea58a40e76477d53f3e61$d38e5d2db24cd605a3d29eaf79e1b0429e7c7f5fce28c47faf59126fdd15029828447e1b56d0886c74f888ff7ac6693d7b33e0371ac39c9ff0b55385a0ca547e', 1, 1);
 
         MERGE dbo.UserAccounts AS target
         USING (SELECT N'phumanager@phurai.vn' AS email) AS src ON target.email = src.email
         WHEN MATCHED THEN UPDATE SET
-          role_id=4, full_name=N'Dang Quang Phu', is_active=1, email_verified=1,
+          role_id=3, full_name=N'Dang Quang Phu', is_active=1, email_verified=1,
           password_hash=N'scrypt$8b83430313edc67abc8eadeefc31e841$ce82bbdd63b2f38cc66e8cb939a52599c91f53a8396a40ec2ee1d3d28dd106eedb890ddbe0a4b462080f268b0f848fc5d3f1974aa3930dab29612cb25cb887f0',
           updated_at=SYSDATETIME()
         WHEN NOT MATCHED THEN INSERT (role_id, full_name, email, phone, password_hash, is_active, email_verified)
-          VALUES (4, N'Dang Quang Phu', N'phumanager@phurai.vn', '0901000002',
+          VALUES (3, N'Dang Quang Phu', N'phumanager@phurai.vn', '0901000002',
             N'scrypt$8b83430313edc67abc8eadeefc31e841$ce82bbdd63b2f38cc66e8cb939a52599c91f53a8396a40ec2ee1d3d28dd106eedb890ddbe0a4b462080f268b0f848fc5d3f1974aa3930dab29612cb25cb887f0', 1, 1);
       `).then(() => console.log("[DB] Admin accounts synchronized."))
         .catch((err) => console.error("[DB] Admin upsert error:", err.message));

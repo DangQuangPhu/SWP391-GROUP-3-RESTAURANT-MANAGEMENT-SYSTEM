@@ -6,8 +6,15 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
   const [form, setForm] = useState({
     date: reservation.reservation_date || '',
     startTime: reservation.start_time || '',
-    endTime: reservation.end_time || '', // We need to extract this or calculate it
+    endTime: reservation.end_time || '', 
     guests: reservation.guest_count || 1,
+    contact_name: reservation.customer_name || '',
+    contact_phone: reservation.customer_phone || reservation.phone || '',
+    contact_email: reservation.customer_email || reservation.email || '',
+    table_id: reservation.table_id || '',
+    special_request: reservation.special_request || reservation.notes || '',
+    occasion: reservation.occasion || 'Casual Dinner',
+    reservation_status: reservation.reservation_status || 'Confirmed'
   });
 
   const [loading, setLoading] = useState(false);
@@ -102,13 +109,27 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
       return;
     }
 
-    setLoading(true);
+    const payload = {
+      contact_name: form.contact_name,
+      contact_phone: form.contact_phone,
+      contact_email: form.contact_email,
+      guest_count: parseInt(form.guests, 10),
+      special_request: form.special_request || null,
+      occasion: form.occasion || null,
+      reservation_status: form.reservation_status,
+      reservation_start_at: `${form.date}T${form.startTime}:00`,
+      reservation_end_at: `${form.date}T${form.endTime}:00`,
+      table_id: form.table_id ? parseInt(form.table_id, 10) : null
+    };
+
     try {
-      await editStaffReservation(reservation.reservation_id, userId, {
-        date: form.date,
-        start_time: form.startTime,
-        end_time: form.endTime,
-        guest_count: parseInt(form.guests, 10)
+      setLoading(true);
+      await fetch(`/api/staff/reservations/${reservation.reservation_id || reservation.id}/full-edit`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(r => r.json()).then(data => {
+        if (!data.success) throw new Error(data.message);
       });
       onSuccess();
     } catch (err) {
@@ -124,22 +145,54 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
       <div className="staff-table-modal__panel relative z-[101]" style={{ padding: '24px', maxWidth: '400px' }}>
         <header className="staff-table-modal__head" style={{ marginBottom: '20px' }}>
           <div>
-            <h2 className="staff-table-modal__title">Admin Override: Chỉnh sửa lịch</h2>
+            <h2 className="staff-table-modal__title">Chỉnh sửa lịch</h2>
             <p className="staff-table-modal__eyebrow">#{String(reservation.reservation_id).padStart(6, '0')} - {reservation.customer_name}</p>
           </div>
           <button type="button" className="staff-table-modal__close" onClick={onClose}>✕</button>
         </header>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Ngày đặt</label>
-            <input
-              type="date"
-              value={form.date}
-              min={getTodayString()}
-              onChange={e => handleUpdate('date', e.target.value)}
-              style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Tên khách hàng</label>
+              <input
+                type="text"
+                value={form.contact_name}
+                onChange={e => handleUpdate('contact_name', e.target.value)}
+                style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Số điện thoại</label>
+              <input
+                type="text"
+                value={form.contact_phone}
+                onChange={e => handleUpdate('contact_phone', e.target.value)}
+                style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Email</label>
+              <input
+                type="email"
+                value={form.contact_email}
+                onChange={e => handleUpdate('contact_email', e.target.value)}
+                style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Ngày đặt</label>
+              <input
+                type="date"
+                value={form.date}
+                min={getTodayString()}
+                onChange={e => handleUpdate('date', e.target.value)}
+                style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+              />
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: '16px' }}>
@@ -166,13 +219,49 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
             </div>
           </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Số khách</label>
+              <input
+                type="number"
+                min="1"
+                value={form.guests}
+                onChange={e => handleUpdate('guests', e.target.value)}
+                style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Bàn số</label>
+              <input
+                type="number"
+                value={form.table_id}
+                onChange={e => handleUpdate('table_id', e.target.value)}
+                placeholder="Trống"
+                style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Trạng thái</label>
+              <select
+                value={form.reservation_status}
+                onChange={e => handleUpdate('reservation_status', e.target.value)}
+                style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
+              >
+                <option value="Confirmed">Confirmed</option>
+                <option value="Check-in">Check-in</option>
+                <option value="Occupied">Occupied</option>
+                <option value="Cancelled">Cancelled</option>
+                <option value="No Show">No Show</option>
+              </select>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Number of Guests</label>
-            <input
-              type="number"
-              min="1"
-              value={form.guests}
-              onChange={e => handleUpdate('guests', e.target.value)}
+            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Yêu cầu đặc biệt</label>
+            <textarea
+              value={form.special_request}
+              onChange={e => handleUpdate('special_request', e.target.value)}
+              rows="2"
               style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
             />
           </div>

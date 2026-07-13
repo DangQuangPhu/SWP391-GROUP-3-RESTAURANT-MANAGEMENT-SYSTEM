@@ -107,15 +107,8 @@ export async function submitReservation(req, res, next) {
       }
 
       // Format special_request to embed dining purpose and hold time
-      let formattedRequest = special_request ? special_request.trim() : '';
-      if (hold_time) {
-        formattedRequest = `[Hold: ${hold_time}]\n` + formattedRequest;
-      }
-      const finalPurpose = dining_purpose || occasion;
-      if (finalPurpose) {
-        formattedRequest = `[Dining Purpose: ${finalPurpose}]\n` + formattedRequest;
-      }
-      formattedRequest = formattedRequest.trim();
+      const finalPurpose = dining_purpose || occasion || null;
+      const finalSpecialRequest = special_request ? special_request.trim() : null;
 
       // ── STEP 1: Insert reservation — status Confirmed immediately ────────────
       // Rule: Do NOT use OUTPUT INSERTED.* on tables that have DB triggers.
@@ -124,7 +117,7 @@ export async function submitReservation(req, res, next) {
         `INSERT INTO dbo.Reservations
            (customer_id, preferred_area_id,
             reservation_start_at, reservation_end_at,
-            guest_count, special_request,
+            guest_count, special_request, occasion,
             contact_name, contact_phone, contact_email,
             reservation_status, reservation_source,
             confirmed_at,
@@ -132,7 +125,7 @@ export async function submitReservation(req, res, next) {
          VALUES
            (@CustId, @AreaId,
             @StartAt, @EndAt,
-            @Guests, @Request,
+            @Guests, @Request, @Occasion,
             @GuestName, @GuestPhone, @GuestEmail,
             N'Pending Payment', N'Online',
             SYSDATETIME(),
@@ -143,7 +136,8 @@ export async function submitReservation(req, res, next) {
           StartAt: startAt,
           EndAt: endAt,
           Guests: guestNum,
-          Request: formattedRequest || null,
+          Request: finalSpecialRequest || null,
+          Occasion: finalPurpose || null,
           GuestName: guest_name || null,
           GuestPhone: guest_phone || null,
           GuestEmail: guest_email || null,
@@ -369,7 +363,7 @@ export const getCustomerPaymentDetails = async (req, res) => {
                 p.payment_id, p.amount_paid, p.change_given, p.payment_status, p.paid_at, p.transaction_ref, p.created_at,
                 pm.method_name,
                 o.order_id, o.order_status, o.subtotal AS total_amount, o.service_charge AS tax_amount, o.discount_amount, o.total_amount AS net_amount, o.order_type,
-                r.reservation_id, r.reservation_status, r.reservation_start_at, r.guest_count, r.special_request,
+                r.reservation_id, r.reservation_status, r.reservation_start_at, r.guest_count, r.special_request, r.occasion,
                 t.table_number, t.capacity AS seating_capacity
             FROM dbo.Payments p
             LEFT JOIN dbo.PaymentMethods pm ON p.payment_method_id = pm.payment_method_id

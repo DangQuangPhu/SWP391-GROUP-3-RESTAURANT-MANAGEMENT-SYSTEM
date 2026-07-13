@@ -5,7 +5,7 @@ import { useSocket } from "@/core/socket/SocketContext.jsx";
 import { motion, AnimatePresence } from "framer-motion";
 
 function formatVND(amount) {
-  return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount);
+  return new Intl.NumberFormat("vi-VN").format(amount) + " VND";
 }
 
 function CopyableField({ label, copyValue, children }) {
@@ -47,6 +47,7 @@ function CopyableField({ label, copyValue, children }) {
 
 export default function ReservationPaymentPanel({ reservation, amount, orderCode, qrUrl, onSuccess, onCancel }) {
   const [phase, setPhase] = useState("pending"); // pending | processing | success | expired
+  const [customAlert, setCustomAlert] = useState(null);
   const [secondsLeft, setSecondsLeft] = useState(() => {
     if (reservation?.createdAt) {
       const elapsed = Math.floor((Date.now() - reservation.createdAt) / 1000);
@@ -211,7 +212,7 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
     setTimeout(() => {
       if (phaseRef.current === 'processing') {
         setPhase('pending');
-        alert('Payment not yet confirmed. Please wait a moment — it can take up to 30 seconds to verify.');
+        setCustomAlert('Payment not yet confirmed. Please wait a moment — it can take up to 30 seconds to verify.');
       }
     }, 8000);
   };
@@ -219,7 +220,10 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
   const handleCancel = () => {
     localStorage.removeItem("phurai_pending_reservation");
     if (phase === "pending") {
-      apiPatch(`/reservations/${reservation.reservation_id}/cancel`, { cancel_reason: 'Payment Failed' }).catch(console.error);
+      const token = localStorage.getItem("phurai_token") || localStorage.getItem("token") || localStorage.getItem("authToken");
+      if (token) {
+        apiPatch(`/reservations/${reservation.reservation_id}/cancel`, { cancel_reason: 'Payment Failed' }).catch(console.error);
+      }
     }
     onCancel();
   };
@@ -266,7 +270,7 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
   const timeStr = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 
   return (
-    <div className="flex flex-col items-center justify-center p-6 bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-200 dark:border-gray-800 max-w-md mx-auto w-full">
+    <div className="flex flex-col items-center justify-center p-8 bg-white dark:bg-[#171717]/85 dark:backdrop-blur-2xl rounded-2xl shadow-xl dark:shadow-[0_8px_30px_rgb(0,0,0,0.4)] border border-gray-200 dark:border-white/10 max-w-6xl mx-auto w-full">
       <AnimatePresence mode="wait">
         {phase === "pending" && (
           <motion.div
@@ -274,15 +278,18 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="w-full text-center"
+            className="w-full"
           >
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Scan VietQR to pay</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-              Transfer the exact amount. Payment is detected automatically.
-            </p>
+            {/* Header */}
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Scan VietQR to pay</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Transfer the exact amount. Payment is detected automatically.
+              </p>
+            </div>
 
-            {/* Auto-detection live status */}
-            <div className="flex items-center justify-center gap-2 mb-4 px-4 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-full w-fit mx-auto">
+            {/* Live status badge */}
+            <div className="flex items-center justify-center gap-2 mb-8 px-4 py-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-full w-fit mx-auto">
               <span className="relative flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
@@ -292,73 +299,111 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
               </span>
             </div>
 
-            <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 inline-block mb-4 relative max-w-[320px] w-full overflow-hidden">
-              <img src={finalQrUrl} alt="SePay QR Code" className="w-full aspect-square object-cover object-top block rounded-lg" />
-            </div>
+            {/* 50/50 layout: QR left | Info right vertically centered */}
+            <div className="flex flex-col md:flex-row gap-10 items-center w-full">
+              {/* LEFT: QR code & Timer */}
+              <div className="w-full md:w-1/2 flex flex-col items-center justify-center">
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 w-[80%] mx-auto overflow-hidden mb-6">
+                  <img src={finalQrUrl} alt="SePay QR Code" className="w-full aspect-square object-cover object-top block rounded-lg" />
+                </div>
 
-            <div className="w-full text-center mb-4">
-              <div className="inline-flex items-center justify-center gap-2 px-4 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium border border-blue-200 dark:border-blue-800/50">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                {timeStr}
+                {/* Timer moved under QR */}
+                <div className="flex justify-center w-full">
+                  <div className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold border border-blue-200 dark:border-blue-800/50 shadow-sm text-lg">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {timeStr}
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT: Payment info */}
+              <div className="w-full md:w-1/2 flex flex-col">
+                {/* Bank details */}
+                <div className="bg-gray-50 dark:bg-black/40 rounded-2xl p-5 text-left space-y-5 mb-6 border border-gray-100 dark:border-white/5">
+                  <div className="flex justify-between items-center border-b border-gray-200 dark:border-gray-700 pb-4">
+                    <span className="text-gray-500 dark:text-gray-400 text-sm">Bank Name</span>
+                    <span className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 text-base">
+                      <span className="text-[10px] bg-purple-600 text-white px-1.5 py-0.5 rounded uppercase font-bold">TPBank</span>
+                      TPBank
+                    </span>
+                  </div>
+                  <CopyableField label="Account Name" copyValue="DANG QUANG PHU">
+                    <span className="font-semibold text-gray-900 dark:text-white uppercase text-base">DANG QUANG PHU</span>
+                  </CopyableField>
+                  <CopyableField label="Account Number" copyValue="00003942326">
+                    <span className="font-semibold text-gray-900 dark:text-white font-mono flex items-center gap-2 text-base">
+                      00003942326
+                    </span>
+                  </CopyableField>
+                  <CopyableField label="Description" copyValue={generatedOrderCode}>
+                    <span className="font-semibold text-blue-600 dark:text-blue-400 font-mono text-base">{generatedOrderCode}</span>
+                  </CopyableField>
+                  <div className="flex justify-between items-center pb-2 pt-1 border-b border-gray-200 dark:border-white/10">
+                    <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">Total Bill</span>
+                    <span className="font-semibold text-gray-900 dark:text-white text-lg">
+                      {formatVND((reservation?.final_total || 0) + baseAmount)}
+                    </span>
+                  </div>
+
+                  {reservation?.final_total !== undefined && (
+                    <div className="flex justify-between items-center py-3 border-b border-gray-200 dark:border-white/10">
+                      <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">Remaining Balance (Pay Later 70%)</span>
+                      <span className="font-semibold text-gray-900 dark:text-white text-lg">{formatVND(reservation.final_total)}</span>
+                    </div>
+                  )}
+
+                  {reservation?.preorderItems && reservation.preorderItems.length > 0 && (
+                    <div className="pt-3 pb-1 border-b border-gray-200 dark:border-white/10">
+                      <span className="text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2 block">Pre-ordered Items</span>
+                      <ul className="space-y-2 mb-3">
+                        {reservation.preorderItems.map((item, idx) => (
+                          <li key={idx} className="flex justify-between items-center text-sm">
+                            <span className="text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                              <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                              {item.name || item.dish_name || `Item #${item.dish_id}`}
+                            </span>
+                            <span className="text-gray-500 dark:text-gray-400 font-mono text-xs font-semibold bg-gray-200 dark:bg-white/10 px-1.5 py-0.5 rounded">x{item.quantity}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center pt-4">
+                    <span className="text-gray-900 dark:text-white font-semibold text-lg">To Pay Now (Deposit 30%)</span>
+                    <span className="font-bold text-blue-600 dark:text-blue-400 text-2xl">{formatVND(displayAmount)}</span>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-4 mb-4">
+                  <button
+                    onClick={handleIHavePaid}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-[#171717]/85 dark:backdrop-blur-2xl dark:hover:bg-white/10 text-gray-800 dark:text-white font-semibold py-3.5 px-4 rounded-xl border border-transparent dark:border-white/10 transition-colors text-sm flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                    Check transaction
+                  </button>
+                  <button
+                    onClick={handleCancel}
+                    className="flex-1 bg-white hover:bg-red-50 dark:bg-[#171717]/85 dark:backdrop-blur-2xl dark:hover:bg-red-900/20 text-red-500 font-semibold py-3.5 px-4 rounded-xl border border-gray-200 dark:border-white/10 hover:border-red-200 dark:hover:border-red-800 transition-colors flex items-center justify-center gap-2 text-sm"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Cancel order
+                  </button>
+                </div>
+
+                <p className="text-sm text-gray-400 dark:text-gray-500 text-center">
+                  Payment will be confirmed automatically once received. No action needed.
+                </p>
               </div>
             </div>
-
-            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 text-left space-y-4 mb-5">
-              <div className="flex justify-between items-center border-b border-gray-200 dark:border-gray-700 pb-3">
-                <span className="text-gray-500 dark:text-gray-400 text-sm">Bank Name</span>
-                <span className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                  <span className="text-[10px] bg-purple-600 text-white px-1.5 py-0.5 rounded uppercase font-bold">TPBank</span>
-                  TPBank
-                </span>
-              </div>
-              <CopyableField label="Account Name" copyValue="DANG QUANG PHU">
-                <span className="font-semibold text-gray-900 dark:text-white uppercase">DANG QUANG PHU</span>
-              </CopyableField>
-              <CopyableField label="Account Number" copyValue="00003942326">
-                <span className="font-semibold text-gray-900 dark:text-white font-mono flex items-center gap-2">
-                  00003942326
-                </span>
-              </CopyableField>
-              <CopyableField label="Description" copyValue={generatedOrderCode}>
-                <span className="font-semibold text-blue-600 dark:text-blue-400 font-mono">{generatedOrderCode}</span>
-              </CopyableField>
-              <div className="flex justify-between items-center pb-2">
-                <span className="text-gray-500 dark:text-gray-400 text-sm">Deposit Amount</span>
-                <span className="font-semibold text-gray-900 dark:text-white text-md">{formatVND(baseAmount)}</span>
-              </div>
-              <div className="flex justify-between items-center pt-2 border-t border-gray-200 dark:border-gray-700">
-                <span className="text-gray-900 dark:text-white font-medium text-base">Total Target</span>
-                <span className="font-bold text-blue-600 dark:text-blue-400 text-xl">{formatVND(displayAmount)}</span>
-              </div>
-            </div>
-
-            {/* Fallback check button — subtle secondary style */}
-            <div className="flex gap-3">
-              <button
-                onClick={handleIHavePaid}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium py-3 px-4 rounded-xl transition-colors text-sm flex items-center justify-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                </svg>
-                Check the transaction
-              </button>
-              <button
-                onClick={handleCancel}
-                className="flex-1 bg-white hover:bg-gray-50 dark:bg-[#1a1a1a] dark:hover:bg-gray-900 text-red-500 font-medium py-3 px-4 rounded-xl border border-gray-200 dark:border-gray-800 transition-colors flex items-center justify-center gap-2 text-sm"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                Cancel order
-              </button>
-            </div>
-
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
-              Payment will be confirmed automatically once received. No action needed.
-            </p>
           </motion.div>
         )}
 
@@ -416,6 +461,89 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
             >
               Return Home
             </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom alert modal */}
+      <AnimatePresence>
+        {customAlert && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[9999] p-5"
+            onClick={() => setCustomAlert(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 30, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.9, y: 30, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
+              className="bg-[#171717]/90 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-2xl w-full max-w-[460px] p-[36px_32px] text-center text-white"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{
+                width: "60px",
+                height: "60px",
+                borderRadius: "50%",
+                backgroundColor: "rgba(191, 154, 99, 0.08)",
+                border: "2px solid #bf9a63",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 20px auto",
+                color: "#bf9a63",
+              }}>
+                <svg style={{ width: "28px", height: "28px" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h4 style={{
+                fontSize: "1.25rem",
+                fontWeight: "bold",
+                marginBottom: "12px",
+                color: "#bf9a63",
+                fontFamily: "Outfit, Inter, sans-serif",
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
+              }}>
+                Please Note
+              </h4>
+              <p className="text-gray-400 text-[0.95rem] leading-relaxed mb-7 font-['Inter',sans-serif]">
+                {customAlert}
+              </p>
+              <button
+                onClick={() => setCustomAlert(null)}
+                style={{
+                  backgroundColor: "#bf9a63",
+                  color: "#0a0a0a",
+                  fontWeight: 700,
+                  padding: "12px 36px",
+                  borderRadius: "12px",
+                  border: "none",
+                  cursor: "pointer",
+                  transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                  boxShadow: "0 4px 14px rgba(191, 154, 99, 0.25)",
+                  fontSize: "0.85rem",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.12em",
+                  fontFamily: "Outfit, Inter, sans-serif"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "#d4b383";
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = "0 6px 18px rgba(191, 154, 99, 0.35)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "#bf9a63";
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 4px 14px rgba(191, 154, 99, 0.25)";
+                }}
+              >
+                Understood
+              </button>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -7,7 +7,7 @@ import pool from "./db.js";
 // Role mapping: 1=Customer, 2=Restaurant Staff, 4=Manager, 5=Admin
 // role_id=3 (Kitchen Staff) is DEPRECATED — KDS is device-based, not account-based.
 // KDS devices authenticate via their own KDS JWT and join room:kds independently.
-const STAFF_ROLE_IDS = new Set([2, 4, 5]); // role 3 removed
+const STAFF_ROLE_IDS = new Set([2, 3, 4]);
 const CUSTOMER_ROLE_ID = 1;
 
 /**
@@ -31,7 +31,7 @@ export function initSocket(httpServer, { allowedOrigins = [] } = {}) {
     const sessionId = Number(auth.sessionId);
 
     // Join manager room
-    if (roleId === 4 || roleId === 5) {
+    if (roleId === 3 || roleId === 4) {
       socket.join("room:manager");
     }
 

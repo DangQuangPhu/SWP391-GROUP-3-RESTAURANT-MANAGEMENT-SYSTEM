@@ -1,15 +1,17 @@
 import React, { useEffect } from "react";
 import { useSocket } from "@/core/socket/SocketContext.jsx";
 import { useAuth } from "@/features/auth/context/AuthContext.jsx";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { apiPatch } from "@/core/api/httpClient.js";
 
 export default function StaffNotificationListener({ user, isAuthenticated }) {
   const { socket } = useSocket();
   const { handleSignOut } = useAuth();
+  const navigate = useNavigate();
 
   const roleId = Number(user?.roleId || user?.role_id);
-  const isStaffOrManager = isAuthenticated && [2, 3, 4, 5].includes(roleId);
+  const isStaffOrManager = isAuthenticated && [2, 3, 4].includes(roleId);
 
   useEffect(() => {
     if (!socket || !isStaffOrManager) return;
@@ -42,17 +44,33 @@ export default function StaffNotificationListener({ user, isAuthenticated }) {
       handleSignOut();
     };
 
+    // Phase 2: auth:session_revoked — fired when an admin/manager revokes system access.
+    // Uses session_revoked_at timestamp + JWT.iat to invalidate existing tokens server-side.
+    // Frontend: clear auth + redirect to Home page.
+    const handleSessionRevoked = ({ reason, code } = {}) => {
+      handleSignOut();
+      toast.error(reason || "Your system access has been revoked. Please contact your manager.", {
+        id: "session-revoked",
+        duration: 8000,
+        icon: "🔒",
+      });
+      // Redirect to home page (not /staff or /manager — account no longer has access)
+      navigate("/", { replace: true });
+    };
+
     socket.on("STAFF_ROLE_CHANGED", handleRoleChanged);
     socket.on("STAFF_DEACTIVATED", handleDeactivated);
     socket.on("auth:force_logout", handleForceLogout);
+    socket.on("auth:session_revoked", handleSessionRevoked);
 
     return () => {
       socket.off("NEW_DINEIN_ORDER", handleNewDineInOrder);
       socket.off("STAFF_ROLE_CHANGED", handleRoleChanged);
       socket.off("STAFF_DEACTIVATED", handleDeactivated);
       socket.off("auth:force_logout", handleForceLogout);
+      socket.off("auth:session_revoked", handleSessionRevoked);
     };
-  }, [socket, isStaffOrManager, handleSignOut]);
+  }, [socket, isStaffOrManager, handleSignOut, navigate]);
 
   return null;
 }

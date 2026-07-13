@@ -61,26 +61,31 @@ function ReservationPage({
   onRequireAuth,
 }) {
   const navigate = useNavigate();
-  const membershipTier = currentUser?.membershipTier || "Bronze";
 
   const pageVariants = useMemo(() => ({
-    initial: (direction) => ({
-      x: direction > 0 ? 50 : -50,
+    initial: {
       opacity: 0,
-      position: "absolute",
-      width: "100%",
-    }),
-    animate: {
-      x: 0,
-      opacity: 1,
-      position: "relative",
+      y: 16,
+      scale: 0.98,
     },
-    exit: (direction) => ({
-      x: direction < 0 ? 50 : -50,
+    animate: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        duration: 0.45,
+        ease: [0.16, 1, 0.3, 1],
+      }
+    },
+    exit: {
       opacity: 0,
-      position: "absolute",
-      width: "100%",
-    })
+      y: -12,
+      scale: 0.99,
+      transition: {
+        duration: 0.18,
+        ease: "easeIn",
+      }
+    }
   }), []);
 
   const [settings, setSettings] = useState(null);
@@ -199,6 +204,10 @@ function ReservationPage({
   const [prevStep, setPrevStep] = useState(urlStep || "details");
   const [detailsReviewing, setDetailsReviewing] = useState(false);
   const [isPaymentSuccess, setIsPaymentSuccess] = useState(false);
+  // Controls the 3-phase Apple-style exit sequence (details → summary)
+  const [isExitingDetails, setIsExitingDetails] = useState(false);
+  // Controls the summary background overlay fade-in (Phase 3)
+  const [showSummaryBg, setShowSummaryBg] = useState(step !== 'details' && step !== 'payment' && step !== 'success');
 
   useEffect(() => {
     if (urlStep && urlStep !== step) {
@@ -288,6 +297,39 @@ function ReservationPage({
     navigate(`/reservations/${nextStep}`);
   }, [step, navigate]);
 
+  // Orchestrated 3-phase Apple transition: details → summary
+  // Phase 1: fade out form card + bg image (350ms)
+  // Phase 2: layout animation moves header to center (600ms)
+  // Phase 3: summary fades in automatically via pageVariants
+  const transitionToSummary = useCallback((localForm) => {
+    // Commit form data immediately
+    setField("date", localForm.date);
+    setField("time", localForm.startTime);
+    setField("endTime", localForm.endTime);
+    setField("guestCount", localForm.guests);
+    setField("holdDurationMinutes", parseInt(localForm.duration) || 30);
+    setField("diningPurpose", localForm.diningPurpose);
+    setField("diningPurposeNote", localForm.diningPurposeNote);
+    setField("selectedArea", localForm.diningArea);
+    setField("fullName", localForm.fullName);
+    setField("email", localForm.email);
+    setField("phone", localForm.phone);
+
+    // Phase 1: trigger fade-out of form card + bg image simultaneously
+    setIsExitingDetails(true);
+
+    // Phase 2: after fade-out completes, change step so layout animates header to center
+    setTimeout(() => {
+      setPrevStep("details");
+      setStep("summary");
+      navigate("/reservations/summary");
+      // Reset exit flag after step has changed
+      setTimeout(() => setIsExitingDetails(false), 100);
+      // Phase 3: after layout animation completes (~600ms), fade in summary bg
+      setTimeout(() => setShowSummaryBg(true), 620);
+    }, 350);
+  }, [setField, navigate]);
+
   /* Fetch availability whenever the key selection changes (debounced). */
   useEffect(() => {
     if (!form.date || !form.time) {
@@ -351,6 +393,7 @@ function ReservationPage({
   }, [form, selectedTableId, totalCapacity]);
 
   const handleEditDetails = useCallback(() => {
+    setShowSummaryBg(false);
     transitionTo("details");
   }, [transitionTo]);
 
@@ -366,9 +409,8 @@ function ReservationPage({
         reservation_start_at: `${form.date}T${form.time}:00`,
         durationMinutes: form.holdDurationMinutes || 30,
         reservation_end_at: form.endTime ? `${form.date}T${form.endTime}:00` : undefined,
-        special_request: form.diningPurposeNote
-          ? `[Dining Purpose: ${form.diningPurpose}] [Notes: ${form.diningPurposeNote}]`
-          : `[Dining Purpose: ${form.diningPurpose}]`,
+        special_request: form.diningPurposeNote && form.diningPurposeNote.trim() ? form.diningPurposeNote.trim() : null,
+        dining_purpose: form.diningPurpose,
         table_ids: selectedTables.map((t) => t.table_id),
         contact_name: form.fullName,
         contact_phone: form.phone,
@@ -384,7 +426,11 @@ function ReservationPage({
       const res = await createPreSaveReservation(payload);
 
       if (res?.success) {
-        const enrichedRes = { ...res, createdAt: Date.now() };
+        const enrichedRes = { 
+          ...res, 
+          createdAt: Date.now(),
+          preorderItems: Object.values(preorderItems)
+        };
         setSuccessReservation(enrichedRes);
         localStorage.setItem("phurai_pending_reservation", JSON.stringify(enrichedRes));
         transitionTo("payment");
@@ -421,7 +467,9 @@ function ReservationPage({
   }, [transitionTo]);
 
   return (
-    <div className={`rd-page ${step === 'summary' ? 'rd-page--bg-summary' : ''}`}>
+    <div className="rd-page">
+      {/* Summary background overlay — fades in after header reaches center */}
+      <div className={`rd-summary-bg-overlay ${showSummaryBg ? 'rd-summary-bg-overlay--visible' : ''}`} />
       <button className="rd-home-btn" onClick={() => navigate("/")} aria-label="Go to Home">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
@@ -434,8 +482,9 @@ function ReservationPage({
           {step === "details" && (
             <motion.div
               className="rd-image-col"
+              animate={{ opacity: isExitingDetails ? 0 : 1 }}
               exit={{ opacity: 0, width: 0 }}
-              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: isExitingDetails ? 0.35 : 0.6, ease: [0.16, 1, 0.3, 1] }}
             >
               <img src={reservationImg} alt="" className="rd-image" />
             </motion.div>
@@ -443,18 +492,27 @@ function ReservationPage({
         </AnimatePresence>
 
         <motion.div
-          className={`rd-content-col ${step !== 'details' ? 'rd-content-col--centered' : ''}`}
+          className={`rd-content-col ${step === 'details' ? '' : step === 'payment' ? 'rd-content-col--wide' : 'rd-content-col--centered'}`}
           layout
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         >
           <motion.p layout className="rd-eyebrow">RESERVE A TABLE</motion.p>
           <motion.h1 layout className="rd-title">CHOOSE YOUR MOMENT</motion.h1>
-          {step === "details" && (
-            <motion.p layout className="rd-subtitle">
-              Complete your details, choose your table on our interactive floor plan,
-              then review and confirm. Availability updates live.
-            </motion.p>
-          )}
+          <AnimatePresence>
+            {step === "details" && (
+              <motion.p
+                key="rd-subtitle"
+                layout
+                className="rd-subtitle"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: isExitingDetails ? 0 : 1, transition: { duration: isExitingDetails ? 0.25 : 0.6 } }}
+                exit={{ opacity: 0, transition: { duration: 0.2 } }}
+              >
+                Complete your details, choose your table on our interactive floor plan,
+                then review and confirm. Availability updates live.
+              </motion.p>
+            )}
+          </AnimatePresence>
 
           <motion.div layout className="rd-stepper">
             {STEPS.map((stepObj, i) => {
@@ -472,16 +530,14 @@ function ReservationPage({
             })}
           </motion.div>
 
-          <AnimatePresence mode="wait" custom={direction}>
+          <AnimatePresence mode="wait">
             {step === "details" && (
               <motion.div
                 key="details"
-                custom={direction}
                 variants={pageVariants}
                 initial="initial"
-                animate="animate"
+                animate={isExitingDetails ? { opacity: 0, y: -8, scale: 0.99, transition: { duration: 0.35, ease: [0.4, 0, 1, 1] } } : "animate"}
                 exit="exit"
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
               >
                 <ReservationDetails
                   initialForm={{
@@ -503,23 +559,11 @@ function ReservationPage({
                   selectedTableId={selectedTableId}
                   onSelectTable={handleSelectTable}
                   tablesLoading={loadingAvailability}
-                  membershipTier={membershipTier}
                   isAuthenticated={isAuthenticated}
                   onUpdateForm={handleUpdateForm}
                   onGoHome={() => navigate("/")}
                   onContinue={(localForm) => {
-                    setField("date", localForm.date);
-                    setField("time", localForm.startTime);
-                    setField("endTime", localForm.endTime);
-                    setField("guestCount", localForm.guests);
-                    setField("holdDurationMinutes", parseInt(localForm.duration) || 30);
-                    setField("diningPurpose", localForm.diningPurpose);
-                    setField("diningPurposeNote", localForm.diningPurposeNote);
-                    setField("selectedArea", localForm.diningArea);
-                    setField("fullName", localForm.fullName);
-                    setField("email", localForm.email);
-                    setField("phone", localForm.phone);
-                    transitionTo("summary");
+                    transitionToSummary(localForm);
                   }}
                 />
               </motion.div>
@@ -528,13 +572,11 @@ function ReservationPage({
             {step === "summary" && (
               <motion.div
                 key="summary"
-                custom={direction}
                 variants={pageVariants}
                 initial="initial"
                 animate="animate"
                 exit="exit"
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                className="rzv-step rzv-step--enter"
+                className="rzv-step"
               >
                 <div className="rzv-tablestep">
                   <div className="rzv-tablestep__bar">
@@ -578,13 +620,11 @@ function ReservationPage({
             {step === "payment" && successReservation && (
               <motion.div
                 key="payment"
-                custom={direction}
                 variants={pageVariants}
                 initial="initial"
                 animate="animate"
                 exit="exit"
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                className="rzv-step rzv-step--enter"
+                className="rzv-step"
               >
                 <div className={`w-full transition-all duration-500 ease-in-out ${isPaymentSuccess ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
                   <ReservationPaymentPanel
@@ -602,13 +642,11 @@ function ReservationPage({
             {step === "success" && successReservation && (
               <motion.div
                 key="success"
-                custom={direction}
                 variants={pageVariants}
                 initial="initial"
                 animate="animate"
                 exit="exit"
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                className="rzv-step rzv-step--enter w-full"
+                className="rzv-step w-full"
               >
                 <ReservationSuccessPanel
                   reservation={successReservation}

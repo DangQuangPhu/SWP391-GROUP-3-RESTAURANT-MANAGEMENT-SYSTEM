@@ -1,7 +1,7 @@
 import sql from 'mssql';
 import { getRawPool } from '../src/db.js';
 
-async function seedTestVouchers() {
+export async function seedTestVouchers() {
   try {
     const pool = await getRawPool();
     const transaction = new sql.Transaction(pool);
@@ -58,8 +58,7 @@ async function seedTestVouchers() {
   } catch (error) {
     console.error('❌ Failed to seed test vouchers:', error);
   } finally {
-    process.exit(0);
+    
   }
 }
 
-seedTestVouchers();

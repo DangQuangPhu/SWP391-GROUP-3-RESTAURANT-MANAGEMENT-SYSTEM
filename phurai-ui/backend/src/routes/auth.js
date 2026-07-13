@@ -29,7 +29,6 @@ import {
   getProfileForUser,
   serializePreferences,
 } from "../utils/profileService.js";
-import { getMembershipInfo } from "../utils/membership.js";
 import { validateRegisterPayload } from "../utils/validation.js";
 
 const router = express.Router();
@@ -174,7 +173,7 @@ router.post("/login", async (req, res) => {
         requirePasswordReset: true,
         message: "Please change your default password.",
         token: restrictedToken,
-        user: { user_id: user.user_id, email: user.email, role_name: user.role_name }
+        user: buildLoginUserResponse(user)
       });
     }
 
@@ -261,7 +260,6 @@ router.post("/register", async (req, res) => {
     );
 
     const userId = insertResult[0]?.user_id;
-    const membership = getMembershipInfo(0);
 
     await pool.query(
       `INSERT INTO dbo.CustomerProfiles
@@ -429,7 +427,6 @@ async function upsertGoogleUser(googleProfile, { requireOtp = false } = {}) {
   );
 
   const userId = insertResult[0]?.user_id;
-  const membership = getMembershipInfo(0);
 
   await pool.query(
     `INSERT INTO dbo.CustomerProfiles

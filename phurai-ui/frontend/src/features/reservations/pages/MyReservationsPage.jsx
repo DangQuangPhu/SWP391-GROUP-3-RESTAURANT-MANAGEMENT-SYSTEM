@@ -100,27 +100,6 @@ function MyReservationsPage({
     }
   };
 
-  // Helper to parse special notes into purpose and actual notes
-  const parseSpecialNotes = (rawNotes) => {
-    if (!rawNotes) return { purpose: null, notes: null };
-
-    let purpose = null;
-    let notes = rawNotes;
-
-    const purposeMatch = rawNotes.match(/\[Dining Purpose:\s*([^\]]+)\]/i);
-    if (purposeMatch) {
-      purpose = purposeMatch[1];
-      notes = notes.replace(purposeMatch[0], "").trim();
-    }
-
-    const notesMatch = notes.match(/\[Notes:\s*([^\]]+)\]/i);
-    if (notesMatch) {
-      notes = notes.replace(notesMatch[0], "").trim() + "\n" + notesMatch[1];
-    }
-
-    return { purpose, notes: notes.trim() };
-  };
-
   const load = useCallback(() => {
     if (!isAuthenticated || !userId) return;
     setStatus("loading");
@@ -492,22 +471,23 @@ function MyReservationsPage({
                 </div>
               )}
 
-              {viewDetailsTarget.special_request && (() => {
-                const parsed = parseSpecialNotes(viewDetailsTarget.special_request);
-                if (!parsed.purpose && !parsed.notes) return null;
+              {(viewDetailsTarget.special_request || viewDetailsTarget.occasion) && (() => {
+                const purpose = viewDetailsTarget.occasion;
+                const notes = viewDetailsTarget.special_request;
+                if (!purpose && !notes) return null;
                 return (
                   <div style={{ marginBottom: "32px", fontSize: "0.95rem" }}>
-                    {parsed.purpose && (
+                    {purpose && (
                       <div style={{ marginBottom: "16px", textAlign: "center" }}>
                         <strong style={{ color: "var(--rzv-muted)", display: "block", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "8px" }}>Dining Purpose</strong>
-                        <span style={{ fontSize: "1.05rem", fontWeight: 500, color: "var(--rzv-text)" }}>{parsed.purpose}</span>
+                        <span style={{ fontSize: "1.05rem", fontWeight: 500, color: "var(--rzv-text)" }}>{purpose}</span>
                       </div>
                     )}
-                    {parsed.notes && (
+                    {notes && (
                       <div>
                         <strong style={{ color: "var(--rzv-muted)", display: "block", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "8px" }}>Special Notes</strong>
                         <p style={{ margin: 0, padding: "16px", backgroundColor: "var(--rzv-bg)", borderLeft: "3px solid var(--rzv-gold)", borderRadius: "0 8px 8px 0", fontStyle: "italic", color: "var(--rzv-text)", lineHeight: 1.6 }}>
-                          {parsed.notes}
+                          {notes}
                         </p>
                       </div>
                     )}

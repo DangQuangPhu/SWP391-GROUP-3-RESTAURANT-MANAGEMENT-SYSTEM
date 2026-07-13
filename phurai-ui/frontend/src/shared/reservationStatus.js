@@ -71,13 +71,15 @@ export const FILTER_GROUPS = {
   ],
 };
 
+// Status list used for filter dropdowns — ORDERED by business lifecycle.
+// NOTE: Payment Pending is intentionally excluded here (kept in DB CHECK constraint for compat,
+// but removed from UI filters per Phase 1 spec decision).
 export const ALL_RESERVATION_STATUSES = [
   RESERVATION_STATUS.PENDING_REQUEST,
   RESERVATION_STATUS.AWAITING_DEPOSIT,
   RESERVATION_STATUS.CONFIRMED,
   RESERVATION_STATUS.CHECK_IN,
   RESERVATION_STATUS.DINING,
-  RESERVATION_STATUS.PAYMENT_PENDING,
   RESERVATION_STATUS.COMPLETED,
   RESERVATION_STATUS.CANCELLED,
   RESERVATION_STATUS.NO_SHOW,

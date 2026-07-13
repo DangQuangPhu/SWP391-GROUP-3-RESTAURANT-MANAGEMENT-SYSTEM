@@ -14,4 +14,3 @@ export { default as TableBoard } from "./components/choose-table/TableBoard.jsx"
 
 export * from "./services/reservationApi.js";
 export * from "./data/floorPlanConfig.js";
-export * from "./utils/membershipUtils.js";

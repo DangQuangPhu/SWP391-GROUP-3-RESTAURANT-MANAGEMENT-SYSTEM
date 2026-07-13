@@ -27,7 +27,6 @@ function ReservationFormPanel({
   onSelectTable,
   tables,
   tablesLoading,
-  membershipTier,
   onNavigateLogin,
   onNavigateRegister,
 }) {
@@ -163,7 +162,6 @@ function ReservationFormPanel({
                         }}
                         loading={tablesLoading}
                         guestCount={form.guestCount}
-                        membershipTier={membershipTier}
                         isAuthenticated={isAuthenticated}
                         onNavigateLogin={onNavigateLogin}
                         onNavigateRegister={onNavigateRegister}

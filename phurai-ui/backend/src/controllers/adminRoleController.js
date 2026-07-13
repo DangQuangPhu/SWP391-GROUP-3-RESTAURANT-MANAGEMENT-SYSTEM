@@ -66,12 +66,12 @@ export const assignUserRole = async (req, res) => {
         const parsedNewRoleId = Number(newRoleId);
 
         // Prevent escalation to Admin through this endpoint
-        if (parsedNewRoleId === 5) {
+        if (parsedNewRoleId === 4) {
             return res.status(403).json({ success: false, message: 'Cannot promote a user to Admin via this endpoint. Contact the system owner.' });
         }
-        // Prevent valid role IDs outside system range (role_id=3 deprecated, role_id=5 escalation blocked above)
-        if (![1, 2, 4].includes(parsedNewRoleId)) {
-            return res.status(400).json({ success: false, message: 'role_id must be 1 (Customer), 2 (Restaurant Staff), or 4 (Manager). role_id=3 (Kitchen Staff) is deprecated.' });
+        // Prevent valid role IDs outside system range
+        if (![1, 2, 3].includes(parsedNewRoleId)) {
+            return res.status(400).json({ success: false, message: 'role_id must be 1 (Customer), 2 (Restaurant Staff), or 3 (Manager).' });
         }
 
         // Prevent self-role-change
@@ -106,8 +106,8 @@ export const assignUserRole = async (req, res) => {
                 return res.status(409).json({ success: false, message: `User is already assigned to role_id ${parsedNewRoleId}.` });
             }
 
-            // Active duty check (role_id=3 Kitchen Staff check removed — KDS is device-based now)
-            if ([2, 4].includes(current_role_id)) {
+            // Active duty check
+            if ([2, 3].includes(current_role_id)) {
                 // Restaurant Staff / Manager: check for active reservations assigned
                 const resCheck = await transaction.request()
                     .input('userId', sql.Int, targetUserId)

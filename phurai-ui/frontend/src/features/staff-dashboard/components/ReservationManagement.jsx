@@ -12,6 +12,7 @@ import {
 import { useLocation } from "react-router-dom";
 import { format, isSameDay } from "date-fns";
 import DashboardDateRangePicker from "@/features/manager-dashboard/components/shared/DashboardDateRangePicker.jsx";
+import { Pagination } from "@/components/ui/Pagination.jsx";
 
 import Icon from "./StaffIcons.jsx";
 import { EmptyState, Button, SearchField } from "./StaffUI.jsx";
@@ -35,7 +36,7 @@ import {
   formatReservationTimeDisplay,
 } from "../utils/reservationQueueHelpers.js";
 import { useSocket } from "@/core/socket/SocketContext.jsx";
-import { FILTER_GROUPS, RESERVATION_STATUS, RESERVATION_STATUS_META, STAFF_VISIBLE_STATUSES } from "@/shared/reservationStatus.js";
+import { FILTER_GROUPS, RESERVATION_STATUS, RESERVATION_STATUS_META, ALL_RESERVATION_STATUSES } from "@/shared/reservationStatus.js";
 
 import LateArrivalBadge from "./LateArrivalBadge.jsx";
 import StaffEditReservationModal from "./StaffEditReservationModal.jsx";
@@ -54,7 +55,7 @@ const getSelectStyle = (status) => {
   }
   const meta = RESERVATION_STATUS_META[status] || {};
   const tone = meta.tone || "muted";
-  
+
   if (tone === "amber") {
     return {
       background: "#fef3c7",
@@ -214,12 +215,142 @@ function TimelineSection({ reservationId, userId }) {
   );
 }
 
+function AnimatedStatusDropdown({ value, onChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const style = getSelectStyle(value);
+  const selectedLabel = value === "all" ? "All statuses" : (RESERVATION_STATUS_META[value]?.label || value);
+
+  return (
+    <div ref={dropdownRef} style={{ position: "relative", minWidth: 160 }}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          width: "100%",
+          padding: "8px 12px",
+          borderRadius: "8px",
+          border: `1px solid ${style.borderColor || "#e5e7eb"}`,
+          background: style.background || "#fff",
+          color: style.color || "#1a1a1a",
+          fontSize: "14px",
+          fontWeight: "600",
+          cursor: "pointer",
+          transition: "all 0.2s ease"
+        }}
+      >
+        <span>{selectedLabel}</span>
+        <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </motion.div>
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: 0,
+              width: "200px",
+              marginTop: 4,
+              background: "#333", // Dark background as requested in screenshot
+              color: "#fff",
+              borderRadius: 8,
+              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+              zIndex: 100,
+              overflow: "hidden",
+              border: "1px solid #444",
+              display: "flex",
+              flexDirection: "column",
+              padding: "4px 0"
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => { onChange("all"); setIsOpen(false); }}
+              style={{
+                padding: "8px 16px",
+                textAlign: "left",
+                background: value === "all" ? "rgba(255,255,255,0.1)" : "transparent",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 14,
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                gap: 8
+              }}
+            >
+              <div style={{ width: 14, display: "flex", justifyContent: "center" }}>
+                {value === "all" && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+              </div>
+              All statuses
+            </button>
+            <div style={{ height: 1, background: "#444", margin: "4px 0" }} />
+            {ALL_RESERVATION_STATUSES.map(st => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => { onChange(st); setIsOpen(false); }}
+                style={{
+                  padding: "8px 16px",
+                  textAlign: "left",
+                  background: value === st ? "rgba(255,255,255,0.1)" : "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 14,
+                  color: "#fff",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  transition: "background 0.1s"
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.05)"}
+                onMouseLeave={(e) => e.currentTarget.style.background = value === st ? "rgba(255,255,255,0.1)" : "transparent"}
+              >
+                <div style={{ width: 14, display: "flex", justifyContent: "center" }}>
+                  {value === st && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                </div>
+                {RESERVATION_STATUS_META[st]?.label || st}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function ReservationManagement({ user, toast, refreshKey }) {
   const { socket } = useSocket();
   const userId = user?.userId ?? user?.user_id ?? user?.id;
   const isManager = Number(user?.roleId ?? user?.role_id) === 4 || Number(user?.roleId ?? user?.role_id) === 5;
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [editReservation, setEditReservation] = useState(null);
   const [checkedInIds, setCheckedInIds] = useState(new Set());
@@ -287,14 +418,35 @@ function ReservationManagement({ user, toast, refreshKey }) {
       const ed = appliedRange?.endDate;
       const startStr = sd && sd !== "all" && sd !== "All Dates" && String(sd).trim() !== "" ? format(new Date(sd), "yyyy-MM-dd") : null;
       const endStr = ed && ed !== "all" && ed !== "All Dates" && String(ed).trim() !== "" ? format(new Date(ed), "yyyy-MM-dd") : null;
-      const res = await fetchTodayReservations(userId, startStr, endStr);
+
+      const params = {
+        page: currentPage,
+        limit: 20,
+        search,
+        status: statusFilter,
+      };
+      if (startStr && endStr) {
+        params.startDate = startStr;
+        params.endDate = endStr;
+      } else if (startStr) {
+        params.startDate = startStr;
+      }
+
+      const res = await fetchTodayReservations(userId, params);
       setQueue(res.data || []);
+      setTotalCount(res.totalCount || 0);
+      setTotalPages(res.totalPages || 1);
     } catch {
       toast("Failed to load reservations.", "error");
     } finally {
       setLoading(false);
     }
-  }, [toast, user, appliedRange]);
+  }, [toast, user, appliedRange, currentPage, search, statusFilter]);
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [appliedRange, search, statusFilter]);
 
   useEffect(() => { loadReservations(); }, [loadReservations]);
   useEffect(() => { if (refreshKey > 0) loadReservations(); }, [refreshKey, loadReservations]);
@@ -319,7 +471,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
           toast(`Booking #${String(data.reservation_id || "").padStart(6, "0")} → ${newStatus}`, "info");
         }
       };
-      
+
       const handlePaymentSuccess = (data) => {
         if (data.flashCompletePaid) {
           setQueue((prev) => {
@@ -327,30 +479,30 @@ function ReservationManagement({ user, toast, refreshKey }) {
             const idx = updated.findIndex((r) => r.reservation_id === data.reservation_id);
             if (idx !== -1) {
               const originalStatus = updated[idx].reservation_status || updated[idx].status || RESERVATION_STATUS.AWAIT_CHECK_IN;
-              
+
               // Mutate to Complete Paid temporarily
-              updated[idx] = { 
-                ...updated[idx], 
-                status: RESERVATION_STATUS.COMPLETE_PAID, 
+              updated[idx] = {
+                ...updated[idx],
+                status: RESERVATION_STATUS.COMPLETE_PAID,
                 reservation_status: RESERVATION_STATUS.COMPLETE_PAID,
-                _isFlashing: true 
+                _isFlashing: true
               };
-              
+
               // Set timeout to revert exactly after 10000ms
               setTimeout(() => {
                 setQueue((currentQueue) => {
-                   const currIdx = currentQueue.findIndex((r) => r.reservation_id === data.reservation_id);
-                   if (currIdx !== -1 && currentQueue[currIdx]._isFlashing) {
-                      const reverted = [...currentQueue];
-                      reverted[currIdx] = { 
-                         ...reverted[currIdx], 
-                         status: originalStatus, 
-                         reservation_status: originalStatus,
-                         _isFlashing: false 
-                      };
-                      return reverted;
-                   }
-                   return currentQueue;
+                  const currIdx = currentQueue.findIndex((r) => r.reservation_id === data.reservation_id);
+                  if (currIdx !== -1 && currentQueue[currIdx]._isFlashing) {
+                    const reverted = [...currentQueue];
+                    reverted[currIdx] = {
+                      ...reverted[currIdx],
+                      status: originalStatus,
+                      reservation_status: originalStatus,
+                      _isFlashing: false
+                    };
+                    return reverted;
+                  }
+                  return currentQueue;
                 });
               }, 10000);
             }
@@ -367,17 +519,17 @@ function ReservationManagement({ user, toast, refreshKey }) {
         // replaces it with the real server row.
         if (data?.reservation_source === 'Walk-in' && data?.reservation_id) {
           const syntheticRow = {
-            reservation_id:     data.reservation_id,
-            customer_name:      data.customer_name || 'Walk-in Guest',
-            contact_phone:      data.contact_phone || '',
+            reservation_id: data.reservation_id,
+            customer_name: data.customer_name || 'Walk-in Guest',
+            contact_phone: data.contact_phone || '',
             reservation_status: data.reservation_status || 'Dining',
-            status:             data.reservation_status || 'Dining',
+            status: data.reservation_status || 'Dining',
             reservation_source: 'Walk-in',
-            table_id:           data.table_id,
-            table_number:       data.table_number,
-            guest_count:        data.guest_count || 1,
+            table_id: data.table_id,
+            table_number: data.table_number,
+            guest_count: data.guest_count || 1,
             reservation_start_at: new Date().toISOString(),
-            _isOptimistic:      true,
+            _isOptimistic: true,
           };
           setQueue((prev) => {
             const alreadyExists = prev.some((r) => r.reservation_id === data.reservation_id);
@@ -463,61 +615,27 @@ function ReservationManagement({ user, toast, refreshKey }) {
 
   /* ── Filtered rows ── */
   const filtered = useMemo(() => {
-    // Show all statuses (same as Manager) — no hard whitelist
-    let base = Array.isArray(dateScopedQueue) ? [...dateScopedQueue] : [];
+    const sorted = [...dateScopedQueue];
+    sorted.sort((a, b) => {
+      const keyA = getReservationStatusKey(a);
+      const keyB = getReservationStatusKey(b);
 
-    if (search.trim()) {
-      const kw = search.trim().toLowerCase();
-      base = base.filter(
-        (row) =>
-          (row.customer_name || "").toLowerCase().includes(kw) ||
-          String(row.customer_phone || row.phone || "").includes(kw) ||
-          String(row.reservation_id).includes(kw)
-      );
-    }
+      const isPendingA = (keyA === "pending_request" || keyA === "request" || keyA === "pending");
+      const isPendingB = (keyB === "pending_request" || keyB === "request" || keyB === "pending");
 
-    const sd = appliedRange?.startDate;
-    const ed = appliedRange?.endDate;
-    if (sd && ed && sd !== "all" && sd !== "All Dates" && String(sd).trim() !== "") {
-      base = base.filter(r => {
-        try {
-          const rawIso = r.reservation_start_at;
-          if (rawIso) {
-            const resDateStr = String(rawIso).slice(0, 10);
-            const startStr = format(new Date(sd), "yyyy-MM-dd");
-            const endStr = format(new Date(ed), "yyyy-MM-dd");
-            return resDateStr >= startStr && resDateStr <= endStr;
-          }
-          return true;
-        } catch { return true; }
-      });
-    }
+      const isCheckInA = (keyA === "check-in" || keyA === "checked-in" || keyA === "checked_in");
+      const isCheckInB = (keyB === "check-in" || keyB === "checked-in" || keyB === "checked_in");
 
-    if (statusFilter !== "all") {
-      base = base.filter((row) => (row.status || row.reservation_status || "").toLowerCase() === statusFilter.toLowerCase());
-    }
+      const rankA = isPendingA ? 1 : (isCheckInA ? 2 : 3);
+      const rankB = isPendingB ? 1 : (isCheckInB ? 2 : 3);
 
-    const STAFF_STATUS_ORDER = {
-      "await check-in": 1,
-      "check-in": 2,
-      "occupied": 3,
-      "complete paid": 4,
-      "check-out": 5,
-      "pending request": 6,
-      "reject check-in": 7,
-      "reject request": 8,
-      "reject check-out": 9
-    };
-
-    return base.sort((a, b) => {
-      const statusA = (a.display_status || a.reservation_status || a.status || "").toLowerCase();
-      const statusB = (b.display_status || b.reservation_status || b.status || "").toLowerCase();
-      const orderA = STAFF_STATUS_ORDER[statusA] || 99;
-      const orderB = STAFF_STATUS_ORDER[statusB] || 99;
-      if (orderA !== orderB) return orderA - orderB;
-      return (b.reservation_id || 0) - (a.reservation_id || 0);
+      if (rankA !== rankB) {
+        return rankA - rankB;
+      }
+      return new Date(a?.reservation_start_at || 0).getTime() - new Date(b?.reservation_start_at || 0).getTime();
     });
-  }, [dateScopedQueue, search, statusFilter]);
+    return sorted;
+  }, [dateScopedQueue]);
 
   const kpiConfirmed = useMemo(
     () => dateScopedQueue.filter((r) => r.reservation_status === "Confirmed").length,
@@ -716,17 +834,28 @@ function ReservationManagement({ user, toast, refreshKey }) {
       <Button
         size="sm"
         variant="ghost"
-        style={{ color: "#000" }}
+        icon="eye"
         onClick={() => setConfirmDialog({ action: "view", target: reservation })}
       >
         View
       </Button>
     );
 
+    const editBtn = (
+      <Button
+        size="sm"
+        variant="gold"
+        onClick={() => setEditReservation(reservation)}
+      >
+        Edit
+      </Button>
+    );
+
     if (isCheckedOut) {
       return (
-        <div className="sfx-rowacts" style={{ justifyContent: "center" }}>
+        <div className="sfx-rowacts" style={{ justifyContent: "center", gap: 8, display: "flex", alignItems: "center" }}>
           {viewBtn}
+          {editBtn}
         </div>
       );
     }
@@ -748,13 +877,14 @@ function ReservationManagement({ user, toast, refreshKey }) {
             Check-in
           </Button>
           {viewBtn}
+          {editBtn}
         </div>
       );
     }
 
     if (isOccupied) {
       return (
-        <div className="sfx-rowacts" style={{ justifyContent: "center" }}>
+        <div className="sfx-rowacts" style={{ justifyContent: "center", gap: 8, display: "flex", alignItems: "center" }}>
           <button
             type="button"
             style={{
@@ -792,6 +922,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
             </button>
           )}
           {viewBtn}
+          {editBtn}
         </div>
       );
     }
@@ -816,19 +947,13 @@ function ReservationManagement({ user, toast, refreshKey }) {
               Check-in
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="ghost"
-            style={{ color: "#000" }}
-            onClick={() => setConfirmDialog({ action: "view", target: reservation })}
-          >
-            View
-          </Button>
+          {viewBtn}
+          {editBtn}
         </div>
       );
     }
 
-    return <div className="sfx-rowacts" style={{ justifyContent: "center" }}>{viewBtn}</div>;
+    return <div className="sfx-rowacts" style={{ justifyContent: "center", gap: 8, display: "flex", alignItems: "center" }}>{viewBtn}{editBtn}</div>;
   }
 
   /* ── Detail drawer content ── */
@@ -872,18 +997,16 @@ function ReservationManagement({ user, toast, refreshKey }) {
           </div>
         </div>
 
-        {isManager && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-            <Button
-              size="sm"
-              variant="outline"
-              style={{ color: "#3b82f6", borderColor: "#3b82f6", fontWeight: "bold" }}
-              onClick={() => setEditReservation(target)}
-            >
-              Edit (Admin)
-            </Button>
-          </div>
-        )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+          <Button
+            size="sm"
+            variant="outline"
+            style={{ color: "#3b82f6", borderColor: "#3b82f6", fontWeight: "bold" }}
+            onClick={() => setEditReservation(target)}
+          >
+            Edit
+          </Button>
+        </div>
 
         <hr style={{ margin: "14px 0", border: "none", borderTop: "1px solid rgba(0,0,0,0.08)" }} />
 
@@ -904,18 +1027,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
         </div>
 
         {(() => {
-          const raw = target.special_request || "";
-          const cleaned = raw
-            .replace(/\[Dining Purpose:[^\]]*\]/gi, "")
-            .replace(/\[Hold:[^\]]*\]/gi, "")
-            .replace(/\[Notes:[^\]]*\]/gi, "")
-            .replace(/\[Guest Name:[^\]]*\]/gi, "")
-            .replace(/\[Guest Email:[^\]]*\]/gi, "")
-            .replace(/\[Guest Phone:[^\]]*\]/gi, "")
-            .replace(/\n+/g, "\n")
-            .trim();
-          const notesMatch = raw.match(/\[Notes:\s*(.+?)\]/i);
-          const noteText = notesMatch ? notesMatch[1].trim() : cleaned;
+          const noteText = target.special_request || target.notes || "";
           return (
             <div className="sfx-note" style={{ marginBottom: 16 }}>
               <strong>Special Request:</strong><br />
@@ -935,9 +1047,9 @@ function ReservationManagement({ user, toast, refreshKey }) {
           const hasSent = preorders.some(p => p.cooking_status !== 'Not Sent');
 
           const statusColor = (s) => {
-            if (s === 'Queued')  return { bg: 'rgba(37,99,235,0.1)', color: '#1d4ed8' };
+            if (s === 'Queued') return { bg: 'rgba(37,99,235,0.1)', color: '#1d4ed8' };
             if (s === 'Cooking') return { bg: 'rgba(245,158,11,0.1)', color: '#b45309' };
-            if (s === 'Ready')   return { bg: 'rgba(16,185,129,0.1)', color: '#059669' };
+            if (s === 'Ready') return { bg: 'rgba(16,185,129,0.1)', color: '#059669' };
             if (s === 'Not Sent') return { bg: 'rgba(100,100,100,0.1)', color: '#666' };
             return { bg: 'rgba(100,100,100,0.08)', color: '#888' };
           };
@@ -948,8 +1060,10 @@ function ReservationManagement({ user, toast, refreshKey }) {
                 <p style={{ fontWeight: 700, fontSize: 13, color: '#1a1a1a', margin: 0 }}>
                   Pre-ordered Items
                   {preorders.length > 0 && (
-                    <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 600,
-                      background: 'rgba(139,97,20,0.1)', color: '#8B6114', padding: '2px 7px', borderRadius: 10 }}>
+                    <span style={{
+                      marginLeft: 6, fontSize: 11, fontWeight: 600,
+                      background: 'rgba(139,97,20,0.1)', color: '#8B6114', padding: '2px 7px', borderRadius: 10
+                    }}>
                       {preorders.length} item{preorders.length !== 1 ? 's' : ''}
                     </span>
                   )}
@@ -971,8 +1085,10 @@ function ReservationManagement({ user, toast, refreshKey }) {
                   </button>
                 )}
                 {hasSent && unsentItems.length === 0 && (
-                  <span style={{ fontSize: 11, fontWeight: 600,
-                    color: '#059669', background: 'rgba(16,185,129,0.1)', padding: '3px 8px', borderRadius: 10 }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600,
+                    color: '#059669', background: 'rgba(16,185,129,0.1)', padding: '3px 8px', borderRadius: 10
+                  }}>
                     ✓ All sent to kitchen
                   </span>
                 )}
@@ -1001,8 +1117,8 @@ function ReservationManagement({ user, toast, refreshKey }) {
                           </span>
                         )}
                         <span style={{
-                            fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
-                            background: 'rgba(255,255,255,0.2)', color: '#FFFFFF', marginLeft: 4
+                          fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
+                          background: 'rgba(255,255,255,0.2)', color: '#FFFFFF', marginLeft: 4
                         }}>
                           {item.cooking_status}
                         </span>
@@ -1043,6 +1159,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
         <SkeletonPresence
           loading={loading && dateScopedQueue.length === 0}
           skeleton={<ReservationTableSkeleton count={6} />}
+          className="sfx-stack"
         >
           <>
             {/* ── KPI cards ── */}
@@ -1051,8 +1168,8 @@ function ReservationManagement({ user, toast, refreshKey }) {
                 <div className="sfx-kpi__top">
                   <span className="sfx-kpi__icon" aria-hidden="true"><Icon name="calendar" size={18} /></span>
                 </div>
-                <p className="sfx-kpi__value">{dateScopedQueue.length}</p>
-                <p className="sfx-kpi__label">Bookings today</p>
+                <p className="sfx-kpi__value">{totalCount}</p>
+                <p className="sfx-kpi__label">Total Reservations</p>
               </article>
 
               <article className="sfx-kpi sfx-kpi--amber">
@@ -1086,10 +1203,10 @@ function ReservationManagement({ user, toast, refreshKey }) {
                 <div>
                   <h3 className="sfx-card__title" style={{ color: "#1a1a1a" }}>Reservations</h3>
                   <p className="sfx-muted staff-reservations-card__subtitle">
-                    {`Confirmed reservations for ${selectedDateLabel}`}
+                    Reservations for {selectedDateLabel}
                   </p>
                 </div>
-                <span className="sfx-muted">{filtered.length} reservations</span>
+                <span className="sfx-muted">{totalCount} reservations</span>
               </header>
 
               {/* Search + Filters + Date toolbar */}
@@ -1110,41 +1227,8 @@ function ReservationManagement({ user, toast, refreshKey }) {
                   </label>
                 </div>
 
-                <div style={{ flex: "0 0 auto" }}>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="sfx-input"
-                    style={{
-                      padding: "8px 32px 8px 12px",
-                      borderRadius: "8px",
-                      border: "1px solid",
-                      fontSize: "14px",
-                      fontWeight: "600",
-                      cursor: "pointer",
-                      minWidth: "160px",
-                      appearance: "none",
-                      backgroundRepeat: "no-repeat",
-                      backgroundPosition: "right 12px top 50%",
-                      backgroundSize: "10px auto",
-                      transition: "all 0.2s ease",
-                      ...(() => {
-                        const style = getSelectStyle(statusFilter);
-                        const arrowColor = encodeURIComponent(style.color);
-                        return {
-                          ...style,
-                          backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22${arrowColor}%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")`
-                        };
-                      })()
-                    }}
-                  >
-                    <option value="all" style={{ background: "#ffffff", color: "#1a1a1a" }}>All statuses</option>
-                    {STAFF_VISIBLE_STATUSES.map((statusVal) => (
-                      <option key={statusVal} value={statusVal} style={{ background: "#ffffff", color: "#1a1a1a" }}>
-                        {RESERVATION_STATUS_META[statusVal]?.label || statusVal}
-                      </option>
-                    ))}
-                  </select>
+                <div style={{ flex: "0 0 auto", zIndex: 60 }}>
+                  <AnimatedStatusDropdown value={statusFilter} onChange={setStatusFilter} />
                 </div>
 
                 <div style={{ flex: 1 }}></div>
@@ -1213,82 +1297,90 @@ function ReservationManagement({ user, toast, refreshKey }) {
                     hint="Reservations will appear here once confirmed by a manager."
                   />
                 ) : (
-                  <div className="sfx-table-wrap">
-                    <table
-                      className="sfx-table sfx-table--hover staff-reservations-table"
-                      style={{ background: "#ffffff" }}
-                    >
-                      <thead>
-                        <tr style={{ background: "#ffffff" }}>
-                          <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Reservation ID</th>
-                          <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Date</th>
-                          <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Customer</th>
-                          <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Phone</th>
-                          <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Email</th>
-                          <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Status</th>
-                          <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Actions</th>
-                        </tr>
-                      </thead>
-                  <motion.tbody
-                    variants={listContainerVariants}
-                    initial="hidden"
-                    animate="visible"
-                  >
-                    {filtered.map((reservation) => {
-                          const resId = reservation.reservation_id;
-                          const dateIso = getReservationDateIso(reservation);
-                          const displayDate = (() => {
-                            try {
-                              return format(new Date(`${dateIso}T12:00:00`), "dd/MM/yyyy");
-                            } catch { return dateIso; }
-                          })();
+                  <>
+                    <div className="sfx-table-wrap">
+                      <table
+                        className="sfx-table sfx-table--hover staff-reservations-table"
+                        style={{ background: "#ffffff" }}
+                      >
+                        <thead>
+                          <tr style={{ background: "#ffffff" }}>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Reservation ID</th>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Date</th>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Customer</th>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Phone</th>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Email</th>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Status</th>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <motion.tbody
+                          variants={listContainerVariants}
+                          initial="hidden"
+                          animate="visible"
+                        >
+                          {filtered.map((reservation) => {
+                            const resId = reservation.reservation_id;
+                            const dateIso = getReservationDateIso(reservation);
+                            const displayDate = (() => {
+                              try {
+                                return format(new Date(`${dateIso}T12:00:00`), "dd/MM/yyyy");
+                              } catch { return dateIso; }
+                            })();
 
-                          return (
-                            <motion.tr
-                              key={resId}
-                              variants={listItemVariants}
-                              id={`res-${String(resId).padStart(6, "0")}`}
-                              style={{ background: "#ffffff" }}
-                              className={`sfx-table__row${checkedInIds.has(resId) ? " sfx-table__row--just-actioned" : ""}${rejectedIds.has(resId) ? " sfx-table__row--just-rejected" : ""}`}
-                            >
-                              <td style={{ fontSize: 13, fontWeight: 600, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
-                                #{String(resId).padStart(6, "0")}
-                              </td>
-                              <td style={{ fontSize: 13, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
-                                {displayDate}
-                              </td>
-                              <td style={{ fontWeight: 500, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
-                                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                                  <span>{reservation.customer_name}</span>
-                                </div>
-                              </td>
-                              <td style={{ color: "#000", fontSize: 13, textAlign: "center", verticalAlign: "middle" }}>
-                                <EmptyVal val={reservation.customer_phone || reservation.phone} />
-                              </td>
-                              <td style={{ color: "#000", fontSize: 12, wordBreak: "break-all", textAlign: "center", verticalAlign: "middle" }}>
-                                <EmptyVal val={reservation.customer_email || reservation.email} />
-                              </td>
-                              <td style={{ textAlign: "center", verticalAlign: "middle" }}>
-                                <div style={{ display: "flex", justifyContent: "center" }}>
-                                  <ReservationStatusBadge
-                                    status={reservation.display_status || reservation.reservation_status}
-                                    size="sm"
-                                    isFlashing={reservation._isFlashing}
-                                  />
-                                </div>
-                              </td>
-                              <td style={{ textAlign: "center", verticalAlign: "middle" }}>
-                                <div style={{ display: "flex", justifyContent: "center" }}>
-                                  <RowActions reservation={reservation} />
-                                </div>
-                              </td>
-                            </motion.tr>
-                          );
-                        })}
-                      </motion.tbody>
-
-                    </table>
-                  </div>
+                            return (
+                              <motion.tr
+                                key={resId}
+                                variants={listItemVariants}
+                                id={`res-${String(resId).padStart(6, "0")}`}
+                                style={{ background: "#ffffff" }}
+                                className={`sfx-table__row${checkedInIds.has(resId) ? " sfx-table__row--just-actioned" : ""}${rejectedIds.has(resId) ? " sfx-table__row--just-rejected" : ""}`}
+                              >
+                                <td style={{ fontSize: 13, fontWeight: 600, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
+                                  #{String(resId).padStart(6, "0")}
+                                </td>
+                                <td style={{ fontSize: 13, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
+                                  {displayDate}
+                                </td>
+                                <td style={{ fontWeight: 500, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
+                                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                                    <span>{reservation.customer_name}</span>
+                                  </div>
+                                </td>
+                                <td style={{ color: "#000", fontSize: 13, textAlign: "center", verticalAlign: "middle" }}>
+                                  <EmptyVal val={reservation.customer_phone || reservation.phone} />
+                                </td>
+                                <td style={{ color: "#000", fontSize: 12, wordBreak: "break-all", textAlign: "center", verticalAlign: "middle" }}>
+                                  <EmptyVal val={reservation.customer_email || reservation.email} />
+                                </td>
+                                <td style={{ textAlign: "center", verticalAlign: "middle" }}>
+                                  <div style={{ display: "flex", justifyContent: "center" }}>
+                                    <ReservationStatusBadge
+                                      status={reservation.display_status || reservation.reservation_status}
+                                      size="sm"
+                                      isFlashing={reservation._isFlashing}
+                                    />
+                                  </div>
+                                </td>
+                                <td style={{ textAlign: "center", verticalAlign: "middle" }}>
+                                  <div style={{ display: "flex", justifyContent: "center" }}>
+                                    <RowActions reservation={reservation} />
+                                  </div>
+                                </td>
+                              </motion.tr>
+                            );
+                          })}
+                        </motion.tbody>
+                      </table>
+                    </div>
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      totalCount={totalCount}
+                      limit={20}
+                      onPageChange={setCurrentPage}
+                    />
+                  </>
                 )}
               </div>
             </div>
@@ -1370,7 +1462,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
                         </p>
                         {cfg.needsReason && (
                           <div style={{ marginTop: 16 }}>
-                            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--sfx-muted)", marginBottom: 6, textTransform: "uppercase" }}>Reason (required) <span style={{color: "#ef4444"}}>*</span></label>
+                            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--sfx-muted)", marginBottom: 6, textTransform: "uppercase" }}>Reason (required) <span style={{ color: "#ef4444" }}>*</span></label>
                             <input
                               type="text"
                               autoFocus

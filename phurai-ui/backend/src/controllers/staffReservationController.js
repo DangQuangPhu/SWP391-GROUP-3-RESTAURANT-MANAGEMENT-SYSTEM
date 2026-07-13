@@ -139,7 +139,7 @@ export const createWalkInReservation = async (req, res) => {
         (@reservationId, N'WALK_IN_CREATED', @staffId,
          N'Walk-in reservation created by staff. No deposit required.');
       INSERT INTO dbo.AuditLogs
-        (user_id, action_name, target_table, target_id, new_values, ip_address)
+        (user_id, action_name, target_table, target_id, new_value_json, ip_address)
       VALUES
         (@staffId, N'WALK_IN_CREATED', N'Reservations', @reservationId,
          N'{"reservation_source":"Walk-in","reservation_status":"Dining"}', NULL);
@@ -268,26 +268,63 @@ export const getTodayShiftReservations = async (req, res) => {
   }
 
   try {
-    let dateCondition = "";
-    const queryParams = [staffId];
+    const { page = 1, limit = 20, search = "", status = "all" } = req.query;
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 20;
+    const offset = (pageNum - 1) * limitNum;
 
-    // Ensure "all", "All Dates", or empty strings are ignored
+    let whereConditions = ["1 = 1"];
+    let queryParams = [];
+
+    // Date filtering (default to next 7 days if "All Dates" is provided to ensure staff sees data!)
     const isValidDate = (d) => d && typeof d === 'string' && d.toLowerCase() !== "all" && d.toLowerCase() !== "all dates" && d.trim() !== "";
-
     const sd = isValidDate(req.query.startDate) ? req.query.startDate : null;
     const ed = isValidDate(req.query.endDate) ? req.query.endDate : null;
 
     if (sd && ed) {
-      dateCondition = "AND CAST(r.reservation_start_at AS DATE) BETWEEN ? AND ?";
+      whereConditions.push("CAST(r.reservation_start_at AS DATE) BETWEEN ? AND ?");
       queryParams.push(sd, ed);
     } else if (sd) {
-      dateCondition = "AND CAST(r.reservation_start_at AS DATE) >= ?";
+      whereConditions.push("CAST(r.reservation_start_at AS DATE) >= ?");
       queryParams.push(sd);
     } else if (ed) {
-      dateCondition = "AND CAST(r.reservation_start_at AS DATE) <= ?";
+      whereConditions.push("CAST(r.reservation_start_at AS DATE) <= ?");
       queryParams.push(ed);
     }
 
+    // Status filtering
+    if (status !== "all" && status) {
+      whereConditions.push("r.reservation_status = ?");
+      queryParams.push(status);
+    }
+
+    // Search filtering
+    if (search) {
+      whereConditions.push(`(
+        CAST(r.reservation_id AS VARCHAR) LIKE ? OR
+        ua.full_name LIKE ? OR
+        r.contact_name LIKE ? OR
+        ua.phone LIKE ? OR
+        r.contact_phone LIKE ?
+      )`);
+      const searchWild = `%${search}%`;
+      queryParams.push(searchWild, searchWild, searchWild, searchWild, searchWild);
+    }
+
+    const whereClause = whereConditions.join(" AND ");
+
+    // Count Total
+    const [countRows] = await pool.query(
+      `SELECT COUNT(DISTINCT r.reservation_id) AS totalCount
+       FROM dbo.Reservations r
+       LEFT JOIN dbo.UserAccounts ua ON r.customer_id = ua.user_id
+       WHERE ${whereClause}`,
+      queryParams
+    );
+    const totalCount = countRows[0]?.totalCount || 0;
+    const totalPages = Math.ceil(totalCount / limitNum);
+
+    // Fetch Page
     const [rows] = await pool.query(
       `SELECT
                 r.reservation_id,
@@ -299,6 +336,7 @@ export const getTodayShiftReservations = async (req, res) => {
                 r.reservation_end_at,
                 r.guest_count,
                 r.special_request,
+                r.occasion,
                 r.reservation_status,
                 CASE WHEN r.has_pending_request = 1
                      THEN N'Request'
@@ -317,13 +355,11 @@ export const getTodayShiftReservations = async (req, res) => {
              LEFT JOIN dbo.RestaurantTables t ON res_t.table_id = t.table_id
              LEFT JOIN dbo.StaffSchedules ss ON ss.user_id = ? AND ss.work_date = CAST(r.reservation_start_at AS DATE)
              LEFT JOIN dbo.Shifts sh ON sh.shift_id = ss.shift_id AND sh.is_active = 1
-             WHERE
-                 r.reservation_status NOT IN (N'${RESERVATION_STATUS.PENDING_PAYMENT}', N'${RESERVATION_STATUS.PENDING_LEGACY}', N'${RESERVATION_STATUS.REJECT_REQUEST}', N'${RESERVATION_STATUS.REJECT_CHECK_IN}', N'${RESERVATION_STATUS.REJECT_CHECK_OUT}', N'${RESERVATION_STATUS.CANCELLED}')
-                 ${dateCondition}
+             WHERE ${whereClause}
              GROUP BY
                  r.reservation_id, ua.full_name, r.contact_name, ua.phone, r.contact_phone,
                  ua.email, r.contact_email, cp.username, r.reservation_start_at,
-                 r.reservation_end_at, r.guest_count, r.special_request, r.reservation_status,
+                 r.reservation_end_at, r.guest_count, r.special_request, r.occasion, r.reservation_status,
                  r.has_pending_request, r.created_at, r.checked_in_at, sh.shift_name, sh.start_time, sh.end_time
              ORDER BY 
                  CASE r.reservation_status
@@ -336,13 +372,18 @@ export const getTodayShiftReservations = async (req, res) => {
                      WHEN N'${RESERVATION_STATUS.REJECT_CHECK_IN}' THEN 7
                      ELSE 8
                  END ASC,
-                 r.reservation_start_at ASC`,
-      queryParams
+                 r.reservation_start_at ASC
+             OFFSET ? ROWS
+             FETCH NEXT ? ROWS ONLY`,
+      [staffId, ...queryParams, offset, limitNum]
     );
 
     return res.json({
       success: true,
       reservations: rows,
+      totalCount,
+      totalPages,
+      currentPage: pageNum
     });
   } catch (error) {
     console.error("[getTodayShiftReservations] Query failed:", error);
@@ -536,7 +577,7 @@ export const getStaffReservationDetail = async (req, res) => {
           COALESCE(ua.email, r.contact_email) AS customer_email,
           cp.username,
           r.reservation_start_at, r.reservation_end_at, r.guest_count,
-          r.special_request, r.reservation_status, r.reservation_source,
+          r.special_request, r.occasion, r.reservation_status, r.reservation_source,
           r.created_at, r.checked_in_at,
           STRING_AGG(t.table_number, ', ') AS assigned_tables,
           MAX(a.area_name) AS area_name
@@ -551,7 +592,7 @@ export const getStaffReservationDetail = async (req, res) => {
                 r.contact_name, r.contact_phone, r.contact_email,
                 cp.username,
                 r.reservation_start_at, r.reservation_end_at, r.guest_count,
-                r.special_request, r.reservation_status, r.reservation_source,
+                r.special_request, r.occasion, r.reservation_status, r.reservation_source,
                 r.created_at, r.checked_in_at`,
       [reservationId]
     );

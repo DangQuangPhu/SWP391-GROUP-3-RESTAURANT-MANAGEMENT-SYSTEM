@@ -31,9 +31,9 @@ import {
 } from "../../services/managerApi.js";
 
 // ── Role label map ────────────────────────────────────────────────────────────
-const ROLE_LABELS = { 1: "Customer", 2: "Staff", 4: "Manager", 5: "Admin" };
+const ROLE_LABELS = { 1: "Customer", 2: "Staff", 3: "Manager", 4: "Admin" };
 const GRANTABLE_ROLES_MANAGER = [{ id: 2, label: "Restaurant Staff" }];
-const GRANTABLE_ROLES_ADMIN   = [{ id: 2, label: "Restaurant Staff" }, { id: 4, label: "Manager" }];
+const GRANTABLE_ROLES_ADMIN   = [{ id: 2, label: "Restaurant Staff" }, { id: 3, label: "Manager" }];
 
 // ── Filter tabs ───────────────────────────────────────────────────────────────
 const FILTER_TABS = [
@@ -58,8 +58,8 @@ const EMPTY_GRANT  = { role_id: 2 };
 function StaffSection({ toast }) {
   const { currentUser } = useManagerPortal();
   const callerRoleId = currentUser?.role_id;
-  const showSalary   = [4, 5].includes(callerRoleId);
-  const grantableRoles = callerRoleId === 5 ? GRANTABLE_ROLES_ADMIN : GRANTABLE_ROLES_MANAGER;
+  const showSalary   = [3, 4].includes(callerRoleId);
+  const grantableRoles = callerRoleId === 4 ? GRANTABLE_ROLES_ADMIN : GRANTABLE_ROLES_MANAGER;
 
   // ── Data state ────────────────────────────────────────────────────────────
   const [employees, setEmployees]   = useState([]);
@@ -69,14 +69,16 @@ function StaffSection({ toast }) {
   const [searchQ, setSearchQ]       = useState("");
 
   // ── Modal state ───────────────────────────────────────────────────────────
-  const [editModal, setEditModal]       = useState(null);  // employee row | null
-  const [isNew, setIsNew]               = useState(false);
-  const [editForm, setEditForm]         = useState(EMPTY_EMP);
-  const [grantModal, setGrantModal]     = useState(null);  // employee row | null
-  const [grantForm, setGrantForm]       = useState(EMPTY_GRANT);
-  const [reviewModal, setReviewModal]   = useState(null);  // employee row | null
-  const [reviewForm, setReviewForm]     = useState(EMPTY_REVIEW);
-  const [saving, setSaving]             = useState(false);
+  const [editModal, setEditModal]           = useState(null);  // employee row | null
+  const [isNew, setIsNew]                   = useState(false);
+  const [editForm, setEditForm]             = useState(EMPTY_EMP);
+  const [grantModal, setGrantModal]         = useState(null);  // employee row | null
+  const [grantForm, setGrantForm]           = useState(EMPTY_GRANT);
+  const [reviewModal, setReviewModal]       = useState(null);  // employee row | null
+  const [reviewForm, setReviewForm]         = useState(EMPTY_REVIEW);
+  // Phase 2: Access Revocation Warning — shown when an employee's new job title doesn't require a system account
+  const [revokeWarningModal, setRevokeWarningModal] = useState(null); // { emp, newTitle } | null
+  const [saving, setSaving]                 = useState(false);
 
   // ── Fetch data ────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -97,6 +99,12 @@ function StaffSection({ toast }) {
   // ── Client-side filter + search ───────────────────────────────────────────
   const filtered = useMemo(() => {
     let list = employees;
+    
+    // Hide Admins from non-Admins
+    if (callerRoleId !== 4) {
+      list = list.filter(e => e.role_id !== 4);
+    }
+
     if (filterTab === "with")    list = list.filter(e => e.has_system_account);
     if (filterTab === "without") list = list.filter(e => !e.has_system_account);
     if (searchQ.trim()) {
@@ -149,6 +157,29 @@ function StaffSection({ toast }) {
         await createEmployee(payload);
         toast?.({ type: "success", message: "Employee created." });
       } else {
+        // Phase 2: Check if job_title_id changed to a non-access-requiring title
+        // for an employee who currently has a system account
+        const prevTitleId = editModal.job_title_id;
+        const newTitleId  = editForm.job_title_id ? Number(editForm.job_title_id) : null;
+        const newTitle    = jobTitles.find(t => t.job_title_id === newTitleId);
+        const prevTitle   = jobTitles.find(t => t.job_title_id === prevTitleId);
+        const titleChanged = newTitleId && newTitleId !== prevTitleId;
+        const accessWillBeUnneeded = titleChanged && newTitle && !newTitle.requires_system_access;
+        const empHasAccount = editModal.has_system_account;
+
+        if (accessWillBeUnneeded && empHasAccount) {
+          // Save the employee update first, then prompt about revocation
+          await updateEmployee(editModal.staff_id, payload);
+          setEditModal(null);
+          await loadData();
+          // Show revocation warning AFTER successful update
+          setRevokeWarningModal({
+            emp: editModal,
+            newTitle: newTitle?.title_name || "this role",
+          });
+          return;
+        }
+
         await updateEmployee(editModal.staff_id, payload);
         toast?.({ type: "success", message: "Employee updated." });
       }
@@ -258,17 +289,17 @@ function StaffSection({ toast }) {
         ) : filtered.length === 0 ? (
           <EmptyState message="No employees match your filter." />
         ) : (
-          <div style={{ overflowX: "auto" }}>
+          <div style={{ overflowX: "auto", background: "var(--bg-card, #fff)", borderRadius: "12px", border: "1px solid var(--border-subtle, #eaeaea)", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "14px" }}>
-              <thead>
-                <tr style={{ borderBottom: "1px solid var(--border, #333)", color: "var(--text-muted, #888)", textAlign: "left" }}>
-                  <th style={{ padding: "10px 12px" }}>Name</th>
-                  <th style={{ padding: "10px 12px" }}>Job Title</th>
-                  <th style={{ padding: "10px 12px" }}>Department</th>
-                  {showSalary && <th style={{ padding: "10px 12px" }}>Salary</th>}
-                  <th style={{ padding: "10px 12px" }}>Rating</th>
-                  <th style={{ padding: "10px 12px" }}>System Access</th>
-                  <th style={{ padding: "10px 12px" }}>Actions</th>
+              <thead style={{ background: "var(--bg-subtle, #fcfcfc)" }}>
+                <tr style={{ borderBottom: "2px solid var(--border, #e0e0e0)", color: "var(--text-muted, #666)", textAlign: "left", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  <th style={{ padding: "16px 20px", fontWeight: "600" }}>Name</th>
+                  <th style={{ padding: "16px 20px", fontWeight: "600" }}>Job Title</th>
+                  <th style={{ padding: "16px 20px", fontWeight: "600" }}>Department</th>
+                  {showSalary && <th style={{ padding: "16px 20px", fontWeight: "600" }}>Salary</th>}
+                  <th style={{ padding: "16px 20px", fontWeight: "600" }}>Rating</th>
+                  <th style={{ padding: "16px 20px", fontWeight: "600" }}>System Access</th>
+                  <th style={{ padding: "16px 20px", fontWeight: "600", textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
               <motion.tbody variants={listContainerVariants} initial="hidden" animate="visible">
@@ -276,17 +307,19 @@ function StaffSection({ toast }) {
                   <motion.tr
                     key={emp.staff_id}
                     variants={listItemVariants}
-                    style={{ borderBottom: "1px solid var(--border-subtle, #222)", verticalAlign: "middle" }}
+                    style={{ borderBottom: "1px solid var(--border-subtle, #f0f0f0)", verticalAlign: "middle", transition: "background 0.2s" }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "var(--bg-hover, #fafafa)"}
+                    onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
                   >
-                    <td style={{ padding: "10px 12px" }}>
-                      <div style={{ fontWeight: "500" }}>{fmt(emp.full_name)}</div>
-                      <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>{fmt(emp.email)}</div>
+                    <td style={{ padding: "20px" }}>
+                      <div style={{ fontWeight: "600", color: "var(--text-main, #111)" }}>{fmt(emp.full_name)}</div>
+                      <div style={{ fontSize: "13px", color: "var(--text-muted, #777)", marginTop: "4px" }}>{fmt(emp.email)}</div>
                     </td>
-                    <td style={{ padding: "10px 12px", color: "var(--text-muted)" }}>{fmt(emp.job_title)}</td>
-                    <td style={{ padding: "10px 12px", color: "var(--text-muted)" }}>{fmt(emp.department)}</td>
-                    {showSalary && <td style={{ padding: "10px 12px", fontFamily: "monospace" }}>{fmtSalary(emp.salary)}</td>}
-                    <td style={{ padding: "10px 12px" }}>{fmtRating(emp.latest_rating)}</td>
-                    <td style={{ padding: "10px 12px" }}>
+                    <td style={{ padding: "16px 20px", color: "var(--text-main, #333)", fontWeight: "500" }}>{fmt(emp.job_title)}</td>
+                    <td style={{ padding: "16px 20px", color: "var(--text-muted, #666)" }}>{fmt(emp.department)}</td>
+                    {showSalary && <td style={{ padding: "16px 20px", fontFamily: "monospace", color: "var(--text-main, #333)" }}>{fmtSalary(emp.salary)}</td>}
+                    <td style={{ padding: "16px 20px", fontWeight: "600", color: "var(--text-main, #333)" }}>{fmtRating(emp.latest_rating)}</td>
+                    <td style={{ padding: "16px 20px" }}>
                       {emp.has_system_account ? (
                         <StatusBadge status={emp.account_is_active ? "active" : "inactive"}>
                           {emp.account_is_active ? ROLE_LABELS[emp.role_id] ?? "Staff" : "Suspended"}
@@ -295,13 +328,13 @@ function StaffSection({ toast }) {
                         <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>No Account</span>
                       )}
                     </td>
-                    <td style={{ padding: "10px 12px" }}>
-                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                    <td style={{ padding: "16px 20px" }}>
+                      <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", flexWrap: "wrap" }}>
                         <Button size="sm" onClick={() => openEdit(emp)}>Edit</Button>
                         {!emp.has_system_account && (
                           <Button size="sm" variant="success" onClick={() => openGrant(emp)}>Grant Access</Button>
                         )}
-                        {emp.has_system_account && emp.account_is_active && emp.role_id !== 5 && (
+                        {emp.has_system_account && emp.account_is_active && emp.role_id !== 4 && (
                           <Button size="sm" variant="danger" onClick={() => handleRevoke(emp)} disabled={saving}>Revoke</Button>
                         )}
                         <Button size="sm" variant="ghost" onClick={() => openReview(emp)}>Review</Button>
@@ -343,11 +376,14 @@ function StaffSection({ toast }) {
                 onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
             </label>
             <label>Job Title
+              {/* Phase 2: 🔑 icon indicates this title requires a system account */}
               <select className="modal-input" value={editForm.job_title_id}
                 onChange={e => setEditForm(f => ({ ...f, job_title_id: e.target.value }))}>
                 <option value="">— Select —</option>
                 {jobTitles.map(jt => (
-                  <option key={jt.job_title_id} value={jt.job_title_id}>{jt.title_name}</option>
+                  <option key={jt.job_title_id} value={jt.job_title_id}>
+                    {jt.requires_system_access ? "🔑 " : ""}{jt.title_name}
+                  </option>
                 ))}
               </select>
             </label>
@@ -421,6 +457,57 @@ function StaffSection({ toast }) {
                 onChange={e => setReviewForm(f => ({ ...f, notes: e.target.value }))}
                 placeholder="Optional notes about this review period…" />
             </label>
+          </div>
+        </ManagerModal>
+      )}
+
+      {/* Phase 2 — Access Revocation Warning Modal */}
+      {revokeWarningModal !== null && (
+        <ManagerModal
+          title="⚠️ System Access Review"
+          onClose={() => setRevokeWarningModal(null)}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setRevokeWarningModal(null)}>
+                Keep Account Active
+              </Button>
+              <Button
+                variant="danger"
+                disabled={saving}
+                onClick={async () => {
+                  setSaving(true);
+                  try {
+                    await revokeAccess(revokeWarningModal.emp.staff_id);
+                    toast?.({ type: "success", message: `Access revoked for ${revokeWarningModal.emp.full_name}. Session terminated.` });
+                    setRevokeWarningModal(null);
+                    await loadData();
+                  } catch (err) {
+                    toast?.({ type: "error", message: err.message || "Failed to revoke access." });
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                {saving ? "Revoking…" : "Revoke System Access"}
+              </Button>
+            </>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div style={{
+              background: "rgba(255, 170, 0, 0.1)", border: "1px solid rgba(255, 170, 0, 0.3)",
+              borderRadius: "8px", padding: "14px", fontSize: "14px", lineHeight: "1.6"
+            }}>
+              <strong>{revokeWarningModal?.emp?.full_name}</strong>'s job title has been changed to{" "}
+              <strong>"{revokeWarningModal?.newTitle}"</strong>, which does not require system access.
+            </div>
+            <p style={{ color: "var(--text-muted)", fontSize: "13px", margin: 0 }}>
+              Their system account is still active. Would you like to revoke it now?
+              Revoking will immediately log them out and invalidate all their active sessions.
+            </p>
+            <p style={{ color: "var(--text-muted)", fontSize: "13px", margin: 0 }}>
+              You can always re-grant access later via the "Grant Access" button.
+            </p>
           </div>
         </ManagerModal>
       )}
