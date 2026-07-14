@@ -253,11 +253,11 @@ function ReservationSummary({
 
                 <div style={{ marginTop: "1rem", background: "#f8fafc", padding: "1.25rem", borderRadius: "0.75rem", border: "1px solid #e2e8f0" }}>
                   <div className="rzv-summary__row" style={{ padding: "4px 0", fontWeight: 700, color: "var(--rzv-gold)" }}>
-                    <span className="rzv-summary__label" style={{ fontSize: "1rem" }}>Required Deposit (Table + 30% Food)</span>
+                    <span className="rzv-summary__label" style={{ fontSize: "1rem" }}>Required Deposit (30%)</span>
                     <span className="rzv-summary__value" style={{ fontSize: "1.2rem" }}>{formatVND(depositRequired)}</span>
                   </div>
                   <div className="rzv-summary__row" style={{ padding: "4px 0", color: "#64748b", fontSize: "0.95rem" }}>
-                    <span className="rzv-summary__label">Remaining Balance (70% Food)</span>
+                    <span className="rzv-summary__label">Remaining Balance (70%)</span>
                     <span className="rzv-summary__value" style={{ fontWeight: 600 }}>{formatVND(remainingBalance)}</span>
                   </div>
                   <p style={{ margin: "10px 0 0 0", fontSize: "11px", color: "#64748b", fontStyle: "italic", lineHeight: "1.4" }}>
