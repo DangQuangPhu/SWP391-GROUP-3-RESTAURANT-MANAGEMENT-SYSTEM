@@ -718,7 +718,7 @@ GO
 
 // We will append to System_Restaurant.sql, BUT we must make sure we don't duplicate if it was already appended!
 let currentContent = fs.readFileSync(sqlFile, 'utf-8');
-const marker = '-- ==========================================';
+const marker = '-- ==========================================\n-- PHU TEST DATA OVERRIDE';
 
 if (currentContent.includes(marker)) {
     console.log("Already seeded! Removing old seed and regenerating...");
