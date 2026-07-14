@@ -216,23 +216,33 @@ function PreorderModal({ open, initialItems = [], onClose, onApply }) {
                   <h4 className="rzv-preorder-group-name">{category}</h4>
                   <div className="rzv-preorder-grid">
                     {dishes.map((dish) => {
-                      const qty = quantities[dish.dish_id] || 0;
+                      const isAvailable = dish.is_available !== false && dish.is_available !== 0;
+                      const qty = isAvailable ? (quantities[dish.dish_id] || 0) : 0;
                       return (
                         <article
                           key={dish.dish_id}
                           className={`rzv-preorder-card ${qty > 0 ? "rzv-preorder-card--active" : ""}`}
+                          style={!isAvailable ? { opacity: 0.6 } : {}}
                         >
                           <button
                             type="button"
                             className="rzv-preorder-img-btn"
                             onClick={() => setPreviewDish({ ...dish, image: resolveImage(dish.image_url), name: dish.dish_name })}
                             aria-label={`View full image of ${dish.dish_name}`}
+                            disabled={!isAvailable}
                           >
                             <div className="rzv-preorder-img-wrap">
-                              <img src={resolveImage(dish.image_url)} alt={dish.dish_name} className="rzv-preorder-img" />
-                              <div className="rzv-preorder-img-icon">
-                                <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
-                              </div>
+                              <img
+                                src={resolveImage(dish.image_url)}
+                                alt={dish.dish_name}
+                                className="rzv-preorder-img"
+                                style={!isAvailable ? { filter: 'grayscale(100%) opacity(70%)' } : {}}
+                              />
+                              {isAvailable && (
+                                <div className="rzv-preorder-img-icon">
+                                  <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+                                </div>
+                              )}
                             </div>
                           </button>
 
@@ -243,14 +253,32 @@ function PreorderModal({ open, initialItems = [], onClose, onApply }) {
                             )}
 
                             <div className="rzv-preorder-price-row">
-                              <span className="rzv-preorder-price">{formatVND(dish.price)}</span>
+                              <span className="rzv-preorder-price">
+                                {formatVND(dish.price)}
+                                {!isAvailable && (
+                                  <span style={{
+                                    display: 'inline-block',
+                                    marginLeft: '8px',
+                                    backgroundColor: '#fee2e2',
+                                    color: '#dc2626',
+                                    padding: '2px 8px',
+                                    borderRadius: '9999px',
+                                    fontFamily: "'Hanken Grotesk', system-ui, sans-serif",
+                                    fontSize: '11px',
+                                    fontWeight: '700',
+                                    verticalAlign: 'middle'
+                                  }}>
+                                    Out of Dish
+                                  </span>
+                                )}
+                              </span>
 
-                              <div className="rzv-preorder-stepper">
+                              <div className="rzv-preorder-stepper" style={!isAvailable ? { opacity: 0.5, pointerEvents: 'none' } : {}}>
                                 <button
                                   type="button"
                                   className={`rzv-preorder-step ${qty > 0 ? "rzv-preorder-step--active" : "rzv-preorder-step--disabled"}`}
                                   aria-label={`Remove one ${dish.dish_name}`}
-                                  disabled={qty <= 0}
+                                  disabled={qty <= 0 || !isAvailable}
                                   onClick={() => setQty(dish.dish_id, qty - 1)}
                                 >
                                   −
@@ -258,8 +286,9 @@ function PreorderModal({ open, initialItems = [], onClose, onApply }) {
                                 <span className="rzv-preorder-qty">{qty}</span>
                                 <button
                                   type="button"
-                                  className="rzv-preorder-step rzv-preorder-step--active"
+                                  className={`rzv-preorder-step ${isAvailable ? "rzv-preorder-step--active" : "rzv-preorder-step--disabled"}`}
                                   aria-label={`Add one ${dish.dish_name}`}
+                                  disabled={!isAvailable}
                                   onClick={() => setQty(dish.dish_id, qty + 1)}
                                 >
                                   +

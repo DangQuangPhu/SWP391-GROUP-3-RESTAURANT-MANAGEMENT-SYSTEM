@@ -14,15 +14,15 @@ router.get("/preorder", async (req, res) => {
           d.spicy_level,
           d.prep_time_min,
           c.category_name,
-          img.image_url
+          img.image_url,
+          d.is_available
       FROM dbo.Dishes d
       JOIN dbo.MenuCategories c
           ON d.category_id = c.category_id
       LEFT JOIN dbo.DishImages img
           ON d.dish_id = img.dish_id
          AND img.is_primary = 1
-      WHERE d.is_available = 1
-        AND d.allow_preorder = 1
+      WHERE d.allow_preorder = 1
       ORDER BY
           ISNULL(d.preorder_sort, 9999),
           c.display_order,
@@ -31,7 +31,10 @@ router.get("/preorder", async (req, res) => {
 
     return res.json({
       success: true,
-      data: rows,
+      data: rows.map(r => ({
+        ...r,
+        is_available: r.is_available === true || r.is_available === 1
+      })),
     });
   } catch (error) {
     console.error("GET /api/dishes/preorder failed:", error);
