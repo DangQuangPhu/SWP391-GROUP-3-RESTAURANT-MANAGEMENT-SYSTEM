@@ -134,11 +134,11 @@ export function generateAllData() {
     const totalDays = 365;
     let currentDate = new Date(startDate);
     
-    let globalOrderId = 1000;
-    let globalOrderItemId = 1000;
-    let globalKitchenTicketId = 1000;
-    let globalReservationId = 1000;
-    let globalUserId = 1000;
+    let globalOrderId = 10000;
+    let globalOrderItemId = 10000;
+    let globalKitchenTicketId = 10000;
+    let globalReservationId = 10000;
+    let globalUserId = 10000;
     
     for (const rc of REPEAT_CUSTOMERS) {
         const userId = globalUserId++;
