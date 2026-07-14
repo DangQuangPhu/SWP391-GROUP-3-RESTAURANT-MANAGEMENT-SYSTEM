@@ -326,12 +326,13 @@ WHEN MATCHED THEN
         role_id        = @CustomerRoleId,
         full_name      = N'Dang Quang Phu',
         is_active      = 1,
-        email_verified = 1
+        email_verified = 1,
+        created_at     = DATEADD(month, -6, SYSDATETIME())
 WHEN NOT MATCHED THEN
     INSERT (role_id, full_name, email, password_hash, is_active, email_verified, created_at, updated_at)
     VALUES (@CustomerRoleId, N'Dang Quang Phu', source.email,
             N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',
-            1, 1, SYSDATETIME(), SYSDATETIME());
+            1, 1, DATEADD(month, -6, SYSDATETIME()), DATEADD(month, -6, SYSDATETIME()));
 
 -- Target ONLY the customer account for all subsequent seed data
 DECLARE @PhuUsers TABLE (user_id INT);
@@ -351,9 +352,11 @@ DELETE FROM dbo.LoyaltyTransactions WHERE customer_id IN (SELECT user_id FROM @P
 MERGE dbo.CustomerProfiles AS target
 USING @PhuUsers AS source
 ON target.user_id = source.user_id
+WHEN MATCHED THEN
+    UPDATE SET created_at = DATEADD(month, -6, SYSDATETIME())
 WHEN NOT MATCHED THEN
-    INSERT (user_id, username, date_of_birth, gender, country, [language], bio, loyalty_points, preferences)
-    VALUES (source.user_id, N'quagphu159', '2004-12-29', N'Male', N'Vietnam', N'Vietnamese', N'CEO & Regular VIP customer.', 1010, N'["VIP area","Window seat","Steak"]');
+    INSERT (user_id, username, date_of_birth, gender, country, [language], bio, loyalty_points, preferences, created_at, updated_at)
+    VALUES (source.user_id, N'quagphu159', '2004-12-29', N'Male', N'Vietnam', N'Vietnamese', N'CEO & Regular VIP customer.', 1010, N'["VIP area","Window seat","Steak"]', DATEADD(month, -6, SYSDATETIME()), DATEADD(month, -6, SYSDATETIME()));
 
 -- Update loyalty points to 1010 so he has Gold status and can redeem vouchers
 -- Also set username to quagphu159 for his Google account
