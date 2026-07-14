@@ -213,9 +213,9 @@ export async function updateUserProfile(userId, payload) {
          updated_at = SYSDATETIME()
      WHERE user_id = ?`,
     [
-      full_name,
-      phone,
-      avatar_url,
+      full_name !== undefined ? full_name : existing.full_name,
+      phone !== undefined ? phone : existing.phone,
+      avatar_url !== undefined ? avatar_url : existing.avatar_url,
       userId,
     ]
   );

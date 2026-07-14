@@ -352,6 +352,28 @@ async function handleRequestOtp(req, res) {
   }
 }
 
+router.get("/auth/debug-db", async (req, res) => {
+  try {
+    const email = "quagphu159@gmail.com";
+    const [userRows] = await pool.query(
+      `SELECT user_id, role_id, full_name, email, phone, avatar_url, email_verified, created_at, updated_at 
+       FROM dbo.UserAccounts WHERE email = ?`,
+      [email]
+    );
+    const [profileRows] = await pool.query(
+      `SELECT * FROM dbo.CustomerProfiles WHERE user_id = (SELECT user_id FROM dbo.UserAccounts WHERE email = ?)`,
+      [email]
+    );
+    return res.json({
+      success: true,
+      user: userRows[0] || null,
+      profile: profileRows[0] || null
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 router.post("/auth/request-otp", handleRequestOtp);
 router.post("/auth/resend-otp", handleRequestOtp);
 
