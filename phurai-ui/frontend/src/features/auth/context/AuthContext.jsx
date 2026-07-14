@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   clearAuthUser,
   loadAuthUser,
@@ -20,7 +20,7 @@ export const AuthContext = createContext(null);
 function normalizeAuthUser(user) {
   if (!user) return null;
   // If the object already has camelCase properties, do not remap it
-  const mapped = (user.userId || user.fullName || user.email) ? user : mapApiUserToFrontend(user);
+  const mapped = (user.userId || user.fullName) ? user : mapApiUserToFrontend(user);
   return {
     ...mapped,
     avatarUrl: normalizeStoredAvatarUrl(mapped?.avatarUrl),
