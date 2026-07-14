@@ -1,6 +1,8 @@
-import { createContext, useContext, useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { createContext, useContext, useCallback, useMemo, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
+import { QRCodeSVG as QRCode } from "qrcode.react";
+import { ManagerModal } from "../../manager-dashboard/components/ManagerOverlay.jsx";
 import {
   TableCardSkeleton,
   SkeletonPresence,
@@ -11,7 +13,6 @@ import {
   SearchField,
   StatusBadge,
   Button,
-  NotConnectedNote,
   EmptyState,
 } from "./StaffUI.jsx";
 import Icon from "./StaffIcons.jsx";
@@ -23,10 +24,13 @@ import {
   markStaffTableClean,
   mergeTablesApi,
   unmergeTableApi,
+  createVirtualTableApi,
+  updateStaffTableStatusApi,
+  deleteStaffTableApi,
   fetchStaffReservationDetail,
 } from "../services/staffApi.js";
 import { formatBookingId } from "@/features/reservations/utils/formatBookingId.js";
-import { DEMO_NOTICE, TABLE_STATUS_META } from "@/shared/constants.js";
+import { TABLE_STATUS_META } from "@/shared/constants.js";
 import "../styles/staff-table-tab.css";
 
 const FILTER_STATUS_SLUGS = ["available", "reserved", "occupied", "cleaning"];
@@ -62,16 +66,11 @@ function normalizeTableStatus(table) {
 }
 
 function getTableStatusSlug(table) {
-  const raw = String(table?.status ?? "").trim().toLowerCase();
+  const raw = String(table.table_status || table.status || "Available").toLowerCase();
   if (TABLE_STATUS_META[raw]) return raw;
 
   const normalized = normalizeTableStatus(table);
   return STATUS_LABEL_TO_SLUG[normalized] || "available";
-}
-
-function isManagerUser(user) {
-  const roleId = Number(user?.roleId ?? user?.role_id);
-  return roleId === 4 || roleId === 5;
 }
 
 function sameTableId(left, right) {
@@ -203,18 +202,7 @@ function getTablesForReservationCheckIn(tables, reservation) {
     }));
 }
 
-function LockIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="staff-table-action__lock">
-      <path
-        d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
+
 
 /* =========================================================================
    COMPOUND COMPONENTS ARCHITECTURE
@@ -321,7 +309,6 @@ function TableManagementFloorMap() {
     handlePointerUpOrLeave,
     handleDragStart,
     handleDrop,
-    setSelectedTable,
     handleUnmerge,
   } = actions;
 
@@ -347,7 +334,9 @@ function TableManagementFloorMap() {
                 const slug = getTableStatusSlug(table);
                 const meta = TABLE_STATUS_META[slug] || TABLE_STATUS_META.available;
                 const displayNum = table.combined_names.join(" | ");
-                const canMerge = isJiggling && !table.is_counter;
+                const normalizedArea = (table.area_name || "").toLowerCase().trim();
+                const isRestricted = !["kitchen view", "standard area", "window area"].includes(normalizedArea);
+                const canMerge = isJiggling && !isRestricted;
 
                 return (
                   <article
@@ -361,7 +350,13 @@ function TableManagementFloorMap() {
                       if (canMerge) e.preventDefault();
                     }}
                     onDrop={(e) => handleDrop(e, table)}
+                    onClick={() => {
+                      if (!isJiggling) actions.setSelectedTable(table);
+                    }}
                     className={`sfx-mtile sfx-mtile--${meta.tone} ${canMerge ? "is-jiggling" : ""}`}
+                    style={{
+                      cursor: isJiggling ? "grab" : "pointer"
+                    }}
                   >
                     <span className="sfx-mtile__no">{displayNum}</span>
                     <span className="sfx-mtile__cap">{table.combined_capacity} seats</span>
@@ -376,18 +371,12 @@ function TableManagementFloorMap() {
                         justifyContent: "center",
                       }}
                     >
-                      {!isJiggling ? (
-                        meta.slug === "cleaning" ? (
-                          <Button size="sm" variant="soft" onClick={(e) => { e.stopPropagation(); actions.handleMarkClean(table); }}>
-                            Mark as Cleaned
-                          </Button>
-                        ) : (
-                          <Button size="sm" onClick={() => setSelectedTable(table)}>
-                            Manage
-                          </Button>
-                        )
+                      {!isJiggling && meta.slug === "cleaning" ? (
+                        <Button size="sm" variant="soft" onClick={(e) => { e.stopPropagation(); actions.handleMarkClean(table); }}>
+                          {table.child_ids?.length > 0 ? "Clean & Split" : "Mark as Cleaned"}
+                        </Button>
                       ) : null}
-                      {table.child_ids?.length > 0 && !isJiggling ? (
+                      {table.child_ids?.length > 0 && !isJiggling && meta.slug !== "cleaning" ? (
                         <Button
                           size="sm"
                           variant="soft"
@@ -413,131 +402,315 @@ function TableManagementFloorMap() {
 
 function TableManagementTableModal() {
   const { state, actions } = useTableManagement();
-  const { selectedTable: table, user, actionBusy: busy, toast } = state;
-  const { setSelectedTable, handleCheckIn, handleReset } = actions;
+  const { selectedTable: table, user, actionBusy: busy, toast, tables } = state;
+  const { setSelectedTable, handleUnmerge, handleRefreshAll, handleCheckIn, handleReset } = actions;
+
+  const [editingStatus, setEditingStatus] = useState(() => table ? normalizeTableStatus(table) : "");
+
+  const handleCheckInAction = async () => {
+    try {
+      await handleCheckIn(table);
+      setSelectedTable(null);
+    } catch (err) {
+      toast(err.message || "Check-in failed", "error");
+    }
+  };
+
+  const handleCheckOutAction = async () => {
+    try {
+      await handleReset(table);
+      setSelectedTable(null);
+    } catch (err) {
+      toast(err.message || "Check-out failed", "error");
+    }
+  };
+
+  const handleViewReservationAction = async () => {
+    if (table.active_reservation_id) {
+      setSelectedTable(null);
+      try {
+        const userId = Number(user?.userId ?? user?.id);
+        const resDetail = await fetchStaffReservationDetail(table.active_reservation_id, userId);
+        actions.setCheckInReservation(resDetail.reservation || resDetail);
+      } catch (err) {
+        toast(err.message || "Failed to load reservation details", "error");
+      }
+    } else {
+      toast("No active reservation found for this table.", "error");
+    }
+  };
+
+  const childTables = useMemo(() => {
+    if (!table || !table.child_ids || !tables) return [];
+    return table.child_ids.map(id => tables.find(t => t.table_id === id)).filter(Boolean);
+  }, [table, tables]);
 
   if (!table) return null;
 
-  const status = normalizeTableStatus(table);
-  const meta = STATUS_META[status] || STATUS_META.Available;
-  const manager = isManagerUser(user);
   const onClose = () => setSelectedTable(null);
 
-  const showCheckIn = status === "Available";
-  const showViewReservation = status === "Reserved";
-  const showCheckOut = status === "Occupied" || status === "Cleaning";
+  const handleSave = async () => {
+    try {
+      const userId = Number(user?.userId ?? user?.id);
+      await updateStaffTableStatusApi(table.table_id, editingStatus, userId);
+      toast("Table status updated successfully", "success");
+      handleRefreshAll();
+      onClose();
+    } catch (err) {
+      toast(err.message || "Failed to update table status", "error");
+    }
+  };
 
-  return createPortal(
-    <div
-      className="staff-table-modal fixed inset-0 z-[100] w-screen h-screen flex items-center justify-center"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="staff-table-modal-title"
-    >
-      <button
-        type="button"
-        className="staff-table-modal__backdrop fixed inset-0 z-[100] w-screen h-screen bg-black/50"
-        aria-label="Close table actions"
-        onClick={onClose}
-      />
-      <div className="staff-table-modal__panel relative z-[101]">
-        <header className="staff-table-modal__head">
-          <div>
-            <p className="staff-table-modal__eyebrow">{table.area_name}</p>
-            <h2 id="staff-table-modal-title" className="staff-table-modal__title">
-              Table {table.table_number}
-            </h2>
+  const handleAddVirtualSlot = async () => {
+    try {
+      const userId = Number(user?.userId ?? user?.id);
+      const res = await createVirtualTableApi(userId, {
+        table_number: table.table_number,
+        area_id: table.area_id,
+        capacity: table.capacity
+      });
+      const newTable = res.data;
+
+      // Auto-merge new virtual slot into parent table
+      await mergeTablesApi(newTable.table_id, table.table_id, userId);
+
+      toast(`Virtual slot ${newTable.table_number} created and merged with ${table.table_number}`, "success");
+      handleRefreshAll();
+      onClose();
+    } catch (err) {
+      toast(err.message || "Failed to create and merge virtual slot", "error");
+    }
+  };
+
+  const lowerArea = (table.area_name || "").toLowerCase();
+  const isRestricted = lowerArea.includes("premium") || lowerArea.includes("private") || lowerArea.includes("vip");
+
+  return (
+    <ManagerModal
+      open={Boolean(table)}
+      title={`Edit ${table.combined_names?.join(" | ") || table.table_number || "Table"}`}
+      onClose={onClose}
+      size="lg"
+      footer={
+        <>
+          <div style={{ display: "flex", gap: "8px" }}>
+            {editingStatus === "Available" && (
+              <Button variant="gold" onClick={handleCheckInAction} disabled={busy}>
+                Check-in
+              </Button>
+            )}
+            {editingStatus === "Reserved" && (
+              <Button variant="gold" onClick={handleViewReservationAction} disabled={busy}>
+                View Reservation
+              </Button>
+            )}
+            {editingStatus === "Occupied" && (
+              <Button variant="danger" onClick={handleCheckOutAction} disabled={busy}>
+                Check-out
+              </Button>
+            )}
           </div>
-          <button
-            type="button"
-            className="staff-table-modal__close"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <Icon name="close" size={18} />
-          </button>
-        </header>
-
-        <div className="staff-table-modal__meta">
-          <span className={`staff-table-status staff-table-status--${meta.tone}`}>
-            {meta.label}
-          </span>
-          <span className="staff-table-modal__cap">{table.capacity} seats</span>
-          {table.active_session_id ? (
-            <span className="staff-table-modal__session">
-              Session #{table.active_session_id}
-            </span>
-          ) : null}
-          {table.active_reservation_customer_name ? (
-            <span className="staff-table-modal__session" style={{ backgroundColor: "rgba(59, 130, 246, 0.1)", color: "#2563eb", border: "1px solid rgba(59, 130, 246, 0.2)" }}>
-              Reserved for {table.active_reservation_customer_name}
-            </span>
-          ) : null}
-        </div>
-
-        <div className="staff-table-modal__actions">
-          {showCheckIn ? (
-            <button
-              type="button"
-              className="sfx-btn sfx-btn--gold sfx-btn--md staff-table-action"
-              onClick={() => handleCheckIn(table)}
-              disabled={busy}
-            >
-              Check-in
-            </button>
-          ) : null}
-
-          {showViewReservation ? (
-            <button
-              type="button"
-              className="sfx-btn sfx-btn--gold sfx-btn--md staff-table-action"
-              onClick={async () => {
-                if (table.active_reservation_id) {
-                  setSelectedTable(null);
+          <div className="sfx-modal__footacts" style={{ marginLeft: "auto" }}>
+            {table.child_ids?.length > 0 && (
+              <Button
+                variant="danger"
+                onClick={async () => {
+                  await handleUnmerge(table.table_id);
+                  onClose();
+                }}
+              >
+                Separate Tables
+              </Button>
+            )}
+            {(table.table_number.includes("-V") || table.table_number.startsWith("V-")) && (
+              <Button
+                variant="danger"
+                onClick={async () => {
                   try {
                     const userId = Number(user?.userId ?? user?.id);
-                    const resDetail = await fetchStaffReservationDetail(table.active_reservation_id, userId);
-                    actions.setCheckInReservation(resDetail.reservation || resDetail);
+                    if (table.merged_into_table_id) {
+                      await unmergeTableApi(table.table_id, userId);
+                    }
+                    await deleteStaffTableApi(table.table_id, userId);
+                    toast(`Virtual table ${table.table_number} deleted`, "success");
+                    handleRefreshAll();
+                    onClose();
                   } catch (err) {
-                    toast?.(err.message || "Failed to load reservation details", "error");
+                    toast(err.message || "Failed to delete virtual table", "error");
                   }
-                } else {
-                  toast?.("No active reservation found for this table.", "error");
-                }
-              }}
-              disabled={busy}
-            >
-              View Reservation
-            </button>
-          ) : null}
+                }}
+                disabled={busy}
+              >
+                Delete Table
+              </Button>
+            )}
+            <Button variant="ghost" onClick={onClose} disabled={busy}>
+              Cancel
+            </Button>
+            <Button variant="gold" onClick={handleSave} disabled={busy}>
+              Save changes
+            </Button>
+          </div>
+        </>
+      }
+    >
+      <div className="sfx-form">
+        <div style={{ display: "flex", gap: "24px" }}>
+          <div style={{ flex: 1 }}>
+            <label className="sfx-field">
+              <span>Table number</span>
+              <input
+                className="sfx-input"
+                value={table.combined_names?.join(" | ") || table.table_number}
+                disabled
+              />
+            </label>
+            <div className="sfx-form__row">
+              <label className="sfx-field">
+                <span>Area</span>
+                <input
+                  className="sfx-input"
+                  value={table.area_name}
+                  disabled
+                />
+              </label>
+              <label className="sfx-field">
+                <span>Capacity</span>
+                <input
+                  className="sfx-input"
+                  type="number"
+                  value={table.combined_capacity || table.capacity}
+                  disabled
+                />
+              </label>
+            </div>
+          </div>
 
-          {showCheckOut ? (
-            <button
-              type="button"
-              className="sfx-btn sfx-btn--ghost sfx-btn--md staff-table-action"
-              onClick={() => handleReset(table)}
-              disabled={busy}
-            >
-              Check-out
-            </button>
-          ) : null}
-
-          <button
-            type="button"
-            className="sfx-btn sfx-btn--ghost sfx-btn--md staff-table-action staff-table-action--locked"
-            disabled={!manager}
-            title={manager ? "Move table (coming soon)" : "Manager role required"}
-          >
-            {!manager ? <LockIcon /> : null}
-            Move Table
-          </button>
+          {table.qr_code && (
+            <div style={{ flex: "0 0 180px", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+              <span className="sfx-muted" style={{ fontSize: "12px", fontWeight: "600", whiteSpace: "nowrap" }}>Static QR - Scan to Order</span>
+              <div id={`qr-wrapper-${table.table_id}`} style={{ background: "#fff", padding: "12px", borderRadius: "10px", border: "1px solid var(--sfx-border-soft)", display: "flex", justifyContent: "center", alignItems: "center", boxShadow: "0 4px 12px rgba(0, 0, 0, 0.05)" }}>
+                <QRCode
+                  value={`${window.location.origin}/scan/${table.qr_code}`}
+                  size={156}
+                />
+              </div>
+              <Button
+                variant="soft"
+                size="sm"
+                icon="download"
+                onClick={() => {
+                  const wrapper = document.getElementById(`qr-wrapper-${table.table_id}`);
+                  const svg = wrapper?.querySelector("svg");
+                  if (!svg) return;
+                  const svgData = new XMLSerializer().serializeToString(svg);
+                  const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement("a");
+                  link.href = url;
+                  link.download = `Table-${table.table_number}-QR.svg`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+              >
+                Download
+              </Button>
+            </div>
+          )}
         </div>
-        <p style={{ marginTop: "16px", fontSize: "12px", color: "var(--sfx-muted)", textAlign: "center" }}>
-          Tip: Long-press any table card to drag and merge it.
-        </p>
+
+        <div className="sfx-field">
+          <span>Status</span>
+          <div className="sfx-chips">
+            {["Available", "Reserved", "Occupied", "Cleaning", "Inactive"].map((s) => {
+              const isActive = s === editingStatus;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setEditingStatus(s)}
+                  className={`sfx-chip ${isActive ? "is-active" : "sfx-chip--outline"}`}
+                >
+                  {s}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {!isRestricted && (
+          <div style={{ marginTop: "16px" }}>
+            <Button
+              variant="soft"
+              size="md"
+              icon="plus"
+              onClick={handleAddVirtualSlot}
+              disabled={busy}
+              style={{ width: "100%" }}
+            >
+              Add Virtual Slot (Walk-in)
+            </Button>
+          </div>
+        )}
+
+        {childTables.length > 0 && (
+          <div className="sfx-field" style={{ marginTop: "20px" }}>
+            <span>Merged Tables</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
+              {childTables.map((child) => {
+                const isVirtualChild = child.table_number.includes("-V") || child.table_number.startsWith("V-");
+                return (
+                  <div key={child.table_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "var(--sfx-bg-soft, #f8f9fa)", borderRadius: "8px", border: "1px solid var(--sfx-border-soft, #e9ecef)" }}>
+                    <span style={{ fontWeight: "600", fontSize: "14px" }}>{child.table_number} ({child.capacity} seats)</span>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      {isVirtualChild ? (
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          onClick={async () => {
+                            try {
+                              const userId = Number(user?.userId ?? user?.id);
+                              await unmergeTableApi(child.table_id, userId);
+                              await deleteStaffTableApi(child.table_id, userId);
+                              toast(`Virtual table ${child.table_number} deleted`, "success");
+                              handleRefreshAll();
+                              onClose();
+                            } catch (err) {
+                              toast(err.message || "Failed to delete virtual table", "error");
+                            }
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="soft"
+                          onClick={async () => {
+                            try {
+                              const userId = Number(user?.userId ?? user?.id);
+                              await unmergeTableApi(child.table_id, userId);
+                              toast(`Table ${child.table_number} separated`, "success");
+                              handleRefreshAll();
+                              onClose();
+                            } catch (err) {
+                              toast(err.message || "Failed to separate table", "error");
+                            }
+                          }}
+                        >
+                          Separate
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
-    </div>,
-    document.body
+    </ManagerModal>
   );
 }
 
@@ -546,7 +719,20 @@ function TableManagementReservationModal() {
   const { checkInReservation: reservation, tables, actionBusy: busy } = state;
   const { setCheckInReservation, handleConfirmReservationCheckIn, handleRejectReservation } = actions;
 
-  const [selectedTableId, setSelectedTableId] = useState("");
+  const options = useMemo(
+    () => getTablesForReservationCheckIn(tables, reservation),
+    [tables, reservation]
+  );
+
+  const [selectedTableId, setSelectedTableId] = useState(() => {
+    if (!reservation) return "";
+    const assignedId = getAssignedTableId(reservation);
+    const assignedStr = assignedId != null ? String(assignedId) : "";
+    if (assignedStr && options.some((table) => String(table.table_id) === assignedStr)) {
+      return assignedStr;
+    }
+    return options.length > 0 ? String(options[0].table_id) : "";
+  });
   const [showTablePicker, setShowTablePicker] = useState(false);
 
   const onClose = () => setCheckInReservation(null);
@@ -556,45 +742,10 @@ function TableManagementReservationModal() {
     [reservation]
   );
 
-  const options = useMemo(
-    () => getTablesForReservationCheckIn(tables, reservation),
-    [tables, reservation]
-  );
-
   const partySize = reservation?.guest_count ?? "—";
   const timeAndDuration = briefing?.durationLabel
     ? `${reservation?.start_time || "—"} (${briefing.durationLabel})`
     : reservation?.start_time || "—";
-
-  useEffect(() => {
-    if (!reservation) {
-      setSelectedTableId("");
-      setShowTablePicker(false);
-      return;
-    }
-
-    const assignedId = getAssignedTableId(reservation);
-    setSelectedTableId(assignedId != null ? String(assignedId) : "");
-    setShowTablePicker(false);
-  }, [reservation?.reservation_id]);
-
-  useEffect(() => {
-    if (!reservation || options.length === 0) return;
-
-    setSelectedTableId((prev) => {
-      if (prev && options.some((table) => String(table.table_id) === prev)) {
-        return prev;
-      }
-
-      const assignedId = getAssignedTableId(reservation);
-      const assignedStr = assignedId != null ? String(assignedId) : "";
-      if (assignedStr && options.some((table) => String(table.table_id) === assignedStr)) {
-        return assignedStr;
-      }
-
-      return String(options[0].table_id);
-    });
-  }, [reservation, options]);
 
   if (!reservation || !briefing) return null;
 
@@ -846,7 +997,10 @@ function StaffTableTab({
   );
 
   const handlePointerDown = (e, t) => {
-    if (t.is_counter) return;
+    const lowerArea = (t.area_name || "").toLowerCase().trim();
+    if (!["kitchen view", "standard area", "window area"].includes(lowerArea)) {
+      return; // Cannot jiggle or merge restricted areas
+    }
     pressTimer.current = window.setTimeout(() => {
       setIsJiggling(true);
     }, 500);
@@ -857,7 +1011,7 @@ function StaffTableTab({
   };
 
   const handleDragStart = (e, t) => {
-    if (!isJiggling || t.is_counter) {
+    if (!isJiggling) {
       e.preventDefault();
       return;
     }
@@ -867,11 +1021,30 @@ function StaffTableTab({
   const handleDrop = async (e, targetTable) => {
     e.preventDefault();
     setIsJiggling(false);
-    if (targetTable.is_counter) return;
 
     try {
       const data = JSON.parse(e.dataTransfer.getData("application/json"));
       if (data.id === targetTable.table_id || data.area_id !== targetTable.area_id) return;
+
+      const sourceTable = tables.find((t) => t.table_id === data.id);
+      if (!sourceTable) return;
+
+      // Extract table number prefix (up to the hyphen)
+      const getPrefix = (num) => String(num).split("-")[0];
+      const sourcePrefix = getPrefix(sourceTable.table_number);
+      const targetPrefix = getPrefix(targetTable.table_number);
+
+      if (sourcePrefix !== targetPrefix) {
+        toast("Only tables with the same prefix (e.g. K-01 and K-02) can be merged.", "error");
+        return;
+      }
+
+      const lowerArea = (targetTable.area_name || "").toLowerCase().trim();
+      if (!["kitchen view", "standard area", "window area"].includes(lowerArea)) {
+        toast("Tables in this area cannot be merged.", "error");
+        return;
+      }
+
       const userId = Number(user?.userId ?? user?.id);
       await mergeTablesApi(data.id, targetTable.table_id, userId);
       toast("Tables merged successfully", "success");
@@ -949,7 +1122,15 @@ function StaffTableTab({
           table_status: "Available",
           status: "available",
         });
-        toast(`Table ${table.table_number} is now Available`, "success");
+        
+        // If it's a merged table, automatically unmerge it
+        if (table.child_ids?.length > 0) {
+          await unmergeTableApi(table.table_id, userId);
+          toast(`Table ${table.table_number} is cleaned and separated`, "success");
+        } else {
+          toast(`Table ${table.table_number} is now Available`, "success");
+        }
+        
         handleRefreshAll();
       } catch (err) {
         toast(err.message || "Failed to mark clean", "error");
@@ -1043,6 +1224,20 @@ function StaffTableTab({
     handleRefreshAll,
   ]);
 
+  const handleAddVirtualTable = useCallback(async () => {
+    const userId = Number(user?.userId ?? user?.id);
+    setActionBusy(true);
+    try {
+      await createVirtualTableApi(userId);
+      toast("Virtual table added successfully", "success");
+      handleRefreshAll();
+    } catch (err) {
+      toast(err.message || "Failed to add virtual table", "error");
+    } finally {
+      setActionBusy(false);
+    }
+  }, [user, toast, handleRefreshAll]);
+
   if (!tables.length) {
     return (
       <div className="sfx-stack">
@@ -1094,6 +1289,7 @@ function StaffTableTab({
       handleMarkClean,
       handleConfirmReservationCheckIn,
       handleRejectReservation,
+      handleAddVirtualTable,
     },
   };
 
@@ -1116,8 +1312,8 @@ function StaffTableTab({
             <TableManagementHeader />
             <TableManagementToolbar />
             <TableManagementFloorMap />
-            <TableManagementTableModal />
-            <TableManagementReservationModal />
+            <TableManagementTableModal key={selectedTable?.table_id} />
+            <TableManagementReservationModal key={checkInReservation?.reservation_id} />
           </div>
         </TableManagementProvider>
       </motion.div>

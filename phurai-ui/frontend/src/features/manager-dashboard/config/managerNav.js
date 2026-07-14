@@ -33,6 +33,7 @@ export const NAV_GROUPS = [
     group: "Insights",
     items: [
       { id: "reports", label: "Reports", view: "reports", icon: "chart", managerOnly: true },
+      { id: "ratings", label: "Ratings", view: "ratings", icon: "star", managerOnly: true },
     ],
   },
 ];
@@ -47,4 +48,5 @@ export const VIEW_SUBTITLE = {
   staff: "Staff roster, shifts and working status",
   promotions: "Campaigns, vouchers and discounts",
   reports: "Revenue, statistics and exports",
+  ratings: "Customer feedback and ratings",
 };

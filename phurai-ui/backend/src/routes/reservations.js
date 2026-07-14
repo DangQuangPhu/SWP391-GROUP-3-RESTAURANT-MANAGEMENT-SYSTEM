@@ -367,8 +367,8 @@ router.get("/availability", async (req, res) => {
                  OR
                  (r.reservation_status IN (N'Pending Request', N'Pending Payment') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
                )
-               AND r.reservation_start_at < ?
-               AND r.reservation_end_at > ?
+               AND DATEADD(minute, -60, r.reservation_start_at) < ?
+               AND DATEADD(minute, 60, r.reservation_end_at) > ?
            ) THEN N'Booked'
            ELSE N'Available'
          END AS availability_at_slot
@@ -446,6 +446,51 @@ router.get("/availability", async (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
+/* GET /api/reservations/table-bookings                                */
+/* ------------------------------------------------------------------ */
+
+router.get("/table-bookings", async (req, res) => {
+  try {
+    const { tableId, date } = req.query;
+    if (!tableId || !date) {
+      return res.status(400).json({
+        success: false,
+        message: "tableId and date are required.",
+      });
+    }
+
+    const startOfDay = `${date} 00:00:00`;
+    const endOfDay = `${date} 23:59:59`;
+
+    const [rows] = await pool.query(
+      `SELECT r.reservation_start_at, r.reservation_end_at
+       FROM dbo.Reservations r
+       JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
+       WHERE rt.table_id = ?
+         AND r.reservation_status IN (N'Confirmed', N'Reserved', N'Dining')
+         AND r.reservation_start_at >= ?
+         AND r.reservation_start_at <= ?
+       ORDER BY r.reservation_start_at ASC;`,
+      [Number(tableId), startOfDay, endOfDay]
+    );
+
+    return res.json({
+      success: true,
+      bookings: rows.map(r => ({
+        start: r.reservation_start_at,
+        end: r.reservation_end_at
+      }))
+    });
+  } catch (error) {
+    console.error("GET /api/reservations/table-bookings failed:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Could not load table bookings.",
+    });
+  }
+});
+
+/* ------------------------------------------------------------------ */
 /* GET /api/reservations/status                                        */
 /* ------------------------------------------------------------------ */
 
@@ -512,9 +557,7 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
     special_request,
     preorderItems,
     preorder_items,
-    // Booking metadata — frontend may send as dining_purpose or occasion
     dining_purpose,
-    occasion,
     duration,
   } = req.body || {};
 
@@ -659,7 +702,7 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
       });
     }
 
-    const effectiveDiningPurpose = dining_purpose || occasion || null;
+    const effectiveDiningPurpose = dining_purpose || null;
     const finalSpecialRequest = special_request && special_request.trim() ? special_request.trim() : null;
 
     const connection = await pool.getConnection();
@@ -793,8 +836,8 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
                      OR
                      (r.reservation_status IN (N'Pending Request', N'Pending Payment') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
                    )
-                   AND r.reservation_start_at < ?
-                   AND r.reservation_end_at > ?
+                    AND DATEADD(minute, -60, r.reservation_start_at) < ?
+                    AND DATEADD(minute, 60, r.reservation_end_at) > ?
                ) THEN N'Booked'
                ELSE N'Available'
              END AS availability_at_slot,
@@ -874,7 +917,7 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
         `INSERT INTO dbo.Reservations
            (customer_id, contact_name, contact_phone, contact_email, preferred_area_id,
             reservation_start_at, reservation_end_at,
-            guest_count, special_request, occasion, reservation_status, reservation_source,
+            guest_count, special_request, dining_purpose, reservation_status, reservation_source,
             confirmed_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, N'Online', SYSDATETIME());
          SELECT CAST(SCOPE_IDENTITY() AS INT) AS reservation_id;`,
@@ -1080,7 +1123,7 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
           : durationMins > 0
             ? `${durationMins} minutes`
             : null;
-        const effectivePurpose = dining_purpose || occasion || null;
+        const effectivePurpose = dining_purpose || null;
         sendBookingConfirmationEmail({
           toEmail:         guestEmailRaw,
           customerName:    guestName,
@@ -1241,7 +1284,7 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
          r.reservation_end_at,
          r.guest_count,
          r.special_request,
-         r.occasion,
+         r.dining_purpose,
          r.reservation_status AS status,
          r.created_at AS created_time,
          r.cancelled_at,
@@ -1325,7 +1368,7 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
         reservation_end_at: r.reservation_end_at,
         guest_count: r.guest_count,
         special_request: r.special_request,
-        occasion: r.occasion,
+        dining_purpose: r.dining_purpose,
         reservation_status: r.status,
         status: r.status,
         created_time: r.created_time,
@@ -1651,13 +1694,14 @@ router.post("/:id/request-cancel", resolveUserId, async (req, res) => {
   }
 
   const customerId = req.userId ? Number(req.userId) : null;
-  const { cancel_reason } = req.body || {};
+  const { cancelReason, cancel_reason } = req.body || {};
+  const actualReason = cancelReason || cancel_reason || null;
 
   try {
     const result = await submitCancelRequest(
       reservationId,
       customerId,
-      cancel_reason || null,
+      actualReason,
       req.ip
     );
     if (!result.success) {

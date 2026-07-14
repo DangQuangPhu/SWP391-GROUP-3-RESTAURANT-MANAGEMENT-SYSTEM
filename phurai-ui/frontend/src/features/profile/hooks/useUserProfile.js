@@ -82,22 +82,29 @@ function saveExtended(userId, email, data) {
 
 function mergeUser(user, extended) {
   if (!user) return null;
+  // API data (user) wins over localStorage cache (extended) for all authoritative fields.
+  // Only fall back to extended when the API returned empty/null.
   const dateOfBirth =
-    extended.dateOfBirth || user.dateOfBirth || user.dob || "";
+    user.dateOfBirth || user.dob || extended.dateOfBirth || "";
   const preferences =
     user.preferences?.length ? user.preferences : extended.preferences || [];
+  const fullName = user.fullName || extended.fullName || "";
+  const phone = user.phone || user.phoneNumber || extended.phone || "";
   return {
-    ...user,
-    ...extended,
+    ...extended,          // localStorage cache provides UI prefs (theme, reduceMotion etc.)
+    ...user,              // API overwrites everything with live DB values
     dateOfBirth,
     dob: dateOfBirth,
     preferences,
+    fullName,
+    phone,
+    phoneNumber: phone,
     loyaltyPoints: user.loyaltyPoints ?? extended.loyaltyPoints ?? 0,
-    avatarUrl: normalizeStoredAvatarUrl(user.avatarUrl),
+    // avatarUrl: prefer the live API avatar_url, then fall back to cached
+    avatarUrl: normalizeStoredAvatarUrl(user.avatarUrl || extended.avatarUrl || ""),
     googleAvatarUrl:
-      user.googleAvatarUrl || user.google_avatar_url || user.picture || "",
-    avatarSource: user.avatarSource || user.avatar_source || "",
-    fullName: user.fullName || "",
+      user.googleAvatarUrl || user.google_avatar_url || user.picture || extended.googleAvatarUrl || "",
+    avatarSource: user.avatarSource || user.avatar_source || extended.avatarSource || "",
     created_at: user.created_at || extended.created_at || null,
     username:
       user.username ||
@@ -105,6 +112,7 @@ function mergeUser(user, extended) {
     nickname: user.nickname || user.username,
   };
 }
+
 
 const PROFILE_API_FIELD_KEYS = [
   "firstName",
@@ -211,17 +219,26 @@ export function useUserProfile(user, onUserUpdate) {
         userId: mapped.userId ?? mapped.id,
       };
       onUserUpdateRef.current?.(normalized);
+      // Update the localStorage cache with fresh API values.
+      // API is authoritative — overwrite cached values for user-owned fields.
       setExtended((prev) => ({
         ...prev,
-        gender: normalized.gender ?? prev.gender,
-        bio: normalized.bio ?? prev.bio,
-        address: normalized.address ?? prev.address,
-        country: normalized.country ?? prev.country,
-        language: normalized.language ?? prev.language,
-        dateOfBirth: normalized.dateOfBirth || prev.dateOfBirth,
-        preferences: normalized.preferences ?? prev.preferences,
+        // UI-preference fields kept from prev (cover theme, reduce motion etc.)
+        gender: normalized.gender || prev.gender,
+        bio: normalized.bio || prev.bio,
+        address: normalized.address || prev.address,
+        country: normalized.country || prev.country,
+        language: normalized.language || prev.language,
+        dateOfBirth: normalized.dateOfBirth || normalized.dob || prev.dateOfBirth,
+        preferences: normalized.preferences?.length ? normalized.preferences : prev.preferences,
         loyaltyPoints: normalized.loyaltyPoints ?? prev.loyaltyPoints,
         created_at: normalized.created_at ?? prev.created_at,
+        // These must never be stale — always take from API
+        fullName: normalized.fullName || prev.fullName,
+        phone: normalized.phone || normalized.phoneNumber || prev.phone,
+        phoneNumber: normalized.phoneNumber || normalized.phone || prev.phoneNumber,
+        avatarUrl: normalized.avatarUrl || prev.avatarUrl,
+        googleAvatarUrl: normalized.googleAvatarUrl || prev.googleAvatarUrl,
       }));
       return;
     }
@@ -230,6 +247,7 @@ export function useUserProfile(user, onUserUpdate) {
       setExtended((prev) => ({ ...prev, ...data }));
     }
   }, []);
+
 
   const fetchAndApplyProfile = useCallback(
     async ({ skipCache = false } = {}) => {

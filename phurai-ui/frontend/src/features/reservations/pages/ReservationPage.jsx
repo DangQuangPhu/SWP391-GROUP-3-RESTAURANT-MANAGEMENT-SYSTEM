@@ -65,24 +65,18 @@ function ReservationPage({
   const pageVariants = useMemo(() => ({
     initial: {
       opacity: 0,
-      y: 16,
-      scale: 0.98,
     },
     animate: {
       opacity: 1,
-      y: 0,
-      scale: 1,
       transition: {
-        duration: 0.45,
-        ease: [0.16, 1, 0.3, 1],
+        duration: 0.35,
+        ease: "easeOut",
       }
     },
     exit: {
       opacity: 0,
-      y: -12,
-      scale: 0.99,
       transition: {
-        duration: 0.18,
+        duration: 0.25,
         ease: "easeIn",
       }
     }
@@ -491,18 +485,15 @@ function ReservationPage({
           )}
         </AnimatePresence>
 
-        <motion.div
+        <div
           className={`rd-content-col ${step === 'details' ? '' : step === 'payment' ? 'rd-content-col--wide' : 'rd-content-col--centered'}`}
-          layout
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         >
-          <motion.p layout className="rd-eyebrow">RESERVE A TABLE</motion.p>
-          <motion.h1 layout className="rd-title">CHOOSE YOUR MOMENT</motion.h1>
+          <p className="rd-eyebrow">RESERVE A TABLE</p>
+          <h1 className="rd-title">CHOOSE YOUR MOMENT</h1>
           <AnimatePresence>
             {step === "details" && (
               <motion.p
                 key="rd-subtitle"
-                layout
                 className="rd-subtitle"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: isExitingDetails ? 0 : 1, transition: { duration: isExitingDetails ? 0.25 : 0.6 } }}
@@ -513,8 +504,8 @@ function ReservationPage({
               </motion.p>
             )}
           </AnimatePresence>
-
-          <motion.div layout className="rd-stepper">
+ 
+          <div className="rd-stepper">
             {STEPS.map((stepObj, i) => {
               const label = stepObj.label;
               const isActive = i <= activeStepIndex;
@@ -528,7 +519,7 @@ function ReservationPage({
                 </div>
               );
             })}
-          </motion.div>
+          </div>
 
           <AnimatePresence mode="wait">
             {step === "details" && (
@@ -536,7 +527,7 @@ function ReservationPage({
                 key="details"
                 variants={pageVariants}
                 initial="initial"
-                animate={isExitingDetails ? { opacity: 0, y: -8, scale: 0.99, transition: { duration: 0.35, ease: [0.4, 0, 1, 1] } } : "animate"}
+                animate={isExitingDetails ? { opacity: 0, transition: { duration: 0.35, ease: [0.4, 0, 1, 1] } } : "animate"}
                 exit="exit"
               >
                 <ReservationDetails
@@ -656,7 +647,7 @@ function ReservationPage({
               </motion.div>
             )}
           </AnimatePresence>
-        </motion.div>
+        </div>
       </div>
     </div>
   );

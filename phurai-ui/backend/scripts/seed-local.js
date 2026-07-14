@@ -3,13 +3,6 @@
  *
  * Generates 1 year of deterministic, realistic restaurant data and inserts
  * it directly into the database using batched multi-row INSERT statements.
- *
- * Why this is extremely robust:
- *  1. It specifies target columns explicitly, meaning it doesn't care about
- *     column order changes in the physical database schema.
- *  2. Omitted columns with DEFAULT values or NULLs work automatically.
- *  3. Bypasses the strict BCP requirements of request.bulk() which often fail
- *     due to low-level type mapping mismatches.
  */
 
 import sql from 'mssql';
@@ -119,7 +112,7 @@ export async function generateAndSeed(pool) {
 
   const endDate   = new Date();
   const startDate = new Date();
-  startDate.setDate(endDate.getDate() - 365);
+  startDate.setDate(endDate.getDate() - 30);
 
   const TOTAL_DAYS       = 365;
   let   globalOrderId    = 1000;
@@ -127,19 +120,32 @@ export async function generateAndSeed(pool) {
   let   globalKtId       = 1000;
   let   globalResId      = 1000;
   let   globalUserId     = 1000;
+  let   globalTimelineId = 1000;
+  let   globalLoyaltyId  = 1000;
 
-  // ── Build 500 repeat customers ─────────────────────────────────────────────
-  const REPEAT_CUSTOMERS = [];
-  for (let i = 0; i < 500; i++) {
+  // ── IMPORTANT: Include Demo User (ID 15) ───────────────────────────────────
+  // Note: user_id 15 is already created by System_Restaurant.sql, so we just add
+  // them to the REPEAT_CUSTOMERS pool but DO NOT inject them into allUsers again.
+  const REPEAT_CUSTOMERS = [
+    { userId: 15, fullName: 'Đặng Quang Phú', email: 'quagphu159@gmail.com', phone: '0964813966', isGenerated: false }
+  ];
+
+  // We only track the loyalty points accrued to update CustomerProfiles later
+  const customerLoyaltyMap = { 15: 1250 }; // user 15 starts with 1250 from SQL
+
+  // Generate more repeat customers
+  for (let i = 0; i < 499; i++) {
     const id  = globalUserId++;
     const idt = makeIdentity(prng, i + 1);
-    REPEAT_CUSTOMERS.push({ userId: id, ...idt });
+    REPEAT_CUSTOMERS.push({ userId: id, ...idt, isGenerated: true });
+    customerLoyaltyMap[id] = 0;
   }
 
   const allUsers = [];
   const allProfiles = [];
   const allReservations = [];
   const allResTables = [];
+  const allTimelines = [];
   const allOrders = [];
   const allOItems = [];
   const allKt = [];
@@ -147,11 +153,16 @@ export async function generateAndSeed(pool) {
   const allAudit = [];
   const allSchedules = [];
   const allReviews = [];
+  const allLoyaltyTx = [];
 
   const PH = '$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6';
+  
+  // Only inject the ones we generated
   for (const rc of REPEAT_CUSTOMERS) {
-    allUsers.push(`(${rc.userId}, 1, ${escapeSqlString(rc.fullName)}, ${escapeSqlString(rc.email)}, '${rc.phone}', '${PH}', 1, 1, '${startDate.toISOString()}')`);
-    allProfiles.push(`(${rc.userId}, ${rc.userId}, 'user_${rc.userId}', 0)`);
+    if (rc.isGenerated) {
+      allUsers.push(`(${rc.userId}, 1, ${escapeSqlString(rc.fullName)}, ${escapeSqlString(rc.email)}, '${rc.phone}', '${PH}', 1, 1, '${startDate.toISOString()}')`);
+      allProfiles.push(`(${rc.userId}, ${rc.userId}, 'user_${rc.userId}', 0)`);
+    }
   }
 
   // ── Generate daily data ────────────────────────────────────────────────────
@@ -166,7 +177,7 @@ export async function generateAndSeed(pool) {
     const isWeekend = dow === 0 || dow === 6;
     const isFriday  = dow === 5;
 
-    let vol = prng.nextRange(2, 3);
+    let vol = prng.nextRange(3, 5); // Increased slightly for more data
     if (isFriday || (isWeekend && dow !== 0)) vol = Math.floor(vol * prng.nextRange(15, 20) / 10);
     else if (dow === 0) vol = Math.floor(vol * 1.3);
     vol = Math.floor(vol * (1 + (dayCounter / TOTAL_DAYS) * 0.3));
@@ -177,22 +188,47 @@ export async function generateAndSeed(pool) {
       const isLunch    = prng.chance(0.5);
       const hour       = isLunch ? prng.nextRange(11, 13) : prng.nextRange(18, 21);
       const minute     = prng.nextRange(0, 59);
-      const orderTime  = new Date(currentDate);
-      orderTime.setHours(hour, minute, 0, 0);
-      const endTime = new Date(orderTime.getTime() + 2 * 3600 * 1000);
+      
+      const reservationStartAt = new Date(currentDate);
+      reservationStartAt.setHours(hour, minute, 0, 0);
+      const reservationEndAt = new Date(reservationStartAt.getTime() + 2 * 3600 * 1000);
+      
+      // Booking time should be earlier than start time (e.g., 2 to 48 hours ago)
+      const bookingTime = new Date(reservationStartAt.getTime() - prng.nextRange(2, 48) * 3600 * 1000);
 
-      const isCancelled = prng.chance(0.07);
+      const now = new Date();
+      let isFuture = false;
+      let isOngoing = false;
+      let isCancelled = prng.chance(0.07);
 
-      // Customer
+      if (currentDate.getDate() === endDate.getDate()) {
+        if (reservationStartAt > now) {
+          isFuture = true;
+          isCancelled = false;
+        } else if (reservationStartAt <= now && reservationEndAt > now) {
+          isOngoing = true;
+          isCancelled = false;
+        }
+      }
+
+      const resStatus = isCancelled ? 'Cancelled'
+                      : isFuture ? 'Confirmed'
+                      : isOngoing ? 'Dining'
+                      : 'Completed';
+
+      // Pick customer: bias 10% heavily towards Demo Customer (userId=15) so they get tons of data
       let customer;
-      if (prng.chance(0.65)) {
+      if (prng.chance(0.1)) {
+        customer = REPEAT_CUSTOMERS[0]; // quagphu159
+      } else if (prng.chance(0.65)) {
         customer = prng.nextElement(REPEAT_CUSTOMERS);
       } else {
         const uid = globalUserId++;
         const idt = makeIdentity(prng, uid);
         customer  = { userId: uid, ...idt };
-        allUsers.push(`(${uid}, 1, ${escapeSqlString(idt.fullName)}, ${escapeSqlString(idt.email)}, '${idt.phone}', '${PH}', 1, 1, '${orderTime.toISOString()}')`);
+        allUsers.push(`(${uid}, 1, ${escapeSqlString(idt.fullName)}, ${escapeSqlString(idt.email)}, '${idt.phone}', '${PH}', 1, 1, '${bookingTime.toISOString()}')`);
         allProfiles.push(`(${uid}, ${uid}, 'user_${uid}', 0)`);
+        customerLoyaltyMap[uid] = 0;
       }
 
       const table     = prng.nextElement(TABLES);
@@ -200,65 +236,94 @@ export async function generateAndSeed(pool) {
 
       // Reservation
       const resId = globalResId++;
-      allReservations.push(`(${resId}, ${customer.userId}, ${escapeSqlString(customer.fullName)}, '${customer.phone}', '${orderTime.toISOString()}', '${endTime.toISOString()}', ${partySize}, '${isCancelled ? 'Cancelled' : 'Completed'}', '${orderTime.toISOString()}')`);
+      allReservations.push(`(${resId}, ${customer.userId}, ${escapeSqlString(customer.fullName)}, '${customer.phone}', '${reservationStartAt.toISOString()}', '${reservationEndAt.toISOString()}', ${partySize}, '${resStatus}', '${bookingTime.toISOString()}')`);
       allResTables.push(`(${resId}, ${table.table_id})`);
 
-      // Order
-      const orderId      = globalOrderId++;
-      const staffUser    = prng.nextElement(REGULAR_STAFF).user_id;
-      let   subtotal     = 0;
-      const items        = [];
-      const numItems     = prng.nextRange(partySize, partySize * 2);
-
-      for (let i = 0; i < numItems; i++) {
-        const dish = prng.nextElement(DISHES);
-        const qty  = prng.nextRange(1, 2);
-        subtotal  += dish.price * qty;
-        items.push({ dish, qty, price: dish.price });
+      // Timelines
+      allTimelines.push(`(${globalTimelineId++}, ${resId}, 'PENDING', ${customer.userId}, N'Reservation created', '${bookingTime.toISOString()}')`);
+      const confirmedTime = new Date(bookingTime.getTime() + prng.nextRange(10, 60) * 60 * 1000);
+      if (confirmedTime < reservationStartAt && (confirmedTime < now || !isFuture)) {
+          allTimelines.push(`(${globalTimelineId++}, ${resId}, 'CONFIRMED', ${prng.nextElement(REGULAR_STAFF).user_id}, N'Confirmed by staff', '${confirmedTime.toISOString()}')`);
       }
 
-      let discount = 0;
-      if (!isCancelled && prng.chance(0.2)) {
-        const v = prng.nextElement(VOUCHERS);
-        discount = v.discount_type === 'Percent'
-          ? subtotal * (v.discount_value / 100)
-          : v.discount_value;
-        if (discount > subtotal) discount = subtotal;
+      if (isCancelled) {
+          const cancelledTime = new Date(reservationStartAt.getTime() - prng.nextRange(1, 24) * 3600 * 1000);
+          allTimelines.push(`(${globalTimelineId++}, ${resId}, 'CANCELLED', ${customer.userId}, N'Cancelled by customer', '${cancelledTime.toISOString()}')`);
+      } else if (!isFuture) {
+          allTimelines.push(`(${globalTimelineId++}, ${resId}, 'DINING', ${prng.nextElement(REGULAR_STAFF).user_id}, N'Guest arrived', '${reservationStartAt.toISOString()}')`);
       }
-      const serviceCharge = (subtotal - discount) * 0.05;
-      const total         = subtotal - discount + serviceCharge;
 
-      allOrders.push(`(${orderId}, ${resId}, ${table.table_id}, ${customer.userId}, ${staffUser}, 'Dine In', '${isCancelled ? 'Cancelled' : 'Paid'}', ${subtotal}, ${discount}, ${serviceCharge}, ${total}, '${orderTime.toISOString()}')`);
+      // Order (only if not future)
+      if (!isFuture) {
+        const orderId      = globalOrderId++;
+        const staffUser    = prng.nextElement(REGULAR_STAFF).user_id;
+        let   subtotal     = 0;
+        const items        = [];
+        const numItems     = prng.nextRange(partySize, partySize * 2);
 
-      // Order Items + Kitchen Tickets
-      let ktOffset = 0;
-      for (const item of items) {
-        const oiId    = globalOiId++;
-        const status  = isCancelled ? 'Cancelled' : 'Served';
-        allOItems.push(`(${oiId}, ${orderId}, ${item.dish.dish_id}, ${item.qty}, ${item.price}, '${status}')`);
-
-        const ktId     = globalKtId++;
-        const sentAt   = new Date(orderTime.getTime() + ktOffset * 1000);
-        const startAt  = new Date(sentAt.getTime()  + prng.nextRange(60, 180) * 1000);
-        const readyAt  = new Date(startAt.getTime() + prng.nextRange(480, 1200) * 1000);
-
-        if (isCancelled) {
-          const cancelAt = new Date(sentAt.getTime() + prng.nextRange(60, 600) * 1000);
-          allKt.push(`(${ktId}, ${oiId}, 'Cancelled', 3, '${sentAt.toISOString()}', NULL, NULL, '${cancelAt.toISOString()}')`);
-          if (prng.chance(0.3)) {
-            const mgr = prng.nextElement(MANAGER_STAFF).user_id;
-            allAudit.push(`(${mgr}, ${ktId}, 'KitchenTickets', 'KITCHEN_MANAGER_OVERRIDE_CANCEL', N'{"old_status": "Preparing", "new_status": "Cancelled"}', '127.0.0.1', '${cancelAt.toISOString()}')`);
-          }
-        } else {
-          allKt.push(`(${ktId}, ${oiId}, 'Served', 3, '${sentAt.toISOString()}', '${startAt.toISOString()}', '${readyAt.toISOString()}', NULL)`);
+        for (let i = 0; i < numItems; i++) {
+          const dish = prng.nextElement(DISHES);
+          const qty  = prng.nextRange(1, 2);
+          subtotal  += dish.price * qty;
+          items.push({ dish, qty, price: dish.price });
         }
-        ktOffset += 30;
-      }
 
-      // Payment
-      if (!isCancelled) {
-        const pmId = prng.chance(0.7) ? prng.nextElement(PAYMENT_METHODS_QR) : PAYMENT_METHOD_CASH;
-        allPayments.push(`(${orderId}, ${pmId}, ${total}, 'Completed', '${orderTime.toISOString()}', '${orderTime.toISOString()}')`);
+        let discount = 0;
+        if (!isCancelled && prng.chance(0.2)) {
+          const v = prng.nextElement(VOUCHERS);
+          discount = v.discount_type === 'Percent'
+            ? subtotal * (v.discount_value / 100)
+            : v.discount_value;
+          if (discount > subtotal) discount = subtotal;
+        }
+        const serviceCharge = (subtotal - discount) * 0.05;
+        const total         = subtotal - discount + serviceCharge;
+
+        let orderStatus = isCancelled ? 'Cancelled' : isOngoing ? 'Sent To Kitchen' : 'Paid';
+        allOrders.push(`(${orderId}, ${resId}, ${table.table_id}, ${customer.userId}, ${staffUser}, 'Dine In', '${orderStatus}', ${subtotal}, ${discount}, ${serviceCharge}, ${total}, '${reservationStartAt.toISOString()}')`);
+
+        // Order Items + Kitchen Tickets
+        let ktOffset = 0;
+        for (const item of items) {
+          const oiId    = globalOiId++;
+          const status  = isCancelled ? 'Cancelled' : isOngoing ? 'Preparing' : 'Served';
+          allOItems.push(`(${oiId}, ${orderId}, ${item.dish.dish_id}, ${item.qty}, ${item.price}, '${status}')`);
+
+          const ktId     = globalKtId++;
+          const sentAt   = new Date(reservationStartAt.getTime() + ktOffset * 1000);
+          const startAt  = new Date(sentAt.getTime()  + prng.nextRange(60, 180) * 1000);
+          const readyAt  = new Date(startAt.getTime() + prng.nextRange(480, 1200) * 1000);
+
+          if (isCancelled) {
+            const cancelAt = new Date(sentAt.getTime() + prng.nextRange(60, 600) * 1000);
+            allKt.push(`(${ktId}, ${oiId}, 'Cancelled', 3, '${sentAt.toISOString()}', NULL, NULL, '${cancelAt.toISOString()}')`);
+            if (prng.chance(0.3)) {
+              const mgr = prng.nextElement(MANAGER_STAFF).user_id;
+              allAudit.push(`(${mgr}, ${ktId}, 'KitchenTickets', 'KITCHEN_MANAGER_OVERRIDE_CANCEL', N'{"old_status": "Preparing", "new_status": "Cancelled"}', '127.0.0.1', '${cancelAt.toISOString()}')`);
+            }
+          } else if (isOngoing) {
+            allKt.push(`(${ktId}, ${oiId}, 'Preparing', 3, '${sentAt.toISOString()}', NULL, NULL, NULL)`);
+          } else {
+            allKt.push(`(${ktId}, ${oiId}, 'Served', 3, '${sentAt.toISOString()}', '${startAt.toISOString()}', '${readyAt.toISOString()}', NULL)`);
+          }
+          ktOffset += 30;
+        }
+
+        // Payment & Loyalty
+        if (!isCancelled && !isOngoing) {
+          const pmId = prng.chance(0.7) ? prng.nextElement(PAYMENT_METHODS_QR) : PAYMENT_METHOD_CASH;
+          const paidAt = new Date(reservationEndAt.getTime() - prng.nextRange(5, 15) * 60 * 1000); // Paid ~10 mins before leaving
+          allPayments.push(`(${orderId}, ${pmId}, ${total}, 'Completed', '${paidAt.toISOString()}', '${paidAt.toISOString()}')`);
+          
+          allTimelines.push(`(${globalTimelineId++}, ${resId}, 'COMPLETED', ${staffUser}, N'Table checked out', '${reservationEndAt.toISOString()}')`);
+
+          // Earn Points (100k = 1 point)
+          const earnedPoints = Math.floor(total / 100000);
+          if (earnedPoints > 0) {
+              allLoyaltyTx.push(`(${globalLoyaltyId++}, ${customer.userId}, ${earnedPoints}, 'Earn', 'Payment', '${orderId}', N'Earned from order #${orderId}', '${paidAt.toISOString()}')`);
+              customerLoyaltyMap[customer.userId] = (customerLoyaltyMap[customer.userId] || 0) + earnedPoints;
+          }
+        }
       }
     }
 
@@ -300,6 +365,9 @@ export async function generateAndSeed(pool) {
   console.log('  Inserting reservation tables...');
   await executeInserts(pool, 'ReservationTables', 'reservation_id, table_id', allResTables, false);
 
+  console.log('  Inserting reservation timelines...');
+  await executeInserts(pool, 'ReservationTimelines', 'timeline_id, reservation_id, event_type, performed_by, notes, created_at', allTimelines, true);
+
   console.log('  Inserting orders...');
   await executeInserts(pool, 'Orders', 'order_id, reservation_id, table_id, customer_id, created_by_staff_id, order_type, order_status, subtotal, discount_amount, service_charge, total_amount, created_at', allOrders, true);
 
@@ -321,5 +389,92 @@ export async function generateAndSeed(pool) {
   console.log('  Inserting performance reviews...');
   await executeInserts(pool, 'PerformanceReviews', 'staff_id, rating, notes, reviewed_by, review_date, created_at', allReviews, false);
 
-  console.log(`\n  Summary: ${allReservations.length} reservations | ${allOrders.length} orders | ${allPayments.length} payments`);
+  console.log('  Inserting loyalty transactions...');
+  await executeInserts(pool, 'LoyaltyTransactions', 'transaction_id, customer_id, points, transaction_type, reference_type, reference_id, description, created_at', allLoyaltyTx, true);
+
+  console.log('  Updating customer profile loyalty points...');
+  // Update generated profiles
+  for (const [uid, points] of Object.entries(customerLoyaltyMap)) {
+      if (points > 0) {
+          await pool.query(`UPDATE dbo.CustomerProfiles SET loyalty_points = ${points} WHERE user_id = ${uid}`);
+      }
+  }
+
+  // ── Promotions & Voucher Engine Seed ───────────────────────────────────────
+  console.log('  Inserting promotions...');
+  const futureEnd = new Date(); futureEnd.setFullYear(futureEnd.getFullYear() + 1);
+  const pastStart = new Date(); pastStart.setFullYear(pastStart.getFullYear() - 1);
+  const futureEndStr = futureEnd.toISOString();
+  const pastStartStr = pastStart.toISOString();
+  const nowStr = new Date().toISOString();
+
+  // promotion_name, description, discount_type, discount_value, min_order_value, max_discount,
+  // start_at, end_at, is_active, applicable_to, points_required, validity_duration_hours,
+  // total_quantity, remaining_quantity, created_by_staff_id, created_at, updated_at
+  const promotions = [
+    // 1 — Welcome Gift (free, auto-granted on signup)
+    `(N'Welcome Gift', N'Chào mừng đến với Phurai! Nhận ngay 50.000đ cho đơn hàng đầu tiên.', N'Fixed', 50000, 0, 50000,
+      '${pastStartStr}', '${futureEndStr}', 1, N'Both', 0, 720, 9999, 9990, 1, SYSDATETIME(), SYSDATETIME())`,
+    // 2 — Loyal Diner 10% (exchange 500 points)
+    `(N'Loyal Diner 10%', N'Đổi 500 điểm lấy voucher giảm 10% cho bữa ăn. Áp dụng cho Order từ 200.000đ.', N'Percent', 10, 200000, 100000,
+      '${pastStartStr}', '${futureEndStr}', 1, N'Order', 500, 48, 200, 185, 1, SYSDATETIME(), SYSDATETIME())`,
+    // 3 — Reservation Discount 30K (exchange 300 points)
+    `(N'Reservation Discount 30K', N'Đổi 300 điểm lấy voucher giảm 30.000đ khi đặt bàn. Áp dụng cho mọi giá trị đặt cọc.', N'Fixed', 30000, 0, 30000,
+      '${pastStartStr}', '${futureEndStr}', 1, N'Reservation', 300, 72, 150, 143, 1, SYSDATETIME(), SYSDATETIME())`,
+  ];
+  await executeInserts(pool, 'Promotions',
+    'promotion_name, description, discount_type, discount_value, min_order_value, max_discount, start_at, end_at, is_active, applicable_to, points_required, validity_duration_hours, total_quantity, remaining_quantity, created_by_staff_id, created_at, updated_at',
+    promotions, false
+  );
+
+  // Get the actual promotion IDs we just inserted
+  const [promoRows] = await pool.query(`SELECT TOP 3 promotion_id, promotion_name FROM dbo.Promotions ORDER BY promotion_id ASC`);
+  const welcomePromoId = promoRows.find(r => r.promotion_name.startsWith('Welcome'))?.promotion_id;
+  const loyalPromoId   = promoRows.find(r => r.promotion_name.startsWith('Loyal'))?.promotion_id;
+  const resPromoId     = promoRows.find(r => r.promotion_name.startsWith('Reservation'))?.promotion_id;
+
+  if (welcomePromoId && loyalPromoId && resPromoId) {
+    // Seed global Vouchers pool entries for each promotion
+    const globalVouchers = [
+      `(${welcomePromoId}, N'WELCOME-PROMO', 9999, 9, 1, SYSDATETIME(), SYSDATETIME())`,
+      `(${loyalPromoId},   N'LOYAL10-PROMO', 200,  15, 1, SYSDATETIME(), SYSDATETIME())`,
+      `(${resPromoId},     N'RES30K-PROMO',  150,  7,  1, SYSDATETIME(), SYSDATETIME())`,
+    ];
+    await executeInserts(pool, 'Vouchers', 'promotion_id, voucher_code, usage_limit, times_used, is_active, created_at, updated_at', globalVouchers, false);
+
+    // ── CustomerVouchers for Demo User (user_id=15) ─────────────────────────
+    console.log('  Inserting customer vouchers for demo user...');
+    const in30Days  = new Date(); in30Days.setDate(in30Days.getDate() + 30);
+    const in2Days   = new Date(); in2Days.setDate(in2Days.getDate() + 2);
+    const pastExp   = new Date(); pastExp.setDate(pastExp.getDate() - 5);
+
+    const customerVouchers = [
+      // Active: Welcome gift voucher (30 days)
+      `(15, ${welcomePromoId}, 0,   N'WELCOME-U15-A1', N'active', SYSDATETIME(), '${in30Days.toISOString()}', NULL, NULL, NULL)`,
+      // Active: Loyal Diner 10% (expires in 2 days — shows urgency in countdown)
+      `(15, ${loyalPromoId},   500, N'LOYAL10-U15-A2', N'active', SYSDATETIME(), '${in2Days.toISOString()}', NULL, NULL, NULL)`,
+      // Used: Reservation Discount used on demo reservation
+      `(15, ${resPromoId},     300, N'RES30K-U15-USED', N'used', SYSDATETIME(), '${in30Days.toISOString()}', SYSDATETIME(), NULL, NULL)`,
+      // Expired: Old welcome voucher
+      `(15, ${welcomePromoId}, 0,   N'WELCOME-U15-EXP', N'expired', '${pastExp.toISOString()}', '${pastExp.toISOString()}', NULL, NULL, NULL)`,
+    ];
+    await executeInserts(pool, 'CustomerVouchers',
+      'customer_id, promotion_id, points_spent, voucher_code, status, redeemed_at, expires_at, used_at, used_in_order_id, used_in_reservation_id',
+      customerVouchers, false
+    );
+
+    // ── Notifications for Demo User ─────────────────────────────────────────
+    console.log('  Inserting notifications for demo user...');
+    const notifications = [
+      `(15, N'Promotion', N'🎉 Welcome Gift Received!', N'You have received a welcome voucher (WELCOME-U15-A1). Use it on your first order or reservation!', 0, SYSDATETIME())`,
+      `(15, N'Promotion', N'⭐ Voucher Redeemed: Loyal Diner 10%', N'Voucher LOYAL10-U15-A2 is now active. Expires in 48 hours — apply it at checkout!', 0, SYSDATETIME())`,
+      `(15, N'Promotion', N'✅ Voucher Used: Reservation Discount 30K', N'Voucher RES30K-U15-USED was applied and saved you 30.000đ on your reservation.', 1, SYSDATETIME())`,
+    ];
+    await executeInserts(pool, 'Notifications',
+      'user_id, notification_type, title, message_body, is_read, sent_at',
+      notifications, false
+    );
+  }
+
+  console.log(`\n  Summary: ${allReservations.length} reservations | ${allOrders.length} orders | ${allPayments.length} payments | ${allTimelines.length} timelines | ${allLoyaltyTx.length} loyalty txns`);
 }

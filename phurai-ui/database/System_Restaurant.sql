@@ -1334,31 +1334,63 @@ INSERT INTO dbo.DishImages (image_id, dish_id, image_url, is_primary) VALUES
 SET IDENTITY_INSERT dbo.DishImages OFF;
 GO
 
+-- ── Seed: KitchenDevices ────────────────────────────────────────────────────
+-- PIN hashes below = bcrypt of '1234' (test only — regenerate in production).
+-- station_category_ids NULL = catch-all device.
+-- created_by = user_id 1 (Admin).
+SET IDENTITY_INSERT dbo.KitchenDevices ON;
+INSERT INTO dbo.KitchenDevices (device_id, device_name, device_pin_hash, station_category_ids, is_active, created_by)
+VALUES
+(1, N'KDS - Main Kitchen',  N'$2b$10$NKnVpBImQPDDAB9pkSw00edPtrHpEWUmwGwPvlaAnNRMcX5HFWwkW', NULL,     1, 1),
+(2, N'KDS - Dessert Bar',   N'$2b$10$NKnVpBImQPDDAB9pkSw00edPtrHpEWUmwGwPvlaAnNRMcX5HFWwkW', N'[6]',   1, 1);
+SET IDENTITY_INSERT dbo.KitchenDevices OFF;
+GO
+
+SET IDENTITY_INSERT dbo.PaymentMethods ON;
+INSERT INTO dbo.PaymentMethods (payment_method_id, method_name, is_active) VALUES
+(1, N'Cash',      1),
+(2, N'QR Code',   1),
+(3, N'Bank Card', 1),
+(4, N'Mock Pay',  1);
+SET IDENTITY_INSERT dbo.PaymentMethods OFF;
+GO
+
+-- ============================================================================
+-- seed-demo.sql — Production / Staging Demo Seed
+-- 
+-- PURPOSE : Give the live server enough realistic data to make the
+--           dashboard, charts and tables look populated.
+--           ~60 rows total, runs in < 2 seconds.
+--
+-- USAGE   : Called automatically by `npm run db:init:prod`
+--           DO NOT run this on local — use `npm run db:init:local` instead.
+-- ============================================================================
+
 SET IDENTITY_INSERT dbo.Reservations ON;
 INSERT INTO dbo.Reservations
 (reservation_id, customer_id, created_by_staff_id, preferred_area_id, reservation_start_at, reservation_end_at,
- guest_count, special_request, reservation_status, reservation_source, confirmed_by_staff_id, confirmed_at, checked_in_at,
+ guest_count, special_request, dining_purpose, reservation_status, reservation_source, confirmed_by_staff_id, confirmed_at, checked_in_at,
  contact_name, contact_phone, contact_email)
 VALUES
-(1,  7, NULL, 1, '2026-05-20T18:30:00', '2026-05-20T20:30:00', 2, N'[Dining Purpose: Casual Dining] Window seat if possible', N'Confirmed',  N'Online',  3, '2026-05-18T09:15:00', NULL, NULL, NULL, NULL),
-(2,  8, NULL, 4, '2026-05-20T19:00:00', '2026-05-20T21:00:00', 4, N'[Dining Purpose: Anniversary] VIP area requested',       N'Confirmed',  N'Online',  3, '2026-05-18T10:00:00', NULL, NULL, NULL, NULL),
-(3,  9, NULL, 2, '2026-05-21T12:00:00', '2026-05-21T14:00:00', 3, N'[Dining Purpose: Casual Dining]',                        N'Pending Request',     N'Online',  NULL, NULL, NULL, NULL, NULL, NULL),
-(4, 10, NULL, 5, '2026-05-21T20:00:00', '2026-05-21T22:00:00', 6, N'[Dining Purpose: Business] Business dinner',          N'Confirmed',  N'Online',  4, '2026-05-19T08:00:00', NULL, NULL, NULL, NULL),
-(5, NULL,3,    2, '2026-05-18T18:00:00', '2026-05-18T20:00:00', 2, N'[Dining Purpose: Casual Dining] Walk-in guest',            N'Check-in', N'Walk-in', 3, '2026-05-18T17:55:00', '2026-05-18T18:00:00', N'Nguyen Hoang An', '0908111222', 'hoangan@gmail.com'),
-(6,  7, NULL, 2, '2026-04-10T19:00:00', '2026-04-10T21:00:00', 2, N'[Dining Purpose: Casual Dining]',                        N'Completed',  N'Online',  3, '2026-04-08T10:00:00', '2026-04-10T18:55:00', NULL, NULL, NULL),
-(7,  12, NULL, 4, '2026-04-15T20:00:00', '2026-04-15T22:00:00', 4, N'[Dining Purpose: Birthday] VIP birthday dinner',      N'Completed',  N'Online',  4, '2026-04-13T09:30:00', '2026-04-15T19:55:00', NULL, NULL, NULL),
-(8, 10, NULL, 1, '2026-06-25T19:00:00', '2026-06-25T21:00:00', 3, N'[Dining Purpose: Casual Dining] Customer requested date change', N'Pending Request', N'Online', 3, '2026-06-18T10:00:00', NULL, NULL, NULL, NULL),
-(9,  7, NULL, 1, '2026-06-24T18:30:00', '2026-06-24T20:30:00', 2, N'[Dining Purpose: Casual Date]', N'Confirmed',  N'Online',  3, '2026-06-20T09:15:00', NULL, NULL, NULL, NULL),
-(10, 8, NULL, 4, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 4, N'[Dining Purpose: Business] window seat', N'Pending Request', N'Online', NULL, NULL, NULL, NULL, NULL, NULL),
-(11, 9, NULL, 2, '2026-06-24T12:00:00', '2026-06-24T14:00:00', 3, N'[Dining Purpose: Casual Dining]', N'Awaiting Deposit', N'Online', NULL, NULL, NULL, NULL, NULL, NULL),
-(12, 12, NULL, 5, DATEADD(hour, 1, SYSDATETIME()), DATEADD(hour, 3, SYSDATETIME()), 6, N'[Dining Purpose: Birthday] extra cake', N'Check-in', N'Online', 4, DATEADD(day, -1, SYSDATETIME()), NULL, NULL, NULL, NULL),
-(13, NULL, 3, 2, '2026-06-24T18:00:00', '2026-06-24T20:00:00', 2, N'[Dining Purpose: Anniversary]', N'Dining', N'Walk-in', 3, '2026-06-24T17:55:00', '2026-06-24T18:00:00', N'Pham Minh Tuan', '0909555666', 'minhtuan@gmail.com'),
-(14, 7, NULL, 2, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 2, N'[Dining Purpose: Casual Dining]', N'Payment Pending', N'Online', 3, '2026-06-20T10:00:00', '2026-06-24T18:55:00', NULL, NULL, NULL),
-(15, 8, NULL, 4, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 4, N'[Dining Purpose: Celebration]', N'Completed', N'Online', 4, '2026-06-20T09:30:00', '2026-06-24T19:55:00', NULL, NULL, NULL),
-(16, 10, NULL, 1, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 3, N'[Dining Purpose: Casual Date]', N'Cancelled', N'Online', 3, '2026-06-20T10:00:00', NULL, NULL, NULL, NULL),
-(17, 9, NULL, 2, '2026-06-24T18:30:00', '2026-06-24T20:30:00', 2, N'[Dining Purpose: Business]', N'No Show', N'Online', 3, '2026-06-20T11:00:00', NULL, NULL, NULL, NULL),
-(18, 7, NULL, 1, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 2, N'[Dining Purpose: Casual Dining]', N'Confirmed', N'Online', 3, '2026-06-20T12:00:00', NULL, NULL, NULL, NULL),
-(19, 12, NULL, 1, DATEADD(day, -2, SYSDATETIME()), DATEADD(hour, 2, DATEADD(day, -2, SYSDATETIME())), 2, N'[Dining Purpose: Anniversary]', N'Completed', N'Online', 3, DATEADD(day, -4, SYSDATETIME()), DATEADD(minute, -5, DATEADD(day, -2, SYSDATETIME())), NULL, NULL, NULL);
+(1,  7, NULL, 1, '2026-05-20T18:30:00', '2026-05-20T20:30:00', 2, N'Window seat if possible', N'Casual Dining', N'Confirmed',  N'Online',  3, '2026-05-18T09:15:00', NULL, NULL, NULL, NULL),
+(2,  8, NULL, 4, '2026-05-20T19:00:00', '2026-05-20T21:00:00', 4, N'VIP area requested', N'Anniversary', N'Confirmed',  N'Online',  3, '2026-05-18T10:00:00', NULL, NULL, NULL, NULL),
+(3,  9, NULL, 2, '2026-05-21T12:00:00', '2026-05-21T14:00:00', 3, NULL, N'Casual Dining', N'Pending Request',     N'Online',  NULL, NULL, NULL, NULL, NULL, NULL),
+(4, 10, NULL, 5, '2026-05-21T20:00:00', '2026-05-21T22:00:00', 6, N'Business dinner', N'Business', N'Confirmed',  N'Online',  4, '2026-05-19T08:00:00', NULL, NULL, NULL, NULL),
+(5, NULL,3,    2, '2026-05-18T18:00:00', '2026-05-18T20:00:00', 2, N'Walk-in guest', N'Casual Dining', N'Check-in', N'Walk-in', 3, '2026-05-18T17:55:00', '2026-05-18T18:00:00', N'Nguyen Hoang An', '0908111222', 'hoangan@gmail.com'),
+(6,  7, NULL, 2, '2026-04-10T19:00:00', '2026-04-10T21:00:00', 2, NULL, N'Casual Dining', N'Completed',  N'Online',  3, '2026-04-08T10:00:00', '2026-04-10T18:55:00', NULL, NULL, NULL),
+(7,  12, NULL, 4, '2026-04-15T20:00:00', '2026-04-15T22:00:00', 4, N'VIP birthday dinner', N'Birthday', N'Completed',  N'Online',  4, '2026-04-13T09:30:00', '2026-04-15T19:55:00', NULL, NULL, NULL),
+(8, 10, NULL, 1, '2026-06-25T19:00:00', '2026-06-25T21:00:00', 3, N'Customer requested date change', N'Casual Dining', N'Pending Request', N'Online', 3, '2026-06-18T10:00:00', NULL, NULL, NULL, NULL),
+(9,  7, NULL, 1, '2026-06-24T18:30:00', '2026-06-24T20:30:00', 2, NULL, N'Casual Date', N'Confirmed',  N'Online',  3, '2026-06-20T09:15:00', NULL, NULL, NULL, NULL),
+(10, 8, NULL, 4, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 4, N'window seat', N'Business', N'Pending Request', N'Online', NULL, NULL, NULL, NULL, NULL, NULL),
+(11, 9, NULL, 2, '2026-06-24T12:00:00', '2026-06-24T14:00:00', 3, NULL, N'Casual Dining', N'Awaiting Deposit', N'Online', NULL, NULL, NULL, NULL, NULL, NULL),
+(12, 12, NULL, 5, DATEADD(hour, 1, SYSDATETIME()), DATEADD(hour, 3, SYSDATETIME()), 6, N'extra cake', N'Birthday', N'Check-in', N'Online', 4, DATEADD(day, -1, SYSDATETIME()), NULL, NULL, NULL, NULL),
+(13, NULL, 3, 2, '2026-06-24T18:00:00', '2026-06-24T20:00:00', 2, NULL, N'Anniversary', N'Dining', N'Walk-in', 3, '2026-06-24T17:55:00', '2026-06-24T18:00:00', N'Pham Minh Tuan', '0909555666', 'minhtuan@gmail.com'),
+(14, 7, NULL, 2, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 2, NULL, N'Casual Dining', N'Payment Pending', N'Online', 3, '2026-06-20T10:00:00', '2026-06-24T18:55:00', NULL, NULL, NULL),
+(15, 8, NULL, 4, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 4, NULL, N'Celebration', N'Completed', N'Online', 4, '2026-06-20T09:30:00', '2026-06-24T19:55:00', NULL, NULL, NULL),
+(16, 10, NULL, 1, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 3, NULL, N'Casual Date', N'Cancelled', N'Online', 3, '2026-06-20T10:00:00', NULL, NULL, NULL, NULL),
+(17, 9, NULL, 2, '2026-06-24T18:30:00', '2026-06-24T20:30:00', 2, NULL, N'Business', N'No Show', N'Online', 3, '2026-06-20T11:00:00', NULL, NULL, NULL, NULL),
+(18, 7, NULL, 1, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 2, NULL, N'Casual Dining', N'Confirmed', N'Online', 3, '2026-06-20T12:00:00', NULL, NULL, NULL, NULL),
+(19, 12, NULL, 1, DATEADD(day, -2, SYSDATETIME()), DATEADD(hour, 2, DATEADD(day, -2, SYSDATETIME())), 2, NULL, N'Anniversary', N'Completed', N'Online', 3, DATEADD(day, -4, SYSDATETIME()), DATEADD(minute, -5, DATEADD(day, -2, SYSDATETIME())), NULL, NULL, NULL);
 
 SET IDENTITY_INSERT dbo.Reservations OFF;
 GO
@@ -1454,29 +1486,6 @@ VALUES
 (6, 16, N'Pending',   3, NULL, SYSDATETIME(), NULL, NULL),
 (7, 17, N'Pending',   3, NULL, SYSDATETIME(), NULL, NULL);
 SET IDENTITY_INSERT dbo.KitchenTickets OFF;
-GO
-
--- ── Seed: KitchenDevices ────────────────────────────────────────────────────
--- PIN hashes below = bcrypt of '1234' (test only — regenerate in production).
--- station_category_ids NULL = catch-all device.
--- created_by = user_id 1 (Admin).
-SET IDENTITY_INSERT dbo.KitchenDevices ON;
-INSERT INTO dbo.KitchenDevices (device_id, device_name, device_pin_hash, station_category_ids, is_active, created_by)
-VALUES
-(1, N'KDS - Main Kitchen',  N'$2b$10$NKnVpBImQPDDAB9pkSw00edPtrHpEWUmwGwPvlaAnNRMcX5HFWwkW', NULL,     1, 1),
-(2, N'KDS - Dessert Bar',   N'$2b$10$NKnVpBImQPDDAB9pkSw00edPtrHpEWUmwGwPvlaAnNRMcX5HFWwkW', N'[6]',   1, 1);
-SET IDENTITY_INSERT dbo.KitchenDevices OFF;
-GO
-
-
-
-SET IDENTITY_INSERT dbo.PaymentMethods ON;
-INSERT INTO dbo.PaymentMethods (payment_method_id, method_name, is_active) VALUES
-(1, N'Cash',      1),
-(2, N'QR Code',   1),
-(3, N'Bank Card', 1),
-(4, N'Mock Pay',  1);
-SET IDENTITY_INSERT dbo.PaymentMethods OFF;
 GO
 
 SET IDENTITY_INSERT dbo.Payments ON;
@@ -1727,17 +1736,6 @@ GO
 -- tiếng việt -- 36. Lấy dữ liệu bảng Lịch sử Đánh giá Hiệu suất (PerformanceReviews)
 SELECT review_id, staff_id, rating, notes, reviewed_by, review_date, created_at FROM dbo.PerformanceReviews;
 GO
-
--- ============================================================================
--- seed-demo.sql — Production / Staging Demo Seed
--- 
--- PURPOSE : Give the live server enough realistic data to make the
---           dashboard, charts and tables look populated.
---           ~60 rows total, runs in < 2 seconds.
---
--- USAGE   : Called automatically by `npm run db:init:prod`
---           DO NOT run this on local — use `npm run db:init:local` instead.
--- ============================================================================
 
 -- ---------------------------------------------------------------------------
 -- Phu / Admin test accounts (always upsert so they survive re-init)

@@ -83,9 +83,7 @@ function getPool() {
         IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name=N'updated_at' AND Object_ID=OBJECT_ID(N'dbo.KitchenTickets'))
           ALTER TABLE dbo.KitchenTickets ADD updated_at DATETIME2(0) NOT NULL CONSTRAINT DF_KitchenTickets_updated_at DEFAULT SYSDATETIME();
 
-        -- 7. Reservations occasion column
-        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name=N'occasion' AND Object_ID=OBJECT_ID(N'dbo.Reservations'))
-          ALTER TABLE dbo.Reservations ADD occasion NVARCHAR(100) NULL;
+
       `).then(() => console.log("[DB] Schema synchronized."))
         .catch((err) => console.error("[DB] Schema sync error:", err.message));
 

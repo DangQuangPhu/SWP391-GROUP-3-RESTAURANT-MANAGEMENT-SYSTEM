@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev:frontend": "cd frontend && npx vite --host",
+    "dev:frontend": "sleep 3 && cd frontend && npx vite --host",
     "dev:backend": "node --watch --watch-path=backend/src backend/src/index.js",
 
     "clean-ports": "docker stop phurai-app phurai-app-local 2>/dev/null || true; for pid in $(lsof -t -i:5001 -i:5173 2>/dev/null); do kill -9 $pid 2>/dev/null || true; done",

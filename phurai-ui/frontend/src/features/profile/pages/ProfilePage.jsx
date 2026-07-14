@@ -1121,7 +1121,11 @@ function ProfilePage({
                 <PhoneIcon />
               </span>
               <p className="profile-dashboard__email-text">
-                {phoneDisplay || "No phone number added"}
+                {phoneDisplay || (
+                  <span style={{ color: "var(--rzv-error, #f87171)" }}>
+                    Missing. Please update to enable table booking.
+                  </span>
+                )}
               </p>
             </div>
           </div>

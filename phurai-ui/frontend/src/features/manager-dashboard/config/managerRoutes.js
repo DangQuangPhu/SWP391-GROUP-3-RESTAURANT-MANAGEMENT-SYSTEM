@@ -11,6 +11,7 @@ const CONSOLIDATED_VIEWS = new Set([
   "tables",
   "staff",
   "promotions",
+  "ratings",
 ]);
 
 /** Legacy view ids still used by section callbacks until Overview is updated. */
@@ -29,6 +30,7 @@ const SEGMENT_TO_VIEW = {
   staff: "staff",
   promotions: "promotions",
   reports: "reports",
+  ratings: "ratings",
   settings: "settings",
 };
 

@@ -137,10 +137,7 @@ export async function scanStaticQr(req, res) {
 
     const table = tables[0];
 
-    // Rule 1: No QR for counter tables
-    if (table.is_counter === true || table.is_counter === 1) {
-      return res.status(403).json({ success: false, message: "Counter tables do not support QR ordering." });
-    }
+
 
     if (table.table_status === 'Reserved' || table.table_status === 'Cleaning') {
       return res.status(403).json({ success: false, message: "Table is not ready or is currently reserved. Please contact staff." });
@@ -295,10 +292,7 @@ export async function scanStaticQrCodeUrl(req, res) {
     const table = tables[0];
     const tableId = table.table_id;
 
-    // Rule 1: No QR for counter tables
-    if (table.is_counter === true || table.is_counter === 1) {
-      return res.status(403).json({ success: false, message: "Counter tables do not support QR ordering." });
-    }
+
 
     if (table.table_status === 'Reserved' || table.table_status === 'Cleaning') {
       return res.status(403).json({ success: false, message: "Table is not ready or is currently reserved. Please contact staff." });

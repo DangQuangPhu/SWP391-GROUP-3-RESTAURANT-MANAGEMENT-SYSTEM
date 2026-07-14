@@ -239,6 +239,18 @@ export async function getMyVouchers(req, res) {
     }
 
     const pool = await getRawPool();
+
+    // Auto-expire any vouchers that have passed their expiry date
+    await pool.request()
+      .input('customerId', sql.Int, customerId)
+      .query(`
+        UPDATE dbo.CustomerVouchers
+        SET status = N'expired'
+        WHERE customer_id = @customerId
+          AND status = N'active'
+          AND expires_at < SYSDATETIME()
+      `);
+
     let queryStr = `
       SELECT 
         cv.customer_voucher_id,
@@ -254,7 +266,8 @@ export async function getMyVouchers(req, res) {
         p.discount_type,
         p.discount_value,
         p.min_order_value,
-        p.applicable_to
+        p.applicable_to,
+        p.validity_duration_hours
       FROM dbo.CustomerVouchers cv
       JOIN dbo.Promotions p ON cv.promotion_id = p.promotion_id
       WHERE cv.customer_id = @customerId
@@ -276,6 +289,7 @@ export async function getMyVouchers(req, res) {
     return res.status(500).json({ success: false, message: 'Internal server error.' });
   }
 }
+
 
 /**
  * POST /api/loyalty/apply-voucher

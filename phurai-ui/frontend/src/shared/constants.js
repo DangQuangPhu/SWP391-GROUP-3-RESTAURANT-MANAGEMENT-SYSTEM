@@ -52,7 +52,82 @@ export const PROMO_STATUS_META = {
 
 export const DASHBOARD_TODAY = new Date();
 
-export const KPI_CARDS = [];
+export const KPI_CARDS = [
+  {
+    id: "revenue",
+    label: "Today Revenue",
+    value: 48750000,
+    format: "currency",
+    icon: "wallet",
+    trend: { dir: "up", text: "+18.2% vs yesterday" },
+    accent: "gold",
+  },
+  {
+    id: "reservations",
+    label: "Reservations Today",
+    value: 45,
+    format: "number",
+    icon: "calendar",
+    trend: { dir: "up", text: "+11 new today" },
+    accent: "blue",
+  },
+  {
+    id: "occupied",
+    label: "Occupied Tables",
+    value: 18,
+    suffix: " / 28",
+    format: "number",
+    icon: "grid",
+    trend: { dir: "up", text: "64% capacity" },
+    accent: "green",
+  },
+  {
+    id: "pendingOrders",
+    label: "Pending Orders",
+    value: 12,
+    format: "number",
+    icon: "receipt",
+    trend: { dir: "up", text: "+4 since 6pm" },
+    accent: "amber",
+  },
+  {
+    id: "kitchen",
+    label: "Kitchen Queue",
+    value: 8,
+    format: "number",
+    icon: "fire",
+    trend: { dir: "up", text: "3 firing now" },
+    accent: "red",
+  },
+  {
+    id: "bestDish",
+    label: "Best-selling Dish",
+    value: "Wagyu Sukiyaki",
+    format: "text",
+    icon: "star",
+    trend: { dir: "up", text: "124 sold today" },
+    accent: "gold",
+  },
+  {
+    id: "promos",
+    label: "Active Promotions",
+    value: 5,
+    format: "number",
+    icon: "tag",
+    trend: { dir: "flat", text: "2 ending soon" },
+    accent: "purple",
+  },
+  {
+    id: "rating",
+    label: "Customer Rating",
+    value: "4.8",
+    suffix: " / 5",
+    format: "text",
+    icon: "heart",
+    trend: { dir: "up", text: "2,547 verified reviews" },
+    accent: "green",
+  },
+];
 export const REVENUE_SERIES = { day: [], week: [], month: [] };
 export const DISHES = [];
 export const BEST_SELLERS = [];
@@ -142,7 +217,7 @@ export function deriveKpisForRange(baseKpis, dailyRevenueSeries, dateRange, demo
   const filtered = filterDailyRevenue(dailyRevenueSeries, dateRange);
   const totalRev = filtered.reduce((sum, item) => sum + item.revenue, 0);
   const totalRes = filtered.reduce((sum, item) => sum + item.reservations, 0);
-  
+
   return baseKpis.map(kpi => {
     if (kpi.id === "revenue") return { ...kpi, value: totalRev, label: "Total Revenue" };
     if (kpi.id === "reservations") return { ...kpi, value: totalRes };

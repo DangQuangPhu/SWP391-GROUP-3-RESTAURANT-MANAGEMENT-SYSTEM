@@ -282,8 +282,8 @@ export const validateReservationCreate = async (req, res, next) => {
              OR
              (r.reservation_status IN (N'Pending Request', N'Pending Payment') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
            )
-           AND r.reservation_start_at < ?
-           AND r.reservation_end_at > ?`,
+           AND DATEADD(minute, -60, r.reservation_start_at) < ?
+           AND DATEADD(minute, 60, r.reservation_end_at) > ?`,
         [slotEnd.toISOString(), slotStart.toISOString()]
       );
       
@@ -650,8 +650,8 @@ export const validateReservationUpdate = async (req, res, next) => {
                OR
                (r.reservation_status IN (N'Pending Request', N'Pending Payment') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
              )
-             AND r.reservation_start_at < ?
-             AND r.reservation_end_at > ?`,
+             AND DATEADD(minute, -60, r.reservation_start_at) < ?
+             AND DATEADD(minute, 60, r.reservation_end_at) > ?`,
           [reservationId, activeSlotEnd.toISOString(), activeSlotStart.toISOString()]
         );
 

@@ -27,6 +27,7 @@ import adminKdsRoutes from "./routes/admin.kds.routes.js";
 import ordersRoutes from "./routes/orders.routes.js";
 
 import loyaltyRoutes from "./routes/loyalty.js";
+import reviewRoutes from "./routes/review.routes.js";
 import { initSocket } from "./socket.js";
 import { runReservationReminders } from "./services/reminderService.js";
 import { runAutoSeed } from "./utils/autoSeeder.js";
@@ -94,6 +95,7 @@ app.use("/api/promotions", promotionRoutes);
 app.use("/api/vouchers", voucherRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/loyalty", loyaltyRoutes);
+app.use("/api/reviews", reviewRoutes);
 
 import paymentRoutes from "./routes/paymentRoutes.js";
 app.use("/api/payments", paymentRoutes);

@@ -56,5 +56,6 @@ function normalizeGoogleProfile(data) {
     emailVerified: data.email_verified === true || data.email_verified === "true",
     fullName: data.name || [data.given_name, data.family_name].filter(Boolean).join(" ").trim(),
     picture: data.picture || null,
+    phoneNumber: data.phoneNumber || data.phone_number || null,
   };
 }

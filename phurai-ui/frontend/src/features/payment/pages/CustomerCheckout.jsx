@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import CheckoutQR from '../components/CheckoutQR';
+import CustomerReviewModal from '../../reviews/CustomerReviewModal';
 import usePaymentPolling from '../hooks/usePaymentPolling';
 import { useTableSession } from '@/features/table-session';
 import { useAuth } from '@/features/auth/context/AuthContext';
@@ -19,6 +20,7 @@ export default function CustomerCheckout() {
   const [isLoading, setIsLoading] = useState(!location.state?.amount);
 
   const { status } = usePaymentPolling(orderId);
+  const [showReviewModal, setShowReviewModal] = useState(false);
 
   // Voucher states
   const [voucherCode, setVoucherCode] = useState('');
@@ -72,11 +74,10 @@ export default function CustomerCheckout() {
   }, [session, amount]);
 
   useEffect(() => {
-    if (status === 'Paid') {
-      alert("Payment Successful!");
-      navigate(`/review/${orderId}`);
+    if (status === 'Paid' && !showReviewModal) {
+      setShowReviewModal(true);
     }
-  }, [status, orderId, navigate]);
+  }, [status, showReviewModal]);
 
   const handleApplyVoucher = async () => {
     if (!voucherCode.trim() || !userId) return;
@@ -140,23 +141,34 @@ export default function CustomerCheckout() {
   }
 
   return (
-    <CheckoutQR
-      orderId={orderId}
-      amount={amount}
-      originalAmount={originalAmount}
-      voucherCode={voucherCode}
-      setVoucherCode={setVoucherCode}
-      appliedVoucher={appliedVoucher}
-      applying={applying}
-      voucherError={voucherError}
-      onApplyVoucher={handleApplyVoucher}
-      onComplete={() => {
-        alert("Payment Successful!");
-        navigate(`/review/${orderId}`);
-      }}
-      onRetry={() => {
-        navigate(-1);
-      }}
-    />
+    <>
+      <CheckoutQR
+        orderId={orderId}
+        amount={amount}
+        originalAmount={originalAmount}
+        voucherCode={voucherCode}
+        setVoucherCode={setVoucherCode}
+        appliedVoucher={appliedVoucher}
+        applying={applying}
+        voucherError={voucherError}
+        onApplyVoucher={handleApplyVoucher}
+        onComplete={() => {
+          setShowReviewModal(true);
+        }}
+        onRetry={() => {
+          navigate(-1);
+        }}
+      />
+      <CustomerReviewModal 
+        isOpen={showReviewModal}
+        onClose={() => setShowReviewModal(false)}
+        orderId={orderId}
+        customerId={userId}
+        reservationId={session?.reservation_id || null}
+        onSubmitted={() => {
+          navigate('/'); // Return home or to orders list after rating
+        }}
+      />
+    </>
   );
 }

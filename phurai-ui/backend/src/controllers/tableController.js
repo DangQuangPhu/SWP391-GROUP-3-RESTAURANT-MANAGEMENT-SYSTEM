@@ -386,6 +386,95 @@ export async function createTable(req, res) {
   }
 }
 
+export async function createVirtualTable(req, res) {
+  try {
+    const areaId = req.body?.area_id ? Number(req.body.area_id) : 1;
+    const capacity = req.body?.capacity ? Number(req.body.capacity) : 4;
+    const baseNumber = req.body?.table_number ? String(req.body.table_number).trim() : 'V';
+
+    const area = await fetchActiveArea(areaId);
+    if (!area) {
+      return jsonError(res, "Active area not found.", 404);
+    }
+
+    const numbersRequest = await createDbRequest();
+    
+    let tableNumber;
+    if (baseNumber === 'V') {
+      const numbersResult = await numbersRequest.query(
+        `SELECT table_number FROM dbo.RestaurantTables WHERE table_number LIKE 'V-%';`
+      );
+      const existingNumbers = numbersResult.recordset.map((r) => r.table_number);
+      let best = 0;
+      for (const num of existingNumbers) {
+        const match = num.match(/^V-(\d+)$/);
+        if (match) {
+          const val = parseInt(match[1], 10);
+          if (val > best) best = val;
+        }
+      }
+      tableNumber = `V-${String(best + 1).padStart(2, "0")}`;
+    } else {
+      numbersRequest.input("likePattern", sql.NVarChar(20), `${baseNumber}-V%`);
+      const numbersResult = await numbersRequest.query(
+        `SELECT table_number FROM dbo.RestaurantTables WHERE table_number LIKE @likePattern;`
+      );
+      const existingNumbers = numbersResult.recordset.map((r) => r.table_number);
+      let best = 0;
+      const regex = new RegExp(`^${baseNumber}-V(\\d+)$`);
+      for (const num of existingNumbers) {
+        const match = num.match(regex);
+        if (match) {
+          const val = parseInt(match[1], 10);
+          if (val > best) best = val;
+        }
+      }
+      tableNumber = `${baseNumber}-V${best + 1}`;
+    }
+
+    const staticQrCode = buildQrCode();
+    const insertRequest = await createDbRequest();
+    insertRequest.input("areaId", sql.SmallInt, areaId);
+    insertRequest.input("tableNumber", sql.NVarChar(20), tableNumber);
+    insertRequest.input("capacity", sql.TinyInt, capacity);
+    insertRequest.input("tableStatus", sql.NVarChar(20), "Available");
+    insertRequest.input("staticQrCode", sql.NVarChar(120), staticQrCode);
+
+    const insertResult = await insertRequest.query(
+      `INSERT INTO dbo.RestaurantTables
+         (area_id, table_number, capacity, table_status, static_qr_code)
+       OUTPUT
+         INSERTED.table_id,
+         INSERTED.area_id,
+         INSERTED.table_number,
+         INSERTED.capacity,
+         INSERTED.table_status,
+         INSERTED.static_qr_code
+       VALUES
+         (@areaId, @tableNumber, @capacity, @tableStatus, @staticQrCode);`
+    );
+
+    const created = insertResult.recordset[0];
+    
+    // Emit socket event to sync frontend
+    const io = req.app.get("io");
+    if (io) {
+      io.to("room:manager").to("room:staff").emit("table:sync", { action: "create", table: created });
+    }
+
+    return res.status(201).json({
+      success: true,
+      data: mapTableRow({
+        ...created,
+        area_name: area.area_name,
+      }),
+    });
+  } catch (error) {
+    console.error("POST /api/manager/tables/virtual failed:", error);
+    return jsonError(res, "Could not create virtual table.");
+  }
+}
+
 export async function updateTable(req, res) {
   try {
     const tableId = Number(req.params.id);
@@ -471,10 +560,10 @@ export async function updateTable(req, res) {
     await auditRequest.query(
       `INSERT INTO dbo.AuditLogs (
          user_id, action_name, target_table, target_id, old_value_json, new_value_json, 
-         ip_address, user_agent, created_at
+         ip_address, created_at
        ) VALUES (
          @managerId, 'UPDATE_TABLE_STATUS', 'RestaurantTables', @tableId, @oldVal, @newVal,
-         'system', 'system', SYSDATETIME()
+         'system', SYSDATETIME()
        );`
     );
 

@@ -280,6 +280,9 @@ router.post("/register", async (req, res) => {
       userId,
     });
 
+    // Grant Welcome Voucher to new users (non-fatal if it fails)
+    await grantWelcomeVoucher(userId);
+
     return res.status(201).json({
       message: "Registration successful. Please verify your email.",
       userId,
@@ -293,6 +296,7 @@ router.post("/register", async (req, res) => {
     return res.status(500).json({ message: "Registration failed.", error: error.message });
   }
 });
+
 
 async function handleRequestOtp(req, res) {
   try {
@@ -384,19 +388,75 @@ router.post("/auth/verify-otp", async (req, res) => {
   }
 });
 
+/**
+ * Grants a "Welcome" voucher to a newly registered customer.
+ * Finds the first active promotion with points_required = 0 and promotion_name LIKE 'Welcome%'.
+ * Inserts into CustomerVouchers and creates a Promotion notification.
+ * Non-fatal: errors are logged but not rethrown.
+ */
+async function grantWelcomeVoucher(userId) {
+  try {
+    // Find active welcome promotion
+    const [promoRows] = await pool.query(`
+      SELECT TOP 1 promotion_id, promotion_name, validity_duration_hours
+      FROM dbo.Promotions
+      WHERE is_active = 1
+        AND (points_required = 0 OR points_required IS NULL)
+        AND promotion_name LIKE N'Welcome%'
+        AND start_at <= SYSDATETIME()
+        AND end_at > SYSDATETIME()
+      ORDER BY promotion_id ASC
+    `);
+
+    const promo = promoRows[0];
+    if (!promo) return; // No welcome promotion configured yet
+
+    // Generate unique voucher code
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let voucherCode = 'WELCOME-';
+    for (let i = 0; i < 6; i++) voucherCode += chars[Math.floor(Math.random() * chars.length)];
+
+    const hoursValid = promo.validity_duration_hours || 720; // 30 days default
+    const expiresAt = new Date(Date.now() + hoursValid * 60 * 60 * 1000);
+
+    await pool.query(`
+      IF NOT EXISTS (SELECT 1 FROM dbo.CustomerVouchers WHERE customer_id = ? AND promotion_id = ?)
+      BEGIN
+        INSERT INTO dbo.CustomerVouchers
+          (customer_id, promotion_id, points_spent, voucher_code, status, redeemed_at, expires_at)
+        VALUES (?, ?, 0, ?, N'active', SYSDATETIME(), ?)
+      END
+    `, [userId, promo.promotion_id, userId, promo.promotion_id, voucherCode, expiresAt]);
+
+    // Send a notification (type must be 'Promotion' per DB CHECK constraint)
+    await pool.query(`
+      INSERT INTO dbo.Notifications (user_id, notification_type, title, message_body, is_read, sent_at)
+      VALUES (?, N'Promotion', N'🎉 Welcome Gift Received!',
+        N'You have received a welcome voucher (${voucherCode}). Use it on your first order or reservation!',
+        0, SYSDATETIME())
+    `, [userId]);
+
+  } catch (err) {
+    // Non-fatal — log and continue
+    console.warn('[Auth] grantWelcomeVoucher failed (non-fatal):', err.message);
+  }
+}
+
 async function upsertGoogleUser(googleProfile, { requireOtp = false } = {}) {
   const existing = await fetchProfileByEmail(googleProfile.email);
   const emailVerified = googleProfile.emailVerified && !requireOtp ? 1 : 0;
 
   if (existing) {
+    // NULLIF converts empty string to NULL so COALESCE keeps the existing DB value
     await pool.query(
       `UPDATE dbo.UserAccounts
-       SET full_name = COALESCE(?, full_name),
-           avatar_url = COALESCE(?, avatar_url),
+       SET full_name = COALESCE(NULLIF(?, ''), full_name),
+           avatar_url = COALESCE(NULLIF(?, ''), avatar_url),
+           phone = COALESCE(NULLIF(?, ''), phone),
            email_verified = CASE WHEN ? = 1 THEN 1 ELSE email_verified END,
            updated_at = SYSDATETIME()
        WHERE user_id = ?`,
-      [googleProfile.fullName, googleProfile.picture, emailVerified, existing.user_id]
+      [googleProfile.fullName, googleProfile.picture, googleProfile.phoneNumber, emailVerified, existing.user_id]
     );
 
     if (existing.customer_id == null) {
@@ -411,15 +471,16 @@ async function upsertGoogleUser(googleProfile, { requireOtp = false } = {}) {
   const roleId = await getCustomerRoleId();
   const [insertResult] = await pool.query(
     `DECLARE @OutputTbl TABLE (user_id INT);
-     INSERT INTO dbo.UserAccounts
-      (role_id, full_name, email, phone, password_hash, avatar_url, is_active, email_verified, created_at, updated_at)
-     OUTPUT INSERTED.user_id INTO @OutputTbl
-     VALUES (?, ?, ?, NULL, ?, ?, 1, ?, SYSDATETIME(), SYSDATETIME());
-     SELECT user_id FROM @OutputTbl;`,
+      INSERT INTO dbo.UserAccounts
+       (role_id, full_name, email, phone, password_hash, avatar_url, is_active, email_verified, created_at, updated_at)
+      OUTPUT INSERTED.user_id INTO @OutputTbl
+      VALUES (?, ?, ?, ?, ?, ?, 1, ?, SYSDATETIME(), SYSDATETIME());
+      SELECT user_id FROM @OutputTbl;`,
     [
       roleId,
       googleProfile.fullName || getEmailPrefix(googleProfile.email),
       googleProfile.email,
+      googleProfile.phoneNumber || null,
       hashPassword(generateSecureToken()),
       googleProfile.picture,
       emailVerified,
@@ -434,6 +495,9 @@ async function upsertGoogleUser(googleProfile, { requireOtp = false } = {}) {
      VALUES (?, ?, 0, ?, SYSDATETIME(), SYSDATETIME())`,
     [userId, getEmailPrefix(googleProfile.email), serializePreferences([])]
   );
+
+  // Grant Welcome Voucher to new users (non-fatal if it fails)
+  await grantWelcomeVoucher(userId);
 
   return fetchProfileByEmail(googleProfile.email);
 }
@@ -471,10 +535,11 @@ router.post("/auth/google", async (req, res) => {
       `UPDATE dbo.UserAccounts
        SET full_name = COALESCE(?, full_name),
            avatar_url = COALESCE(?, avatar_url),
+           phone = COALESCE(?, phone),
            last_login_at = SYSDATETIME(),
            updated_at = SYSDATETIME()
        WHERE user_id = ?`,
-      [googleProfile.fullName, googleProfile.picture, row.user_id]
+      [googleProfile.fullName, googleProfile.picture, googleProfile.phoneNumber, row.user_id]
     );
 
     const profile = await getProfileForUser(row.user_id, { ensureProfile: true });

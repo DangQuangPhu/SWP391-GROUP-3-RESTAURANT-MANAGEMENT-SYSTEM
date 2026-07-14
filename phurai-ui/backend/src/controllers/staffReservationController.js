@@ -336,7 +336,7 @@ export const getTodayShiftReservations = async (req, res) => {
                 r.reservation_end_at,
                 r.guest_count,
                 r.special_request,
-                r.occasion,
+                r.dining_purpose,
                 r.reservation_status,
                 CASE WHEN r.has_pending_request = 1
                      THEN N'Request'
@@ -359,7 +359,7 @@ export const getTodayShiftReservations = async (req, res) => {
              GROUP BY
                  r.reservation_id, ua.full_name, r.contact_name, ua.phone, r.contact_phone,
                  ua.email, r.contact_email, cp.username, r.reservation_start_at,
-                 r.reservation_end_at, r.guest_count, r.special_request, r.occasion, r.reservation_status,
+                 r.reservation_end_at, r.guest_count, r.special_request, r.dining_purpose, r.reservation_status,
                  r.has_pending_request, r.created_at, r.checked_in_at, sh.shift_name, sh.start_time, sh.end_time
              ORDER BY 
                  CASE r.reservation_status
@@ -577,7 +577,7 @@ export const getStaffReservationDetail = async (req, res) => {
           COALESCE(ua.email, r.contact_email) AS customer_email,
           cp.username,
           r.reservation_start_at, r.reservation_end_at, r.guest_count,
-          r.special_request, r.occasion, r.reservation_status, r.reservation_source,
+          r.special_request, r.dining_purpose, r.reservation_status, r.reservation_source,
           r.created_at, r.checked_in_at,
           STRING_AGG(t.table_number, ', ') AS assigned_tables,
           MAX(a.area_name) AS area_name
@@ -592,7 +592,7 @@ export const getStaffReservationDetail = async (req, res) => {
                 r.contact_name, r.contact_phone, r.contact_email,
                 cp.username,
                 r.reservation_start_at, r.reservation_end_at, r.guest_count,
-                r.special_request, r.occasion, r.reservation_status, r.reservation_source,
+                r.special_request, r.dining_purpose, r.reservation_status, r.reservation_source,
                 r.created_at, r.checked_in_at`,
       [reservationId]
     );

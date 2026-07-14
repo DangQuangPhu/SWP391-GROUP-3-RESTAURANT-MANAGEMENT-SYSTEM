@@ -27,6 +27,7 @@ import OrdersSection from "../components/sections/OrdersSection.jsx";
 import StaffSection from "../components/sections/StaffSection.jsx";
 import PromotionsSection from "../components/sections/PromotionsSection.jsx";
 import ReportsSection from "../components/sections/ReportsSection.jsx";
+import RatingDashboard from "./RatingDashboard.jsx";
 import { ManagerChatbot } from "../components/ManagerChatbot.jsx";
 
 import {
@@ -704,6 +705,7 @@ function ManagerPortalPage({
           <Route path="staff" element={<StaffRoute />} />
           <Route path="promotions" element={<PromotionsRoute />} />
           <Route path="reports" element={<ReportsRoute />} />
+          <Route path="ratings" element={<RatingDashboard />} />
           <Route path="settings" element={<Navigate to="dashboard" replace />} />
           <Route path="*" element={<Navigate to="dashboard" replace />} />
         </Route>

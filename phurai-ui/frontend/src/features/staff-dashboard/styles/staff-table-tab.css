@@ -717,7 +717,18 @@
   z-index: 10;
   cursor: grab;
   border-color: var(--sfx-gold);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+.sfx-mtile.is-jiggling:hover {
+  transform: scale(1.05) rotate(0deg) !important;
+  animation: none !important;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+  border-color: #f59e0b;
 }
 .sfx-mtile.is-jiggling:active {
   cursor: grabbing;
+}
+
+.sfx-modal--lg {
+  max-width: 620px;
 }

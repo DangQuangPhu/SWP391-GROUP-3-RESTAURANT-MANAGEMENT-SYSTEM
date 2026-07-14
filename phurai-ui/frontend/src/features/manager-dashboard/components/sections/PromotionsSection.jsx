@@ -5,7 +5,24 @@ import { format, parseISO } from "date-fns";
 import { SectionHead, ContentPanel, Toolbar, SearchField, Button, EmptyState } from "../ManagerUI.jsx";
 import { ManagerModal } from "../ManagerOverlay.jsx";
 import { fetchPromotions, createPromotion, updatePromotion, togglePromotionStatus, deletePromotion } from "../../services/promotionsApi.js";
-import { Copy, Edit2, Trash2, Play, Pause } from "lucide-react";
+import { Copy, Edit2, Trash2, Play, Pause, Star, ShoppingBag, CalendarCheck } from "lucide-react";
+
+const SCOPE_COLORS = {
+  Both:        { bg: '#EDE9FE', color: '#7C3AED' },
+  Order:       { bg: '#D1FAE5', color: '#065F46' },
+  Reservation: { bg: '#DBEAFE', color: '#1E40AF' },
+};
+
+function ScopeBadge({ scope }) {
+  const s = SCOPE_COLORS[scope] || { bg: '#F3F4F6', color: '#374151' };
+  const Icon = scope === 'Order' ? ShoppingBag : scope === 'Reservation' ? CalendarCheck : null;
+  return (
+    <span style={{ background: s.bg, color: s.color, fontSize: '0.72rem', fontWeight: 700,
+      padding: '2px 8px', borderRadius: 99, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      {Icon && <Icon size={10} />}{scope || 'Both'}
+    </span>
+  );
+}
 
 export default function PromotionsSection({ promotions, setPromotions, toast }) {
   const [search, setSearch] = useState("");
@@ -17,14 +34,17 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
     promotion_name: "",
     description: "",
     promo_code: "",
-    discount_type: "PERCENT",
+    discount_type: "Percent",
     discount_value: "",
     max_discount_amount: "",
     min_order_value: "0",
     valid_from: "",
     valid_until: "",
     usage_limit: "",
-    applicable_to: "All",
+    applicable_to: "Both",
+    points_required: "0",
+    total_quantity: "",
+    validity_duration_hours: "24",
   });
 
   const loadData = async () => {
@@ -77,14 +97,17 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
       promotion_name: promo.promotion_name || "",
       description: promo.description || "",
       promo_code: promo.promo_code || "",
-      discount_type: promo.discount_type || "PERCENT",
+      discount_type: (promo.discount_type === 'PERCENT' ? 'Percent' : promo.discount_type) || 'Percent',
       discount_value: promo.discount_value?.toString() || "",
       max_discount_amount: promo.max_discount_amount?.toString() || "",
       min_order_value: promo.min_order_value?.toString() || "0",
       valid_from: promo.valid_from ? format(parseISO(promo.valid_from), "yyyy-MM-dd'T'HH:mm") : "",
       valid_until: promo.valid_until ? format(parseISO(promo.valid_until), "yyyy-MM-dd'T'HH:mm") : "",
       usage_limit: promo.usage_limit?.toString() || "",
-      applicable_to: promo.applicable_to || "All",
+      applicable_to: ['Both','Order','Reservation'].includes(promo.applicable_to) ? promo.applicable_to : 'Both',
+      points_required: promo.points_required?.toString() || "0",
+      total_quantity: promo.total_quantity?.toString() || "",
+      validity_duration_hours: promo.validity_duration_hours?.toString() || "24",
     });
     setEditingPromoId(promo.promotion_id);
     setShowAddModal(true);
@@ -92,17 +115,11 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
 
   const resetForm = () => {
     setFormData({
-      promotion_name: "",
-      description: "",
-      promo_code: "",
-      discount_type: "PERCENT",
-      discount_value: "",
-      max_discount_amount: "",
-      min_order_value: "0",
-      valid_from: "",
-      valid_until: "",
-      usage_limit: "",
-      applicable_to: "All",
+      promotion_name: "", description: "", promo_code: "",
+      discount_type: "Percent", discount_value: "", max_discount_amount: "",
+      min_order_value: "0", valid_from: "", valid_until: "",
+      usage_limit: "", applicable_to: "Both",
+      points_required: "0", total_quantity: "", validity_duration_hours: "24",
     });
     setEditingPromoId(null);
   };
@@ -117,6 +134,10 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
         max_discount_amount: formData.max_discount_amount ? parseFloat(formData.max_discount_amount) : null,
         min_order_value: parseFloat(formData.min_order_value) || 0,
         usage_limit: formData.usage_limit ? parseInt(formData.usage_limit, 10) : null,
+        points_required: parseInt(formData.points_required, 10) || 0,
+        total_quantity: formData.total_quantity ? parseInt(formData.total_quantity, 10) : null,
+        validity_duration_hours: parseInt(formData.validity_duration_hours, 10) || 24,
+        applicable_to: ['Both','Order','Reservation'].includes(formData.applicable_to) ? formData.applicable_to : 'Both',
       };
 
       let res;
@@ -141,7 +162,7 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
   };
 
   const filtered = promotions?.filter(Boolean).filter(p =>
-    p.promo_code?.toLowerCase().includes(search.toLowerCase())
+    (p.promo_code || p.promotion_name || "").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -172,12 +193,13 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
             <table className="sfx-table">
               <thead>
                 <tr>
-                  <th>Code</th>
+                  <th>Name / Code</th>
                   <th>Discount</th>
-                  <th>Min Order</th>
-                  <th>Valid Range</th>
-                  <th>Usage</th>
                   <th>Scope</th>
+                  <th>Points Req.</th>
+                  <th>Qty Remaining</th>
+                  <th>Voucher Valid</th>
+                  <th>Date Range</th>
                   <th>Status</th>
                   <th className="text-right">Actions</th>
                 </tr>
@@ -188,109 +210,107 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                 animate="visible"
               >
                 {filtered.map(p => {
-                  const isExpired = new Date(p.valid_until) < new Date();
-                  const isExhausted = p.usage_limit !== null && p.used_count >= p.usage_limit;
+                  const isExpired = p.valid_until && new Date(p.valid_until) < new Date();
+                  const isExhausted = p.usage_limit != null && p.used_count >= p.usage_limit;
                   const inactive = !p.is_active || isExpired || isExhausted;
 
                   return (
                     <motion.tr
-                      key={p.promotion_id}
+                      key={p.voucher_id || p.promotion_id}
                       variants={listItemVariants}
                       className={inactive ? "opacity-60 grayscale-[50%]" : ""}
                     >
-                      <td className="font-semibold">
-                        <div className="inline-flex items-center gap-2 bg-slate-100 border border-dashed border-slate-300 rounded px-3 py-1 font-mono text-slate-900 text-sm">
+                      {/* Name / Code */}
+                      <td>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 3 }}>{p.promotion_name}</div>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4,
+                          background: '#F1F5F9', border: '1px dashed #CBD5E1', borderRadius: 6,
+                          padding: '1px 8px', fontFamily: 'monospace', fontSize: '0.78rem', color: '#0F172A' }}>
                           {p.promo_code}
-                        </div>
+                          <button title="Copy" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#64748B', lineHeight: 1 }}
+                            onClick={() => { navigator.clipboard.writeText(p.promo_code); toast("Code copied", "success"); }}>
+                            <Copy size={11} />
+                          </button>
+                        </span>
                       </td>
+                      {/* Discount */}
                       <td>
                         <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                          {p.discount_type === 'PERCENT' ? `${p.discount_value}%` : `₫${p.discount_value.toLocaleString()}`}
+                          {p.discount_type === 'PERCENT' || p.discount_type === 'Percent'
+                            ? `${p.discount_value}%` : `₫${Number(p.discount_value).toLocaleString()}`}
                         </span>
-                        {p.max_discount_amount && (
-                          <div className="text-xs text-gray-500">Max ₫{p.max_discount_amount.toLocaleString()}</div>
+                        {p.max_discount_amount > 0 && (
+                          <div className="text-xs text-gray-500">Max ₫{Number(p.max_discount_amount).toLocaleString()}</div>
+                        )}
+                        {p.min_order_value > 0 && (
+                          <div className="text-xs text-gray-500">Min ₫{Number(p.min_order_value).toLocaleString()}</div>
                         )}
                       </td>
-                      <td>₫{p.min_order_value.toLocaleString()}</td>
+                      {/* Scope */}
+                      <td><ScopeBadge scope={p.applicable_to} /></td>
+                      {/* Points Required */}
+                      <td>
+                        {p.points_required > 0 ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#D97706', fontWeight: 700, fontSize: '0.85rem' }}>
+                            <Star size={11} fill="#D97706" />{p.points_required}
+                          </span>
+                        ) : <span style={{ color: '#10B981', fontWeight: 700, fontSize: '0.8rem' }}>Free</span>}
+                      </td>
+                      {/* Qty Remaining */}
+                      <td style={{ fontSize: '0.85rem' }}>
+                        {p.total_quantity != null
+                          ? <span><span style={{ fontWeight: 600 }}>{p.remaining_quantity ?? '—'}</span><span style={{ color: '#94A3B8' }}> / {p.total_quantity}</span></span>
+                          : <span style={{ color: '#94A3B8' }}>∞</span>}
+                      </td>
+                      {/* Voucher Valid */}
+                      <td style={{ fontSize: '0.85rem', color: '#475569' }}>
+                        {p.validity_duration_hours != null ? `${p.validity_duration_hours}h` : '24h'}
+                      </td>
+                      {/* Date Range */}
                       <td className="text-sm">
-                        <div>{format(parseISO(p.valid_from), "MMM d, yyyy")}</div>
-                        <div className="text-gray-500">to {format(parseISO(p.valid_until), "MMM d, yyyy")}</div>
+                        <div>{p.valid_from ? format(parseISO(p.valid_from), "MMM d, yyyy") : '—'}</div>
+                        <div className="text-gray-500">to {p.valid_until ? format(parseISO(p.valid_until), "MMM d, yyyy") : '—'}</div>
                       </td>
-                      <td>
-                        <div className="flex flex-col gap-1 w-28">
-                          <div className="flex justify-between text-xs font-medium text-gray-700">
-                            <span>{p.used_count}</span>
-                            <span className="text-gray-400">/ {p.usage_limit || '∞'}</span>
-                          </div>
-                          {p.usage_limit ? (
-                            <div className="w-full bg-gray-200 rounded-full h-1.5">
-                              <div
-                                className={`h-1.5 rounded-full ${isExhausted ? 'bg-red-500' : 'bg-emerald-500'}`}
-                                style={{ width: `${Math.min(100, (p.used_count / p.usage_limit) * 100)}%` }}
-                              ></div>
-                            </div>
-                          ) : null}
-                          {isExhausted && <span className="text-[10px] text-red-500 font-semibold uppercase tracking-wider">Exhausted</span>}
-                        </div>
-                      </td>
-                      <td>
-                        <span className="text-xs font-semibold bg-blue-100 text-blue-800 px-2 py-0.5 rounded">
-                          {p.applicable_to || 'All'}
-                        </span>
-                      </td>
+                      {/* Status */}
                       <td>
                         {isExpired ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            Expired
-                          </span>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Expired</span>
                         ) : p.is_active ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
-                            Active
-                          </span>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Active</span>
                         ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                            Disabled
-                          </span>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Disabled</span>
                         )}
                       </td>
+                      {/* Actions */}
                       <td className="text-right">
                         <div className="flex justify-end gap-1">
                           <button
                             className="p-1.5 text-gray-500 rounded-md hover:bg-gray-100 hover:text-gray-700 transition-colors"
-                            title="Copy Code"
-                            onClick={() => {
-                              navigator.clipboard.writeText(p.promo_code);
-                              toast("Promo code copied", "success");
-                            }}
-                          >
-                            <Copy size={16} />
-                          </button>
-                          <button
-                            className="p-1.5 text-gray-500 rounded-md hover:bg-gray-100 hover:text-gray-700 transition-colors"
                             title={p.is_active ? "Disable" : "Enable"}
-                            onClick={() => handleToggleStatus(p.promotion_id)}
+                            onClick={() => handleToggleStatus(p.voucher_id || p.promotion_id)}
                           >
-                            {p.is_active ? <Pause size={16} /> : <Play size={16} />}
+                            {p.is_active ? <Pause size={15} /> : <Play size={15} />}
                           </button>
                           <button
                             className="p-1.5 text-blue-500 rounded-md hover:bg-blue-50 transition-colors"
                             title="Edit"
                             onClick={() => handleEdit(p)}
                           >
-                            <Edit2 size={16} />
+                            <Edit2 size={15} />
                           </button>
                           <button
                             className="p-1.5 text-red-500 rounded-md hover:bg-red-50 transition-colors"
                             title="Delete"
-                            onClick={() => handleDelete(p.promotion_id)}
+                            onClick={() => handleDelete(p.voucher_id || p.promotion_id)}
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={15} />
                           </button>
                         </div>
                       </td>
                     </motion.tr>
                   );
                 })}
+
               </motion.tbody>
             </table>
           </div>
@@ -440,10 +460,43 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                 value={formData.applicable_to}
                 onChange={e => setFormData({ ...formData, applicable_to: e.target.value })}
               >
-                <option value="All">All (Reservation & Order)</option>
+                <option value="Both">Both (Reservation &amp; Order)</option>
                 <option value="Reservation">Reservation Only</option>
                 <option value="Order">Order Only</option>
               </select>
+            </div>
+          </div>
+
+          {/* Loyalty Exchange Panel */}
+          <div style={{ padding: '12px 16px', background: '#FFFBEB', borderRadius: 10, border: '1px solid #FDE68A' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.8rem', color: '#92400E', marginBottom: 10,
+              display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Star size={13} fill="#D97706" color="#D97706" /> Loyalty Exchange Settings
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Points Required</label>
+                <input type="number" min="0" step="1" className="sfx-input"
+                  value={formData.points_required}
+                  onChange={e => setFormData({ ...formData, points_required: e.target.value })}
+                  placeholder="0 = free gift" />
+                <p style={{ fontSize: '0.68rem', color: '#92400E', marginTop: 2 }}>0 = auto-granted (welcome gift)</p>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Total Quantity</label>
+                <input type="number" min="1" step="1" className="sfx-input"
+                  value={formData.total_quantity}
+                  onChange={e => setFormData({ ...formData, total_quantity: e.target.value })}
+                  placeholder="Empty = unlimited" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Voucher Valid (hours)</label>
+                <input type="number" min="1" step="1" className="sfx-input"
+                  value={formData.validity_duration_hours}
+                  onChange={e => setFormData({ ...formData, validity_duration_hours: e.target.value })}
+                  placeholder="24" />
+                <p style={{ fontSize: '0.68rem', color: '#92400E', marginTop: 2 }}>After customer redeems</p>
+              </div>
             </div>
           </div>
 

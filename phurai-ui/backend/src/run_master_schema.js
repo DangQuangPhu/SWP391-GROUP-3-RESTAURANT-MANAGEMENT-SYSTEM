@@ -35,7 +35,7 @@ async function runSqlFile(filePath, rawPool) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main
 // ─────────────────────────────────────────────────────────────────────────────
-const LOCK_FILE = path.join(process.cwd(), ".db-sync-lock");
+const LOCK_FILE = path.join('/tmp', 'phurai-db-sync.lock');
 
 async function run() {
   if (!CONFIRM) {

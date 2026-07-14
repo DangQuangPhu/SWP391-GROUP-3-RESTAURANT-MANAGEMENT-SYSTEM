@@ -44,7 +44,8 @@ export async function mergeTables(req, res) {
     if (source.area_id !== target.area_id) {
       throw new Error("Tables must be in the exact same area to merge.");
     }
-    if (source.is_counter || target.is_counter) {
+    const getPrefix = (num) => String(num).split("-")[0];
+    if ((source.is_counter || target.is_counter) && getPrefix(source.table_number) !== getPrefix(target.table_number)) {
       throw new Error("Counter seats cannot be merged.");
     }
 

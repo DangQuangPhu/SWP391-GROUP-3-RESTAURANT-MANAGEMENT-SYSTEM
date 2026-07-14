@@ -52,7 +52,7 @@ import FloatingActionButtons from "@/components/common/FloatingActionButtons";
 import { ProfileModal, Register, VerifyEmail } from "@/features/auth";
 import { saveAuthUser } from "@/core/api";
 import { useAuth } from "@/features/auth/context/AuthContext";
-import CustomerReview from "@/features/reviews/pages/CustomerReview.jsx";
+import RatingDashboard from "@/features/manager-dashboard/pages/RatingDashboard.jsx";
 import CustomerCheckout from "@/features/payment/pages/CustomerCheckout.jsx";
 
 const PAGE_PATHS = {
@@ -268,7 +268,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/landing" element={<LandingPage />} />
           <Route path="/scan/:qr_code" element={<QrScanPage />} />
-          <Route path="/review/:orderId" element={<CustomerReview />} />
+          {/* Review route handled by modal now */}
           <Route path="/checkout/:orderId" element={<CustomerCheckout />} />
           <Route path="/menu" element={<MenuRouteRedirect />} />
           <Route path="/take-out" element={<TakeOut />} />
@@ -301,7 +301,6 @@ function App() {
             }
           />
           <Route path="/private-events" element={<PrivateEvents onNavigate={handleNavigate} />} />
-          <Route path="/careers" element={<Careers />} />
           <Route path="/contact-hours" element={<ContactHours />} />
           <Route
             path="/gift-cards"

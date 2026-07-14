@@ -41,6 +41,7 @@ import { FILTER_GROUPS, RESERVATION_STATUS, RESERVATION_STATUS_META, ALL_RESERVA
 import LateArrivalBadge from "./LateArrivalBadge.jsx";
 import StaffEditReservationModal from "./StaffEditReservationModal.jsx";
 import AddWalkInModal from "./AddWalkInModal.jsx";
+import { useGracePeriod } from "../hooks/useGracePeriod.js";
 import "@/styles/staff-dashboard/ReservationManagement.css";
 
 
@@ -352,6 +353,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const isTargetLate = useGracePeriod(confirmDialog?.target?.reservation_start_at, confirmDialog?.target?.no_show_grace_minutes || 20);
   const [editReservation, setEditReservation] = useState(null);
   const [checkedInIds, setCheckedInIds] = useState(new Set());
   const [rejectedIds, setRejectedIds] = useState(new Set());
@@ -536,7 +538,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
             if (alreadyExists) return prev;
             return [syntheticRow, ...prev];
           });
-          toast(`Walk-in #${String(data.reservation_id).padStart(6, '0')} — ${data.customer_name || 'Guest'} seated at Table ${data.table_number || ''}`, 'success');
+          toast(`Walk-in #${String(data.reservation_id).padStart(6, '0')} — ${data.customer_name || 'Guest'} dining at Table ${data.table_number || ''}`, 'success');
         } else {
           toast(`New booking #${String(data.reservation_id || '').padStart(6, '0')} from ${data.customer_name || 'Guest'}`, 'info');
         }
@@ -787,7 +789,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
       loadReservations();
     } catch (err) {
       if (err?.status === 409) {
-        // RACE CONDITION: Another staff member just seated a guest at this table.
+        // RACE CONDITION: Another staff member just checked in a guest at this table.
         // Show a clear message and auto-refresh the table grid so the floor plan is current.
         toast(
           "⚡ This table was just taken by another staff member. Please select a different table.",
@@ -826,7 +828,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
   function RowActions({ reservation }) {
     const resId = reservation.reservation_id;
     const statusKey = getReservationStatusKey(reservation);
-    const isOccupied = statusKey === "occupied" || statusKey === "seated" || checkedInIds.has(resId);
+    const isOccupied = statusKey === "occupied" || statusKey === "dining" || checkedInIds.has(resId);
     const isCheckedOut = statusKey === "check-out" || checkoutDoneIds.has(resId);
     const isCheckoutReady = checkoutReadyIds.has(resId);
 
@@ -928,25 +930,21 @@ function ReservationManagement({ user, toast, refreshKey }) {
     }
 
     if (statusKey === "await check-in" || statusKey === "confirmed") {
-      const isToday = isSameDay(new Date(reservation.reservation_start_at), new Date());
-
       return (
         <div className="sfx-rowacts" style={{ justifyContent: "center", gap: 8, display: "flex", alignItems: "center" }}>
-          {isToday && (
-            <Button
-              size="sm"
-              variant="soft"
-              style={{
-                color: "#fff",
-                backgroundColor: "#10b981",
-                fontWeight: 600,
-                border: "none"
-              }}
-              onClick={() => openTableSelect(reservation)}
-            >
-              Check-in
-            </Button>
-          )}
+          <Button
+            size="sm"
+            variant="soft"
+            style={{
+              color: "#fff",
+              backgroundColor: "#10b981",
+              fontWeight: 600,
+              border: "none"
+            }}
+            onClick={() => openTableSelect(reservation)}
+          >
+            Check-in
+          </Button>
           {viewBtn}
           {editBtn}
         </div>
@@ -1069,7 +1067,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
                   )}
                 </p>
                 {/* Send to Kitchen button — only if there are unsent items and reservation is Occupied */}
-                {unsentItems.length > 0 && (getReservationStatusKey(target) === 'occupied' || getReservationStatusKey(target) === 'seated' || getReservationStatusKey(target) === 'check-in') && (
+                {unsentItems.length > 0 && (getReservationStatusKey(target) === 'occupied' || getReservationStatusKey(target) === 'dining' || getReservationStatusKey(target) === 'check-in') && (
                   <button
                     type="button"
                     onClick={() => handleSendToKitchen(target.reservation_id)}
@@ -1400,7 +1398,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
                   if (!target) return null;
                   const sk = getReservationStatusKey(target);
                   const isConfirmedState = sk === "confirmed" && !checkedInIds.has(target.reservation_id);
-                  const isOccupiedState = sk === "occupied" || sk === "seated" || checkedInIds.has(target.reservation_id);
+                  const isOccupiedState = sk === "occupied" || sk === "dining" || checkedInIds.has(target.reservation_id);
                   const isFutureDate = new Date(target.reservation_start_at).setHours(0, 0, 0, 0) > new Date().setHours(0, 0, 0, 0);
 
                   return (
@@ -1412,6 +1410,11 @@ function ReservationManagement({ user, toast, refreshKey }) {
                         <Button variant="gold" onClick={() => openTableSelect(target)}>
                           Confirm Check-in
                         </Button>
+                        {isTargetLate && (
+                          <Button variant="danger" onClick={() => setConfirmDialog({ action: "no_show", target })}>
+                            Mark No Show
+                          </Button>
+                        )}
                       </>}
                       {isOccupiedState && !isFutureDate && checkoutReadyIds.has(target.reservation_id) && (
                         <Button variant="gold" onClick={() => setConfirmDialog({ action: "checkout", target })}>

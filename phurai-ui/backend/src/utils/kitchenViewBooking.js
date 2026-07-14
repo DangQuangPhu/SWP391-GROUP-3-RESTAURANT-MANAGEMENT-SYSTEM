@@ -58,8 +58,8 @@ export async function getKitchenViewSeatsBooked(connection, areaId, slotStart, s
      FROM dbo.Reservations r
      WHERE r.preferred_area_id = ?
        AND r.reservation_status IN (N'Pending', N'Confirmed', N'Checked In')
-       AND r.reservation_start_at < ?
-       AND r.reservation_end_at > ?;`,
+       AND DATEADD(minute, -60, r.reservation_start_at) < ?
+       AND DATEADD(minute, 60, r.reservation_end_at) > ?;`,
     [areaId, slotEnd, slotStart]
   );
 

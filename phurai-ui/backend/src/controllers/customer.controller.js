@@ -16,7 +16,6 @@ export async function submitReservation(req, res, next) {
       reservation_end_at,
       guest_count,
       special_request,
-      occasion,
       dining_purpose,
       hold_time,
       preorder_items = [],
@@ -95,8 +94,8 @@ export async function submitReservation(req, res, next) {
            JOIN dbo.ReservationTables rt ON rt.reservation_id = r.reservation_id
            WHERE rt.table_id = @Tid
              AND r.reservation_status NOT IN (N'Completed', N'Paid', N'Cancelled', N'No Show')
-             AND r.reservation_start_at < @EndAt
-             AND r.reservation_end_at   > @StartAt`,
+             AND DATEADD(minute, -60, r.reservation_start_at) < @EndAt
+             AND DATEADD(minute, 60, r.reservation_end_at)   > @StartAt`,
           { Tid: Number(table_id), StartAt: startAt, EndAt: endAt }
         );
         if (conflictRows.length > 0) {
@@ -107,7 +106,7 @@ export async function submitReservation(req, res, next) {
       }
 
       // Format special_request to embed dining purpose and hold time
-      const finalPurpose = dining_purpose || occasion || null;
+      const finalPurpose = dining_purpose || null;
       const finalSpecialRequest = special_request ? special_request.trim() : null;
 
       // ── STEP 1: Insert reservation — status Confirmed immediately ────────────
@@ -117,7 +116,7 @@ export async function submitReservation(req, res, next) {
         `INSERT INTO dbo.Reservations
            (customer_id, preferred_area_id,
             reservation_start_at, reservation_end_at,
-            guest_count, special_request, occasion,
+            guest_count, special_request, dining_purpose,
             contact_name, contact_phone, contact_email,
             reservation_status, reservation_source,
             confirmed_at,
@@ -125,7 +124,7 @@ export async function submitReservation(req, res, next) {
          VALUES
            (@CustId, @AreaId,
             @StartAt, @EndAt,
-            @Guests, @Request, @Occasion,
+            @Guests, @Request, @DiningPurpose,
             @GuestName, @GuestPhone, @GuestEmail,
             N'Pending Payment', N'Online',
             SYSDATETIME(),
@@ -137,7 +136,7 @@ export async function submitReservation(req, res, next) {
           EndAt: endAt,
           Guests: guestNum,
           Request: finalSpecialRequest || null,
-          Occasion: finalPurpose || null,
+          DiningPurpose: finalPurpose || null,
           GuestName: guest_name || null,
           GuestPhone: guest_phone || null,
           GuestEmail: guest_email || null,
@@ -256,7 +255,7 @@ export async function submitReservation(req, res, next) {
         table_id: table_id || null,
         has_preorder: enrichedPreorders.length > 0,
         has_voucher: !!resolvedVoucher,
-        occasion: occasion || null,
+        dining_purpose: dining_purpose || null,
       });
     }
 
@@ -314,14 +313,14 @@ export async function submitReservation(req, res, next) {
 }
 
 export const getCustomerPaymentHistory = async (req, res) => {
-    try {
-        const userId = req.userId || req.user?.id || req.user?.user_id;
-        
-        if (!userId) {
-            return res.status(401).json({ success: false, message: "User not authenticated." });
-        }
+  try {
+    const userId = req.userId || req.user?.id || req.user?.user_id;
 
-        const queryStr = `
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "User not authenticated." });
+    }
+
+    const queryStr = `
             SELECT 
                 p.payment_id, p.amount_paid, p.payment_status, p.paid_at, p.transaction_ref, p.created_at,
                 pm.method_name,
@@ -340,30 +339,30 @@ export const getCustomerPaymentHistory = async (req, res) => {
             ORDER BY p.created_at DESC;
         `;
 
-        const result = await query(queryStr, { userId });
+    const result = await query(queryStr, { userId });
 
-        return res.json({ success: true, payments: result || [] });
-    } catch (err) {
-        console.error('Error fetching customer payment history:', err);
-        res.status(500).json({ success: false, message: 'Internal server error.' });
-    }
+    return res.json({ success: true, payments: result || [] });
+  } catch (err) {
+    console.error('Error fetching customer payment history:', err);
+    res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
 };
 
 export const getCustomerPaymentDetails = async (req, res) => {
-    try {
-        const userId = req.userId || req.user?.id || req.user?.user_id;
-        const { paymentId } = req.params;
-        
-        if (!userId) {
-            return res.status(401).json({ success: false, message: "User not authenticated." });
-        }
+  try {
+    const userId = req.userId || req.user?.id || req.user?.user_id;
+    const { paymentId } = req.params;
 
-        const paymentQuery = `
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "User not authenticated." });
+    }
+
+    const paymentQuery = `
             SELECT 
                 p.payment_id, p.amount_paid, p.change_given, p.payment_status, p.paid_at, p.transaction_ref, p.created_at,
                 pm.method_name,
                 o.order_id, o.order_status, o.subtotal AS total_amount, o.service_charge AS tax_amount, o.discount_amount, o.total_amount AS net_amount, o.order_type,
-                r.reservation_id, r.reservation_status, r.reservation_start_at, r.guest_count, r.special_request, r.occasion,
+                r.reservation_id, r.reservation_status, r.reservation_start_at, r.guest_count, r.special_request, r.dining_purpose,
                 t.table_number, t.capacity AS seating_capacity
             FROM dbo.Payments p
             LEFT JOIN dbo.PaymentMethods pm ON p.payment_method_id = pm.payment_method_id
@@ -377,17 +376,17 @@ export const getCustomerPaymentDetails = async (req, res) => {
             LEFT JOIN dbo.RestaurantTables t ON t.table_id = COALESCE(o.table_id, rt_join.table_id)
             WHERE p.payment_id = @paymentId AND (o.customer_id = @userId OR r.customer_id = @userId)
         `;
-        const payments = await query(paymentQuery, { paymentId, userId });
-        
-        if (!payments || payments.length === 0) {
-            return res.status(404).json({ success: false, message: "Payment not found or unauthorized." });
-        }
-        
-        const payment = payments[0];
-        let items = [];
+    const payments = await query(paymentQuery, { paymentId, userId });
 
-        if (payment.order_id) {
-            const itemsQuery = `
+    if (!payments || payments.length === 0) {
+      return res.status(404).json({ success: false, message: "Payment not found or unauthorized." });
+    }
+
+    const payment = payments[0];
+    let items = [];
+
+    if (payment.order_id) {
+      const itemsQuery = `
                 SELECT 
                     oi.order_item_id, oi.quantity, oi.unit_price, oi.line_total AS subtotal, oi.notes AS note,
                     d.dish_name AS item_name,
@@ -396,192 +395,192 @@ export const getCustomerPaymentDetails = async (req, res) => {
                 JOIN dbo.Dishes d ON oi.dish_id = d.dish_id
                 WHERE oi.order_id = @orderId
             `;
-            items = await query(itemsQuery, { orderId: payment.order_id });
-        }
-
-        return res.json({ success: true, payment, items });
-    } catch (err) {
-        console.error('Error fetching payment details:', err);
-        res.status(500).json({ success: false, message: 'Internal server error.' });
+      items = await query(itemsQuery, { orderId: payment.order_id });
     }
+
+    return res.json({ success: true, payment, items });
+  } catch (err) {
+    console.error('Error fetching payment details:', err);
+    res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
 };
 
 export const getCustomerDashboardSummary = async (req, res) => {
-    try {
-        const userId = req.userId || req.user?.id || req.user?.user_id;
-        if (!userId) return res.status(401).json({ success: false, message: "Unauthorized." });
+  try {
+    const userId = req.userId || req.user?.id || req.user?.user_id;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized." });
 
-        const { startDate, endDate } = req.query;
-        let startVal = startDate ? new Date(startDate) : null;
-        let endVal = endDate ? new Date(endDate) : null;
-        if (startVal && isNaN(startVal.getTime())) startVal = null;
-        if (endVal && isNaN(endVal.getTime())) endVal = null;
+    const { startDate, endDate } = req.query;
+    let startVal = startDate ? new Date(startDate) : null;
+    let endVal = endDate ? new Date(endDate) : null;
+    if (startVal && isNaN(startVal.getTime())) startVal = null;
+    if (endVal && isNaN(endVal.getTime())) endVal = null;
 
-        let dateFilter = "";
-        let prevDateFilter = "";
-        let prevStartVal = null;
-        let prevEndVal = null;
+    let dateFilter = "";
+    let prevDateFilter = "";
+    let prevStartVal = null;
+    let prevEndVal = null;
 
-        if (startVal && endVal) {
-            dateFilter = " AND created_at >= @startDate AND created_at <= @endDate ";
-            prevDateFilter = " AND created_at >= @prevStartDate AND created_at <= @prevEndDate ";
-            
-            const diffMs = endVal.getTime() - startVal.getTime();
-            prevStartVal = new Date(startVal.getTime() - diffMs);
-            prevEndVal = new Date(endVal.getTime() - diffMs);
-        } else {
-            prevDateFilter = " AND created_at < DATEADD(day, -30, GETDATE()) ";
-        }
+    if (startVal && endVal) {
+      dateFilter = " AND created_at >= @startDate AND created_at <= @endDate ";
+      prevDateFilter = " AND created_at >= @prevStartDate AND created_at <= @prevEndDate ";
 
-        // 1. Total Reservations
-        const resQuery = `SELECT COUNT(*) AS total FROM dbo.Reservations WHERE customer_id = @userId AND reservation_status != N'Cancelled' ${dateFilter}`;
-        const resPrevQuery = `SELECT COUNT(*) AS total FROM dbo.Reservations WHERE customer_id = @userId AND reservation_status != N'Cancelled' ${prevDateFilter}`;
-        
-        let sparkEndDate = endVal || new Date();
-        const resSparkQuery = `SELECT CAST(created_at AS DATE) as date, COUNT(*) as count FROM dbo.Reservations WHERE customer_id = @userId AND reservation_status != N'Cancelled' AND created_at >= DATEADD(day, -7, @sparkEndDate) AND created_at <= @sparkEndDate GROUP BY CAST(created_at AS DATE) ORDER BY date ASC`;
-        
-        // 2. Total Orders
-        const ordQuery = `SELECT COUNT(*) AS total FROM dbo.Orders WHERE customer_id = @userId ${dateFilter}`;
-        const ordPrevQuery = `SELECT COUNT(*) AS total FROM dbo.Orders WHERE customer_id = @userId ${prevDateFilter}`;
-        const ordSparkQuery = `SELECT CAST(created_at AS DATE) as date, COUNT(*) as count FROM dbo.Orders WHERE customer_id = @userId AND created_at >= DATEADD(day, -7, @sparkEndDate) AND created_at <= @sparkEndDate GROUP BY CAST(created_at AS DATE) ORDER BY date ASC`;
-
-        // 3. Total Expenditure
-        let pDateFilter = "";
-        let pPrevDateFilter = "";
-        if (startVal && endVal) {
-            pDateFilter = " AND p.created_at >= @startDate AND p.created_at <= @endDate ";
-            pPrevDateFilter = " AND p.created_at >= @prevStartDate AND p.created_at <= @prevEndDate ";
-        } else {
-            pPrevDateFilter = " AND p.created_at < DATEADD(day, -30, GETDATE()) ";
-        }
-        const expQuery = `SELECT SUM(p.amount_paid) AS total FROM dbo.Payments p LEFT JOIN dbo.Orders o ON p.order_id = o.order_id LEFT JOIN dbo.Reservations r ON p.reservation_id = r.reservation_id WHERE p.payment_status = N'Completed' AND (o.customer_id = @userId OR r.customer_id = @userId) ${pDateFilter}`;
-        const expPrevQuery = `SELECT SUM(p.amount_paid) AS total FROM dbo.Payments p LEFT JOIN dbo.Orders o ON p.order_id = o.order_id LEFT JOIN dbo.Reservations r ON p.reservation_id = r.reservation_id WHERE p.payment_status = N'Completed' AND (o.customer_id = @userId OR r.customer_id = @userId) ${pPrevDateFilter}`;
-        const expSparkQuery = `SELECT CAST(p.created_at AS DATE) as date, SUM(p.amount_paid) as count FROM dbo.Payments p LEFT JOIN dbo.Orders o ON p.order_id = o.order_id LEFT JOIN dbo.Reservations r ON p.reservation_id = r.reservation_id WHERE p.payment_status = N'Completed' AND (o.customer_id = @userId OR r.customer_id = @userId) AND p.created_at >= DATEADD(day, -7, @sparkEndDate) AND p.created_at <= @sparkEndDate GROUP BY CAST(p.created_at AS DATE) ORDER BY date ASC`;
-
-        const safeQuery = async (q, params) => {
-            try {
-                return await query(q, params);
-            } catch (err) {
-                console.error(`[Dashboard] Query failed: ${q.substring(0, 50)}...`, err.message || err);
-                return [];
-            }
-        };
-
-        const queryParams = { 
-            userId, 
-            startDate: startVal, 
-            endDate: endVal, 
-            prevStartDate: prevStartVal, 
-            prevEndDate: prevEndVal,
-            sparkEndDate
-        };
-
-        const [
-            reservations, prevReservations, resSpark,
-            orders, prevOrders, ordSpark,
-            expenditures, prevExpenditures, expSpark
-        ] = await Promise.all([
-            safeQuery(resQuery, queryParams), safeQuery(resPrevQuery, queryParams), safeQuery(resSparkQuery, queryParams),
-            safeQuery(ordQuery, queryParams), safeQuery(ordPrevQuery, queryParams), safeQuery(ordSparkQuery, queryParams),
-            safeQuery(expQuery, queryParams), safeQuery(expPrevQuery, queryParams), safeQuery(expSparkQuery, queryParams)
-        ]);
-
-        const loyaltyBalanceData = await getCustomerBalance(userId);
-        const totalLoyaltyPoints = loyaltyBalanceData.balance || 0;
-
-        const calcDelta = (curr, prev) => {
-            let res;
-            if (!prev || prev === 0) {
-                if (!curr || curr === 0) res = 0;
-                else res = 100;
-            } else {
-                res = ((curr - prev) / prev) * 100;
-            }
-            console.log(`calcDelta: curr=${curr}, prev=${prev}, res=${res}`);
-            return res;
-        };
-
-        const generateSparklineArray = (data) => {
-            const arr = Array(7).fill(0);
-            const targetEnd = new Date(sparkEndDate);
-            targetEnd.setHours(0,0,0,0);
-            if (data && data.length > 0) {
-                data.forEach(row => {
-                    const d = new Date(row.date);
-                    d.setHours(0,0,0,0);
-                    const diffTime = Math.abs(targetEnd - d);
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    if (diffDays < 7) {
-                        arr[6 - diffDays] = row.count || 0;
-                    }
-                });
-            }
-            return arr;
-        };
-
-        const totalReservations = reservations[0]?.total || 0;
-        const totalOrders = orders[0]?.total || 0;
-        const totalExpenditure = expenditures[0]?.total || 0;
-
-        return res.json({
-            totalReservations: {
-                value: totalReservations,
-                deltaPercent: calcDelta(totalReservations, prevReservations[0]?.total || 0),
-                sparkline: generateSparklineArray(resSpark)
-            },
-            totalOrders: {
-                value: totalOrders,
-                deltaPercent: calcDelta(totalOrders, prevOrders[0]?.total || 0),
-                sparkline: generateSparklineArray(ordSpark)
-            },
-            totalExpenditure: {
-                value: totalExpenditure,
-                deltaPercent: calcDelta(totalExpenditure, prevExpenditures[0]?.total || 0),
-                sparkline: generateSparklineArray(expSpark)
-            },
-            totalLoyaltyPoints: {
-                value: totalLoyaltyPoints,
-                deltaPercent: null,
-                sparkline: []
-            }
-        });
-    } catch (err) {
-        console.error('Error fetching dashboard summary:', err);
-        res.status(500).json({ success: false, message: 'Internal server error.' });
+      const diffMs = endVal.getTime() - startVal.getTime();
+      prevStartVal = new Date(startVal.getTime() - diffMs);
+      prevEndVal = new Date(endVal.getTime() - diffMs);
+    } else {
+      prevDateFilter = " AND created_at < DATEADD(day, -30, GETDATE()) ";
     }
+
+    // 1. Total Reservations
+    const resQuery = `SELECT COUNT(*) AS total FROM dbo.Reservations WHERE customer_id = @userId AND reservation_status != N'Cancelled' ${dateFilter}`;
+    const resPrevQuery = `SELECT COUNT(*) AS total FROM dbo.Reservations WHERE customer_id = @userId AND reservation_status != N'Cancelled' ${prevDateFilter}`;
+
+    let sparkEndDate = endVal || new Date();
+    const resSparkQuery = `SELECT CAST(created_at AS DATE) as date, COUNT(*) as count FROM dbo.Reservations WHERE customer_id = @userId AND reservation_status != N'Cancelled' AND created_at >= DATEADD(day, -7, @sparkEndDate) AND created_at <= @sparkEndDate GROUP BY CAST(created_at AS DATE) ORDER BY date ASC`;
+
+    // 2. Total Orders
+    const ordQuery = `SELECT COUNT(*) AS total FROM dbo.Orders WHERE customer_id = @userId ${dateFilter}`;
+    const ordPrevQuery = `SELECT COUNT(*) AS total FROM dbo.Orders WHERE customer_id = @userId ${prevDateFilter}`;
+    const ordSparkQuery = `SELECT CAST(created_at AS DATE) as date, COUNT(*) as count FROM dbo.Orders WHERE customer_id = @userId AND created_at >= DATEADD(day, -7, @sparkEndDate) AND created_at <= @sparkEndDate GROUP BY CAST(created_at AS DATE) ORDER BY date ASC`;
+
+    // 3. Total Expenditure
+    let pDateFilter = "";
+    let pPrevDateFilter = "";
+    if (startVal && endVal) {
+      pDateFilter = " AND p.created_at >= @startDate AND p.created_at <= @endDate ";
+      pPrevDateFilter = " AND p.created_at >= @prevStartDate AND p.created_at <= @prevEndDate ";
+    } else {
+      pPrevDateFilter = " AND p.created_at < DATEADD(day, -30, GETDATE()) ";
+    }
+    const expQuery = `SELECT SUM(p.amount_paid) AS total FROM dbo.Payments p LEFT JOIN dbo.Orders o ON p.order_id = o.order_id LEFT JOIN dbo.Reservations r ON p.reservation_id = r.reservation_id WHERE p.payment_status = N'Completed' AND (o.customer_id = @userId OR r.customer_id = @userId) ${pDateFilter}`;
+    const expPrevQuery = `SELECT SUM(p.amount_paid) AS total FROM dbo.Payments p LEFT JOIN dbo.Orders o ON p.order_id = o.order_id LEFT JOIN dbo.Reservations r ON p.reservation_id = r.reservation_id WHERE p.payment_status = N'Completed' AND (o.customer_id = @userId OR r.customer_id = @userId) ${pPrevDateFilter}`;
+    const expSparkQuery = `SELECT CAST(p.created_at AS DATE) as date, SUM(p.amount_paid) as count FROM dbo.Payments p LEFT JOIN dbo.Orders o ON p.order_id = o.order_id LEFT JOIN dbo.Reservations r ON p.reservation_id = r.reservation_id WHERE p.payment_status = N'Completed' AND (o.customer_id = @userId OR r.customer_id = @userId) AND p.created_at >= DATEADD(day, -7, @sparkEndDate) AND p.created_at <= @sparkEndDate GROUP BY CAST(p.created_at AS DATE) ORDER BY date ASC`;
+
+    const safeQuery = async (q, params) => {
+      try {
+        return await query(q, params);
+      } catch (err) {
+        console.error(`[Dashboard] Query failed: ${q.substring(0, 50)}...`, err.message || err);
+        return [];
+      }
+    };
+
+    const queryParams = {
+      userId,
+      startDate: startVal,
+      endDate: endVal,
+      prevStartDate: prevStartVal,
+      prevEndDate: prevEndVal,
+      sparkEndDate
+    };
+
+    const [
+      reservations, prevReservations, resSpark,
+      orders, prevOrders, ordSpark,
+      expenditures, prevExpenditures, expSpark
+    ] = await Promise.all([
+      safeQuery(resQuery, queryParams), safeQuery(resPrevQuery, queryParams), safeQuery(resSparkQuery, queryParams),
+      safeQuery(ordQuery, queryParams), safeQuery(ordPrevQuery, queryParams), safeQuery(ordSparkQuery, queryParams),
+      safeQuery(expQuery, queryParams), safeQuery(expPrevQuery, queryParams), safeQuery(expSparkQuery, queryParams)
+    ]);
+
+    const loyaltyBalanceData = await getCustomerBalance(userId);
+    const totalLoyaltyPoints = loyaltyBalanceData.balance || 0;
+
+    const calcDelta = (curr, prev) => {
+      let res;
+      if (!prev || prev === 0) {
+        if (!curr || curr === 0) res = 0;
+        else res = 100;
+      } else {
+        res = ((curr - prev) / prev) * 100;
+      }
+      console.log(`calcDelta: curr=${curr}, prev=${prev}, res=${res}`);
+      return res;
+    };
+
+    const generateSparklineArray = (data) => {
+      const arr = Array(7).fill(0);
+      const targetEnd = new Date(sparkEndDate);
+      targetEnd.setHours(0, 0, 0, 0);
+      if (data && data.length > 0) {
+        data.forEach(row => {
+          const d = new Date(row.date);
+          d.setHours(0, 0, 0, 0);
+          const diffTime = Math.abs(targetEnd - d);
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          if (diffDays < 7) {
+            arr[6 - diffDays] = row.count || 0;
+          }
+        });
+      }
+      return arr;
+    };
+
+    const totalReservations = reservations[0]?.total || 0;
+    const totalOrders = orders[0]?.total || 0;
+    const totalExpenditure = expenditures[0]?.total || 0;
+
+    return res.json({
+      totalReservations: {
+        value: totalReservations,
+        deltaPercent: calcDelta(totalReservations, prevReservations[0]?.total || 0),
+        sparkline: generateSparklineArray(resSpark)
+      },
+      totalOrders: {
+        value: totalOrders,
+        deltaPercent: calcDelta(totalOrders, prevOrders[0]?.total || 0),
+        sparkline: generateSparklineArray(ordSpark)
+      },
+      totalExpenditure: {
+        value: totalExpenditure,
+        deltaPercent: calcDelta(totalExpenditure, prevExpenditures[0]?.total || 0),
+        sparkline: generateSparklineArray(expSpark)
+      },
+      totalLoyaltyPoints: {
+        value: totalLoyaltyPoints,
+        deltaPercent: null,
+        sparkline: []
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching dashboard summary:', err);
+    res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
 };
 
 export const getCustomerExpenditureTrend = async (req, res) => {
-    try {
-        const userId = req.userId || req.user?.id || req.user?.user_id;
-        const { range = '6m', startDate, endDate } = req.query;
-        if (!userId) return res.status(401).json({ success: false, message: "Unauthorized." });
+  try {
+    const userId = req.userId || req.user?.id || req.user?.user_id;
+    const { range = '6m', startDate, endDate } = req.query;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized." });
 
-        let monthsBack = 6;
-        if (range === '1y') monthsBack = 12;
+    let monthsBack = 6;
+    if (range === '1y') monthsBack = 12;
 
-        let startVal = startDate ? new Date(startDate) : null;
-        let endVal = endDate ? new Date(endDate) : null;
-        if (startVal && isNaN(startVal.getTime())) startVal = null;
-        if (endVal && isNaN(endVal.getTime())) endVal = null;
+    let startVal = startDate ? new Date(startDate) : null;
+    let endVal = endDate ? new Date(endDate) : null;
+    if (startVal && isNaN(startVal.getTime())) startVal = null;
+    if (endVal && isNaN(endVal.getTime())) endVal = null;
 
-        let dateFilter = "";
-        let grouping = "yyyy-MM";
+    let dateFilter = "";
+    let grouping = "yyyy-MM";
 
-        if (startVal && endVal) {
-            dateFilter = " AND p.created_at >= @startDate AND p.created_at <= @endDate ";
-            
-            const diffDays = Math.ceil(Math.abs(endVal - startVal) / (1000 * 60 * 60 * 24));
-            if (diffDays <= 1) {
-                grouping = "HH:00";
-            } else if (diffDays <= 31) {
-                grouping = "yyyy-MM-dd";
-            }
-        } else {
-            dateFilter = " AND p.created_at >= DATEADD(month, -@monthsBack, GETDATE()) ";
-        }
+    if (startVal && endVal) {
+      dateFilter = " AND p.created_at >= @startDate AND p.created_at <= @endDate ";
 
-        const trendQuery = `
+      const diffDays = Math.ceil(Math.abs(endVal - startVal) / (1000 * 60 * 60 * 24));
+      if (diffDays <= 1) {
+        grouping = "HH:00";
+      } else if (diffDays <= 31) {
+        grouping = "yyyy-MM-dd";
+      }
+    } else {
+      dateFilter = " AND p.created_at >= DATEADD(month, -@monthsBack, GETDATE()) ";
+    }
+
+    const trendQuery = `
             SELECT 
                 FORMAT(p.created_at, '${grouping}') AS month,
                 SUM(p.amount_paid) AS total
@@ -594,37 +593,37 @@ export const getCustomerExpenditureTrend = async (req, res) => {
             GROUP BY FORMAT(p.created_at, '${grouping}')
             ORDER BY month ASC
         `;
-        
-        let result = [];
-        try {
-            result = await query(trendQuery, { userId, monthsBack, startDate: startVal, endDate: endVal });
-        } catch (err) {
-            console.error('[Dashboard] Expenditure Trend Query failed:', err.message || err);
-        }
-        return res.json({ success: true, trend: result || [] });
+
+    let result = [];
+    try {
+      result = await query(trendQuery, { userId, monthsBack, startDate: startVal, endDate: endVal });
     } catch (err) {
-        console.error('Error fetching expenditure trend:', err);
-        res.status(500).json({ success: false, message: 'Internal server error.' });
+      console.error('[Dashboard] Expenditure Trend Query failed:', err.message || err);
     }
+    return res.json({ success: true, trend: result || [] });
+  } catch (err) {
+    console.error('Error fetching expenditure trend:', err);
+    res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
 };
 
 export const getCustomerOrdersByCategory = async (req, res) => {
-    try {
-        const userId = req.userId || req.user?.id || req.user?.user_id;
-        if (!userId) return res.status(401).json({ success: false, message: "Unauthorized." });
+  try {
+    const userId = req.userId || req.user?.id || req.user?.user_id;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized." });
 
-        const { startDate, endDate } = req.query;
-        let startVal = startDate ? new Date(startDate) : null;
-        let endVal = endDate ? new Date(endDate) : null;
-        if (startVal && isNaN(startVal.getTime())) startVal = null;
-        if (endVal && isNaN(endVal.getTime())) endVal = null;
+    const { startDate, endDate } = req.query;
+    let startVal = startDate ? new Date(startDate) : null;
+    let endVal = endDate ? new Date(endDate) : null;
+    if (startVal && isNaN(startVal.getTime())) startVal = null;
+    if (endVal && isNaN(endVal.getTime())) endVal = null;
 
-        let dateFilter = "";
-        if (startVal && endVal) {
-            dateFilter = " AND o.created_at >= @startDate AND o.created_at <= @endDate ";
-        }
+    let dateFilter = "";
+    if (startVal && endVal) {
+      dateFilter = " AND o.created_at >= @startDate AND o.created_at <= @endDate ";
+    }
 
-        const catQuery = `
+    const catQuery = `
             SELECT 
                 mc.category_name as category,
                 COUNT(oi.order_item_id) as count
@@ -636,37 +635,37 @@ export const getCustomerOrdersByCategory = async (req, res) => {
             GROUP BY mc.category_name
             ORDER BY count DESC
         `;
-        let result = [];
-        try {
-            result = await query(catQuery, { userId, startDate: startVal, endDate: endVal });
-        } catch (err) {
-            // Silently fallback to avoid terminal spam
-        }
-
-        return res.json({ success: true, categories: result || [] });
+    let result = [];
+    try {
+      result = await query(catQuery, { userId, startDate: startVal, endDate: endVal });
     } catch (err) {
-        console.error('Error fetching categories:', err);
-        res.status(500).json({ success: false, message: 'Internal server error.' });
+      // Silently fallback to avoid terminal spam
     }
+
+    return res.json({ success: true, categories: result || [] });
+  } catch (err) {
+    console.error('Error fetching categories:', err);
+    res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
 };
 
 export const getCustomerRecentActivity = async (req, res) => {
-    try {
-        const userId = req.userId || req.user?.id || req.user?.user_id;
-        if (!userId) return res.status(401).json({ success: false, message: "Unauthorized." });
+  try {
+    const userId = req.userId || req.user?.id || req.user?.user_id;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized." });
 
-        const { startDate, endDate } = req.query;
-        let startVal = startDate ? new Date(startDate) : null;
-        let endVal = endDate ? new Date(endDate) : null;
-        if (startVal && isNaN(startVal.getTime())) startVal = null;
-        if (endVal && isNaN(endVal.getTime())) endVal = null;
+    const { startDate, endDate } = req.query;
+    let startVal = startDate ? new Date(startDate) : null;
+    let endVal = endDate ? new Date(endDate) : null;
+    if (startVal && isNaN(startVal.getTime())) startVal = null;
+    if (endVal && isNaN(endVal.getTime())) endVal = null;
 
-        let dateFilter = "";
-        if (startVal && endVal) {
-            dateFilter = " AND created_at >= @startDate AND created_at <= @endDate ";
-        }
+    let dateFilter = "";
+    if (startVal && endVal) {
+      dateFilter = " AND created_at >= @startDate AND created_at <= @endDate ";
+    }
 
-        const actQuery = `
+    const actQuery = `
             SELECT TOP 10 * FROM (
                 SELECT 
                     'order' AS type,
@@ -690,16 +689,16 @@ export const getCustomerRecentActivity = async (req, res) => {
             ) AS Combined
             ORDER BY created_at DESC
         `;
-        
-        let result = [];
-        try {
-            result = await query(actQuery, { userId, startDate: startVal, endDate: endVal });
-        } catch (err) {
-            // Silently fallback to avoid terminal spam
-        }
-        return res.json({ success: true, activity: result || [] });
+
+    let result = [];
+    try {
+      result = await query(actQuery, { userId, startDate: startVal, endDate: endVal });
     } catch (err) {
-        console.error('Error fetching recent activity:', err);
-        res.status(500).json({ success: false, message: 'Internal server error.' });
+      // Silently fallback to avoid terminal spam
     }
+    return res.json({ success: true, activity: result || [] });
+  } catch (err) {
+    console.error('Error fetching recent activity:', err);
+    res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
 };

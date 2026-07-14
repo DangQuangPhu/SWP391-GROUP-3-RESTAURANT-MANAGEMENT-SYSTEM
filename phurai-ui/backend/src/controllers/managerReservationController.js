@@ -45,7 +45,7 @@ export const getPendingReservations = async (req, res) => {
          r.reservation_end_at,
          r.guest_count,
          r.special_request,
-         r.occasion,
+         r.dining_purpose,
          r.reservation_status,
          r.reservation_source,
          r.created_at,
@@ -61,7 +61,7 @@ export const getPendingReservations = async (req, res) => {
        GROUP BY
          r.reservation_id, ua.full_name, r.contact_name, ua.phone, r.contact_phone,
          ua.email, r.contact_email, r.reservation_start_at, r.reservation_end_at,
-         r.guest_count, r.special_request, r.occasion, r.reservation_status, r.reservation_source,
+         r.guest_count, r.special_request, r.dining_purpose, r.reservation_status, r.reservation_source,
          r.created_at, r.preferred_area_id, a.area_name
        ORDER BY r.reservation_start_at ASC`
     );
@@ -155,7 +155,7 @@ export const getAllReservations = async (req, res) => {
          r.reservation_end_at,
          r.guest_count,
          r.special_request,
-         r.occasion,
+         r.dining_purpose,
          r.reservation_status,
          CASE WHEN r.has_pending_request = 1
               THEN N'Request'
@@ -184,7 +184,7 @@ export const getAllReservations = async (req, res) => {
        GROUP BY
          r.reservation_id, r.customer_id, ua.full_name, r.contact_name, ua.phone, r.contact_phone,
          ua.email, r.contact_email, r.reservation_start_at, r.reservation_end_at,
-         r.guest_count, r.special_request, r.occasion, r.reservation_status, r.reservation_source,
+         r.guest_count, r.special_request, r.dining_purpose, r.reservation_status, r.reservation_source,
          r.created_at, r.confirmed_at, r.checked_in_at, r.cancelled_at,
          r.cancel_reason, r.resolved_at, a.area_name,
          r.has_pending_request, r.request_type, r.edit_used_count, r.pending_changes_json
@@ -238,7 +238,7 @@ export const getReservationDetails = async (req, res) => {
          r.reservation_end_at,
          r.guest_count,
          r.special_request,
-         r.occasion,
+         r.dining_purpose,
          r.reservation_status,
          r.reservation_source,
          r.created_at,
@@ -847,17 +847,22 @@ export const updateReservation = async (req, res) => {
     "guest_count", "special_request", "reservation_status",
     "preferred_area_id", "table_id",
     "contact_name", "contact_phone", "contact_email",
-    "occasion", "dining_purpose"
+    "dining_purpose"
   ];
 
   const fieldEntries = [];
-  let occasionValue = req.body.occasion !== undefined ? req.body.occasion : (req.body.dining_purpose !== undefined ? req.body.dining_purpose : undefined);
-  if (occasionValue !== undefined) {
-    fieldEntries.push({ field: "occasion", value: occasionValue });
+  let diningPurposeValue = req.body.dining_purpose !== undefined ? req.body.dining_purpose : (req.body.occasion !== undefined ? req.body.occasion : undefined);
+  if (diningPurposeValue !== undefined) {
+    fieldEntries.push({ field: "dining_purpose", value: diningPurposeValue });
+  }
+
+  let statusValue = req.body.reservation_status !== undefined ? req.body.reservation_status : (req.body.status !== undefined ? req.body.status : undefined);
+  if (statusValue !== undefined) {
+    fieldEntries.push({ field: "reservation_status", value: statusValue });
   }
 
   for (const field of allowedFields) {
-    if (field === "occasion" || field === "dining_purpose") continue;
+    if (field === "dining_purpose" || field === "reservation_status") continue;
     if (req.body[field] !== undefined) {
       fieldEntries.push({ field, value: req.body[field] });
     }
@@ -928,9 +933,9 @@ export const updateReservation = async (req, res) => {
                     AND r.reservation_id != @resId
                     AND r.reservation_status NOT IN (N'Completed', N'Cancelled', N'No Show', N'Rejected')
                     AND (
-                       (r.reservation_start_at < @newEnd)
+                       (DATEADD(MINUTE, -60, r.reservation_start_at) < @newEnd)
                        AND
-                       (DATEADD(MINUTE, 30, r.reservation_end_at) > @newStart)
+                       (DATEADD(MINUTE, 60, r.reservation_end_at) > @newStart)
                     )
                 `;
           const { recordset: overlaps } = await reqOverlap.query(overlapQuery);
@@ -1314,97 +1319,119 @@ export const resolveEditRequest = async (req, res) => {
     const isConfirm = decision.toLowerCase() === "confirm";
 
     if (isConfirm) {
-      // ── CONFIRM: apply changes ────────────────────────────────────────────
-      // Build UPDATE SET clauses from pendingChanges
-      const allowedFields = ["guest_count", "reservation_start_at", "reservation_end_at", "special_request", "preferred_area_id", "occasion"];
-      const setClauses = [];
-      const reqUpdate = new sql.Request(transaction);
+      if (reservation.request_type === "cancel") {
+        // ── CONFIRM CANCEL REQUEST ─────────────────────────────────────────
+        const cancelReasonStr = pendingChanges.cancel_reason ? String(pendingChanges.cancel_reason).replace(/'/g, "''") : 'Customer requested cancellation';
+        
+        await updateReservationStatus({
+          connection: transaction,
+          reservationId,
+          toStatus: RESERVATION_STATUS.CANCELLED,
+          staffId: managerId,
+          auditAction: "MANAGER_RESOLVE_CANCEL_REQUEST",
+          extraUpdates: `, has_pending_request = 0, pending_changes_json = NULL, request_type = NULL, resolved_at = SYSDATETIME(), resolved_by = ${managerId}, cancelled_at = SYSDATETIME(), cancel_reason = N'${cancelReasonStr}'`
+        });
 
-      for (const [field, value] of Object.entries(pendingChanges)) {
-        if (!allowedFields.includes(field)) continue;
-        if (field === "guest_count") {
-          reqUpdate.input("gc_new", sql.TinyInt, parseInt(value, 10));
-          setClauses.push("guest_count = @gc_new");
-        } else if (field === "reservation_start_at") {
-          reqUpdate.input("rsa_new", sql.DateTime2, new Date(value));
-          setClauses.push("reservation_start_at = @rsa_new");
-        } else if (field === "reservation_end_at") {
-          reqUpdate.input("rea_new", sql.DateTime2, new Date(value));
-          setClauses.push("reservation_end_at = @rea_new");
-        } else if (field === "special_request") {
-          reqUpdate.input("sr_new", sql.NVarChar, String(value));
-          setClauses.push("special_request = @sr_new");
-        } else if (field === "preferred_area_id") {
-          reqUpdate.input("area_new", sql.SmallInt, parseInt(value, 10));
-          setClauses.push("preferred_area_id = @area_new");
-        } else if (field === "occasion") {
-          reqUpdate.input("occ_new", sql.NVarChar, String(value));
-          setClauses.push("occasion = @occ_new");
+        // Release tables
+        const reqRelease = new sql.Request(transaction);
+        reqRelease.input("resId", sql.Int, reservationId);
+        await reqRelease.query(`
+          UPDATE dbo.RestaurantTables SET table_status = N'Available', updated_at = SYSDATETIME()
+          WHERE table_id IN (SELECT table_id FROM dbo.ReservationTables WHERE reservation_id = @resId)
+        `);
+      } else {
+        // ── CONFIRM EDIT REQUEST ────────────────────────────────────────────
+        // Build UPDATE SET clauses from pendingChanges
+        const allowedFields = ["guest_count", "reservation_start_at", "reservation_end_at", "special_request", "preferred_area_id", "dining_purpose"];
+        const setClauses = [];
+        const reqUpdate = new sql.Request(transaction);
+
+        for (const [field, value] of Object.entries(pendingChanges)) {
+          if (!allowedFields.includes(field)) continue;
+          if (field === "guest_count") {
+            reqUpdate.input("gc_new", sql.TinyInt, parseInt(value, 10));
+            setClauses.push("guest_count = @gc_new");
+          } else if (field === "reservation_start_at") {
+            reqUpdate.input("rsa_new", sql.DateTime2, new Date(value));
+            setClauses.push("reservation_start_at = @rsa_new");
+          } else if (field === "reservation_end_at") {
+            reqUpdate.input("rea_new", sql.DateTime2, new Date(value));
+            setClauses.push("reservation_end_at = @rea_new");
+          } else if (field === "special_request") {
+            reqUpdate.input("sr_new", sql.NVarChar, String(value));
+            setClauses.push("special_request = @sr_new");
+          } else if (field === "preferred_area_id") {
+            reqUpdate.input("area_new", sql.SmallInt, parseInt(value, 10));
+            setClauses.push("preferred_area_id = @area_new");
+          } else if (field === "dining_purpose" || field === "occasion") {
+            reqUpdate.input("occ_new", sql.NVarChar, String(value));
+            setClauses.push("dining_purpose = @occ_new");
+          }
         }
-      }
 
-      // Only call updateReservationStatus to revert back to CONFIRMED
-      await updateReservationStatus({
-        connection: transaction,
-        reservationId,
-        toStatus: RESERVATION_STATUS.CONFIRMED,
-        staffId: managerId,
-        auditAction: "MANAGER_RESOLVE_REQUEST",
-        extraUpdates: `, has_pending_request = 0, pending_changes_json = NULL, request_type = NULL, resolved_at = SYSDATETIME(), resolved_by = ${managerId}`
-      });
+        // Only call updateReservationStatus to revert back to CONFIRMED
+        await updateReservationStatus({
+          connection: transaction,
+          reservationId,
+          toStatus: RESERVATION_STATUS.CONFIRMED,
+          staffId: managerId,
+          auditAction: "MANAGER_RESOLVE_REQUEST",
+          extraUpdates: `, has_pending_request = 0, pending_changes_json = NULL, request_type = NULL, resolved_at = SYSDATETIME(), resolved_by = ${managerId}`
+        });
 
-      // No need to add reservation_status or pending fields to setClauses since state machine handles it
-      reqUpdate.input("managerId", sql.Int, managerId);
-      reqUpdate.input("resId", sql.Int, reservationId);
+        // No need to add reservation_status or pending fields to setClauses since state machine handles it
+        reqUpdate.input("managerId", sql.Int, managerId);
+        reqUpdate.input("resId", sql.Int, reservationId);
 
-      if (setClauses.length > 0) {
-        await reqUpdate.query(`
-          UPDATE dbo.Reservations SET ${setClauses.join(", ")}
-          WHERE reservation_id = @resId
-        `);
-      }
-
-      // Handle table swap if new table_ids requested
-      const newTableIds = Array.isArray(pendingChanges.table_ids) ? pendingChanges.table_ids.map(Number) : null;
-      let oldTableIds = [];
-
-      if (newTableIds && newTableIds.length > 0) {
-        // Get current tables
-        const reqOldTables = new sql.Request(transaction);
-        reqOldTables.input("resId", sql.Int, reservationId);
-        const { recordset: oldTables } = await reqOldTables.query(`
-          SELECT table_id FROM dbo.ReservationTables WHERE reservation_id = @resId
-        `);
-        oldTableIds = oldTables.map(t => t.table_id);
-
-        // Release old tables
-        if (oldTableIds.length > 0) {
-          const reqRelease = new sql.Request(transaction);
-          reqRelease.input("resId", sql.Int, reservationId);
-          await reqRelease.query(`
-            UPDATE dbo.RestaurantTables SET table_status = N'Available', updated_at = SYSDATETIME()
-            WHERE table_id IN (SELECT table_id FROM dbo.ReservationTables WHERE reservation_id = @resId)
-          `);
-          await reqRelease.query(`
-            DELETE FROM dbo.ReservationTables WHERE reservation_id = @resId
+        if (setClauses.length > 0) {
+          await reqUpdate.query(`
+            UPDATE dbo.Reservations SET ${setClauses.join(", ")}
+            WHERE reservation_id = @resId
           `);
         }
 
-        // Reserve new tables
-        for (const tid of newTableIds) {
-          const reqInsert = new sql.Request(transaction);
-          reqInsert.input("resId", sql.Int, reservationId);
-          reqInsert.input("tid", sql.Int, tid);
-          await reqInsert.query(`
-            INSERT INTO dbo.ReservationTables (reservation_id, table_id, assigned_at)
-            VALUES (@resId, @tid, SYSDATETIME())
+        // Handle table swap if new table_ids requested
+        const newTableIds = Array.isArray(pendingChanges.table_ids) ? pendingChanges.table_ids.map(Number) : null;
+        let oldTableIds = [];
+
+        if (newTableIds && newTableIds.length > 0) {
+          // Get current tables
+          const reqOldTables = new sql.Request(transaction);
+          reqOldTables.input("resId", sql.Int, reservationId);
+          const { recordset: oldTables } = await reqOldTables.query(`
+            SELECT table_id FROM dbo.ReservationTables WHERE reservation_id = @resId
           `);
-          const reqLock = new sql.Request(transaction);
-          reqLock.input("tid", sql.Int, tid);
-          await reqLock.query(`
-            UPDATE dbo.RestaurantTables SET table_status = N'Reserved', updated_at = SYSDATETIME()
-            WHERE table_id = @tid
-          `);
+          oldTableIds = oldTables.map(t => t.table_id);
+
+          // Release old tables
+          if (oldTableIds.length > 0) {
+            const reqRelease = new sql.Request(transaction);
+            reqRelease.input("resId", sql.Int, reservationId);
+            await reqRelease.query(`
+              UPDATE dbo.RestaurantTables SET table_status = N'Available', updated_at = SYSDATETIME()
+              WHERE table_id IN (SELECT table_id FROM dbo.ReservationTables WHERE reservation_id = @resId)
+            `);
+            await reqRelease.query(`
+              DELETE FROM dbo.ReservationTables WHERE reservation_id = @resId
+            `);
+          }
+
+          // Reserve new tables
+          for (const tid of newTableIds) {
+            const reqInsert = new sql.Request(transaction);
+            reqInsert.input("resId", sql.Int, reservationId);
+            reqInsert.input("tid", sql.Int, tid);
+            await reqInsert.query(`
+              INSERT INTO dbo.ReservationTables (reservation_id, table_id, assigned_at)
+              VALUES (@resId, @tid, SYSDATETIME())
+            `);
+            const reqLock = new sql.Request(transaction);
+            reqLock.input("tid", sql.Int, tid);
+            await reqLock.query(`
+              UPDATE dbo.RestaurantTables SET table_status = N'Reserved', updated_at = SYSDATETIME()
+              WHERE table_id = @tid
+            `);
+          }
         }
       }
 

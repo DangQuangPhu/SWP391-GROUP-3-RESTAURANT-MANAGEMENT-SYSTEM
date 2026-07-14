@@ -31,7 +31,8 @@ import {
     createTable,
     getNextTableNumber,
     updateTable,
-    deleteTable
+    deleteTable,
+    createVirtualTable
 } from '../controllers/tableController.js';
 import {
     mergeTables,
@@ -96,6 +97,7 @@ router.get('/shift-mapping', requireManagerOrAdmin, getShiftMapping);
 router.put('/shift-mapping/:id', requireManagerOrAdmin, updateShiftMapping);
 
 router.post('/tables', requireManagerOrAdmin, createTable);
+router.post('/tables/virtual', requireManagerOrAdmin, createVirtualTable);
 router.get('/next-table-number', requireManagerOrAdmin, getNextTableNumber);
 router.post('/tables/merge', requireManagerOrAdmin, mergeTables);
 router.post('/tables/unmerge', requireManagerOrAdmin, unmergeTable);

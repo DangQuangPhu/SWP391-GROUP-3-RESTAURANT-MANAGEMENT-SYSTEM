@@ -112,7 +112,7 @@ function PortalHeader({
 
         <div className="sfx-header__user">
           <span className="sfx-avatar" aria-hidden="true">
-            {user?.avatarUrl ? <img src={user.avatarUrl} alt="" /> : initials}
+            {user?.avatarUrl ? <img src={user.avatarUrl} alt="" referrerPolicy="no-referrer" /> : initials}
           </span>
           <span className="sfx-header__usermeta">
             <strong>{name}</strong>

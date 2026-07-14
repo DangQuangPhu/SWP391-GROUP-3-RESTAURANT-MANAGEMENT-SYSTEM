@@ -84,7 +84,12 @@ export default function CustomerNotificationBell() {
       }
     }
     setOpen(false);
-    navigate("/my-reservations");
+    // Route to context-appropriate page based on notification type
+    if (notif.notification_type === 'Promotion') {
+      navigate('/loyalty');
+    } else {
+      navigate('/my-reservations');
+    }
   };
 
   const handleDeleteNotification = async (e, notif) => {
@@ -99,6 +104,8 @@ export default function CustomerNotificationBell() {
       console.error("Failed to delete notification", err);
     }
   };
+
+  const hasPromotion = notifications.some((n) => !n.is_read && n.notification_type === 'Promotion');
 
   return (
     <div
@@ -123,6 +130,7 @@ export default function CustomerNotificationBell() {
         aria-label="Notifications"
       >
         <svg
+          className={`notification-bell-icon${hasPromotion ? ' has-promotion' : ''}`}
           width="24"
           height="24"
           viewBox="0 0 24 24"
@@ -135,6 +143,7 @@ export default function CustomerNotificationBell() {
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
           <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
         </svg>
+
         {unreadCount > 0 && (
           <span
             style={{

@@ -7,6 +7,7 @@ import {
   resetTable,
   markTableClean,
   updateTableStatus,
+  deleteStaffTable,
   getActiveOccupiedOrders,
   addOrderItem,
   updateOrderItemStatus,
@@ -45,6 +46,7 @@ import {
   getTableTimeline,
   verifyClearTable,
 } from "../controllers/tableMergeController.js";
+import { createVirtualTable } from "../controllers/tableController.js";
 import { splitOrderItems } from "../controllers/staffOrderController.js";
 import { approveQrSession, rejectQrSession } from "../controllers/qrSessionController.js";
 import {
@@ -139,7 +141,20 @@ router.post("/tables/:tableId/check-in", (req, res) => {
 router.post("/tables/:tableId/reset", resolveUserId, requireUserId, resetTable);
 router.put("/tables/:tableId/mark-clean", resolveUserId, requireUserId, markTableClean);
 router.patch("/tables/:tableId/status", resolveUserId, requireUserId, updateTableStatus);
-router.post("/tables/merge", resolveUserId, requireUserId, mergeTables);
+router.delete("/tables/:tableId", resolveUserId, requireUserId, deleteStaffTable);
+router.post(
+  "/tables/merge",
+  resolveUserId,
+  requireUserId,
+  mergeTables
+);
+
+router.post(
+  "/tables/virtual",
+  resolveUserId,
+  requireUserId,
+  createVirtualTable
+);
 router.post("/tables/unmerge", resolveUserId, requireUserId, unmergeTable);
 router.get("/tables/:tableId/timeline", resolveUserId, getTableTimeline);
 router.post("/tables/:tableId/verify-clear", resolveUserId, requireUserId, verifyClearTable);

@@ -443,6 +443,33 @@ export async function markStaffTableClean(tableId, userId) {
   return res;
 }
 
+export async function updateStaffTableStatusApi(tableId, status, userId) {
+  const res = await request(`/staff/tables/${tableId}/status`, {
+    method: "PATCH",
+    headers: profileRequestHeaders(userId, {
+      "Content-Type": "application/json",
+    }),
+    body: JSON.stringify({ status })
+  });
+  if (!res?.success) throw new Error(res?.message || "Failed to update table status");
+  return res;
+}
+
+export async function deleteStaffTableApi(tableId, userId) {
+  const res = await request(`/staff/tables/${tableId}`, {
+    method: "DELETE",
+    headers: profileRequestHeaders(userId),
+  });
+  if (!res?.success) throw new Error(res?.message || "Failed to delete table");
+  return res;
+}
+
+export async function createVirtualTableApi(userId, payload = {}) {
+  const res = await staffPost("/staff/tables/virtual", userId, payload);
+  if (!res?.success) throw new Error(res?.message || "Failed to create virtual table");
+  return res;
+}
+
 export async function mergeTablesApi(sourceId, targetId, userId) {
   const res = await staffPost(
     "/staff/tables/merge",

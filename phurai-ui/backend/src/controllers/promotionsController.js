@@ -43,7 +43,8 @@ export const createPromotion = async (req, res) => {
   try {
     const {
       promotion_name, description, promo_code, discount_type, discount_value, max_discount_amount,
-      min_order_value, valid_from, valid_until, usage_limit, applicable_to
+      min_order_value, valid_from, valid_until, usage_limit, applicable_to,
+      points_required, total_quantity, validity_duration_hours
     } = req.body;
 
     // Auth info for audit logging
@@ -71,6 +72,14 @@ export const createPromotion = async (req, res) => {
     if (!isNaN(parsedUsageLimit) && parsedUsageLimit <= 0) {
       return res.status(400).json({ success: false, message: "Usage limit must be greater than 0" });
     }
+
+    // Normalize applicable_to — DB constraint only allows 'Reservation', 'Order', 'Both'
+    const VALID_APPLICABLE = ['Reservation', 'Order', 'Both'];
+    const normalizedApplicableTo = VALID_APPLICABLE.includes(applicable_to) ? applicable_to : 'Both';
+
+    const parsedPointsRequired = points_required ? parseInt(points_required, 10) : null;
+    const parsedTotalQty = total_quantity ? parseInt(total_quantity, 10) : null;
+    const parsedValidityHours = validity_duration_hours ? parseInt(validity_duration_hours, 10) : 24;
 
     const pool = await getRawPool();
 
@@ -105,18 +114,25 @@ export const createPromotion = async (req, res) => {
         .input('start_at', sql.DateTime2, valid_from)
         .input('end_at', sql.DateTime2, valid_until)
         .input('is_active', sql.Bit, 1)
-        .input('applicable_to', sql.NVarChar(20), applicable_to || 'All')
+        .input('applicable_to', sql.NVarChar(20), normalizedApplicableTo)
+        .input('points_required', sql.Int, parsedPointsRequired)
+        .input('total_quantity', sql.Int, parsedTotalQty)
+        .input('remaining_quantity', sql.Int, parsedTotalQty)
+        .input('validity_duration_hours', sql.Int, parsedValidityHours)
+        .input('created_by_staff_id', sql.Int, managerId)
         .query(`
           INSERT INTO dbo.Promotions (
             promotion_name, description, discount_type, discount_value, max_discount, 
             min_order_value, start_at, end_at, is_active, applicable_to,
-            created_at, updated_at
+            points_required, total_quantity, remaining_quantity, validity_duration_hours,
+            created_by_staff_id, created_at, updated_at
           )
           OUTPUT inserted.promotion_id
           VALUES (
             @promotion_name, @description, @discount_type, @discount_value, @max_discount,
             @min_order_value, @start_at, @end_at, @is_active, @applicable_to,
-            SYSDATETIME(), SYSDATETIME()
+            @points_required, @total_quantity, @remaining_quantity, @validity_duration_hours,
+            @created_by_staff_id, SYSDATETIME(), SYSDATETIME()
           )
         `);
     } catch (err) {
@@ -164,7 +180,10 @@ export const createPromotion = async (req, res) => {
       end_at: valid_until,
       voucher_code: promo_code,
       usage_limit: parsedUsageLimit || 999999,
-      applicable_to: applicable_to || 'All'
+      applicable_to: normalizedApplicableTo,
+      points_required: parsedPointsRequired,
+      total_quantity: parsedTotalQty,
+      validity_duration_hours: parsedValidityHours,
     };
 
     try {
@@ -209,7 +228,10 @@ export const createPromotion = async (req, res) => {
         usage_limit: usage_limit || 999999,
         used_count: 0,
         is_active: 1,
-        applicable_to: applicable_to || 'All'
+        applicable_to: normalizedApplicableTo,
+        points_required: parsedPointsRequired,
+        total_quantity: parsedTotalQty,
+        validity_duration_hours: parsedValidityHours,
       }
     });
   } catch (error) {
@@ -269,16 +291,21 @@ export const updatePromotion = async (req, res) => {
     transaction = new sql.Transaction(pool);
     await transaction.begin();
 
+    const VALID_APPLICABLE_UPDATE = ['Reservation', 'Order', 'Both'];
+    const safeApplicableTo = VALID_APPLICABLE_UPDATE.includes(req.body.applicable_to) ? req.body.applicable_to : 'Both';
+
     await transaction.request()
       .input('promotion_id', sql.Int, promotionId)
-      .input('promotion_name', sql.NVarChar(150), `Promo: ${promo_code}`)
+      .input('promotion_name', sql.NVarChar(150), req.body.promotion_name || `Promo: ${promo_code}`)
       .input('discount_type', sql.NVarChar(20), normalizedDiscountType)
       .input('discount_value', sql.Decimal(12, 2), discount_value)
       .input('max_discount', sql.Decimal(12, 2), max_discount_amount || null)
       .input('min_order_value', sql.Decimal(12, 2), min_order_value || 0)
       .input('start_at', sql.DateTime2, valid_from)
       .input('end_at', sql.DateTime2, valid_until)
-      .input('applicable_to', sql.NVarChar(20), applicable_to || 'All')
+      .input('applicable_to', sql.NVarChar(20), safeApplicableTo)
+      .input('points_required', sql.Int, req.body.points_required ? parseInt(req.body.points_required, 10) : null)
+      .input('validity_duration_hours', sql.Int, req.body.validity_duration_hours ? parseInt(req.body.validity_duration_hours, 10) : 24)
       .query(`
         UPDATE dbo.Promotions SET 
           promotion_name = @promotion_name,
@@ -289,6 +316,8 @@ export const updatePromotion = async (req, res) => {
           start_at = @start_at,
           end_at = @end_at,
           applicable_to = @applicable_to,
+          points_required = @points_required,
+          validity_duration_hours = @validity_duration_hours,
           updated_at = SYSDATETIME()
         WHERE promotion_id = @promotion_id
       `);
@@ -438,8 +467,8 @@ export const checkPromoValidity = async (code, orderValue, context = 'All') => {
 
   const promo = result.recordset[0];
 
-  // Scope Check
-  if (context !== 'All' && promo.applicable_to !== 'All' && promo.applicable_to !== context) {
+  // Scope Check — DB constraint: 'Reservation' | 'Order' | 'Both'
+  if (promo.applicable_to !== 'Both' && context !== 'Both' && promo.applicable_to !== context) {
     return { isValid: false, message: `This promo code is only applicable to ${promo.applicable_to.toLowerCase()}s.` };
   }
 

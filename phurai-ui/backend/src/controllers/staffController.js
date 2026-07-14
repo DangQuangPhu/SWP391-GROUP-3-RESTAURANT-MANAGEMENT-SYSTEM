@@ -883,21 +883,22 @@ export async function updateTableStatus(req, res) {
     return jsonError(res, "Invalid table id.", 400);
   }
 
-  if (status !== 'Available') {
-    return jsonError(res, "Only 'Available' status update is currently supported via this endpoint.", 400);
+  const validStatuses = ["Available", "Occupied", "Cleaning", "Inactive", "Reserved"];
+  if (!validStatuses.includes(status)) {
+    return jsonError(res, `Invalid status. Must be one of: ${validStatuses.join(", ")}`, 400);
   }
 
   try {
     const [result] = await pool.query(
       `UPDATE dbo.RestaurantTables
-       SET table_status = N'Available',
+       SET table_status = ?,
            updated_at = SYSDATETIME()
-       WHERE table_id = ? AND table_status = N'Cleaning';`,
-      [tableId]
+       WHERE table_id = ?;`,
+      [status, tableId]
     );
 
     if (result.rowsAffected === 0) {
-      return jsonError(res, "Table not found or not in Cleaning state.", 404);
+      return jsonError(res, "Table not found.", 404);
     }
 
     // Emit socket event to update clients
@@ -905,11 +906,14 @@ export async function updateTableStatus(req, res) {
     if (io) {
       io.to("room:manager").to("room:staff").emit("table:status_changed", {
         table_id: tableId,
-        table_status: "Available"
+        table_status: status
       });
     }
 
-    return jsonOk(res, { table_id: tableId, table_status: "Available" });
+    return res.json({
+      success: true,
+      message: "Table status updated successfully",
+    });
   } catch (error) {
     console.error("PATCH /api/staff/tables/:tableId/status failed:", error);
     return jsonError(res, "Could not update table status.");
@@ -2814,5 +2818,45 @@ export async function payBillSplit(req, res) {
     return jsonError(res, "Could not mark split as paid.");
   } finally {
     connection.release();
+  }
+}
+
+export async function deleteStaffTable(req, res) {
+  const tableId = Number(req.params.tableId);
+  if (!Number.isFinite(tableId) || tableId <= 0) {
+    return jsonError(res, "Invalid table id.", 400);
+  }
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT table_number FROM dbo.RestaurantTables WHERE table_id = ?;`,
+      [tableId]
+    );
+
+    if (!rows || rows.length === 0) {
+      return jsonError(res, "Table not found.", 404);
+    }
+
+    const table = rows[0];
+    const isVirtual = table.table_number.includes("-V") || table.table_number.startsWith("V-");
+    
+    if (!isVirtual) {
+      return jsonError(res, "Staff can only delete virtual tables.", 403);
+    }
+
+    await pool.query(
+      `DELETE FROM dbo.RestaurantTables WHERE table_id = ?;`,
+      [tableId]
+    );
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to("room:manager").to("room:staff").emit("table:sync", { action: "delete", table_id: tableId });
+    }
+
+    return res.json({ success: true, message: "Virtual table deleted successfully." });
+  } catch (error) {
+    console.error("DELETE /api/staff/tables/:tableId failed:", error);
+    return jsonError(res, "Could not delete virtual table.");
   }
 }
