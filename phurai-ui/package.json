@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "preview": "cd frontend && npx vite preview --host",
     "db:init":       "node backend/src/run_master_schema.js",
-    "db:init:prod":  "node backend/src/run_master_schema.js --confirm",
+    "db:init:prod":  "npm run db:seed && node backend/src/run_master_schema.js --confirm",
     "db:init:local": "node backend/src/run_master_schema.js --confirm --seed-full",
     "db:seed":       "node backend/scripts/inject_seed_to_sql.mjs",
     "migrate":       "node migrate.cjs"
