@@ -3,6 +3,7 @@ import { apiGet } from '@/core/api/httpClient';
 import AdminPageHeader from '@/features/admin-dashboard/components/AdminPageHeader';
 import AdminDataTable from '@/features/admin-dashboard/components/AdminDataTable';
 import KdsDeviceManager from '@/features/admin-dashboard/components/KdsDeviceManager';
+import { Pagination } from '@/components/ui/Pagination';
 import { Edit, Trash2, UserPlus, Monitor } from 'lucide-react';
 
 export default function Accounts() {
@@ -10,7 +11,10 @@ export default function Accounts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('staff'); // 'staff' | 'customers' | 'kds'
+  const [currentPage, setCurrentPage] = useState(1);
   const [toastMsg, setToastMsg] = useState(null);
+
+  const limit = 20;
 
   const toast = ({ type, message }) => {
     setToastMsg({ type, message });
@@ -41,6 +45,11 @@ export default function Accounts() {
     window.addEventListener("phurai_admin_refresh", fetchAccounts);
     return () => window.removeEventListener("phurai_admin_refresh", fetchAccounts);
   }, []);
+
+  // Reset page when switching tabs
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
 
 
   const handleCreateAccount = () => {
@@ -172,6 +181,16 @@ export default function Accounts() {
     },
   ];
 
+  const staffData = accounts.filter(a => a.role_name !== 'Customer');
+  const staffTotalCount = staffData.length;
+  const staffTotalPages = Math.ceil(staffTotalCount / limit);
+  const paginatedStaffData = staffData.slice((currentPage - 1) * limit, currentPage * limit);
+
+  const customerData = accounts.filter(a => a.role_name === 'Customer');
+  const customerTotalCount = customerData.length;
+  const customerTotalPages = Math.ceil(customerTotalCount / limit);
+  const paginatedCustomerData = customerData.slice((currentPage - 1) * limit, currentPage * limit);
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Toast */}
@@ -226,12 +245,23 @@ export default function Accounts() {
         error ? (
           <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-red-700 text-sm">{error}</div>
         ) : (
-          <AdminDataTable
-            columns={staffColumns}
-            data={accounts.filter(a => a.role_name !== 'Customer')}
-            loading={loading}
-            emptyMessage="No staff accounts found."
-          />
+          <div className="space-y-4">
+            <AdminDataTable
+              columns={staffColumns}
+              data={paginatedStaffData}
+              loading={loading}
+              emptyMessage="No staff accounts found."
+            />
+            {!loading && staffTotalCount > 0 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={staffTotalPages}
+                totalCount={staffTotalCount}
+                onPageChange={setCurrentPage}
+                limit={limit}
+              />
+            )}
+          </div>
         )
       )}
 
@@ -239,12 +269,23 @@ export default function Accounts() {
         error ? (
           <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-red-700 text-sm">{error}</div>
         ) : (
-          <AdminDataTable
-            columns={customerColumns}
-            data={accounts.filter(a => a.role_name === 'Customer')}
-            loading={loading}
-            emptyMessage="No customer accounts found."
-          />
+          <div className="space-y-4">
+            <AdminDataTable
+              columns={customerColumns}
+              data={paginatedCustomerData}
+              loading={loading}
+              emptyMessage="No customer accounts found."
+            />
+            {!loading && customerTotalCount > 0 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={customerTotalPages}
+                totalCount={customerTotalCount}
+                onPageChange={setCurrentPage}
+                limit={limit}
+              />
+            )}
+          </div>
         )
       )}
 
