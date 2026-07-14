@@ -17,10 +17,12 @@ function suppressWsProxyNoise() {
       const _write = process.stderr.write.bind(process.stderr);
       process.stderr.write = (chunk, ...args) => {
         const s = typeof chunk === 'string' ? chunk : chunk.toString();
-        // Drop lines that are purely benign disconnect noise.
+        // Drop lines that are purely benign disconnect/refused noise.
         if (
           s.includes('ws proxy error') ||
           s.includes('ws proxy socket error') ||
+          s.includes('http proxy error') ||
+          s.includes('ECONNREFUSED') ||
           (s.includes('EPIPE') && s.includes('socket.io')) ||
           (s.includes('ECONNRESET') && s.includes('socket.io'))
         ) return true;
@@ -30,7 +32,7 @@ function suppressWsProxyNoise() {
   };
 }
 
-const BENIGN = new Set(['EPIPE', 'ECONNRESET']);
+const BENIGN = new Set(['EPIPE', 'ECONNRESET', 'ECONNREFUSED']);
 
 export default defineConfig({
   root: '.',
