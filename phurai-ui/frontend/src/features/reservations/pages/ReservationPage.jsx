@@ -485,9 +485,9 @@ function ReservationPage({
           )}
         </AnimatePresence>
 
-        <div
-          className={`rd-content-col ${step === 'details' ? '' : step === 'payment' ? 'rd-content-col--wide' : 'rd-content-col--centered'}`}
-        >
+         <div
+           className={`rd-content-col ${step === 'details' ? '' : (step === 'payment' || step === 'summary') ? 'rd-content-col--wide' : 'rd-content-col--centered'}`}
+         >
           <p className="rd-eyebrow">RESERVE A TABLE</p>
           <h1 className="rd-title">CHOOSE YOUR MOMENT</h1>
           <AnimatePresence>
