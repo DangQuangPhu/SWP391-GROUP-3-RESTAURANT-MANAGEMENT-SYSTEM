@@ -68,9 +68,10 @@ export const getAccounts = async (req, res) => {
     try {
         const pool = await getRawPool();
         const result = await pool.request().query(`
-            SELECT u.user_id, u.full_name, u.email, u.phone, r.role_name, u.is_active 
+            SELECT u.user_id, u.full_name, u.email, u.phone, r.role_name, u.is_active, s.job_title 
             FROM dbo.UserAccounts u 
             JOIN dbo.Roles r ON u.role_id = r.role_id 
+            LEFT JOIN dbo.StaffProfiles s ON u.user_id = s.user_id 
             ORDER BY u.created_at DESC
         `);
 
