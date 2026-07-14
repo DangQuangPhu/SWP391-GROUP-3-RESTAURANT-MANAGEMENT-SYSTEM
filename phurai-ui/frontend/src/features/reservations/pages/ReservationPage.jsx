@@ -1,18 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
 import reservationImg from "@/assets/images/reservation/Reservation.jpg";
 import "../styles/reservation.css";
-import ReservationHero from "../components/ReservationHero.jsx";
 import ReservationSummary from "../components/ReservationSummary.jsx";
 import ReservationSuccessPanel from "../components/ReservationSuccessPanel.jsx";
 import ReservationPaymentPanel from "../components/ReservationPaymentPanel.jsx";
 import ReservationDetails from "../components/ReservationDetails.jsx";
 import {
   DINING_PURPOSES,
-  buildTimeSlots,
-  KITCHEN_VIEW_AREA_NAME,
 } from "../data/floorPlanConfig.js";
 import {
   getReservationSettings,
@@ -20,9 +17,6 @@ import {
 } from "../services/reservationApi.js";
 import { createPreSaveReservation } from "../services/reservationPreSaveApi.js";
 import { useSocket } from "@/core/socket/SocketContext.jsx";
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_RE = /^[+]?[\d\s().-]{7,}$/;
 
 function todayString() {
   const d = new Date();
@@ -57,8 +51,6 @@ const STEPS = [
 function ReservationPage({
   isAuthenticated = false,
   currentUser = null,
-  onNavigate,
-  onRequireAuth,
 }) {
   const navigate = useNavigate();
 
@@ -87,7 +79,7 @@ function ReservationPage({
     try {
       const stored = localStorage.getItem("phurai_reservation_form");
       return stored ? JSON.parse(stored) : INITIAL_FORM;
-    } catch (e) {
+    } catch {
       return INITIAL_FORM;
     }
   });
@@ -126,8 +118,8 @@ function ReservationPage({
         } else {
           localStorage.removeItem("phurai_pending_reservation");
         }
-      } catch (e) {
-        console.error("Failed to parse stored reservation", e);
+      } catch {
+        // Ignored
       }
     }
     return null;
@@ -137,7 +129,7 @@ function ReservationPage({
     try {
       const stored = localStorage.getItem("phurai_reservation_preorder_items");
       return stored ? JSON.parse(stored) : {};
-    } catch (e) {
+    } catch {
       return {};
     }
   });
@@ -150,7 +142,7 @@ function ReservationPage({
     try {
       const stored = localStorage.getItem("phurai_applied_promo_discount");
       return stored ? JSON.parse(stored) : null;
-    } catch (e) {
+    } catch {
       return null;
     }
   });
@@ -195,8 +187,6 @@ function ReservationPage({
 
   // --- guided step machine ---
   const [step, setStep] = useState(urlStep || "details"); // details | summary | payment | success
-  const [prevStep, setPrevStep] = useState(urlStep || "details");
-  const [detailsReviewing, setDetailsReviewing] = useState(false);
   const [isPaymentSuccess, setIsPaymentSuccess] = useState(false);
   // Controls the 3-phase Apple-style exit sequence (details → summary)
   const [isExitingDetails, setIsExitingDetails] = useState(false);
@@ -205,7 +195,7 @@ function ReservationPage({
 
   useEffect(() => {
     if (urlStep && urlStep !== step) {
-      setPrevStep(step);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStep(urlStep);
     } else if (!urlStep && step !== "details") {
       navigate('/reservations/details', { replace: true });
@@ -227,6 +217,7 @@ function ReservationPage({
             navigate('/reservations/details', { replace: true });
           } else {
             // Restore the reservation state so the UI renders
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setSuccessReservation(parsed);
           }
         } catch {
@@ -235,9 +226,6 @@ function ReservationPage({
       }
     }
   }, [step, successReservation, navigate]);
-
-  const bookingRef = useRef(null);
-  const tablesRef = useRef(null);
 
   const setField = useCallback((name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -283,13 +271,11 @@ function ReservationPage({
 
   const getStepIndex = useCallback((s) => STEPS.findIndex(x => x.id === s), []);
   const activeStepIndex = getStepIndex(step);
-  const direction = activeStepIndex > getStepIndex(prevStep) ? 1 : -1;
 
   const transitionTo = useCallback((nextStep) => {
-    setPrevStep(step);
     setStep(nextStep);
     navigate(`/reservations/${nextStep}`);
-  }, [step, navigate]);
+  }, [navigate]);
 
   // Orchestrated 3-phase Apple transition: details → summary
   // Phase 1: fade out form card + bg image (350ms)
@@ -314,7 +300,6 @@ function ReservationPage({
 
     // Phase 2: after fade-out completes, change step so layout animates header to center
     setTimeout(() => {
-      setPrevStep("details");
       setStep("summary");
       navigate("/reservations/summary");
       // Reset exit flag after step has changed
@@ -327,6 +312,7 @@ function ReservationPage({
   /* Fetch availability whenever the key selection changes (debounced). */
   useEffect(() => {
     if (!form.date || !form.time) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTables([]);
       setSelectedTableId(null);
       return undefined;
@@ -349,7 +335,7 @@ function ReservationPage({
           setTables(nextTables);
           setSelectedTableId((prev) => {
             if (!prev) return null;
-            const t = nextTables.find((x) => x.table_id === prev);
+            const t = nextTables.find((x) => String(x.table_id) === String(prev));
             return (t && t.is_bookable && !t.is_too_small) ? prev : null;
           });
         })
@@ -369,7 +355,7 @@ function ReservationPage({
 
   const selectedTables = useMemo(() => {
     if (!selectedTableId) return [];
-    return tables.filter((t) => t.table_id === selectedTableId || t.merged_into_table_id === selectedTableId);
+    return tables.filter((t) => String(t.table_id) === String(selectedTableId) || String(t.merged_into_table_id) === String(selectedTableId));
   }, [tables, selectedTableId]);
 
   const isKitchenView = useMemo(() => {
