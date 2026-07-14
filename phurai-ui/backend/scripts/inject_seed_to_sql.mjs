@@ -716,18 +716,16 @@ COMMIT TRANSACTION;
 GO
 `;
 
-const generatedRealisticData = generateAllData();
-
 // We will append to System_Restaurant.sql, BUT we must make sure we don't duplicate if it was already appended!
 let currentContent = fs.readFileSync(sqlFile, 'utf-8');
-const marker = '-- ==========================================\n-- REALISTIC 2-YEAR HISTORICAL DATA SEED\n-- ==========================================';
+const marker = '-- ==========================================';
 
 if (currentContent.includes(marker)) {
     console.log("Already seeded! Removing old seed and regenerating...");
     currentContent = currentContent.split(marker)[0];
 }
 
-const finalOutput = currentContent.trim() + '\n\n' + generatedRealisticData + '\n' + phuDataSql;
+const finalOutput = currentContent.trim() + '\n\n' + phuDataSql;
 
 fs.writeFileSync(sqlFile, finalOutput);
-console.log("✅ Successfully injected ALL 2-YEAR SEED DATA natively into System_Restaurant.sql!");
+console.log("✅ Successfully injected PHU 6-MONTH TEST DATA natively into System_Restaurant.sql!");
