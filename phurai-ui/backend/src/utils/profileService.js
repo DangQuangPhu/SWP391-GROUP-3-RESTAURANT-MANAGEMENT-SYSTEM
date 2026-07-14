@@ -83,6 +83,10 @@ export function formatProfileResponse(row) {
     email: row.email || "",
     phone: row.phone || "",
     avatar_url: row.avatar_url || null,
+    // Expose google_avatar_url + avatar_source so the frontend avatarUtils
+    // can fall back to the Google profile photo when no custom avatar is set.
+    google_avatar_url: row.google_avatar_url || null,
+    avatar_source: row.avatar_source || null,
     username: row.username || getEmailPrefix(row.email),
     date_of_birth: formatDateOfBirth(row.date_of_birth),
     gender: row.gender || "",
@@ -203,15 +207,15 @@ export async function updateUserProfile(userId, payload) {
 
   await pool.query(
     `UPDATE dbo.UserAccounts
-     SET full_name = ?,
-         phone = ?,
-         avatar_url = ?,
+     SET full_name = COALESCE(NULLIF(?, ''), full_name),
+         phone = COALESCE(NULLIF(?, ''), phone),
+         avatar_url = COALESCE(NULLIF(?, ''), avatar_url),
          updated_at = SYSDATETIME()
      WHERE user_id = ?`,
     [
-      full_name ?? existing.full_name,
-      phone ?? existing.phone,
-      avatar_url !== undefined ? avatar_url : existing.avatar_url,
+      full_name,
+      phone,
+      avatar_url,
       userId,
     ]
   );

@@ -96,6 +96,7 @@ export default function ReservationDetails({
   const [isCustomEndTime, setIsCustomEndTime] = useState(false);
   const [showTableBoard, setShowTableBoard] = useState(false);
   const [errors, setErrors] = useState({});
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   useEffect(() => {
     if (showTableBoard) {
@@ -399,19 +400,22 @@ export default function ReservationDetails({
     if (Object.keys(newErrors).length === 0 && !isCase3Invalid) {
       console.log("Validation passed. Calling onContinue with form payload...");
       isTransitioningRef.current = true;
+      setIsTransitioning(true);
+      const payload = {
+        ...form,
+        selectedTable: selectedTableId
+      };
+      // Fire-and-forget — transitionToSummary is synchronous (uses setTimeout internally),
+      // so we do NOT await it. The component will unmount during the 350ms animation;
+      // never reset isTransitioning so the button stays disabled until then.
       try {
-        const payload = {
-          ...form,
-          selectedTable: selectedTableId
-        };
-
         if (onContinue) {
-          await onContinue(payload);
+          onContinue(payload);
         }
       } catch (err) {
         console.error("Transition failed:", err);
-      } finally {
         isTransitioningRef.current = false;
+        setIsTransitioning(false);
       }
     } else {
       console.log("Validation failed. Errors found:", Object.keys(newErrors));
@@ -695,8 +699,10 @@ export default function ReservationDetails({
         type="button"
         className="rd-btn-primary"
         onClick={handleConfirmSummary}
+        disabled={isTransitioning}
+        aria-busy={isTransitioning}
       >
-        Continue to summary
+        {isTransitioning ? "Loading…" : "Continue to summary"}
       </button>
     </div>
   );

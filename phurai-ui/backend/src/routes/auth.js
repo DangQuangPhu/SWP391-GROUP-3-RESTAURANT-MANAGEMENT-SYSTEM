@@ -533,9 +533,9 @@ router.post("/auth/google", async (req, res) => {
 
     await pool.query(
       `UPDATE dbo.UserAccounts
-       SET full_name = COALESCE(?, full_name),
-           avatar_url = COALESCE(?, avatar_url),
-           phone = COALESCE(?, phone),
+       SET full_name = COALESCE(NULLIF(?, ''), full_name),
+           avatar_url = COALESCE(NULLIF(?, ''), avatar_url),
+           phone = COALESCE(NULLIF(?, ''), phone),
            last_login_at = SYSDATETIME(),
            updated_at = SYSDATETIME()
        WHERE user_id = ?`,
