@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
@@ -192,8 +192,14 @@ function ReservationPage({
   const [isExitingDetails, setIsExitingDetails] = useState(false);
   // Controls the summary background overlay fade-in (Phase 3)
   const [showSummaryBg, setShowSummaryBg] = useState(step !== 'details' && step !== 'payment' && step !== 'success');
+  // Guard flag — prevents the url-sync useEffect from interfering while the
+  // details→summary transition animation is in flight (350ms fade + setTimeout).
+  const isTransitioningToSummaryRef = useRef(false);
 
   useEffect(() => {
+    // Skip URL sync while the animated transition is in progress — the
+    // setTimeout inside transitionToSummary will call setStep/navigate itself.
+    if (isTransitioningToSummaryRef.current) return;
     if (urlStep && urlStep !== step) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setStep(urlStep);
@@ -282,18 +288,25 @@ function ReservationPage({
   // Phase 2: layout animation moves header to center (600ms)
   // Phase 3: summary fades in automatically via pageVariants
   const transitionToSummary = useCallback((localForm) => {
-    // Commit form data immediately
-    setField("date", localForm.date);
-    setField("time", localForm.startTime);
-    setField("endTime", localForm.endTime);
-    setField("guestCount", localForm.guests);
-    setField("holdDurationMinutes", parseInt(localForm.duration) || 30);
-    setField("diningPurpose", localForm.diningPurpose);
-    setField("diningPurposeNote", localForm.diningPurposeNote);
-    setField("selectedArea", localForm.diningArea);
-    setField("fullName", localForm.fullName);
-    setField("email", localForm.email);
-    setField("phone", localForm.phone);
+    // Guard: prevent URL-sync useEffect from racing with our timed navigation.
+    isTransitioningToSummaryRef.current = true;
+
+    // Batch all form field updates into a single setState to avoid cascading
+    // re-renders that could mis-fire the URL-sync effect between updates.
+    setForm((prev) => ({
+      ...prev,
+      date: localForm.date,
+      time: localForm.startTime,
+      endTime: localForm.endTime,
+      guestCount: localForm.guests,
+      holdDurationMinutes: parseInt(localForm.duration) || 30,
+      diningPurpose: localForm.diningPurpose,
+      diningPurposeNote: localForm.diningPurposeNote,
+      selectedArea: localForm.diningArea,
+      fullName: localForm.fullName,
+      email: localForm.email,
+      phone: localForm.phone,
+    }));
 
     // Phase 1: trigger fade-out of form card + bg image simultaneously
     setIsExitingDetails(true);
@@ -302,12 +315,14 @@ function ReservationPage({
     setTimeout(() => {
       setStep("summary");
       navigate("/reservations/summary");
+      // Release the guard after navigation has committed
+      isTransitioningToSummaryRef.current = false;
       // Reset exit flag after step has changed
       setTimeout(() => setIsExitingDetails(false), 100);
       // Phase 3: after layout animation completes (~600ms), fade in summary bg
       setTimeout(() => setShowSummaryBg(true), 620);
     }, 350);
-  }, [setField, navigate]);
+  }, [navigate]);
 
   /* Fetch availability whenever the key selection changes (debounced). */
   useEffect(() => {
