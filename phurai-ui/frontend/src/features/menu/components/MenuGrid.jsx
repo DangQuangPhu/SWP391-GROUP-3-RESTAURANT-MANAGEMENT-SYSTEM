@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { menuImages } from '../data/menuAssets.js';
 import { formatVND } from '@/core/utils/formatCurrency';
 import { flyToCart } from '../utils/flyToCart.js';
+import { BookmarkButton } from './BookmarkButton.jsx';
 
 const FALLBACK_IMAGE = menuImages.hero;
 
@@ -12,6 +13,9 @@ function MenuGrid({
   canAddToCart = false,
   onAddToCart,
   cartFabRef,
+  isCustomer = false,
+  onBookmark,
+  isFavorite,
 }) {
   if (layoutVariant === 'set-cards') {
     return (
@@ -25,6 +29,9 @@ function MenuGrid({
             canAddToCart={canAddToCart}
             onAddToCart={onAddToCart}
             cartFabRef={cartFabRef}
+            isCustomer={isCustomer}
+            onBookmark={onBookmark}
+            isFavorite={isFavorite}
           />
         ))}
       </div>
@@ -42,6 +49,9 @@ function MenuGrid({
           canAddToCart={canAddToCart}
           onAddToCart={onAddToCart}
           cartFabRef={cartFabRef}
+          isCustomer={isCustomer}
+          onBookmark={onBookmark}
+          isFavorite={isFavorite}
         />
       ))}
     </div>
@@ -90,6 +100,9 @@ function MenuCard({
   canAddToCart,
   onAddToCart,
   cartFabRef,
+  isCustomer,
+  onBookmark,
+  isFavorite,
 }) {
   const [imageSrc, setImageSrc] = useState(dish.image || FALLBACK_IMAGE);
   const { imageWrapRef, handleAdd } = useAddToCartHandler({
@@ -99,6 +112,7 @@ function MenuCard({
     onAddToCart,
     cartFabRef,
   });
+  const saved = isFavorite ? isFavorite(dish.id ?? dish.dish_id) : false;
 
   const openPreview = () => {
     onPreviewImage?.({ ...dish, image: imageSrc });
@@ -136,6 +150,12 @@ function MenuCard({
             />
           </div>
         </button>
+        {isCustomer && dish.is_available !== false && dish.is_available !== 0 ? (
+          <BookmarkButton
+            isSaved={saved}
+            onToggle={() => onBookmark?.(dish)}
+          />
+        ) : null}
         {canAddToCart && dish.is_available !== false && dish.is_available !== 0 ? (
           <MenuAddButton
             onClick={handleAdd}
@@ -190,6 +210,9 @@ function SetMenuCard({
   canAddToCart,
   onAddToCart,
   cartFabRef,
+  isCustomer,
+  onBookmark,
+  isFavorite,
 }) {
   const [imageSrc, setImageSrc] = useState(dish.image || FALLBACK_IMAGE);
   const { imageWrapRef, handleAdd } = useAddToCartHandler({
@@ -199,6 +222,7 @@ function SetMenuCard({
     onAddToCart,
     cartFabRef,
   });
+  const saved = isFavorite ? isFavorite(dish.id ?? dish.dish_id) : false;
 
   const setCard = dish.setCard ?? {};
   const titleLines = setCard.titleLines ?? [dish.name];
@@ -243,6 +267,12 @@ function SetMenuCard({
           <MenuAddButton
             onClick={handleAdd}
             label={`Add ${dish.name} to cart`}
+          />
+        ) : null}
+        {isCustomer && dish.is_available !== false && dish.is_available !== 0 ? (
+          <BookmarkButton
+            isSaved={saved}
+            onToggle={() => onBookmark?.(dish)}
           />
         ) : null}
       </div>

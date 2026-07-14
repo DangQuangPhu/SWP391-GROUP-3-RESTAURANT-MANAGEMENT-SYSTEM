@@ -44,6 +44,19 @@ function QrTableIcon() {
   );
 }
 
+function FavoritesIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path
+        d="M5 4.5C5 3.67 5.67 3 6.5 3h7C14.33 3 15 3.67 15 4.5v12.25l-4.5-2.5L6 16.75V4.5z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function ProfileDropdown({
   isOpen,
   onClose,
@@ -51,6 +64,7 @@ function ProfileDropdown({
   status,
   onMyProfile,
   onMyReservations,
+  onMyFavorites,
   onViewQrTable,
   onSignOut,
   onOpenAuth,
@@ -170,8 +184,20 @@ function ProfileDropdown({
               <span className="account-dropdown__item-text">My Reservations</span>
             </button>
           </li>
+          <li style={{ "--anim-delay": "3" }}>
+            <button
+              type="button"
+              className="account-dropdown__item"
+              onClick={closeAnd(onMyFavorites)}
+            >
+              <span className="account-dropdown__item-icon">
+                <FavoritesIcon />
+              </span>
+              <span className="account-dropdown__item-text">My Favorites</span>
+            </button>
+          </li>
           {onViewQrTable ? (
-            <li style={{ "--anim-delay": "3" }}>
+            <li style={{ "--anim-delay": "4" }}>
               <button
                 type="button"
                 className="account-dropdown__item"
@@ -184,7 +210,7 @@ function ProfileDropdown({
               </button>
             </li>
           ) : null}
-          <li style={{ "--anim-delay": onViewQrTable ? "4" : "3" }}>
+          <li style={{ "--anim-delay": onViewQrTable ? "5" : "4" }}>
             <button
               type="button"
               className="profile-dropdown__signout account-dropdown__item"

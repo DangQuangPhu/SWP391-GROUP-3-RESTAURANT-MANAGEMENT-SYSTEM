@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { MonitorSmartphone, CreditCard, LayoutDashboard, Gem, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import CustomerDashboard from "../components/CustomerDashboard";
 import LoyaltyPointsPage from "@/features/loyalty/pages/LoyaltyPointsPage";
+import { useFavoritesStore } from "@/features/menu/context/MenuFavoritesContext.jsx";
 
 import { getProfilePayments } from "../services/profileApi.js";
 import {
@@ -161,15 +162,28 @@ const PasswordIcon = () => (
   </svg>
 );
 
+const BookmarkSidebarIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      d="M5 4.5C5 3.67 5.67 3 6.5 3h11C18.33 3 19 3.67 19 4.5v15.75l-7-3.89L5 20.25V4.5z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 const DASHBOARD_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "loyalty", label: "Loyalty Points", icon: Gem },
+  { key: "loyalty", label: "Loyalty Points", icon: Gem, customerOnly: true },
+  { key: "favorites", label: "My Favorites", icon: BookmarkSidebarIcon, customerOnly: true },
   { key: "profile", label: "Profile", icon: ProfileIcon },
   { key: "appearance", label: "Appearance", icon: AppearanceIcon },
   { key: "accessibility", label: "Accessibility", icon: AccessibilityIcon },
   { key: "password", label: "Password & Authentication", icon: PasswordIcon },
   { key: "sessions", label: "Sessions", icon: MonitorSmartphone },
-  { key: "payments", label: "Payment History", icon: CreditCard },
+  { key: "payments", label: "Payment History", icon: CreditCard, customerOnly: true },
 ];
 
 const SIDEBAR_ITEMS = DASHBOARD_ITEMS;
@@ -620,6 +634,97 @@ function PaymentHistoryPanel({ profile }) {
   );
 }
 
+function FavoritesProfilePanel({ currentUser }) {
+  const { favorites, removeFavorite } = useFavoritesStore(currentUser);
+  const { formatVND } = { formatVND: (v) => {
+    if (!v && v !== 0) return '';
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v);
+  }};
+
+  const FALLBACK = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=80&q=60';
+
+  if (favorites.length === 0) {
+    return (
+      <div style={{ padding: '48px 24px', textAlign: 'center', color: '#9b8a7a' }}>
+        <svg viewBox="0 0 24 24" fill="none" style={{ width: 48, height: 48, margin: '0 auto 16px', opacity: 0.3 }}>
+          <path d="M5 4.5C5 3.67 5.67 3 6.5 3h11C18.33 3 19 3.67 19 4.5v15.75l-7-3.89L5 20.25V4.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        </svg>
+        <p style={{ fontSize: 16, fontWeight: 600, color: '#4d463d', marginBottom: 8 }}>No favorites yet</p>
+        <p style={{ fontSize: 14 }}>Browse the menu and tap the bookmark icon to save your favorite dishes here.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="profile-dashboard__section-header" style={{ marginBottom: 20 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#342716', margin: 0 }}>My Favorites</h2>
+        <p style={{ fontSize: 13, color: '#9b8a7a', margin: '4px 0 0' }}>{favorites.length} saved {favorites.length === 1 ? 'dish' : 'dishes'}</p>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
+        {favorites.map((dish) => (
+          <div
+            key={dish.id ?? dish.dish_id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+              padding: '12px 14px',
+              background: '#faf9f6',
+              borderRadius: 14,
+              border: '1px solid #e8e2da',
+              position: 'relative',
+            }}
+          >
+            <img
+              src={dish.image || FALLBACK}
+              alt={dish.name}
+              onError={(e) => { e.currentTarget.src = FALLBACK; }}
+              style={{
+                width: 60,
+                height: 60,
+                objectFit: 'cover',
+                borderRadius: 10,
+                flexShrink: 0,
+              }}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontWeight: 700, fontSize: 14, color: '#342716', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {dish.name}
+              </p>
+              <p style={{ fontSize: 13, color: '#9b845e', fontWeight: 600, margin: '3px 0 0' }}>
+                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(dish.price)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => removeFavorite(dish.id ?? dish.dish_id)}
+              aria-label={`Remove ${dish.name} from favorites`}
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: '50%',
+                border: 'none',
+                background: '#fee2e2',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#dc2626',
+                flexShrink: 0,
+              }}
+            >
+              <svg viewBox="0 0 16 16" fill="none" style={{ width: 14, height: 14 }}>
+                <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M10 7v5M6 7v5M3 4l.8 8a1 1 0 0 0 1 .9h6.4a1 1 0 0 0 1-.9L13 4H3z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ProfilePage({
   profile,
   profileLoading = false,
@@ -659,14 +764,15 @@ function ProfilePage({
   }
 
   useEffect(() => {
-    if (authUser && !isCustomer && (activePanel === "loyalty" || activePanel === "payments")) {
+    const customerOnlyPanels = ["loyalty", "payments", "favorites"];
+    if (authUser && !isCustomer && customerOnlyPanels.includes(activePanel)) {
       navigate("/profile", { replace: true });
     }
   }, [authUser, isCustomer, activePanel, navigate]);
 
   const sidebarItems = useMemo(() => {
     return DASHBOARD_ITEMS.filter((item) => {
-      if (item.key === "loyalty" || item.key === "payments") {
+      if (item.customerOnly) {
         return isCustomer;
       }
       return true;
@@ -920,6 +1026,10 @@ function ProfilePage({
         />
       );
     }
+    if (activePanel === "favorites") {
+      return <FavoritesProfilePanel currentUser={authUser} />;
+    }
+
     if (activePanel === "sessions") {
       return <SessionsPanel />;
     }

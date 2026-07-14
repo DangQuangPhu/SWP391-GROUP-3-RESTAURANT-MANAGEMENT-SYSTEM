@@ -8,7 +8,9 @@ import MenuSidebar from '../components/MenuSidebar.jsx';
 import MenuToolbar from '../components/MenuToolbar.jsx';
 import MenuCartDrawer from '../components/MenuCartDrawer.jsx';
 import MenuCartFab from '../components/MenuCartFab.jsx';
+import { FavoritesSidebar } from '../components/FavoritesSidebar.jsx';
 import { MenuCartProvider, useMenuCart } from '../context/MenuCartContext.jsx';
+import { MenuFavoritesProvider, useMenuFavorites } from '../context/MenuFavoritesContext.jsx';
 import { useTableSession } from '@/features/table-session';
 import '@/features/table-session/styles/table-session.css';
 import { useSocket } from '@/core/socket/SocketContext.jsx';
@@ -92,7 +94,15 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
   }, [socket, fetchMenu]);
 
   const { items, addItem, isDrawerOpen, clearCart, totalQuantity, subtotal, openDrawer } = useMenuCart();
-  const canAddToCart = isMenuCustomer(isAuthenticated, currentUser) || hasActiveSession;
+  const { toggleFavorite, isFavorite } = useMenuFavorites();
+  // + button only shows when customer scanned a table QR (has active session)
+  const canAddToCart = hasActiveSession;
+  // Bookmark button shows for any logged-in customer (no QR required)
+  const isCustomer = isMenuCustomer(isAuthenticated, currentUser);
+
+  const handleBookmark = useCallback((dish) => {
+    toggleFavorite(dish);
+  }, [toggleFavorite]);
 
   const handleSendToKitchen = async () => {
     if (!tableSession?.session_id || items.length === 0) return;
@@ -330,6 +340,9 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
                     canAddToCart={canAddToCart}
                     onAddToCart={handleAddToCart}
                     cartFabRef={cartFabRef}
+                    isCustomer={isCustomer}
+                    onBookmark={handleBookmark}
+                    isFavorite={isFavorite}
                   />
                 </div>
               )}
@@ -344,6 +357,7 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
         </div>
       ) : null}
 
+      <FavoritesSidebar />
       <MenuImagePreview dish={previewDish} onClose={() => setPreviewDish(null)} />
     </div>
   );
@@ -351,9 +365,11 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
 
 function Menu({ isAuthenticated = false, currentUser = null }) {
   return (
-    <MenuCartProvider>
-      <MenuPageContent isAuthenticated={isAuthenticated} currentUser={currentUser} />
-    </MenuCartProvider>
+    <MenuFavoritesProvider currentUser={currentUser}>
+      <MenuCartProvider>
+        <MenuPageContent isAuthenticated={isAuthenticated} currentUser={currentUser} />
+      </MenuCartProvider>
+    </MenuFavoritesProvider>
   );
 }
 

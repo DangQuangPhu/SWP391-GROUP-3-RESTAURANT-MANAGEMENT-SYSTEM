@@ -172,6 +172,10 @@ function Navbar({
     setProfileOpen(false);
     onNavigate?.("myReservations");
   };
+  const handleMyFavorites = () => {
+    setProfileOpen(false);
+    onNavigate?.("favorites");
+  };
   const handleSettings = () => {
     setProfileOpen(false);
     onNavigate?.("settings");
@@ -269,6 +273,7 @@ function Navbar({
               onClearStatus={onClearStatus}
               onMyProfile={handleMyProfile}
               onMyReservations={handleMyReservations}
+              onMyFavorites={handleMyFavorites}
               onViewQrTable={showQrTableAction ? handleViewQrTable : undefined}
               onSettings={handleSettings}
               onChangePassword={handleChangePassword}

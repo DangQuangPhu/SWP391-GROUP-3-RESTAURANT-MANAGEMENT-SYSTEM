@@ -70,6 +70,7 @@ const PAGE_PATHS = {
   register: "/register",
   verify: "/verify",
   profile: "/profile",
+  favorites: "/profile/favorites",
   settings: "/settings/profile",
   manager: "/manager/dashboard",
   staff: "/staff",
