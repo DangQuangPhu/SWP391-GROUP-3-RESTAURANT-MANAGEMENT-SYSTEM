@@ -169,45 +169,45 @@ function ReservationSummary({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-          gap: "3rem",
-          alignItems: "start",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 1px 1fr",
+          gap: isMobile ? "1.5rem" : "3rem",
+          alignItems: "stretch",
         }}
       >
-        {/* LEFT COLUMN: Summary + Payment Details */}
+        {/* LEFT COLUMN: Summary + Notes */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           <div>
-            <h3 style={{ fontSize: "1.15rem", fontWeight: 600, color: "#111", marginBottom: "1rem" }}>Booking Details</h3>
-            <div className="rzv-summary__grid" style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "12px 0" }}>
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 600, color: "#111", marginBottom: "0.5rem" }}>Booking Details</h3>
+            <div className="rzv-summary__grid" style={{ display: "flex", flexDirection: "column", gap: "0px" }}>
+              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "7px 0" }}>
                 <span className="rzv-summary__label">Date</span>
                 <span className="rzv-summary__value" style={{ fontWeight: 500 }}>{formatDate(form.date)}</span>
               </div>
-              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "12px 0" }}>
+              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "7px 0" }}>
                 <span className="rzv-summary__label">Time</span>
                 <span className="rzv-summary__value" style={{ fontWeight: 500 }}>{formatTime(form.time)}</span>
               </div>
-              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "12px 0" }}>
+              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "7px 0" }}>
                 <span className="rzv-summary__label">Guests</span>
                 <span className="rzv-summary__value" style={{ fontWeight: 500 }}>{form.guestCount}</span>
               </div>
-              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "12px 0" }}>
+              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "7px 0" }}>
                 <span className="rzv-summary__label">Dining Purpose</span>
                 <span className="rzv-summary__value" style={{ fontWeight: 500 }}>{form.diningPurpose || "—"}</span>
               </div>
-              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "12px 0" }}>
+              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "7px 0" }}>
                 <span className="rzv-summary__label">Duration</span>
                 <span className="rzv-summary__value" style={{ fontWeight: 500 }}>{form.holdDurationMinutes} minutes</span>
               </div>
-              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "12px 0" }}>
+              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "7px 0" }}>
                 <span className="rzv-summary__label">Hold expires at</span>
                 <span className="rzv-summary__value" style={{ fontWeight: 500 }}>{holdExpiresAt}</span>
               </div>
-              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "12px 0" }}>
+              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "7px 0" }}>
                 <span className="rzv-summary__label">Area</span>
                 <span className="rzv-summary__value" style={{ fontWeight: 500 }}>{areaLabels}</span>
               </div>
-              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "12px 0" }}>
+              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "7px 0" }}>
                 <span className="rzv-summary__label">Table</span>
                 <span className="rzv-summary__value" style={{ fontWeight: 500 }}>
                   {tableLabels}
@@ -217,73 +217,33 @@ function ReservationSummary({
             </div>
           </div>
 
-          <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: "1.5rem" }}>
-            <h3 style={{ fontSize: "1.15rem", fontWeight: 600, color: "#111", marginBottom: "1rem" }}>Payment Details</h3>
-            
-            <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "8px 0" }}>
-              <span className="rzv-summary__label" style={{ color: "#666" }}>Base Table Deposit</span>
-              <span className="rzv-summary__value" style={{ fontWeight: 500 }}>{formatVND(20000)}</span>
-            </div>
-
-            {preorderTotal > 0 && (
-              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "8px 0" }}>
-                <span className="rzv-summary__label" style={{ color: "#666" }}>Pre-order Food Total</span>
-                <span className="rzv-summary__value" style={{ fontWeight: 500 }}>{formatVND(preorderTotal)}</span>
-              </div>
-            )}
-
-            {promoDiscount && (
-              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "8px 0", color: "#16a34a" }}>
-                <span className="rzv-summary__label" style={{ color: "#16a34a" }}>Voucher Discount ({promoCode})</span>
-                <span className="rzv-summary__value" style={{ fontWeight: 600 }}>-{formatVND(promoDiscount.discount_amount)}</span>
-              </div>
-            )}
-
-            {(() => {
-              const discountAmt = promoDiscount ? Number(promoDiscount.discount_amount) : 0;
-              const foodTotal = Math.max(0, preorderTotal - discountAmt);
-              const foodDeposit = Math.round(foodTotal * 0.3);
-              const tableDeposit = 20000;
-              const depositRequired = tableDeposit + foodDeposit;
-              const remainingBalance = Math.round(foodTotal * 0.7);
-              const netTotal = depositRequired + remainingBalance;
-
-              return (
-                <>
-                  <div className="rzv-summary__row" style={{ borderBottom: "1px solid #e5e5e5", padding: "12px 0", fontWeight: 600, fontSize: "1.1rem" }}>
-                    <span className="rzv-summary__label" style={{ color: "#111" }}>Net Total</span>
-                    <span className="rzv-summary__value" style={{ color: "#111" }}>{formatVND(netTotal)}</span>
-                  </div>
-
-                  <div style={{ marginTop: "1rem", background: "#f8fafc", padding: "1.25rem", borderRadius: "0.75rem", border: "1px solid #e2e8f0" }}>
-                    <div className="rzv-summary__row" style={{ padding: "4px 0", fontWeight: 700, color: "var(--rzv-gold)" }}>
-                      <span className="rzv-summary__label" style={{ fontSize: "1rem" }}>Required Deposit (30%)</span>
-                      <span className="rzv-summary__value" style={{ fontSize: "1.2rem" }}>{formatVND(depositRequired)}</span>
-                    </div>
-                    <div className="rzv-summary__row" style={{ padding: "4px 0", color: "#64748b", fontSize: "0.95rem" }}>
-                      <span className="rzv-summary__label">Remaining Balance (70%)</span>
-                      <span className="rzv-summary__value" style={{ fontWeight: 600 }}>{formatVND(remainingBalance)}</span>
-                    </div>
-                    <p style={{ margin: "10px 0 0 0", fontSize: "11px", color: "#64748b", fontStyle: "italic", lineHeight: "1.4" }}>
-                      * The required deposit secures your table and pre-ordered items. The remaining balance is paid during checkout.
-                    </p>
-                  </div>
-                </>
-              );
-            })()}
+          {/* Notes Section */}
+          <div className="rd-field" style={{ margin: 0 }}>
+            <label htmlFor="rzv-notes" style={{ fontWeight: 600, fontSize: "0.9rem", color: "#666", marginBottom: "6px", display: "block" }}>SPECIAL REQUESTS / NOTES</label>
+            <textarea
+              id="rzv-notes"
+              placeholder="Any allergies, special occasions, or other requests?"
+              rows={3}
+              value={form.notes || ""}
+              onChange={(e) => setField("notes", e.target.value)}
+              style={{ width: "100%", padding: "0.85rem", borderRadius: "0.75rem", border: "1px solid #e5e5e5", background: "#f9f9f9", fontSize: "0.95rem", color: "#333", resize: "none" }}
+            />
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Pre-order + Promo + Special Requests + Warnings + Action Buttons */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+        {/* DIVIDER LINE */}
+        {!isMobile && <div style={{ width: "1px", backgroundColor: "#e2e8f0" }} />}
+
+        {/* RIGHT COLUMN: Pre-order + Promo + Payment Details + Warnings + Action Buttons */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
           <div>
-            <h3 style={{ fontSize: "1.15rem", fontWeight: 600, color: "#111", marginBottom: "1rem" }}>Add Pre-orders & Promotions</h3>
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 600, color: "#111", marginBottom: "0.75rem" }}>Pre-orders & Promotions</h3>
             
             {/* Pre-order Section */}
-            <div style={{ marginBottom: "1rem" }}>
+            <div style={{ marginBottom: "0.75rem" }}>
               <button
                 type="button"
-                style={{ width: "100%", padding: "14px", background: "#111", color: "#fff", border: "none", borderRadius: "0.75rem", cursor: "pointer", fontSize: "14px", fontWeight: 600, letterSpacing: "0.5px", textTransform: "uppercase", transition: "background 0.2s" }}
+                style={{ width: "100%", padding: "12px", background: "#111", color: "#fff", border: "none", borderRadius: "0.75rem", cursor: "pointer", fontSize: "13px", fontWeight: 600, letterSpacing: "0.5px", textTransform: "uppercase", transition: "background 0.2s" }}
                 onClick={() => setShowPreorder(true)}
                 onMouseOver={(e) => e.target.style.background = "#333"}
                 onMouseOut={(e) => e.target.style.background = "#111"}
@@ -293,11 +253,11 @@ function ReservationSummary({
               
               {/* Display selected preorder items */}
               {Object.keys(preorderItems || {}).length > 0 && (
-                <div style={{ marginTop: "12px", background: "#f9f9f9", padding: "12px 16px", borderRadius: "8px", border: "1px solid #eee" }}>
-                  <h4 style={{ margin: "0 0 8px 0", fontSize: "0.9rem", color: "#666", textTransform: "uppercase", letterSpacing: "0.5px" }}>Selected Items</h4>
+                <div style={{ marginTop: "10px", background: "#f9f9f9", padding: "10px 14px", borderRadius: "8px", border: "1px solid #eee" }}>
+                  <h4 style={{ margin: "0 0 6px 0", fontSize: "0.85rem", color: "#666", textTransform: "uppercase", letterSpacing: "0.5px" }}>Selected Items</h4>
                   <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                     {Object.values(preorderItems).map((item) => (
-                      <li key={item.dish_id} style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "0.95rem" }}>
+                      <li key={item.dish_id} style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px", fontSize: "0.9rem" }}>
                         <span>{item.name} <strong style={{ color: "var(--rzv-gold)" }}>x{item.quantity}</strong></span>
                         <span style={{ color: "#666" }}>{formatVND(item.price * item.quantity)}</span>
                       </li>
@@ -319,9 +279,9 @@ function ReservationSummary({
             </div>
 
             {/* Promo Section */}
-            <div style={{ marginBottom: "1rem" }}>
+            <div style={{ marginBottom: "0.5rem" }}>
               {preorderTotal === 0 ? (
-                <div style={{ background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "0.75rem", padding: "1.25rem", textAlign: "center", color: "#64748b", fontSize: "0.95rem" }}>
+                <div style={{ background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "0.75rem", padding: "1rem", textAlign: "center", color: "#64748b", fontSize: "0.9rem" }}>
                   Pre-order food items to unlock voucher promotions.
                 </div>
               ) : (
@@ -329,28 +289,28 @@ function ReservationSummary({
                   <button
                     type="button"
                     onClick={() => setShowPromoModal(true)}
-                    style={{ width: "100%", padding: "14px 16px", background: "#f8fafc", border: "none", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontSize: "0.95rem", fontWeight: 600, color: "#334155" }}
+                    style={{ width: "100%", padding: "12px 14px", background: "#f8fafc", border: "none", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontSize: "0.9rem", fontWeight: 600, color: "#334155" }}
                   >
                     <span>{promoCode ? `Applied: ${promoCode}` : "APPLY VOUCHER / PROMO CODE"}</span>
                     <span>→</span>
                   </button>
 
                   {promoError && (
-                    <div style={{ padding: "10px 16px", background: "#fef2f2", borderTop: "1px solid #fca5a5", color: "#b91c1c", fontSize: "0.85rem" }}>
+                    <div style={{ padding: "8px 14px", background: "#fef2f2", borderTop: "1px solid #fca5a5", color: "#b91c1c", fontSize: "0.8rem" }}>
                       {promoError}
                     </div>
                   )}
 
                   {promoCode && (
-                    <div style={{ padding: "12px 16px", background: "#fff", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ padding: "10px 14px", background: "#fff", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div>
-                        <strong style={{ color: "#16a34a", fontSize: "0.9rem" }}>{promoCode} Applied!</strong>
-                        {promoDiscount && <div style={{ fontSize: "0.8rem", color: "#15803d" }}>{promoDiscount.promotion_name || promoDiscount.description}</div>}
+                        <strong style={{ color: "#16a34a", fontSize: "0.85rem" }}>{promoCode} Applied!</strong>
+                        {promoDiscount && <div style={{ fontSize: "0.75rem", color: "#15803d" }}>{promoDiscount.promotion_name || promoDiscount.description}</div>}
                       </div>
                       <button
                         type="button"
                         onClick={handleRemovePromo}
-                        style={{ border: "none", background: "none", color: "#dc2626", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}
+                        style={{ border: "none", background: "none", color: "#dc2626", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600 }}
                       >
                         Remove
                       </button>
@@ -361,21 +321,65 @@ function ReservationSummary({
             </div>
           </div>
 
-          {/* Notes Section */}
-          <div className="rd-field" style={{ margin: 0 }}>
-            <label htmlFor="rzv-notes" style={{ fontWeight: 600, fontSize: "0.9rem", color: "#666", marginBottom: "8px", display: "block" }}>SPECIAL REQUESTS / NOTES</label>
-            <textarea
-              id="rzv-notes"
-              placeholder="Any allergies, special occasions, or other requests?"
-              rows={3}
-              value={form.notes || ""}
-              onChange={(e) => setField("notes", e.target.value)}
-              style={{ width: "100%", padding: "1rem", borderRadius: "0.75rem", border: "1px solid #e5e5e5", background: "#f9f9f9", fontSize: "1rem", color: "#333", resize: "vertical" }}
-            />
+          {/* Payment Section */}
+          <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: "1rem" }}>
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 600, color: "#111", marginBottom: "0.75rem" }}>Payment Details</h3>
+            
+            <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "6px 0" }}>
+              <span className="rzv-summary__label" style={{ color: "#666" }}>Base Table Deposit</span>
+              <span className="rzv-summary__value" style={{ fontWeight: 500 }}>{formatVND(20000)}</span>
+            </div>
+
+            {preorderTotal > 0 && (
+              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "6px 0" }}>
+                <span className="rzv-summary__label" style={{ color: "#666" }}>Pre-order Food Total</span>
+                <span className="rzv-summary__value" style={{ fontWeight: 500 }}>{formatVND(preorderTotal)}</span>
+              </div>
+            )}
+
+            {promoDiscount && (
+              <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "6px 0", color: "#16a34a" }}>
+                <span className="rzv-summary__label" style={{ color: "#16a34a" }}>Voucher Discount ({promoCode})</span>
+                <span className="rzv-summary__value" style={{ fontWeight: 600 }}>-{formatVND(promoDiscount.discount_amount)}</span>
+              </div>
+            )}
+
+            {(() => {
+              const discountAmt = promoDiscount ? Number(promoDiscount.discount_amount) : 0;
+              const foodTotal = Math.max(0, preorderTotal - discountAmt);
+              const foodDeposit = Math.round(foodTotal * 0.3);
+              const tableDeposit = 20000;
+              const depositRequired = tableDeposit + foodDeposit;
+              const remainingBalance = Math.round(foodTotal * 0.7);
+              const netTotal = depositRequired + remainingBalance;
+
+              return (
+                <>
+                  <div className="rzv-summary__row" style={{ borderBottom: "1px solid #e5e5e5", padding: "8px 0", fontWeight: 600, fontSize: "1.05rem" }}>
+                    <span className="rzv-summary__label" style={{ color: "#111" }}>Net Total</span>
+                    <span className="rzv-summary__value" style={{ color: "#111" }}>{formatVND(netTotal)}</span>
+                  </div>
+
+                  <div style={{ marginTop: "0.75rem", background: "#f8fafc", padding: "1rem", borderRadius: "0.75rem", border: "1px solid #e2e8f0" }}>
+                    <div className="rzv-summary__row" style={{ padding: "2px 0", fontWeight: 700, color: "var(--rzv-gold)" }}>
+                      <span className="rzv-summary__label" style={{ fontSize: "0.95rem" }}>Required Deposit (30%)</span>
+                      <span className="rzv-summary__value" style={{ fontSize: "1.1rem" }}>{formatVND(depositRequired)}</span>
+                    </div>
+                    <div className="rzv-summary__row" style={{ padding: "2px 0", color: "#64748b", fontSize: "0.9rem" }}>
+                      <span className="rzv-summary__label">Remaining Balance (70%)</span>
+                      <span className="rzv-summary__value" style={{ fontWeight: 600 }}>{formatVND(remainingBalance)}</span>
+                    </div>
+                    <p style={{ margin: "6px 0 0 0", fontSize: "11px", color: "#64748b", fontStyle: "italic", lineHeight: "1.4" }}>
+                      * The required deposit secures your table and pre-ordered items. The remaining balance is paid during checkout.
+                    </p>
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           {/* Error & Warnings */}
-          {error ? <div className="rzv-error" style={{ margin: 0, padding: "12px", borderRadius: "8px", background: "#fef2f2", color: "#b91c1c", fontSize: "0.9rem" }}>{error}</div> : null}
+          {error ? <div className="rzv-error" style={{ margin: 0, padding: "10px", borderRadius: "8px", background: "#fef2f2", color: "#b91c1c", fontSize: "0.85rem" }}>{error}</div> : null}
 
           {showVatWarning ? (
             <div className="rzv-alert rzv-alert--surcharge" role="status" style={{ margin: 0 }}>
@@ -385,12 +389,12 @@ function ReservationSummary({
           ) : null}
 
           {/* Action Buttons */}
-          <div style={{ marginTop: "1rem", display: "flex", gap: "1rem" }}>
+          <div style={{ marginTop: "0.5rem", display: "flex", gap: "1rem" }}>
             <button
               type="button"
               className="rd-btn-outline"
               onClick={onEditDetails}
-              style={{ flex: 1, margin: 0, padding: "14px", fontSize: "13px", fontWeight: 600, borderRadius: "0.75rem" }}
+              style={{ flex: 1, margin: 0, padding: "12px", fontSize: "13px", fontWeight: 600, borderRadius: "0.75rem" }}
             >
               EDIT DETAILS
             </button>
@@ -399,7 +403,7 @@ function ReservationSummary({
               className="rd-btn-primary"
               onClick={onSubmit}
               disabled={!canSubmit || submitting}
-              style={{ flex: 2, margin: 0, padding: "14px", borderRadius: "0.75rem" }}
+              style={{ flex: 2, margin: 0, padding: "12px", borderRadius: "0.75rem" }}
             >
               {submitting ? "PROCESSING..." : "CONFIRM RESERVATION"}
             </button>
