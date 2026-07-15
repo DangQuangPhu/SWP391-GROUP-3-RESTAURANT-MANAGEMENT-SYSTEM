@@ -1,14 +1,21 @@
 import express from 'express';
 import sql from 'mssql';
 import { getRawPool } from '../db.js';
-import { handleSepayWebhook } from '../controllers/paymentController.js';
+import { handleSepayWebhook, requestCashOnDelivery, confirmCashPaymentStaff } from '../controllers/paymentController.js';
 import { processCashPayment } from '../controllers/ordersController.js';
+import { getIO } from '../socket.js';
 import { authMiddleware, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Webhook endpoint for SePay
 router.post('/sepay-webhook', handleSepayWebhook);
+
+// Customer requests to pay by cash
+router.post('/cash-on-delivery', requestCashOnDelivery);
+
+// Staff confirms cash payment
+router.post('/staff-confirm-cash', authMiddleware, requireRole(2, 4, 5), confirmCashPaymentStaff);
 
 // Polling endpoint for frontend
 router.get('/orders/:orderId/status', async (req, res) => {
@@ -17,13 +24,44 @@ router.get('/orders/:orderId/status', async (req, res) => {
     const pool = await getRawPool();
     const result = await pool.request()
       .input('orderId', sql.Int, parseInt(orderId, 10))
-      .query('SELECT order_status FROM dbo.Orders WHERE order_id = @orderId');
+      .query('SELECT order_status, reservation_id FROM dbo.Orders WHERE order_id = @orderId');
       
     if (result.recordset.length === 0) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
+
+    const order = result.recordset[0];
+
+    if (order.reservation_id) {
+      const resCheck = await pool.request()
+        .input('resId', sql.Int, order.reservation_id)
+        .query('SELECT reservation_status FROM dbo.Reservations WHERE reservation_id = @resId');
+        
+      if (resCheck.recordset.length > 0 && resCheck.recordset[0].reservation_status === 'Dining') {
+        await pool.request()
+          .input('resId', sql.Int, order.reservation_id)
+          .query(`
+            UPDATE dbo.Reservations
+            SET reservation_status = N'Pending Payment', updated_at = SYSDATETIME()
+            WHERE reservation_id = @resId;
+
+            INSERT INTO dbo.ReservationTimelines (reservation_id, status_from, status_to, note, created_at)
+            VALUES (@resId, N'Dining', N'Pending Payment', N'Customer loaded QR checkout page', SYSDATETIME());
+          `);
+          
+        const io = getIO();
+        if (io) {
+          io.to('room:staff').to('room:manager').emit('reservation:status_changed', {
+            reservation_id: order.reservation_id,
+            id: order.reservation_id,
+            status: 'Pending Payment',
+            new_status: 'Pending Payment'
+          });
+        }
+      }
+    }
     
-    return res.json({ success: true, data: { status: result.recordset[0].order_status } });
+    return res.json({ success: true, data: { status: order.order_status } });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Server error' });
@@ -78,13 +116,13 @@ router.post('/verify-deposit/:reservationId', async (req, res) => {
     const { reservation_status, order_code, deposit_amount } = result.recordset[0];
 
     // If already paid/confirmed, return success immediately
-    const alreadyPaidStatuses = ['Confirmed', 'Completed', 'Check-in', 'Dining'];
+    const alreadyPaidStatuses = ['Await Check-in', 'Completed', 'Dining'];
     if (alreadyPaidStatuses.includes(reservation_status)) {
       return res.json({ success: true, already_paid: true, status: reservation_status });
     }
 
     // Accept these statuses as verifiable
-    const verifiableStatuses = ['Payment Pending', 'Pending Payment', 'Pending Request', 'Awaiting Deposit'];
+    const verifiableStatuses = ['Awaiting Deposit', 'Pending Request'];
     if (!verifiableStatuses.includes(reservation_status)) {
       return res.status(400).json({ success: false, message: `Cannot verify: reservation is in status "${reservation_status}"` });
     }
@@ -132,6 +170,7 @@ router.post('/verify-deposit/:reservationId', async (req, res) => {
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+
 
 // POST /api/payments/cash — Staff/Manager process a cash payment
 router.post('/cash', authMiddleware, requireRole(2, 4, 5), processCashPayment);

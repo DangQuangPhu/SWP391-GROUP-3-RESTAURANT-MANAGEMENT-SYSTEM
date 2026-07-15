@@ -1,53 +1,121 @@
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { listContainerVariants, listItemVariants } from "@/components/ui/Skeleton";
 import { format, parseISO } from "date-fns";
 import { SectionHead, ContentPanel, Toolbar, SearchField, Button, EmptyState } from "../ManagerUI.jsx";
 import { ManagerModal } from "../ManagerOverlay.jsx";
+import Icon from "../ManagerIcons.jsx";
 import { fetchPromotions, createPromotion, updatePromotion, togglePromotionStatus, deletePromotion } from "../../services/promotionsApi.js";
-import { Copy, Edit2, Trash2, Play, Pause, Star, ShoppingBag, CalendarCheck } from "lucide-react";
+import { Copy, Edit2, Trash2, Play, Pause, Star, ShoppingBag, CalendarCheck, Tag, Percent, Gift, Clock, Users } from "lucide-react";
 
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Apple-style animation variants                                           */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+const APPLE = [0.16, 1, 0.3, 1];
+
+const cardVariants = {
+  hidden:  { opacity: 0, y: 24, scale: 0.97 },
+  visible: (i) => ({
+    opacity: 1, y: 0, scale: 1,
+    transition: { ease: APPLE, duration: 0.55, delay: i * 0.06 },
+  }),
+  exit: { opacity: 0, y: -12, scale: 0.97, transition: { ease: APPLE, duration: 0.25 } },
+};
+
+const kpiCardVariants = {
+  hidden:  { opacity: 0, y: 20, scale: 0.95 },
+  visible: (i) => ({
+    opacity: 1, y: 0, scale: 1,
+    transition: { ease: APPLE, duration: 0.5, delay: i * 0.08 },
+  }),
+};
+
+const pulseVariants = {
+  active:   { scale: [1, 1.15, 1], transition: { duration: 2, repeat: Infinity, ease: "easeInOut" } },
+  inactive: { scale: 1 },
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Scope badge + helpers                                                    */
+/* ═══════════════════════════════════════════════════════════════════════════ */
 const SCOPE_COLORS = {
-  Both:        { bg: '#EDE9FE', color: '#7C3AED' },
-  Order:       { bg: '#D1FAE5', color: '#065F46' },
-  Reservation: { bg: '#DBEAFE', color: '#1E40AF' },
+  Both:        { bg: 'linear-gradient(135deg, #EDE9FE, #F3E8FF)', color: '#7C3AED', border: '#DDD6FE' },
+  Order:       { bg: 'linear-gradient(135deg, #D1FAE5, #ECFDF5)', color: '#065F46', border: '#A7F3D0' },
+  Reservation: { bg: 'linear-gradient(135deg, #DBEAFE, #EFF6FF)', color: '#1E40AF', border: '#BFDBFE' },
 };
 
 function ScopeBadge({ scope }) {
-  const s = SCOPE_COLORS[scope] || { bg: '#F3F4F6', color: '#374151' };
-  const Icon = scope === 'Order' ? ShoppingBag : scope === 'Reservation' ? CalendarCheck : null;
+  const s = SCOPE_COLORS[scope] || { bg: '#F3F4F6', color: '#374151', border: '#E5E7EB' };
+  const BadgeIcon = scope === 'Order' ? ShoppingBag : scope === 'Reservation' ? CalendarCheck : Tag;
   return (
-    <span style={{ background: s.bg, color: s.color, fontSize: '0.72rem', fontWeight: 700,
-      padding: '2px 8px', borderRadius: 99, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-      {Icon && <Icon size={10} />}{scope || 'Both'}
+    <span style={{
+      background: s.bg, color: s.color, fontSize: '0.72rem', fontWeight: 700,
+      padding: '3px 10px', borderRadius: 99, display: 'inline-flex', alignItems: 'center', gap: 5,
+      border: `1px solid ${s.border}`, letterSpacing: '0.01em',
+    }}>
+      <BadgeIcon size={11} /> {scope || 'Both'}
     </span>
   );
 }
 
+function StatusPill({ isActive }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      padding: '4px 12px', borderRadius: 99, fontSize: '0.72rem', fontWeight: 700,
+      background: isActive ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.08)',
+      color: isActive ? '#16a34a' : '#dc2626',
+      border: `1px solid ${isActive ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.15)'}`,
+    }}>
+      <motion.span
+        variants={pulseVariants}
+        animate={isActive ? "active" : "inactive"}
+        style={{
+          width: 7, height: 7, borderRadius: '50%',
+          background: isActive ? '#22c55e' : '#ef4444',
+        }}
+      />
+      {isActive ? 'Active' : 'Paused'}
+    </span>
+  );
+}
+
+const safeFmt = (d) => {
+  if (!d) return '—';
+  try { return format(typeof d === 'string' ? parseISO(d) : new Date(d), 'dd/MM/yyyy HH:mm'); }
+  catch { return '—'; }
+};
+
+const fmtDiscount = (type, value) => {
+  if (!value) return '—';
+  if (type === 'PERCENT' || type === 'Percent') return `${value}%`;
+  return `${Number(value).toLocaleString('vi-VN')}₫`;
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Default form state                                                       */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+const EMPTY_FORM = {
+  promotion_name: "", description: "", promo_code: "",
+  discount_type: "PERCENT", discount_value: "",
+  max_discount_amount: "", min_order_value: "0",
+  valid_from: "", valid_until: "", usage_limit: "",
+  applicable_to: "Both", points_required: "0",
+  total_quantity: "", validity_duration_hours: "24",
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  Main Component                                                           */
+/* ═══════════════════════════════════════════════════════════════════════════ */
 export default function PromotionsSection({ promotions, setPromotions, toast }) {
-  const [search, setSearch] = useState("");
+  const [search, setSearch]             = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting]     = useState(false);
   const [editingPromoId, setEditingPromoId] = useState(null);
+  const [formData, setFormData]         = useState({ ...EMPTY_FORM });
 
-  const [formData, setFormData] = useState({
-    promotion_name: "",
-    description: "",
-    promo_code: "",
-    discount_type: "Percent",
-    discount_value: "",
-    max_discount_amount: "",
-    min_order_value: "0",
-    valid_from: "",
-    valid_until: "",
-    usage_limit: "",
-    applicable_to: "Both",
-    points_required: "0",
-    total_quantity: "",
-    validity_duration_hours: "24",
-  });
-
-  const loadData = async () => {
+  /* ── Load promotions ──────────────────────────────────────────────────── */
+  const loadData = useCallback(async () => {
     try {
       const res = await fetchPromotions();
       if (res.success) {
@@ -58,7 +126,7 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
     } catch (err) {
       toast(err.data?.error || err.data?.message || err.message || "Failed to refresh promotions", "error");
     }
-  };
+  }, [setPromotions, toast]);
 
   useEffect(() => {
     if (!promotions || promotions.length === 0) {
@@ -66,6 +134,7 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
     }
   }, []);
 
+  /* ── Toggle status ──────────────────────────────────────────────────── */
   const handleToggleStatus = async (id) => {
     try {
       const res = await togglePromotionStatus(id);
@@ -78,6 +147,7 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
     }
   };
 
+  /* ── Delete ─────────────────────────────────────────────────────────── */
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this promotion?")) return;
     try {
@@ -92,52 +162,56 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
     }
   };
 
+  /* ── Edit ────────────────────────────────────────────────────────────── */
   const handleEdit = (promo) => {
+    setEditingPromoId(promo.promotion_id);
+    const fmtDate = (d) => {
+      if (!d) return '';
+      try {
+        const dt = typeof d === 'string' ? parseISO(d) : new Date(d);
+        return format(dt, "yyyy-MM-dd'T'HH:mm");
+      } catch { return ''; }
+    };
     setFormData({
-      promotion_name: promo.promotion_name || "",
-      description: promo.description || "",
-      promo_code: promo.promo_code || "",
-      discount_type: (promo.discount_type === 'PERCENT' ? 'Percent' : promo.discount_type) || 'Percent',
-      discount_value: promo.discount_value?.toString() || "",
-      max_discount_amount: promo.max_discount_amount?.toString() || "",
-      min_order_value: promo.min_order_value?.toString() || "0",
-      valid_from: promo.valid_from ? format(parseISO(promo.valid_from), "yyyy-MM-dd'T'HH:mm") : "",
-      valid_until: promo.valid_until ? format(parseISO(promo.valid_until), "yyyy-MM-dd'T'HH:mm") : "",
-      usage_limit: promo.usage_limit?.toString() || "",
-      applicable_to: ['Both','Order','Reservation'].includes(promo.applicable_to) ? promo.applicable_to : 'Both',
-      points_required: promo.points_required?.toString() || "0",
-      total_quantity: promo.total_quantity?.toString() || "",
+      promotion_name:       promo.promotion_name || "",
+      description:          promo.description || "",
+      promo_code:           promo.promo_code || "",
+      discount_type:        promo.discount_type || "PERCENT",
+      discount_value:       promo.discount_value?.toString() || "",
+      max_discount_amount:  promo.max_discount_amount?.toString() || "",
+      min_order_value:      promo.min_order_value?.toString() || "0",
+      valid_from:           fmtDate(promo.valid_from),
+      valid_until:          fmtDate(promo.valid_until),
+      usage_limit:          promo.usage_limit?.toString() || "",
+      applicable_to:        promo.applicable_to || "Both",
+      points_required:      promo.points_required?.toString() || "0",
+      total_quantity:       promo.total_quantity?.toString() || "",
       validity_duration_hours: promo.validity_duration_hours?.toString() || "24",
     });
-    setEditingPromoId(promo.promotion_id);
     setShowAddModal(true);
   };
 
+  /* ── Reset ──────────────────────────────────────────────────────────── */
   const resetForm = () => {
-    setFormData({
-      promotion_name: "", description: "", promo_code: "",
-      discount_type: "Percent", discount_value: "", max_discount_amount: "",
-      min_order_value: "0", valid_from: "", valid_until: "",
-      usage_limit: "", applicable_to: "Both",
-      points_required: "0", total_quantity: "", validity_duration_hours: "24",
-    });
+    setFormData({ ...EMPTY_FORM });
     setEditingPromoId(null);
+    setShowAddModal(false);
   };
 
+  /* ── Submit ─────────────────────────────────────────────────────────── */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     try {
       const payload = {
         ...formData,
-        discount_value: parseFloat(formData.discount_value),
-        max_discount_amount: formData.max_discount_amount ? parseFloat(formData.max_discount_amount) : null,
-        min_order_value: parseFloat(formData.min_order_value) || 0,
-        usage_limit: formData.usage_limit ? parseInt(formData.usage_limit, 10) : null,
-        points_required: parseInt(formData.points_required, 10) || 0,
-        total_quantity: formData.total_quantity ? parseInt(formData.total_quantity, 10) : null,
-        validity_duration_hours: parseInt(formData.validity_duration_hours, 10) || 24,
-        applicable_to: ['Both','Order','Reservation'].includes(formData.applicable_to) ? formData.applicable_to : 'Both',
+        discount_value:       parseFloat(formData.discount_value) || 0,
+        max_discount_amount:  parseFloat(formData.max_discount_amount) || null,
+        min_order_value:      parseFloat(formData.min_order_value) || 0,
+        usage_limit:          formData.usage_limit ? parseInt(formData.usage_limit) : null,
+        points_required:      parseInt(formData.points_required) || 0,
+        total_quantity:       formData.total_quantity ? parseInt(formData.total_quantity) : null,
+        validity_duration_hours: parseInt(formData.validity_duration_hours) || 24,
       };
 
       let res;
@@ -148,366 +222,491 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
       }
 
       if (res.success) {
-        toast(`Promotion ${editingPromoId ? 'updated' : 'created'} successfully`, "success");
-        setShowAddModal(false);
+        toast(editingPromoId ? "Promotion updated" : "Promotion created", "success");
         resetForm();
-        loadData();
+        await loadData();
+      } else {
+        toast(res.error || res.message || "Save failed", "error");
       }
     } catch (err) {
-      const errorMessage = err.data?.message || err.message || `Failed to ${editingPromoId ? 'update' : 'create'} promotion`;
-      toast(errorMessage, "error");
+      toast(err.data?.message || err.message || "Failed to save", "error");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const filtered = promotions?.filter(Boolean).filter(p =>
-    (p.promo_code || p.promotion_name || "").toLowerCase().includes(search.toLowerCase())
-  );
+  /* ── Client-side search ────────────────────────────────────────────── */
+  const filtered = useMemo(() => {
+    if (!search.trim()) return promotions || [];
+    const q = search.toLowerCase();
+    return (promotions || []).filter(p =>
+      (p.promotion_name || '').toLowerCase().includes(q) ||
+      (p.promo_code || '').toLowerCase().includes(q) ||
+      (p.description || '').toLowerCase().includes(q)
+    );
+  }, [promotions, search]);
 
+  /* ── KPI stats ─────────────────────────────────────────────────────── */
+  const promoKpis = useMemo(() => {
+    const all = promotions || [];
+    const active = all.filter(p => p.is_active);
+    const totalUsed = all.reduce((s, p) => s + (p.times_used || 0), 0);
+    return [
+      { label: "Total Promotions", value: all.length,    color: "blue",   icon: Tag,     gradient: "linear-gradient(135deg, #3B82F6, #6366F1)" },
+      { label: "Active Now",       value: active.length, color: "green",  icon: Play,    gradient: "linear-gradient(135deg, #22C55E, #16A34A)" },
+      { label: "Paused",           value: all.length - active.length, color: "amber", icon: Pause, gradient: "linear-gradient(135deg, #F59E0B, #D97706)" },
+      { label: "Total Redeemed",   value: totalUsed,     color: "purple", icon: Gift,    gradient: "linear-gradient(135deg, #8B5CF6, #7C3AED)" },
+    ];
+  }, [promotions]);
+
+  /* ── Copy promo code ───────────────────────────────────────────────── */
+  const copyCode = (code) => {
+    navigator.clipboard.writeText(code);
+    toast(`Copied: ${code}`, "success");
+  };
+
+  /* ═══════════════════════════════════════════════════════════════════════ */
+  /*  RENDER                                                                */
+  /* ═══════════════════════════════════════════════════════════════════════ */
   return (
-    <div className="sfx-page">
+    <div className="sfx-stack">
+      {/* ── Section Header ───────────────────────────────────────────────── */}
       <SectionHead
         title="Promotions & Vouchers"
-        subtitle="Manage discount codes, vouchers and their lifecycle rules"
-        actions={
-          <Button variant="primary" icon="plus" onClick={() => { resetForm(); setShowAddModal(true); }}>
-            Add Promotion
-          </Button>
-        }
-      />
+        subtitle="Create, manage and track promotional campaigns"
+      >
+        <Button variant="primary" onClick={() => { resetForm(); setShowAddModal(true); }}>
+          + New Promotion
+        </Button>
+      </SectionHead>
 
-      <Toolbar>
-        <SearchField value={search} onChange={setSearch} placeholder="Search promo code..." />
-      </Toolbar>
+      {/* ── KPI Cards ────────────────────────────────────────────────────── */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: 16, marginBottom: 8,
+      }}>
+        {promoKpis.map((kpi, i) => (
+          <motion.article
+            key={kpi.label}
+            custom={i}
+            variants={kpiCardVariants}
+            initial="hidden"
+            animate="visible"
+            whileHover={{ y: -4, boxShadow: '0 16px 48px rgba(31,26,23,0.10)' }}
+            style={{
+              background: '#fff',
+              borderRadius: 16,
+              padding: '20px 22px 18px',
+              border: '1px solid rgba(31,26,23,0.06)',
+              boxShadow: '0 2px 12px rgba(31,26,23,0.04)',
+              position: 'relative',
+              overflow: 'hidden',
+              cursor: 'default',
+              transition: 'box-shadow 0.4s cubic-bezier(0.16,1,0.3,1)',
+            }}
+          >
+            <div style={{
+              position: 'absolute', top: 0, right: 0,
+              width: 80, height: 80, borderRadius: '0 16px 0 40px',
+              background: kpi.gradient, opacity: 0.08,
+            }} />
+            <div style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: kpi.gradient,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              marginBottom: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+            }}>
+              <kpi.icon size={18} color="#fff" />
+            </div>
+            <p style={{ fontSize: 28, fontWeight: 800, color: '#1a1a1a', margin: 0, lineHeight: 1.1 }}>
+              {kpi.value}
+            </p>
+            <p style={{ fontSize: 12, fontWeight: 500, color: '#888', margin: '6px 0 0', letterSpacing: '0.02em' }}>
+              {kpi.label}
+            </p>
+          </motion.article>
+        ))}
+      </div>
 
-      <ContentPanel>
+      {/* ── Table Card ───────────────────────────────────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ ease: APPLE, duration: 0.5, delay: 0.3 }}
+        style={{
+          background: '#fff', borderRadius: 16, padding: '24px',
+          border: '1px solid rgba(31,26,23,0.06)',
+          boxShadow: '0 4px 24px rgba(31,26,23,0.04)',
+        }}
+      >
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>
+              All Promotions
+            </h3>
+            <p style={{ fontSize: 13, color: '#888', margin: '4px 0 0' }}>
+              {filtered.length} promotion{filtered.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+          <SearchField value={search} onChange={setSearch} placeholder="Search promotions…" />
+        </header>
+
         {filtered.length === 0 ? (
           <EmptyState
-            icon="tag"
+            icon="search"
             title="No promotions found"
-            hint={search ? "Try a different search term" : "Create your first promotion to boost sales!"}
+            hint={search ? "Try different search terms" : "Click + New Promotion to create one"}
           />
         ) : (
           <div className="sfx-table-wrap">
-            <table className="sfx-table">
+            <table className="sfx-table sfx-table--hover" style={{ background: '#fff' }}>
               <thead>
-                <tr>
-                  <th>Name / Code</th>
-                  <th>Discount</th>
-                  <th>Scope</th>
-                  <th>Points Req.</th>
-                  <th>Qty Remaining</th>
-                  <th>Voucher Valid</th>
-                  <th>Date Range</th>
-                  <th>Status</th>
-                  <th className="text-right">Actions</th>
+                <tr style={{ background: '#fafafa' }}>
+                  <th style={{ color: '#555', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, padding: '12px 16px' }}>
+                    Promotion
+                  </th>
+                  <th style={{ color: '#555', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, padding: '12px 16px' }}>
+                    Code
+                  </th>
+                  <th style={{ color: '#555', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, padding: '12px 16px' }}>
+                    Discount
+                  </th>
+                  <th style={{ color: '#555', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, padding: '12px 16px' }}>
+                    Scope
+                  </th>
+                  <th style={{ color: '#555', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, padding: '12px 16px' }}>
+                    Validity
+                  </th>
+                  <th style={{ color: '#555', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, padding: '12px 16px' }}>
+                    Status
+                  </th>
+                  <th style={{ color: '#555', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, padding: '12px 16px', textAlign: 'right' }}>
+                    Actions
+                  </th>
                 </tr>
               </thead>
-              <motion.tbody
-                variants={listContainerVariants}
-                initial="hidden"
-                animate="visible"
-              >
-                {filtered.map(p => {
-                  const isExpired = p.valid_until && new Date(p.valid_until) < new Date();
-                  const isExhausted = p.usage_limit != null && p.used_count >= p.usage_limit;
-                  const inactive = !p.is_active || isExpired || isExhausted;
-
-                  return (
+              <AnimatePresence mode="popLayout">
+                <motion.tbody variants={listContainerVariants} initial="hidden" animate="visible">
+                  {filtered.map((p, idx) => (
                     <motion.tr
-                      key={p.voucher_id || p.promotion_id}
-                      variants={listItemVariants}
-                      className={inactive ? "opacity-60 grayscale-[50%]" : ""}
+                      key={p.promotion_id}
+                      custom={idx}
+                      variants={cardVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                      layout
+                      style={{
+                        borderBottom: '1px solid rgba(31,26,23,0.05)',
+                        transition: 'background 0.25s cubic-bezier(0.16,1,0.3,1)',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,0.03)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
-                      {/* Name / Code */}
-                      <td>
-                        <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: 3 }}>{p.promotion_name}</div>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4,
-                          background: '#F1F5F9', border: '1px dashed #CBD5E1', borderRadius: 6,
-                          padding: '1px 8px', fontFamily: 'monospace', fontSize: '0.78rem', color: '#0F172A' }}>
-                          {p.promo_code}
-                          <button title="Copy" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#64748B', lineHeight: 1 }}
-                            onClick={() => { navigator.clipboard.writeText(p.promo_code); toast("Code copied", "success"); }}>
-                            <Copy size={11} />
-                          </button>
-                        </span>
+                      {/* Name + Description */}
+                      <td style={{ padding: '16px' }}>
+                        <div style={{ fontWeight: 650, color: '#1a1a1a', fontSize: 14 }}>
+                          {p.promotion_name}
+                        </div>
+                        {p.description && (
+                          <div style={{ fontSize: 12, color: '#999', marginTop: 3, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {p.description}
+                          </div>
+                        )}
                       </td>
+
+                      {/* Promo Code */}
+                      <td style={{ padding: '16px' }}>
+                        <button
+                          onClick={() => copyCode(p.promo_code)}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.12)',
+                            borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
+                            fontSize: 13, fontWeight: 700, color: '#4F46E5',
+                            fontFamily: 'monospace', letterSpacing: '0.04em',
+                            transition: 'all 0.25s cubic-bezier(0.16,1,0.3,1)',
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.12)'; e.currentTarget.style.transform = 'scale(1.03)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.06)'; e.currentTarget.style.transform = 'scale(1)'; }}
+                          title="Click to copy"
+                        >
+                          <Copy size={12} /> {p.promo_code}
+                        </button>
+                      </td>
+
                       {/* Discount */}
-                      <td>
-                        <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                          {p.discount_type === 'PERCENT' || p.discount_type === 'Percent'
-                            ? `${p.discount_value}%` : `₫${Number(p.discount_value).toLocaleString()}`}
+                      <td style={{ padding: '16px' }}>
+                        <span style={{ fontWeight: 700, fontSize: 15, color: '#1a1a1a' }}>
+                          {fmtDiscount(p.discount_type, p.discount_value)}
                         </span>
                         {p.max_discount_amount > 0 && (
-                          <div className="text-xs text-gray-500">Max ₫{Number(p.max_discount_amount).toLocaleString()}</div>
-                        )}
-                        {p.min_order_value > 0 && (
-                          <div className="text-xs text-gray-500">Min ₫{Number(p.min_order_value).toLocaleString()}</div>
+                          <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+                            Max: {Number(p.max_discount_amount).toLocaleString('vi-VN')}₫
+                          </div>
                         )}
                       </td>
+
                       {/* Scope */}
-                      <td><ScopeBadge scope={p.applicable_to} /></td>
-                      {/* Points Required */}
-                      <td>
-                        {p.points_required > 0 ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#D97706', fontWeight: 700, fontSize: '0.85rem' }}>
-                            <Star size={11} fill="#D97706" />{p.points_required}
-                          </span>
-                        ) : <span style={{ color: '#10B981', fontWeight: 700, fontSize: '0.8rem' }}>Free</span>}
+                      <td style={{ padding: '16px' }}>
+                        <ScopeBadge scope={p.applicable_to} />
                       </td>
-                      {/* Qty Remaining */}
-                      <td style={{ fontSize: '0.85rem' }}>
-                        {p.total_quantity != null
-                          ? <span><span style={{ fontWeight: 600 }}>{p.remaining_quantity ?? '—'}</span><span style={{ color: '#94A3B8' }}> / {p.total_quantity}</span></span>
-                          : <span style={{ color: '#94A3B8' }}>∞</span>}
-                      </td>
-                      {/* Voucher Valid */}
-                      <td style={{ fontSize: '0.85rem', color: '#475569' }}>
-                        {p.validity_duration_hours != null ? `${p.validity_duration_hours}h` : '24h'}
-                      </td>
-                      {/* Date Range */}
-                      <td className="text-sm">
-                        <div>{p.valid_from ? format(parseISO(p.valid_from), "MMM d, yyyy") : '—'}</div>
-                        <div className="text-gray-500">to {p.valid_until ? format(parseISO(p.valid_until), "MMM d, yyyy") : '—'}</div>
-                      </td>
-                      {/* Status */}
-                      <td>
-                        {isExpired ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Expired</span>
-                        ) : p.is_active ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Active</span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">Disabled</span>
+
+                      {/* Validity */}
+                      <td style={{ padding: '16px' }}>
+                        <div style={{ fontSize: 12, color: '#555', display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <Clock size={12} color="#999" />
+                          <span>{safeFmt(p.valid_from)}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#999', marginTop: 2, paddingLeft: 17 }}>
+                          → {safeFmt(p.valid_until)}
+                        </div>
+                        {p.usage_limit && (
+                          <div style={{ fontSize: 11, color: '#bbb', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4, paddingLeft: 17 }}>
+                            <Users size={10} /> {p.times_used || 0}/{p.usage_limit} used
+                          </div>
                         )}
                       </td>
+
+                      {/* Status */}
+                      <td style={{ padding: '16px' }}>
+                        <motion.button
+                          onClick={() => handleToggleStatus(p.promotion_id)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                          whileTap={{ scale: 0.92 }}
+                          title={p.is_active ? 'Click to pause' : 'Click to activate'}
+                        >
+                          <StatusPill isActive={p.is_active} />
+                        </motion.button>
+                      </td>
+
                       {/* Actions */}
-                      <td className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <button
-                            className="p-1.5 text-gray-500 rounded-md hover:bg-gray-100 hover:text-gray-700 transition-colors"
-                            title={p.is_active ? "Disable" : "Enable"}
-                            onClick={() => handleToggleStatus(p.voucher_id || p.promotion_id)}
-                          >
-                            {p.is_active ? <Pause size={15} /> : <Play size={15} />}
-                          </button>
-                          <button
-                            className="p-1.5 text-blue-500 rounded-md hover:bg-blue-50 transition-colors"
-                            title="Edit"
-                            onClick={() => handleEdit(p)}
-                          >
-                            <Edit2 size={15} />
-                          </button>
-                          <button
-                            className="p-1.5 text-red-500 rounded-md hover:bg-red-50 transition-colors"
-                            title="Delete"
-                            onClick={() => handleDelete(p.voucher_id || p.promotion_id)}
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                      <td style={{ padding: '16px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                          {[
+                            { icon: Edit2, tip: 'Edit', color: '#6366F1', onClick: () => handleEdit(p) },
+                            { icon: Trash2, tip: 'Delete', color: '#EF4444', onClick: () => handleDelete(p.promotion_id) },
+                          ].map(({ icon: BtnIcon, tip, color, onClick }, ai) => (
+                            <motion.button
+                              key={ai}
+                              onClick={onClick}
+                              whileHover={{ scale: 1.12, backgroundColor: `${color}10` }}
+                              whileTap={{ scale: 0.9 }}
+                              title={tip}
+                              style={{
+                                width: 34, height: 34, borderRadius: 10,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                border: 'none', background: 'transparent', cursor: 'pointer',
+                                color, transition: 'background 0.25s cubic-bezier(0.16,1,0.3,1)',
+                              }}
+                            >
+                              <BtnIcon size={15} />
+                            </motion.button>
+                          ))}
                         </div>
                       </td>
                     </motion.tr>
-                  );
-                })}
-
-              </motion.tbody>
+                  ))}
+                </motion.tbody>
+              </AnimatePresence>
             </table>
           </div>
         )}
-      </ContentPanel>
+      </motion.div>
 
-      <ManagerModal
-        open={showAddModal}
-        onClose={() => {
-          if (!submitting) {
-            setShowAddModal(false);
-            resetForm();
-          }
-        }}
-        title={editingPromoId ? "Edit Promotion" : "Create Promotion"}
-      >
-        <form id="addPromoForm" onSubmit={handleSubmit} className="space-y-4 p-1">
-          <div>
-            <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Promotion Name *</label>
-            <input
-              type="text"
-              required
-              className="sfx-input"
-              value={formData.promotion_name}
-              onChange={e => setFormData({ ...formData, promotion_name: e.target.value })}
-              placeholder="e.g. Summer Sale 2026"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Description</label>
-            <textarea
-              className="sfx-input min-h-[80px]"
-              value={formData.description}
-              onChange={e => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Brief description of the promotion"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Voucher Code *</label>
-            <input
-              type="text"
-              required
-              className="sfx-input"
-              value={formData.promo_code}
-              onChange={e => setFormData({ ...formData, promo_code: e.target.value.toUpperCase() })}
-              placeholder="e.g. SUMMER20"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/*  Create / Edit Modal                                              */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {showAddModal && (
+        <ManagerModal
+          onClose={resetForm}
+          footer={null}
+          title={editingPromoId ? "Edit Promotion" : "Create Promotion"}
+        >
+          <form id="addPromoForm" onSubmit={handleSubmit} className="space-y-4 p-1">
             <div>
-              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Type *</label>
-              <select
-                className="sfx-select w-full"
-                value={formData.discount_type}
-                onChange={e => setFormData({ ...formData, discount_type: e.target.value })}
-              >
-                <option value="PERCENT">Percentage (%)</option>
-                <option value="FIXED">Fixed Amount (₫)</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Value *</label>
+              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Promotion Name *</label>
               <input
-                type="number"
+                type="text"
                 required
-                min="0"
-                step="0.01"
                 className="sfx-input"
-                value={formData.discount_value}
-                onChange={e => setFormData({ ...formData, discount_value: e.target.value })}
-                placeholder={formData.discount_type === 'PERCENT' ? "e.g. 15" : "e.g. 50000"}
+                value={formData.promotion_name}
+                onChange={e => setFormData({ ...formData, promotion_name: e.target.value })}
+                placeholder="e.g. Summer Sale 2026"
               />
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {formData.discount_type === 'PERCENT' && (
+            <div>
+              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Description</label>
+              <textarea
+                className="sfx-input min-h-[80px]"
+                value={formData.description}
+                onChange={e => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Brief description of the promotion"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Voucher Code *</label>
+              <input
+                type="text"
+                required
+                className="sfx-input"
+                value={formData.promo_code}
+                onChange={e => setFormData({ ...formData, promo_code: e.target.value.toUpperCase() })}
+                placeholder="e.g. SUMMER20"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Max Discount (₫)</label>
+                <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Type *</label>
+                <select
+                  className="sfx-select w-full"
+                  value={formData.discount_type}
+                  onChange={e => setFormData({ ...formData, discount_type: e.target.value })}
+                >
+                  <option value="PERCENT">Percentage (%)</option>
+                  <option value="FIXED">Fixed Amount (₫)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Value *</label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="0.01"
+                  className="sfx-input"
+                  value={formData.discount_value}
+                  onChange={e => setFormData({ ...formData, discount_value: e.target.value })}
+                  placeholder={formData.discount_type === 'PERCENT' ? "e.g. 15" : "e.g. 50000"}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              {formData.discount_type === 'PERCENT' && (
+                <div>
+                  <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Max Discount (₫)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="sfx-input"
+                    value={formData.max_discount_amount}
+                    onChange={e => setFormData({ ...formData, max_discount_amount: e.target.value })}
+                    placeholder="e.g. 100000"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Min Order Value (₫)</label>
                 <input
                   type="number"
                   min="0"
                   step="0.01"
                   className="sfx-input"
-                  value={formData.max_discount_amount}
-                  onChange={e => setFormData({ ...formData, max_discount_amount: e.target.value })}
-                  placeholder="e.g. 100000"
+                  value={formData.min_order_value}
+                  onChange={e => setFormData({ ...formData, min_order_value: e.target.value })}
+                  placeholder="e.g. 200000"
                 />
               </div>
-            )}
-            <div>
-              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Min Order Value (₫)</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className="sfx-input"
-                value={formData.min_order_value}
-                onChange={e => setFormData({ ...formData, min_order_value: e.target.value })}
-                placeholder="e.g. 200000"
-              />
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Valid From *</label>
-              <input
-                type="datetime-local"
-                required
-                className="sfx-input"
-                value={formData.valid_from}
-                onChange={e => setFormData({ ...formData, valid_from: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Valid Until *</label>
-              <input
-                type="datetime-local"
-                required
-                className="sfx-input"
-                value={formData.valid_until}
-                onChange={e => setFormData({ ...formData, valid_until: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Usage Limit (Total uses)</label>
-              <input
-                type="number"
-                min="1"
-                className="sfx-input"
-                value={formData.usage_limit}
-                onChange={e => setFormData({ ...formData, usage_limit: e.target.value })}
-                placeholder="Empty = unlimited"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Applicable To *</label>
-              <select
-                className="sfx-select w-full"
-                value={formData.applicable_to}
-                onChange={e => setFormData({ ...formData, applicable_to: e.target.value })}
-              >
-                <option value="Both">Both (Reservation &amp; Order)</option>
-                <option value="Reservation">Reservation Only</option>
-                <option value="Order">Order Only</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Loyalty Exchange Panel */}
-          <div style={{ padding: '12px 16px', background: '#FFFBEB', borderRadius: 10, border: '1px solid #FDE68A' }}>
-            <div style={{ fontWeight: 700, fontSize: '0.8rem', color: '#92400E', marginBottom: 10,
-              display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Star size={13} fill="#D97706" color="#D97706" /> Loyalty Exchange Settings
-            </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Points Required</label>
-                <input type="number" min="0" step="1" className="sfx-input"
-                  value={formData.points_required}
-                  onChange={e => setFormData({ ...formData, points_required: e.target.value })}
-                  placeholder="0 = free gift" />
-                <p style={{ fontSize: '0.68rem', color: '#92400E', marginTop: 2 }}>0 = auto-granted (welcome gift)</p>
+                <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Valid From *</label>
+                <input
+                  type="datetime-local"
+                  required
+                  className="sfx-input"
+                  value={formData.valid_from}
+                  onChange={e => setFormData({ ...formData, valid_from: e.target.value })}
+                />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Total Quantity</label>
-                <input type="number" min="1" step="1" className="sfx-input"
-                  value={formData.total_quantity}
-                  onChange={e => setFormData({ ...formData, total_quantity: e.target.value })}
-                  placeholder="Empty = unlimited" />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Voucher Valid (hours)</label>
-                <input type="number" min="1" step="1" className="sfx-input"
-                  value={formData.validity_duration_hours}
-                  onChange={e => setFormData({ ...formData, validity_duration_hours: e.target.value })}
-                  placeholder="24" />
-                <p style={{ fontSize: '0.68rem', color: '#92400E', marginTop: 2 }}>After customer redeems</p>
+                <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Valid Until *</label>
+                <input
+                  type="datetime-local"
+                  required
+                  className="sfx-input"
+                  value={formData.valid_until}
+                  onChange={e => setFormData({ ...formData, valid_until: e.target.value })}
+                />
               </div>
             </div>
-          </div>
 
-          <div className="pt-4 flex justify-end gap-3">
-            <Button variant="ghost" onClick={() => setShowAddModal(false)} disabled={submitting}>Cancel</Button>
-            <Button variant="primary" type="submit" disabled={submitting}>
-              {submitting ? "Saving..." : "Create Promotion"}
-            </Button>
-          </div>
-        </form>
-      </ManagerModal>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Usage Limit (Total uses)</label>
+                <input
+                  type="number"
+                  min="1"
+                  className="sfx-input"
+                  value={formData.usage_limit}
+                  onChange={e => setFormData({ ...formData, usage_limit: e.target.value })}
+                  placeholder="Empty = unlimited"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Applicable To *</label>
+                <select
+                  className="sfx-select w-full"
+                  value={formData.applicable_to}
+                  onChange={e => setFormData({ ...formData, applicable_to: e.target.value })}
+                >
+                  <option value="Both">Both (Reservation &amp; Order)</option>
+                  <option value="Reservation">Reservation Only</option>
+                  <option value="Order">Order Only</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Loyalty Exchange Panel */}
+            <div style={{ padding: '14px 18px', background: 'linear-gradient(135deg, #FFFBEB, #FEF3C7)', borderRadius: 12, border: '1px solid #FDE68A' }}>
+              <div style={{
+                fontWeight: 700, fontSize: '0.82rem', color: '#92400E', marginBottom: 12,
+                display: 'flex', alignItems: 'center', gap: 7
+              }}>
+                <Star size={14} fill="#D97706" color="#D97706" /> Loyalty Exchange Settings
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Points Required</label>
+                  <input type="number" min="0" step="1" className="sfx-input"
+                    value={formData.points_required}
+                    onChange={e => setFormData({ ...formData, points_required: e.target.value })}
+                    placeholder="0 = free gift" />
+                  <p style={{ fontSize: '0.68rem', color: '#92400E', marginTop: 3 }}>0 = auto-granted (welcome gift)</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Total Quantity</label>
+                  <input type="number" min="1" step="1" className="sfx-input"
+                    value={formData.total_quantity}
+                    onChange={e => setFormData({ ...formData, total_quantity: e.target.value })}
+                    placeholder="Empty = unlimited" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Voucher Valid (hours)</label>
+                  <input type="number" min="1" step="1" className="sfx-input"
+                    value={formData.validity_duration_hours}
+                    onChange={e => setFormData({ ...formData, validity_duration_hours: e.target.value })}
+                    placeholder="24" />
+                  <p style={{ fontSize: '0.68rem', color: '#92400E', marginTop: 3 }}>After customer redeems</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 flex justify-end gap-3">
+              <Button variant="ghost" onClick={resetForm} disabled={submitting}>Cancel</Button>
+              <Button variant="primary" type="submit" disabled={submitting}>
+                {submitting ? "Saving..." : editingPromoId ? "Update Promotion" : "Create Promotion"}
+              </Button>
+            </div>
+          </form>
+        </ManagerModal>
+      )}
     </div>
   );
 }

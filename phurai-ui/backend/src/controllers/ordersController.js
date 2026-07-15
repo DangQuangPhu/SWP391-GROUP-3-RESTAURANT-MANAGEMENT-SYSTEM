@@ -31,7 +31,8 @@ async function checkoutQrDineInOrder(req, res) {
                     qs.table_id,
                     qs.customer_id,
                     qs.session_status,
-                    t.table_number
+                    t.table_number,
+                    t.merged_into_table_id
                 FROM dbo.QROrderSessions qs WITH (UPDLOCK)
                 INNER JOIN dbo.RestaurantTables t ON t.table_id = qs.table_id
                 WHERE qs.qr_session_id = @sessionId
@@ -43,11 +44,25 @@ async function checkoutQrDineInOrder(req, res) {
             await transaction.rollback();
             return res.status(403).json({ success: false, message: 'QR session is not active.' });
         }
+        
+        let targetTableId = session.table_id;
+        let targetTableNumber = session.table_number;
+        
+        if (session.merged_into_table_id) {
+            const parentRes = await transaction.request()
+                .input('parentId', sql.Int, session.merged_into_table_id)
+                .query(`SELECT table_number FROM dbo.RestaurantTables WHERE table_id = @parentId`);
+            if (parentRes.recordset.length > 0) {
+                targetTableId = session.merged_into_table_id;
+                targetTableNumber = parentRes.recordset[0].table_number + ' (Merged from ' + targetTableNumber + ')';
+            }
+        }
 
         if (
             Number.isFinite(requestedTableId) &&
             requestedTableId > 0 &&
-            Number(session.table_id) !== requestedTableId
+            Number(session.table_id) !== requestedTableId &&
+            Number(targetTableId) !== requestedTableId
         ) {
             await transaction.rollback();
             return res.status(400).json({ success: false, message: 'Table does not match QR session.' });
@@ -96,7 +111,7 @@ async function checkoutQrDineInOrder(req, res) {
         }
 
         const orderResult = await transaction.request()
-            .input('tableId', sql.Int, session.table_id)
+            .input('tableId', sql.Int, targetTableId)
             .input('customerId', sql.Int, session.customer_id || null)
             .input('sessionId', sql.Int, sessionId)
             .input('subtotal', sql.Decimal(12, 2), subtotal)
@@ -118,7 +133,7 @@ async function checkoutQrDineInOrder(req, res) {
                 .input('quantity', sql.Int, item.quantity)
                 .input('unitPrice', sql.Decimal(12, 2), item.unit_price)
                 .input('notes', sql.NVarChar(500), item.notes)
-                .input('tableNumber', sql.NVarChar(255), String(session.table_number || session.table_id))
+                .input('tableNumber', sql.NVarChar(255), String(targetTableNumber || targetTableId))
                 .query(`
                     INSERT INTO dbo.OrderItems
                         (order_id, dish_id, quantity, unit_price, notes, snapshot_table_name, item_status)
@@ -305,14 +320,27 @@ export const checkoutOrder = async (req, res) => {
         // Validate table exists and is Occupied or Reserved
         const tableCheck = await transaction.request()
             .input('tableId', sql.Int, parsedTableId)
-            .query(`SELECT table_id, table_status, table_number FROM dbo.RestaurantTables WHERE table_id = @tableId`);
+            .query(`SELECT table_id, table_status, table_number, merged_into_table_id FROM dbo.RestaurantTables WHERE table_id = @tableId`);
 
         if (tableCheck.recordset.length === 0) {
             await transaction.rollback();
             return res.status(404).json({ success: false, message: 'Table not found.' });
         }
-        const tableStatus = tableCheck.recordset[0].table_status;
-        const tableNumber = tableCheck.recordset[0].table_number;
+        let targetTableId = tableCheck.recordset[0].table_id;
+        let tableStatus = tableCheck.recordset[0].table_status;
+        let tableNumber = tableCheck.recordset[0].table_number;
+        
+        if (tableCheck.recordset[0].merged_into_table_id) {
+            const parentRes = await transaction.request()
+                .input('parentId', sql.Int, tableCheck.recordset[0].merged_into_table_id)
+                .query(`SELECT table_status, table_number FROM dbo.RestaurantTables WHERE table_id = @parentId`);
+            if (parentRes.recordset.length > 0) {
+                targetTableId = tableCheck.recordset[0].merged_into_table_id;
+                tableStatus = parentRes.recordset[0].table_status;
+                tableNumber = parentRes.recordset[0].table_number + ' (Merged from ' + tableNumber + ')';
+            }
+        }
+
         if (!['Occupied', 'Reserved'].includes(tableStatus)) {
             await transaction.rollback();
             return res.status(409).json({
@@ -357,7 +385,7 @@ export const checkoutOrder = async (req, res) => {
 
         // Insert Order
         const orderResult = await transaction.request()
-            .input('tableId', sql.Int, parsedTableId)
+            .input('tableId', sql.Int, targetTableId)
             .input('customerId', sql.Int, req.user?.user_id || null)
             .input('subtotal', sql.Decimal(18, 2), totalAmount)
             .input('totalAmount', sql.Decimal(18, 2), totalAmount)
@@ -378,7 +406,7 @@ export const checkoutOrder = async (req, res) => {
                 .input('quantity', sql.Int, vItem.quantity)
                 .input('unitPrice', sql.Decimal(18, 2), vItem.unit_price)
                 .input('notes', sql.NVarChar(500), vItem.notes)
-                .input('tableNumber', sql.NVarChar(20), tableNumber)
+                .input('tableNumber', sql.NVarChar(255), tableNumber)
                 .query(`
                     INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, snapshot_table_name, item_status)
                     OUTPUT INSERTED.order_item_id

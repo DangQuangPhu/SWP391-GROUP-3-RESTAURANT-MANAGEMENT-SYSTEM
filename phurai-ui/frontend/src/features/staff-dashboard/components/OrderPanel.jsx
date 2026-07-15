@@ -10,7 +10,7 @@ export default function OrderPanel({ onSelectOrder }) {
   if (!orderTables || orderTables.length === 0) {
     return (
       <div className="staff-order-intro">
-        <p className="sfx-note">Không có đơn hàng nào đang hoạt động</p>
+        <p className="sfx-note">No active orders</p>
       </div>
     );
   }
@@ -36,8 +36,8 @@ export default function OrderPanel({ onSelectOrder }) {
 
               <div className="sfx-card__body" style={{ padding: '0 16px 16px' }}>
                 <div className="staff-order-field">
-                  <span>Bắt đầu: {new Date(order.created_at).toLocaleTimeString('vi-VN')}</span>
-                  <span>Tổng tiền: <strong style={{ color: 'var(--sfx-text)' }}>{`${Math.round(order.total_amount).toLocaleString('vi-VN')} VND`}</strong></span>
+                  <span>Started: {new Date(order.created_at).toLocaleTimeString('vi-VN')}</span>
+                  <span>Total: <strong style={{ color: 'var(--sfx-text)' }}>{`${Math.round(order.total_amount).toLocaleString('vi-VN')} VND`}</strong></span>
                 </div>
 
                 <div className="staff-order-actions" style={{ marginTop: '16px' }}>
@@ -45,7 +45,7 @@ export default function OrderPanel({ onSelectOrder }) {
                     onClick={() => onSelectOrder && onSelectOrder(order)}
                     className="staff-order-action"
                   >
-                    Chi tiết
+                    Details
                   </button>
                   {!isPaid && (
                     <button

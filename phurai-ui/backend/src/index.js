@@ -27,6 +27,7 @@ import adminKdsRoutes from "./routes/admin.kds.routes.js";
 import ordersRoutes from "./routes/orders.routes.js";
 
 import loyaltyRoutes from "./routes/loyalty.js";
+import pool from "./db.js";
 import reviewRoutes from "./routes/review.routes.js";
 import { initSocket } from "./socket.js";
 import { runReservationReminders } from "./services/reminderService.js";
@@ -35,6 +36,7 @@ import { sweepNoShows } from "./services/noShowSweeper.js";
 import { startCronJobs } from "./services/cronService.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const app = express();
 const port = process.env.PORT || 5001;
 
@@ -96,6 +98,7 @@ app.use("/api/vouchers", voucherRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/loyalty", loyaltyRoutes);
 app.use("/api/reviews", reviewRoutes);
+
 
 import paymentRoutes from "./routes/paymentRoutes.js";
 app.use("/api/payments", paymentRoutes);

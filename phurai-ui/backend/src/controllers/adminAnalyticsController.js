@@ -2,13 +2,21 @@ import { getRawPool } from '../db.js';
 
 // GET /api/admin/analytics/reservations
 export const getReservationsAnalytics = async (req, res) => {
+    const { startDate, endDate } = req.query;
     try {
         const pool = await getRawPool();
-        const result = await pool.request().query(`
+        const request = pool.request();
+        let query = `
             SELECT reservation_status, COUNT(*) as count 
             FROM dbo.Reservations 
-            GROUP BY reservation_status
-        `);
+        `;
+        if (startDate && endDate) {
+            query += ` WHERE created_at >= @startDate AND created_at <= @endDate `;
+            request.input('startDate', startDate);
+            request.input('endDate', endDate);
+        }
+        query += ` GROUP BY reservation_status `;
+        const result = await request.query(query);
         return res.json({ success: true, data: result.recordset });
     } catch (error) {
         console.error('[adminAnalyticsController] getReservationsAnalytics error:', error);
@@ -18,15 +26,22 @@ export const getReservationsAnalytics = async (req, res) => {
 
 // GET /api/admin/analytics/revenue
 export const getRevenueAnalytics = async (req, res) => {
+    const { startDate, endDate } = req.query;
     try {
         const pool = await getRawPool();
-        const result = await pool.request().query(`
+        const request = pool.request();
+        let query = `
             SELECT CAST(paid_at AS DATE) as date, ISNULL(SUM(amount_paid), 0) as daily_revenue 
             FROM dbo.Payments 
             WHERE payment_status = 'Completed'
-            GROUP BY CAST(paid_at AS DATE) 
-            ORDER BY date DESC
-        `);
+        `;
+        if (startDate && endDate) {
+            query += ` AND paid_at >= @startDate AND paid_at <= @endDate `;
+            request.input('startDate', startDate);
+            request.input('endDate', endDate);
+        }
+        query += ` GROUP BY CAST(paid_at AS DATE) ORDER BY date ASC `;
+        const result = await request.query(query);
         return res.json({ success: true, data: result.recordset });
     } catch (error) {
         console.error('[adminAnalyticsController] getRevenueAnalytics error:', error);
@@ -36,13 +51,22 @@ export const getRevenueAnalytics = async (req, res) => {
 
 // GET /api/admin/analytics/orders
 export const getOrdersAnalytics = async (req, res) => {
+    const { startDate, endDate } = req.query;
     try {
         const pool = await getRawPool();
-        const result = await pool.request().query(`
+        const request = pool.request();
+        let query = `
             SELECT order_status, COUNT(*) as count, ISNULL(AVG(total_amount), 0) as avg_value 
             FROM dbo.Orders 
-            GROUP BY order_status
-        `);
+            WHERE 1=1
+        `;
+        if (startDate && endDate) {
+            query += ` AND created_at >= @startDate AND created_at <= @endDate `;
+            request.input('startDate', startDate);
+            request.input('endDate', endDate);
+        }
+        query += ` GROUP BY order_status `;
+        const result = await request.query(query);
         return res.json({ success: true, data: result.recordset });
     } catch (error) {
         console.error('[adminAnalyticsController] getOrdersAnalytics error:', error);
@@ -52,13 +76,27 @@ export const getOrdersAnalytics = async (req, res) => {
 
 // GET /api/admin/analytics/reviews
 export const getReviewsAnalytics = async (req, res) => {
+    const { range, startDate, endDate } = req.query;
     try {
         const pool = await getRawPool();
-        const result = await pool.request().query(`
+        const request = pool.request();
+        let query = `
             SELECT overall_rating, COUNT(*) as count 
             FROM dbo.CustomerReviews 
-            GROUP BY overall_rating
-        `);
+            WHERE 1=1
+        `;
+        if (startDate && endDate) {
+            query += ` AND created_at >= @startDate AND created_at <= @endDate `;
+            request.input('startDate', startDate);
+            request.input('endDate', endDate);
+        } else if (range && range !== 'all') {
+            const daysMap = { '7d': 7, '30d': 30, '90d': 90 };
+            const days = daysMap[range] || 30;
+            query += ` AND created_at >= DATEADD(day, -${days}, SYSDATETIME()) `;
+        }
+        query += ` GROUP BY overall_rating `;
+        
+        const result = await request.query(query);
         return res.json({ success: true, data: result.recordset });
     } catch (error) {
         console.error('[adminAnalyticsController] getReviewsAnalytics error:', error);
@@ -68,14 +106,23 @@ export const getReviewsAnalytics = async (req, res) => {
 
 // GET /api/admin/analytics/staff-performance
 export const getStaffPerformanceAnalytics = async (req, res) => {
+    const { startDate, endDate } = req.query;
     try {
         const pool = await getRawPool();
-        const result = await pool.request().query(`
+        const request = pool.request();
+        let shiftJoinCondition = 'sp.user_id = s.staff_user_id';
+        if (startDate && endDate) {
+            shiftJoinCondition += ` AND s.check_in_time >= @startDate AND s.check_in_time <= @endDate`;
+            request.input('startDate', startDate);
+            request.input('endDate', endDate);
+        }
+        const query = `
             SELECT sp.staff_code, COUNT(s.log_id) as total_shifts 
             FROM dbo.StaffProfiles sp 
-            LEFT JOIN dbo.ShiftLogs s ON sp.user_id = s.staff_user_id 
+            LEFT JOIN dbo.ShiftLogs s ON ${shiftJoinCondition}
             GROUP BY sp.staff_code
-        `);
+        `;
+        const result = await request.query(query);
         return res.json({ success: true, data: result.recordset });
     } catch (error) {
         console.error('[adminAnalyticsController] getStaffPerformanceAnalytics error:', error);

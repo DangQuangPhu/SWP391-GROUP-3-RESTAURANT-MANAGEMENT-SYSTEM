@@ -5,6 +5,7 @@ import { MonitorSmartphone, CreditCard, LayoutDashboard, Gem, ArrowDownLeft, Arr
 import CustomerDashboard from "../components/CustomerDashboard";
 import LoyaltyPointsPage from "@/features/loyalty/pages/LoyaltyPointsPage";
 import { useFavoritesStore } from "@/features/menu/context/MenuFavoritesContext.jsx";
+import CustomerNotificationBell from "@/components/notifications/CustomerNotificationBell.jsx";
 
 import { getProfilePayments } from "../services/profileApi.js";
 import {
@@ -1190,9 +1191,7 @@ function ProfilePage({
                   aria-label="Search profile"
                 />
               </label>
-              <button type="button" className="profile-dashboard__icon-btn" aria-label="Notifications">
-                <BellIcon />
-              </button>
+              <CustomerNotificationBell variant="profile" />
             </div>
           </header>
 

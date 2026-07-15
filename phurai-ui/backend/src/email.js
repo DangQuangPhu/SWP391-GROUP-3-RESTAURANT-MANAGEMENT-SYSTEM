@@ -1172,7 +1172,7 @@ export async function sendReservationInvoiceEmail({ to, reservation, preorderIte
 // ============================================================================
 // sendCheckoutReceiptEmail
 // ============================================================================
-export async function sendCheckoutReceiptEmail({ toEmail, customerName, orderId, items, discountAmount, totalPaid, tableNumber, dateStr }) {
+export async function sendCheckoutReceiptEmail({ toEmail, customerName, orderId, items, discountAmount, totalPaid, tableNumber, dateStr, preorderDeposit = 0, preorderTotal = 0, preorders = [], sessionOrders = [], notes = "" }) {
   const recipient = String(toEmail || "").trim().toLowerCase();
   if (!recipient) return { sent: false, reason: "no_recipient" };
   if (!isSmtpConfigured()) return { sent: false, devMode: true };
@@ -1180,20 +1180,54 @@ export async function sendCheckoutReceiptEmail({ toEmail, customerName, orderId,
   const formattedId = `#ORD${String(orderId).padStart(6, "0")}`;
   const safeName = customerName || "Guest";
   
-  const discountHtml = discountAmount > 0 
+  const itemsSubtotal = (items || []).reduce((sum, item) => sum + (Number(item.price || item.unit_price || 0) * Number(item.quantity || item.qty || 1)), 0);
+
+  const preorderDepositHtml = preorderDeposit > 0 
     ? `
       <tr>
-        <td style="padding: 8px 0; color:#4a3f35; font-weight: 600;">Discount Applied:</td>
-        <td align="right" style="padding: 8px 0; font-weight: 700; color:#c0392b;">-${Number(discountAmount).toLocaleString('vi-VN')} đ</td>
+        <td style="padding: 8px 0; color:#4a3f35; font-weight: 500;">Preorder Deposit Paid:</td>
+        <td align="right" style="padding: 8px 0; font-weight: 600; color:#c0392b;">-${Number(preorderDeposit).toLocaleString('vi-VN')} đ</td>
       </tr>
     ` : '';
 
-  const itemsHtml = items && items.length > 0 ? items.map(item => `
-    <tr>
-      <td style="padding: 8px 0; border-bottom: 1px solid #eee; color:#4a3f35;">${item.name} x${item.quantity || item.qty}</td>
-      <td align="right" style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600; color:#2c1d0a;">${Number(item.price || item.unit_price || 0).toLocaleString('vi-VN')} đ</td>
-    </tr>
-  `).join('') : '';
+  const discountHtml = discountAmount > 0 
+    ? `
+      <tr>
+        <td style="padding: 8px 0; color:#4a3f35; font-weight: 500;">Discount Applied:</td>
+        <td align="right" style="padding: 8px 0; font-weight: 600; color:#c0392b;">-${Number(discountAmount).toLocaleString('vi-VN')} đ</td>
+      </tr>
+    ` : '';
+
+  const preordersHtml = preorders && preorders.length > 0 ? `
+    <h4 style="margin: 18px 0 6px; font-size: 11px; font-weight: 700; color: #b89467; text-transform: uppercase; letter-spacing: 0.08em;">Preordered Items</h4>
+    <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px; line-height: 1.6; margin-bottom: 12px;">
+      ${preorders.map(item => `
+        <tr>
+          <td style="padding: 6px 0; border-bottom: 1px solid #eee; color:#4a3f35;">${item.name} x${item.quantity || item.qty}</td>
+          <td align="right" style="padding: 6px 0; border-bottom: 1px solid #eee; font-weight: 600; color:#2c1d0a;">${Number(item.price || item.unit_price || 0).toLocaleString('vi-VN')} đ</td>
+        </tr>
+      `).join('')}
+    </table>
+  ` : '';
+
+  const sessionOrdersHtml = sessionOrders && sessionOrders.length > 0 ? `
+    <h4 style="margin: 18px 0 6px; font-size: 11px; font-weight: 700; color: #10b981; text-transform: uppercase; letter-spacing: 0.08em;">QR Self-Order (Dining) Items</h4>
+    <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px; line-height: 1.6; margin-bottom: 12px;">
+      ${sessionOrders.map(item => `
+        <tr>
+          <td style="padding: 6px 0; border-bottom: 1px solid #eee; color:#4a3f35;">${item.name} x${item.quantity || item.qty}</td>
+          <td align="right" style="padding: 6px 0; border-bottom: 1px solid #eee; font-weight: 600; color:#2c1d0a;">${Number(item.price || item.unit_price || 0).toLocaleString('vi-VN')} đ</td>
+        </tr>
+      `).join('')}
+    </table>
+  ` : '';
+
+  const notesHtml = notes ? `
+    <div style="margin-top: 20px; padding: 12px 16px; background-color: #faf9f6; border-left: 3px solid #b89467; font-size: 13px; color: #665c52; border-radius: 4px; text-align: left;">
+      <strong style="color: #4a3f35; display: block; margin-bottom: 4px;">Customer Notes:</strong>
+      "${notes}"
+    </div>
+  ` : '';
 
   const html = `
 <!DOCTYPE html>
@@ -1253,7 +1287,7 @@ export async function sendCheckoutReceiptEmail({ toEmail, customerName, orderId,
                   </td>
                 </tr>
               </table>
-
+ 
               <!-- Payment summary & Items -->
               <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border:1px solid #e8dcc8;border-radius:10px;margin:0 0 28px;">
                 <tr>
@@ -1261,14 +1295,22 @@ export async function sendCheckoutReceiptEmail({ toEmail, customerName, orderId,
                     <p style="margin:0 0 14px;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#a09080;font-weight:600;">
                       Receipt Items
                     </p>
-                    <table width="100%" cellpadding="0" cellspacing="0" style="font-size:14px; line-height: 1.6;">
-                      ${itemsHtml}
+                    ${preordersHtml}
+                    ${sessionOrdersHtml}
+                    
+                    <table width="100%" cellpadding="0" cellspacing="0" style="font-size:14px; line-height: 1.6; border-collapse: collapse; margin-top: 12px;">
+                      <tr>
+                        <td style="padding: 12px 0 8px; color:#4a3f35; font-weight: 500; border-top: 1px dashed #e8dcc8;">Subtotal:</td>
+                        <td align="right" style="padding: 12px 0 8px; font-weight: 600; color:#2c1d0a; border-top: 1px dashed #e8dcc8;">${Number(itemsSubtotal).toLocaleString('vi-VN')} đ</td>
+                      </tr>
+                      ${preorderDepositHtml}
                       ${discountHtml}
                       <tr>
-                        <td style="padding: 8px 0; color:#4a3f35; font-weight: 600;">Total Paid:</td>
-                        <td align="right" style="padding: 8px 0; font-weight: 700; color:#27ae60; font-size: 16px;">${Number(totalPaid).toLocaleString('vi-VN')} đ</td>
+                        <td style="padding: 12px 0 0; color:#4a3f35; font-weight: 700; border-top: 1px solid #e8dcc8;">Net Paid Amount:</td>
+                        <td align="right" style="padding: 12px 0 0; font-weight: 700; color:#27ae60; font-size: 16px; border-top: 1px solid #e8dcc8;">${Number(totalPaid).toLocaleString('vi-VN')} đ</td>
                       </tr>
                     </table>
+                    ${notesHtml}
                   </td>
                 </tr>
               </table>

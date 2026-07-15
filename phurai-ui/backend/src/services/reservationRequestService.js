@@ -123,8 +123,8 @@ export async function submitEditRequest(reservationId, customerId, changes, call
       return { success: false, code: "FORBIDDEN", message: "You do not own this reservation." };
     }
 
-    // ── 4. State guard: must be Confirmed ───────────────────────────────────
-    if (r.reservation_status !== "Confirmed") {
+    // ── 4. State guard: must be Confirmed or AWAIT CHECK-IN ─────────────────
+    if (r.reservation_status !== "Confirmed" && r.reservation_status !== "AWAIT CHECK-IN") {
       await connection.rollback();
       connection.release();
       return {
@@ -255,7 +255,7 @@ export async function submitCancelRequest(reservationId, customerId, cancelReaso
       return { success: false, code: "FORBIDDEN", message: "You do not own this reservation." };
     }
 
-    if (r.reservation_status !== "Confirmed") {
+    if (r.reservation_status !== "Confirmed" && r.reservation_status !== "AWAIT CHECK-IN") {
       await connection.rollback();
       connection.release();
       return {

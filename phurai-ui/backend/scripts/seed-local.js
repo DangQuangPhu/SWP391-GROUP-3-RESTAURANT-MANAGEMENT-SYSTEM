@@ -476,5 +476,106 @@ export async function generateAndSeed(pool) {
     );
   }
 
-  console.log(`\n  Summary: ${allReservations.length} reservations | ${allOrders.length} orders | ${allPayments.length} payments | ${allTimelines.length} timelines | ${allLoyaltyTx.length} loyalty txns`);
+  // ── 100 CustomerReviews ───────────────────────────────────────────────────
+  console.log('  Inserting 100 customer reviews with realistic rating distribution...');
+  const comments12 = [
+    "Worst service ever. We waited 45 minutes for our table.",
+    "The meat was cold and tough. Very disappointed.",
+    "Too expensive for subpar quality. Service was also inattentive.",
+    "Extremely noisy and the table was dirty. Food was cold.",
+    "Bad experience. The staff was rude when we complained about the food.",
+    "Food was bland and overpriced. Will not return.",
+    "Poor customer service. No one checked on our table.",
+    "Very slow service, and the food was not cooked properly."
+  ];
+
+  const comments3 = [
+    "The food was decent but service was quite slow.",
+    "Average experience. The atmosphere was good but food was a bit salty.",
+    "A bit overpriced for the portion size, but taste was okay.",
+    "Decent steak, but nothing special. Ambiance was nice though.",
+    "Good drinks, but the main courses took too long to arrive.",
+    "Decent experience. Food was okay, service could be improved.",
+    "Nothing outstanding, just your average restaurant."
+  ];
+
+  const comments45 = [
+    "Absolutely stunning. Japanese A5 Wagyu was perfect.",
+    "Black Cod Miso was divine. Staff were warm throughout.",
+    "Best tasting menu in the city. Every dish was a work of art.",
+    "Salmon Mentaiko beautifully presented. Will return for omakase.",
+    "Wonderful service and Wagyu was incredibly delicious!",
+    "Exquisite dining experience! The ambiance was lovely.",
+    "Highly recommend the chef's special. Will definitely come back.",
+    "Excellent service and food quality. A must-visit place.",
+    "Outstanding dishes, every bite was flavorful.",
+    "Attentive staff and great food. The desserts were amazing.",
+    "A truly memorable meal. The wagyu beef literally melted in my mouth.",
+    "Perfect ambiance for our anniversary. The service was impeccable.",
+    "Fabulous food! The presentation was as good as the taste.",
+    "Superb experience. Highly professional staff and great flavors."
+  ];
+
+  const allCustomerReviews = [];
+  for (let i = 0; i < 100; i++) {
+    let customerId;
+    if (prng.chance(0.1)) {
+      customerId = 15; // Demo user user_id=15
+    } else {
+      customerId = 1000 + i; // Pick generated users starting from 1000
+    }
+
+    const roll = prng.next();
+    let baseRating;
+    if (roll < 0.03) {
+      baseRating = 1;
+    } else if (roll < 0.10) {
+      baseRating = 2;
+    } else if (roll < 0.25) {
+      baseRating = 3;
+    } else if (roll < 0.50) {
+      baseRating = 4;
+    } else {
+      baseRating = 5;
+    }
+
+    const getRating = (base) => {
+      const noise = prng.nextRange(-1, 1);
+      return Math.max(1, Math.min(5, base + noise));
+    };
+
+    const food = getRating(baseRating);
+    const service = getRating(baseRating);
+    const ambiance = getRating(baseRating);
+    
+    const overall = Math.round((food + service + ambiance) / 3);
+
+    let comment = "NULL";
+    if (prng.chance(0.60)) {
+      let text = "";
+      if (overall <= 2) {
+        text = prng.nextElement(comments12);
+      } else if (overall === 3) {
+        text = prng.nextElement(comments3);
+      } else {
+        text = prng.nextElement(comments45);
+      }
+      comment = `N'${text.replace(/'/g, "''")}'`;
+    }
+
+    const dateOffsetDays = prng.nextRange(0, 180);
+    const reviewDate = new Date();
+    reviewDate.setDate(reviewDate.getDate() - dateOffsetDays);
+    const dateStr = reviewDate.toISOString();
+
+    allCustomerReviews.push(`(${customerId}, NULL, ${food}, ${service}, ${ambiance}, ${comment}, 1, '${dateStr}')`);
+  }
+
+  await pool.query(`DELETE FROM dbo.CustomerReviews`);
+  await executeInserts(pool, 'CustomerReviews',
+    'customer_id, order_id, food_rating, service_rating, ambiance_rating, comment, is_visible, created_at',
+    allCustomerReviews, false
+  );
+
+  console.log(`\n  Summary: ${allReservations.length} reservations | ${allOrders.length} orders | ${allPayments.length} payments | ${allTimelines.length} timelines | ${allLoyaltyTx.length} loyalty txns | 100 customer reviews`);
 }

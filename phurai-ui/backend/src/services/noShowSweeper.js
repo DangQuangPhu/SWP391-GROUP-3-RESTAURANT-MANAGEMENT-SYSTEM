@@ -4,12 +4,12 @@ import { updateReservationStatus } from "./reservationStateService.js";
 
 export const sweepNoShows = async () => {
   try {
-    // Look for reservations that are Reserved, Confirmed, Pending Request, or Pending Payment
+    // Look for reservations that are Await Check-in, Pending Request, or Awaiting Deposit
     // and whose start time was more than 30 minutes ago.
     const [rows] = await pool.query(`
       SELECT reservation_id, reservation_start_at, reservation_status
       FROM dbo.Reservations
-      WHERE reservation_status IN (N'Reserved', N'Confirmed', N'Pending Request', N'Pending Payment')
+      WHERE reservation_status IN (N'Await Check-in', N'Pending Request', N'Awaiting Deposit')
         AND reservation_start_at < DATEADD(minute, -30, SYSDATETIME())
     `);
 
@@ -17,7 +17,7 @@ export const sweepNoShows = async () => {
 
     for (const r of rows) {
       try {
-        if (r.reservation_status === 'Pending Request' || r.reservation_status === 'Pending Payment') {
+        if (r.reservation_status === 'Pending Request' || r.reservation_status === 'Awaiting Deposit') {
           await updateReservationStatus({
             connection: pool,
             reservationId: r.reservation_id,

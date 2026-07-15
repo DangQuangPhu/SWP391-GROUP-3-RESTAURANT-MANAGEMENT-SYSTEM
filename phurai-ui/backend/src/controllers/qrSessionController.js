@@ -139,73 +139,18 @@ export async function scanStaticQr(req, res) {
 
 
 
-    if (table.table_status === 'Reserved' || table.table_status === 'Cleaning') {
-      return res.status(403).json({ success: false, message: "Table is not ready or is currently reserved. Please contact staff." });
-    }
-
-    // Rule 1: Table must be Occupied or Available
-    if (table.table_status !== 'Occupied' && table.table_status !== 'Available') {
-      return res.status(403).json({ success: false, message: "Table is not available. Please contact staff to check in." });
+    // Enforce Rule: Only Occupied tables (which have active checked-in sessions) can scan QR to order
+    if (table.table_status !== 'Occupied') {
+      return res.status(403).json({
+        success: false,
+        message: "Table has not been activated. Please contact staff to check-in and activate the table before scanning the QR code to order."
+      });
     }
 
     // Rule 1: Resolve merged table
     const resolvedTableId = table.merged_into_table_id ? table.merged_into_table_id : table.table_id;
 
     let session = null;
-
-    if (table.table_status === 'Available') {
-      const conn = await pool.getConnection();
-      try {
-        await conn.beginTransaction();
-
-        const crypto = await import('crypto');
-        const token = crypto.randomBytes(32).toString('hex');
-
-        // 1. Create an Active Session
-        const insertResult = await conn.query(`
-          INSERT INTO dbo.QROrderSessions (table_id, scanned_table_id, token, session_status, generated_at)
-          OUTPUT INSERTED.qr_session_id
-          VALUES (?, ?, ?, N'Active', SYSUTCDATETIME())
-        `, [resolvedTableId, tableId, token]);
-
-        const newSessionId = insertResult[0][0].qr_session_id;
-
-        // 2. Update Table to Occupied
-        await conn.query(`
-          UPDATE dbo.RestaurantTables 
-          SET table_status = N'Occupied', updated_at = SYSUTCDATETIME()
-          WHERE table_id = ?
-        `, [resolvedTableId]);
-
-        await conn.commit();
-
-        const [newSessions] = await pool.query(
-          `${SESSION_SELECT} WHERE qs.qr_session_id = ?`,
-          [newSessionId]
-        );
-        session = mapSessionRow(newSessions[0]);
-
-        // Emit Socket.IO event to staff
-        const io = req.app.get("io");
-        if (io) {
-          io.to("room:manager").to("room:staff").emit("table:status_changed", { tableId: resolvedTableId, status: 'Occupied' });
-          io.to("room:manager").to("room:staff").emit("table:sync", { action: "update", table_id: resolvedTableId });
-        }
-
-        return res.json({
-          success: true,
-          message: "Session activated. Table is now occupied.",
-          session,
-          resolved_table_id: resolvedTableId,
-          was_merged: !!table.merged_into_table_id
-        });
-      } catch (error) {
-        await conn.rollback();
-        throw error;
-      } finally {
-        conn.release();
-      }
-    }
 
     // If Occupied, Find existing active session
     const [existingSessions] = await pool.query(
@@ -294,73 +239,18 @@ export async function scanStaticQrCodeUrl(req, res) {
 
 
 
-    if (table.table_status === 'Reserved' || table.table_status === 'Cleaning') {
-      return res.status(403).json({ success: false, message: "Table is not ready or is currently reserved. Please contact staff." });
-    }
-
-    // Rule 1: Table must be Occupied or Available
-    if (table.table_status !== 'Occupied' && table.table_status !== 'Available') {
-      return res.status(403).json({ success: false, message: "Table is not available. Please contact staff." });
+    // Enforce Rule: Only Occupied tables (which have active checked-in sessions) can scan QR to order
+    if (table.table_status !== 'Occupied') {
+      return res.status(403).json({
+        success: false,
+        message: "Table has not been activated. Please contact staff to check-in and activate the table before scanning the QR code to order."
+      });
     }
 
     // Rule 1: Resolve merged table
     const resolvedTableId = table.merged_into_table_id ? table.merged_into_table_id : table.table_id;
 
     let session = null;
-
-    if (table.table_status === 'Available') {
-      const conn = await pool.getConnection();
-      try {
-        await conn.beginTransaction();
-
-        const crypto = await import('crypto');
-        const token = crypto.randomBytes(32).toString('hex');
-
-        // 1. Create an Active Session
-        const insertResult = await conn.query(`
-          INSERT INTO dbo.QROrderSessions (table_id, scanned_table_id, token, session_status, generated_at)
-          OUTPUT INSERTED.qr_session_id
-          VALUES (?, ?, ?, N'Active', SYSUTCDATETIME())
-        `, [resolvedTableId, tableId, token]);
-
-        const newSessionId = insertResult[0][0].qr_session_id;
-
-        // 2. Update Table to Occupied
-        await conn.query(`
-          UPDATE dbo.RestaurantTables 
-          SET table_status = N'Occupied', updated_at = SYSUTCDATETIME()
-          WHERE table_id = ?
-        `, [resolvedTableId]);
-
-        await conn.commit();
-
-        const [newSessions] = await pool.query(
-          `${SESSION_SELECT} WHERE qs.qr_session_id = ?`,
-          [newSessionId]
-        );
-        session = mapSessionRow(newSessions[0]);
-
-        // Emit Socket.IO event to staff
-        const io = req.app.get("io");
-        if (io) {
-          io.to("room:manager").to("room:staff").emit("table:status_changed", { tableId: resolvedTableId, status: 'Occupied' });
-          io.to("room:manager").to("room:staff").emit("table:sync", { action: "update", table_id: resolvedTableId });
-        }
-
-        return res.json({
-          success: true,
-          message: "Session activated. Table is now occupied.",
-          session,
-          resolved_table_id: resolvedTableId,
-          was_merged: !!table.merged_into_table_id
-        });
-      } catch (error) {
-        await conn.rollback();
-        throw error;
-      } finally {
-        conn.release();
-      }
-    }
 
     // If Occupied, Find existing active session
     const [existingSessions] = await pool.query(
@@ -763,13 +653,13 @@ export async function getQrSessionHistory(req, res) {
         .input("orderId", sql.Int, order.order_id)
         .query(`
           SELECT 
-            oi.order_item_id, oi.order_id, oi.quantity, oi.unit_price, oi.item_status, oi.notes,
+            oi.order_item_id, oi.order_id, oi.quantity, oi.unit_price, oi.item_status, oi.notes, oi.line_total,
             d.dish_name, di.image_url, o.order_type
           FROM dbo.OrderItems oi
           JOIN dbo.Dishes d ON oi.dish_id = d.dish_id
           LEFT JOIN dbo.DishImages di ON d.dish_id = di.dish_id AND di.is_primary = 1
           JOIN dbo.Orders o ON oi.order_id = o.order_id
-          WHERE oi.order_id = @orderId
+          WHERE oi.order_id = @orderId AND oi.item_status != N'Cancelled'
         `);
       const items = result.recordset || [];
 
@@ -826,10 +716,10 @@ export async function cancelOrderItem(req, res) {
 
     const item = items[0];
 
-    // 2. Strict status check
-    if (item.item_status !== 'Pending') {
+    // 2. Strict status check (allow cancellation if not yet Preparing or beyond)
+    if (item.item_status !== 'Pending' && item.item_status !== 'Sent To Kitchen') {
       await conn.rollback();
-      return res.status(400).json({ success: false, message: `Cannot cancel item. Kitchen has already started (Status: ${item.item_status})` });
+      return res.status(400).json({ success: false, message: `Cannot cancel item. Kitchen has already started preparing it (Status: ${item.item_status})` });
     }
 
     // 3. Update Item Status
@@ -875,6 +765,85 @@ export async function cancelOrderItem(req, res) {
     await conn.rollback();
     console.error("cancelOrderItem failed:", error);
     return res.status(500).json({ success: false, message: "Failed to cancel item." });
+  } finally {
+    conn.release();
+  }
+}
+
+/**
+ * PATCH /api/public/qr-order/items/:itemId/quantity
+ * Update quantity of a pending/sent order item and recalculate totals.
+ */
+export async function updateOrderItemQuantity(req, res) {
+  const conn = await pool.getConnection();
+  try {
+    const itemId = Number(req.params.itemId);
+    const { quantity } = req.body;
+    if (!Number.isFinite(itemId) || typeof quantity !== 'number' || quantity < 1) {
+      return res.status(400).json({ success: false, message: "Invalid item ID or quantity" });
+    }
+
+    await conn.beginTransaction();
+
+    // 1. Lock and fetch the item
+    const [items] = await conn.query(
+      `SELECT oi.order_id, oi.item_status, oi.quantity, oi.unit_price, o.table_id
+       FROM dbo.OrderItems oi WITH (UPDLOCK)
+       JOIN dbo.Orders o ON oi.order_id = o.order_id
+       WHERE oi.order_item_id = ?`,
+      [itemId]
+    );
+
+    if (!items || items.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ success: false, message: "Item not found" });
+    }
+
+    const item = items[0];
+
+    // 2. Strict status check (allow update if not yet Preparing or beyond)
+    if (item.item_status !== 'Pending' && item.item_status !== 'Sent To Kitchen') {
+      await conn.rollback();
+      return res.status(400).json({ success: false, message: `Cannot update item. Kitchen has already started preparing it (Status: ${item.item_status})` });
+    }
+
+    // 3. Update Item Quantity
+    await conn.query(
+      `UPDATE dbo.OrderItems SET quantity = ? WHERE order_item_id = ?`,
+      [quantity, itemId]
+    );
+
+    // 4. Strict Recalculation of Order Totals
+    await conn.query(
+      `UPDATE dbo.Orders 
+       SET subtotal = ISNULL((SELECT SUM(quantity * unit_price) FROM dbo.OrderItems WHERE order_id = ? AND item_status != N'Cancelled'), 0)
+       WHERE order_id = ?`,
+      [item.order_id, item.order_id]
+    );
+
+    await conn.query(
+      `UPDATE dbo.Orders
+       SET total_amount = subtotal - ISNULL(discount_amount, 0) + ISNULL(service_charge, 0)
+       WHERE order_id = ?`,
+      [item.order_id]
+    );
+
+    await conn.commit();
+
+    // 5. Real-time updates
+    const io = req.app.get("io");
+    if (io) {
+      // Tell KDS UI to reload the queue so it sees the new quantity
+      io.to("room:kitchen").emit("kds:ticket_updated", { orderItemId: itemId, status: item.item_status });
+      // Tell staff UI
+      io.to("room:manager").to("room:staff").emit("ORDER_ITEM_UPDATED", { orderId: item.order_id, itemId });
+    }
+
+    return res.json({ success: true, message: "Item quantity updated successfully." });
+  } catch (error) {
+    await conn.rollback();
+    console.error("updateOrderItemQuantity failed:", error);
+    return res.status(500).json({ success: false, message: "Failed to update item quantity." });
   } finally {
     conn.release();
   }

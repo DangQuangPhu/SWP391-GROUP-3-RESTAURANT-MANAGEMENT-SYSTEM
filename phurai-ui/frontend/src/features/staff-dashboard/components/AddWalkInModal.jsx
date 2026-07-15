@@ -10,11 +10,11 @@
  *   - Table selected via the shared Customer Floor Plan (TableBoard) via portal
  *   - On success → parent refreshes list via socket (no manual reload needed)
  */
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { LayoutGrid, X, Check, ChevronRight } from "lucide-react";
 import TableBoard from "@/features/reservations/components/choose-table/TableBoard.jsx";
-import { fetchStaffTables, createWalkInReservation } from "../services/staffApi.js";
+import { createWalkInReservation } from "../services/staffApi.js";
 import "../styles/AddWalkInModal.css";
 
 // ─── Field config ────────────────────────────────────────────────────────────
@@ -52,6 +52,14 @@ function validate(fields) {
   if (!gc || gc < 1 || gc > 50) {
     errors.guest_count = "Guest count must be between 1 and 50.";
   }
+  if (!fields.start_time) {
+    errors.start_time = "Start time is required.";
+  }
+  if (!fields.end_time) {
+    errors.end_time = "End time is required.";
+  } else if (fields.start_time && fields.end_time <= fields.start_time) {
+    errors.end_time = "End time must be after start time.";
+  }
   if (!fields.table_id) {
     errors.table_id = "Please select a table using the floor plan.";
   }
@@ -63,12 +71,25 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
   const userId = user?.userId ?? user?.user_id ?? user?.id;
   const modalRef = useRef(null);
 
+  const getNowTimeString = () => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+
+  const getEndTimeString = (hoursAhead = 2) => {
+    const d = new Date();
+    d.setHours(d.getHours() + hoursAhead);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+
   const [fields, setFields] = useState({
     contact_name:  "",
     contact_phone: "",
     contact_email: "",
     guest_count:   "2",
     table_id:      "",
+    start_time:    getNowTimeString(),
+    end_time:      getEndTimeString(2),
   });
   const [errors,        setErrors]        = useState({});
   const [allTables,     setAllTables]     = useState([]);
@@ -76,17 +97,62 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
   const [submitting,    setSubmitting]    = useState(false);
   const [showFloorPlan, setShowFloorPlan] = useState(false);
 
-  // Fetch all tables on mount
+  // Fetch tables according to the chosen time slot and guest count
   useEffect(() => {
-    setLoadingTables(true);
-    fetchStaffTables(userId)
-      .then((res) => {
-        const all = Array.isArray(res?.data) ? res.data : [];
-        setAllTables(all.filter((t) => !t.is_counter));
+    let active = true;
+    
+    // Set loading asynchronously to avoid synchronous effect warnings
+    const timer = setTimeout(() => {
+      if (active) setLoadingTables(true);
+    }, 0);
+
+    const [sh, sm] = fields.start_time.split(':').map(Number);
+    const [eh, em] = fields.end_time.split(':').map(Number);
+    let duration = (eh * 60 + em) - (sh * 60 + sm);
+    if (isNaN(duration) || duration <= 0) {
+      clearTimeout(timer);
+      Promise.resolve().then(() => {
+        if (active) {
+          setAllTables([]);
+          setLoadingTables(false);
+        }
+      });
+      return;
+    }
+
+    const todayStr = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD
+    const url = `/api/reservations/availability?date=${todayStr}&time=${fields.start_time}&durationMinutes=${duration}&guestCount=${parseInt(fields.guest_count, 10) || 1}`;
+
+    fetch(url)
+      .then((res) => res.json())
+      .then((data) => {
+        if (active) {
+          if (data.success && Array.isArray(data.tables)) {
+            const mapped = data.tables
+              .filter((t) => !t.is_counter)
+              .map((t) => ({
+                ...t,
+                table_status: t.availability_at_slot === "Available" ? "Available" : t.availability_at_slot,
+              }));
+            setAllTables(mapped);
+          } else {
+            setAllTables([]);
+          }
+        }
       })
-      .catch(() => setAllTables([]))
-      .finally(() => setLoadingTables(false));
-  }, [userId]);
+      .catch(() => {
+        if (active) setAllTables([]);
+      })
+      .finally(() => {
+        clearTimeout(timer);
+        if (active) setLoadingTables(false);
+      });
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [fields.start_time, fields.end_time, fields.guest_count]);
 
   // Trap focus + Escape
   useEffect(() => {
@@ -139,6 +205,8 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
         contact_email: fields.contact_email.trim(),
         guest_count:   parseInt(fields.guest_count, 10),
         table_id:      parseInt(fields.table_id, 10),
+        start_time:    fields.start_time,
+        end_time:      fields.end_time,
       });
       toast(result.message || "Walk-in created successfully.", "success");
       onCreated?.(result);
@@ -226,22 +294,52 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
               {errors.contact_email && <p className="walkin-form__error">{errors.contact_email}</p>}
             </div>
 
-            {/* Row 3: Guest Count */}
-            <div className={`walkin-form__field${errors.guest_count ? " is-error" : ""}`}>
-              <label className="walkin-form__label">
-                {FIELD_RULES.guest_count.label}
-                <span className="walkin-form__required">*</span>
-              </label>
-              <input
-                className="walkin-form__input walkin-form__input--sm"
-                type="number"
-                min={1}
-                max={50}
-                value={fields.guest_count}
-                onChange={(e) => setField("guest_count", e.target.value)}
-                placeholder={FIELD_RULES.guest_count.placeholder}
-              />
-              {errors.guest_count && <p className="walkin-form__error">{errors.guest_count}</p>}
+            {/* Row 3: Guest Count & Dining Time Slot */}
+            <div className="walkin-form__grid">
+              <div className={`walkin-form__field${errors.guest_count ? " is-error" : ""}`}>
+                <label className="walkin-form__label">
+                  {FIELD_RULES.guest_count.label}
+                  <span className="walkin-form__required">*</span>
+                </label>
+                <input
+                  className="walkin-form__input"
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={fields.guest_count}
+                  onChange={(e) => setField("guest_count", e.target.value)}
+                  placeholder={FIELD_RULES.guest_count.placeholder}
+                />
+                {errors.guest_count && <p className="walkin-form__error">{errors.guest_count}</p>}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div className={`walkin-form__field${errors.start_time ? " is-error" : ""}`}>
+                  <label className="walkin-form__label">
+                    Start Time <span className="walkin-form__required">*</span>
+                  </label>
+                  <input
+                    className="walkin-form__input"
+                    type="time"
+                    value={fields.start_time}
+                    onChange={(e) => setField("start_time", e.target.value)}
+                  />
+                  {errors.start_time && <p className="walkin-form__error">{errors.start_time}</p>}
+                </div>
+
+                <div className={`walkin-form__field${errors.end_time ? " is-error" : ""}`}>
+                  <label className="walkin-form__label">
+                    End Time <span className="walkin-form__required">*</span>
+                  </label>
+                  <input
+                    className="walkin-form__input"
+                    type="time"
+                    value={fields.end_time}
+                    onChange={(e) => setField("end_time", e.target.value)}
+                  />
+                  {errors.end_time && <p className="walkin-form__error">{errors.end_time}</p>}
+                </div>
+              </div>
             </div>
           </div>
 

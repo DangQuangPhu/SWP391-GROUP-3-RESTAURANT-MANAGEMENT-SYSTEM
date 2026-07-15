@@ -17,7 +17,7 @@ export async function runReservationReminders() {
         COALESCE(ua.full_name, r.contact_name, N'Guest') AS recipient_name
       FROM dbo.Reservations r
       LEFT JOIN dbo.UserAccounts ua ON ua.user_id = r.customer_id
-      WHERE r.reservation_status = 'Confirmed'
+      WHERE r.reservation_status = 'Await Check-in'
         AND r.reminder_sent = 0
         AND r.reservation_start_at > SYSDATETIME()
         AND r.reservation_start_at <= DATEADD(hour, 2, SYSDATETIME())

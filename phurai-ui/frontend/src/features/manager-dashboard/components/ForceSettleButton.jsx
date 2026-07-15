@@ -19,7 +19,7 @@ export default function ForceSettleButton({ orderId, onSuccess }) {
         setIsOpen(false);
         if (onSuccess) onSuccess();
       } else {
-        alert(res.message || 'Thất bại');
+        alert(res.message || 'Failed');
       }
     } catch (error) {
       console.error('Force Settle Error:', error);
@@ -54,7 +54,7 @@ export default function ForceSettleButton({ orderId, onSuccess }) {
 
             <div className="p-6">
               <p className="text-gray-700 dark:text-gray-300 text-sm mb-4">
-                Bạn đang thực hiện thao tác <strong className="text-red-600 dark:text-red-400">Force Settle</strong> cho Order #{orderId}.
+                You are performing a <strong className="text-red-600 dark:text-red-400">Force Settle</strong> operation for Order #{orderId}.
                 This action will override the system and mark the order as paid. <br /><br />
                 <span className="italic font-medium text-gray-500 dark:text-gray-400">
                   Are you sure? This manual override is permanently recorded in the Audit Logs.
@@ -68,15 +68,15 @@ export default function ForceSettleButton({ orderId, onSuccess }) {
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600">
                     <input type="radio" name="method" value={1} checked={methodId === 1} onChange={() => setMethodId(1)} className="w-4 h-4 text-red-600" />
-                    <span className="text-sm dark:text-gray-200">Tiền mặt (Cash)</span>
+                    <span className="text-sm dark:text-gray-200">Cash</span>
                   </label>
                   <label className="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600">
                     <input type="radio" name="method" value={2} checked={methodId === 2} onChange={() => setMethodId(2)} className="w-4 h-4 text-red-600" />
-                    <span className="text-sm dark:text-gray-200">Chuyển khoản / QR Code</span>
+                    <span className="text-sm dark:text-gray-200">Transfer / QR Code</span>
                   </label>
                   <label className="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600">
                     <input type="radio" name="method" value={3} checked={methodId === 3} onChange={() => setMethodId(3)} className="w-4 h-4 text-red-600" />
-                    <span className="text-sm dark:text-gray-200">Thẻ ngân hàng (Bank Card)</span>
+                    <span className="text-sm dark:text-gray-200">Bank Card</span>
                   </label>
                 </div>
               </div>
@@ -94,7 +94,7 @@ export default function ForceSettleButton({ orderId, onSuccess }) {
                   className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:bg-red-400"
                 >
                   {isLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <CheckCircle className="w-4 h-4" />}
-                  Xác nhận Settle
+                  Confirm Settle
                 </button>
               </div>
             </div>

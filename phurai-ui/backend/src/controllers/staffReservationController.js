@@ -22,7 +22,7 @@ export const createWalkInReservation = async (req, res) => {
     return res.status(401).json({ success: false, message: 'Unauthorized.' });
   }
 
-  const { contact_name, contact_phone, contact_email, guest_count, table_id } = req.body;
+  const { contact_name, contact_phone, contact_email, guest_count, table_id, start_time, end_time } = req.body;
 
   // ── Input validation ──────────────────────────────────────────────────────
   if (!contact_name || typeof contact_name !== 'string' || contact_name.trim().length < 2) {
@@ -77,22 +77,61 @@ export const createWalkInReservation = async (req, res) => {
       });
     }
 
+    // Find matching customer account by phone or email
+    let matchedCustomerId = null;
+    const reqMatch = new sql.Request(transaction);
+    reqMatch.input('matchPhone', sql.NVarChar(20), safePhone);
+    reqMatch.input('matchEmail', sql.NVarChar(100), safeEmail);
+    const matchRes = await reqMatch.query(`
+      SELECT user_id 
+      FROM dbo.UserAccounts 
+      WHERE (phone IS NOT NULL AND phone = @matchPhone)
+         OR (email IS NOT NULL AND LOWER(email) = LOWER(@matchEmail))
+    `);
+    if (matchRes.recordset.length > 0) {
+      matchedCustomerId = matchRes.recordset[0].user_id;
+    }
+
     // ── Step 1: INSERT Reservation (Walk-in, Dining, no deposit, no voucher) ──
-    const now   = new Date();
-    const endAt = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    const now = new Date();
+    let startAt = now;
+    let endAt = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
+    const getLocalDateWithTime = (timeStr) => {
+      if (!timeStr) return null;
+      const [hh, mm] = timeStr.split(':').map(Number);
+      if (isNaN(hh) || isNaN(mm)) return null;
+      const d = new Date();
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm, 0, 0);
+    };
+
+    if (start_time) {
+      const parsedStart = getLocalDateWithTime(start_time);
+      if (parsedStart) startAt = parsedStart;
+    }
+    if (end_time) {
+      const parsedEnd = getLocalDateWithTime(end_time);
+      if (parsedEnd) endAt = parsedEnd;
+    }
+
+    if (endAt <= startAt) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: 'End time must be after start time.' });
+    }
 
     const req2 = new sql.Request(transaction);
+    req2.input('customerId', sql.Int,           matchedCustomerId);
     req2.input('safeName',   sql.NVarChar(100), safeName);
     req2.input('safePhone',  sql.NVarChar(20),  safePhone);
     req2.input('safeEmail',  sql.NVarChar(100), safeEmail);
     req2.input('guestCount', sql.TinyInt,       parsedGuestCount);
     req2.input('staffId',    sql.Int,           staffId);
-    req2.input('startAt',    sql.DateTime2,     now);
+    req2.input('startAt',    sql.DateTime2,     startAt);
     req2.input('endAt',      sql.DateTime2,     endAt);
 
     const insertRes = await req2.query(`
       INSERT INTO dbo.Reservations
-        (contact_name, contact_phone, contact_email,
+        (customer_id, contact_name, contact_phone, contact_email,
          guest_count, reservation_status, reservation_source,
          deposit_amount, applied_promo_code, applied_voucher_id,
          created_by_staff_id, confirmed_by_staff_id,
@@ -100,7 +139,7 @@ export const createWalkInReservation = async (req, res) => {
          checked_in_at, created_at, updated_at)
       OUTPUT INSERTED.reservation_id
       VALUES
-        (@safeName, @safePhone, @safeEmail,
+        (@customerId, @safeName, @safePhone, @safeEmail,
          @guestCount, N'Dining', N'Walk-in',
          NULL, NULL, NULL,
          @staffId, @staffId,
@@ -168,6 +207,7 @@ export const createWalkInReservation = async (req, res) => {
       const req5b = new sql.Request(transaction);
       req5b.input('tableId',       sql.Int,          parsedTableId);
       req5b.input('reservationId', sql.Int,          newReservationId);
+      req5b.input('customerId',    sql.Int,          matchedCustomerId);
       req5b.input('token',         sql.VarChar(255), token);
       req5b.input('staffId',       sql.Int,          staffId);
       await req5b.query(`
@@ -175,7 +215,7 @@ export const createWalkInReservation = async (req, res) => {
           (table_id, reservation_id, customer_id, token, session_status,
            generated_by_staff_id, generated_at, expires_at)
         VALUES
-          (@tableId, @reservationId, NULL, @token, N'Active',
+          (@tableId, @reservationId, @customerId, @token, N'Active',
            @staffId, SYSDATETIME(), DATEADD(hour, 4, SYSDATETIME()))
       `);
     }
@@ -685,148 +725,169 @@ export const checkinReservation = async (req, res) => {
 
 // PATCH /api/staff/reservations/:id/reject
 export const rejectReservation = async (req, res) => {
-  const reservationId = req.params.id;
-  const staffUserId = req.userId;
+  const reservationId = parseInt(req.params.id, 10);
+  const staffUserId = parseInt(req.userId || req.user?.userId, 10);
   const { reason, new_status } = req.body;
 
-  if (new_status !== 'No Show' && new_status !== 'Check-in Rejected') {
-    return res.status(400).json({ success: false, message: "new_status must be 'No Show' or 'Check-in Rejected'" });
+  if (isNaN(reservationId)) {
+    return res.status(400).json({ success: false, message: "Invalid reservation ID" });
   }
 
-  let connection;
-  try {
-    connection = await pool.getConnection();
+  if (new_status !== 'No Show' && new_status !== 'Check-in Rejected' && new_status !== 'Cancelled') {
+    return res.status(400).json({ success: false, message: "new_status must be 'No Show', 'Cancelled' or 'Check-in Rejected'" });
+  }
 
+  try {
+    const rawPool = await getRawPool();
+    
     // Security Guardrail: Backend RBAC Enforcement
-    const [roleRows] = await connection.query(
-      `SELECT r.role_name FROM dbo.UserAccounts ua INNER JOIN dbo.Roles r ON ua.role_id = r.role_id WHERE ua.user_id = ?`,
-      [staffUserId]
+    const roleReq = new sql.Request(rawPool);
+    roleReq.input('staffUserId', sql.Int, staffUserId);
+    const roleRows = await roleReq.query(
+      `SELECT r.role_name FROM dbo.UserAccounts ua INNER JOIN dbo.Roles r ON ua.role_id = r.role_id WHERE ua.user_id = @staffUserId`
     );
-    const roleName = roleRows[0]?.role_name;
-    if (roleName === 'Restaurant Staff' && new_status !== 'No Show' && new_status !== 'Check-in Rejected') {
-      connection.release();
+    const roleName = roleRows.recordset[0]?.role_name;
+    if (roleName === 'Restaurant Staff' && new_status !== 'No Show' && new_status !== 'Check-in Rejected' && new_status !== 'Cancelled') {
       return res.status(403).json({ success: false, message: "Forbidden: Staff are not allowed to manually reject or cancel reservations. Only No Show or Check-in Rejected is permitted." });
     }
 
-    await connection.beginTransaction();
+    const transaction = new sql.Transaction(rawPool);
+    await transaction.begin();
 
-    const dbReason = reason || 'No reason provided';
-
-    // Step 1: Update Reservation to 'No Show' explicitly to satisfy CK_Reservations_status
-    const [updateResult] = await connection.query(
-      `UPDATE dbo.Reservations
-       SET reservation_status = N'No Show',
-           cancelled_at       = SYSDATETIME(),
-           cancel_reason      = ?,
-           updated_at         = SYSDATETIME()
-       WHERE reservation_id = ?
-         AND reservation_status = N'Confirmed'`,
-      [dbReason, reservationId]
-    );
-
-    if (updateResult.rowsAffected[0] === 0) {
-      await connection.rollback();
-      connection.release();
-      return res.status(409).json({ success: false, message: "Reservation is not confirmed or does not exist." });
-    }
-
-    // Step 2: Safe Table Release
-    await connection.query(
-      `UPDATE dbo.RestaurantTables
-       SET table_status = N'Available', updated_at = SYSDATETIME()
-       WHERE table_id IN (
-         SELECT table_id FROM dbo.ReservationTables WHERE reservation_id = ?
-       )`,
-      [reservationId]
-    );
-
-    // Step 3: Timeline & Audit
-    await connection.query(
-      `INSERT INTO dbo.ReservationTimelines (reservation_id, event_type, performed_by, notes) 
-       VALUES (?, N'REJECT_CHECKIN', ?, ?)`,
-      [reservationId, staffUserId, dbReason]
-    );
-
-    await connection.query(
-      `INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, old_value_json, new_value_json, ip_address, created_at)
-       VALUES (?, N'REJECT_CHECKIN', N'Reservations', ?, ?, ?, ?, SYSDATETIME())`,
-      [
-        staffUserId,
-        reservationId,
-        JSON.stringify({ reservation_status: "Confirmed" }),
-        JSON.stringify({ reservation_status: "No Show", cancel_reason: dbReason }),
-        req.ip || null
-      ]
-    );
-
-    // Step 4: Manager Notification
-    await connection.query(
-      `INSERT INTO dbo.Notifications (user_id, notification_type, title, message_body, is_read, sent_at) 
-       SELECT user_id, N'Booking Rejected', N'Check-in Rejected', N'Staff rejected booking #' + CAST(? AS NVARCHAR) + N'. Reason: ' + ?, 0, SYSDATETIME()
-       FROM dbo.UserAccounts 
-       WHERE role_id = 4`,
-      [reservationId, dbReason]
-    );
-
-    await connection.commit();
-    connection.release();
-
-    // Safe WebSocket Emission
     try {
-      const io = getIO();
-      if (io) {
-        const payload = { reservation_id: parseInt(reservationId), new_status: 'No Show', reason: dbReason };
-        io.to("room:manager").emit("reservation:status_changed", payload);
-        io.to("room:staff").emit("reservation:status_changed", payload);
+      const dbReason = reason || 'No reason provided';
+      const targetStatus = (new_status === 'No Show') ? 'No Show' : 'Cancelled';
 
-        io.to("room:manager").emit("notification:new", {
-          title: "Check-in Rejected",
-          message: `Staff rejected booking #${reservationId}. Reason: ${dbReason}`
-        });
+      // Step 1: Update Reservation
+      const updateReq = new sql.Request(transaction);
+      updateReq.input('targetStatus', sql.NVarChar, targetStatus);
+      updateReq.input('dbReason', sql.NVarChar, dbReason);
+      updateReq.input('resId', sql.Int, reservationId);
+      
+      const updateResult = await updateReq.query(
+        `UPDATE dbo.Reservations
+         SET reservation_status = @targetStatus,
+             cancelled_at       = SYSDATETIME(),
+             cancel_reason      = @dbReason,
+             updated_at         = SYSDATETIME()
+         WHERE reservation_id = @resId
+           AND reservation_status = N'Await Check-in'`
+      );
 
-        // Notify table status changed to available for assigned tables
-        const [assignedTables] = await pool.query(
-          `SELECT table_id FROM dbo.ReservationTables WHERE reservation_id = ?`,
-          [reservationId]
-        );
-        for (const tbl of assignedTables) {
-          io.to("room:manager").emit("table:status_changed", { table_id: tbl.table_id, new_status: 'Available' });
-          io.to("room:staff").emit("table:status_changed", { table_id: tbl.table_id, new_status: 'Available' });
+      if (updateResult.rowsAffected[0] === 0) {
+        await transaction.rollback();
+        return res.status(409).json({ success: false, message: "Reservation is not in Await Check-in status or does not exist." });
+      }
+
+      // Step 2: Safe Table Release
+      const releaseReq = new sql.Request(transaction);
+      releaseReq.input('resId', sql.Int, reservationId);
+      await releaseReq.query(
+        `UPDATE dbo.RestaurantTables
+         SET table_status = N'Available', updated_at = SYSDATETIME()
+         WHERE table_id IN (
+           SELECT table_id FROM dbo.ReservationTables WHERE reservation_id = @resId
+         )`
+      );
+
+      // Step 3: Timeline & Audit
+      const timelineReq = new sql.Request(transaction);
+      timelineReq.input('resId', sql.Int, reservationId);
+      timelineReq.input('staffUserId', sql.Int, staffUserId);
+      timelineReq.input('dbReason', sql.NVarChar, dbReason);
+      await timelineReq.query(
+        `INSERT INTO dbo.ReservationTimelines (reservation_id, event_type, performed_by, notes) 
+         VALUES (@resId, N'REJECT_CHECKIN', @staffUserId, @dbReason)`
+      );
+
+      const auditReq = new sql.Request(transaction);
+      auditReq.input('staffUserId', sql.Int, staffUserId);
+      auditReq.input('resId', sql.Int, reservationId);
+      auditReq.input('oldVal', sql.NVarChar, JSON.stringify({ reservation_status: "Await Check-in" }));
+      auditReq.input('newVal', sql.NVarChar, JSON.stringify({ reservation_status: targetStatus, cancel_reason: dbReason }));
+      auditReq.input('ip', sql.NVarChar, req.ip || null);
+      await auditReq.query(
+        `INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, old_value_json, new_value_json, ip_address, created_at)
+         VALUES (@staffUserId, N'STAFF_REJECTED_AWAIT_CHECK_IN', N'Reservations', @resId, @oldVal, @newVal, @ip, SYSDATETIME())`
+      );
+
+      // Step 4: Manager Notification
+      const notifyReq = new sql.Request(transaction);
+      notifyReq.input('resId', sql.Int, reservationId);
+      notifyReq.input('dbReason', sql.NVarChar, dbReason);
+      await notifyReq.query(
+        `INSERT INTO dbo.Notifications (user_id, notification_type, title, message_body, is_read, sent_at) 
+         SELECT user_id, N'Booking Rejected', N'Check-in Rejected', N'Staff rejected reservation #' + CAST(@resId AS NVARCHAR) + N'. Reason: ' + @dbReason, 0, SYSDATETIME()
+         FROM dbo.UserAccounts 
+         WHERE role_id = 4`
+      );
+
+      // Get assigned tables before committing to emit socket events
+      const tablesReq = new sql.Request(transaction);
+      tablesReq.input('resId', sql.Int, reservationId);
+      const tablesRes = await tablesReq.query(
+        `SELECT table_id FROM dbo.ReservationTables WHERE reservation_id = @resId`
+      );
+      const assignedTables = tablesRes.recordset;
+
+      await transaction.commit();
+
+      // Safe WebSocket Emission
+      try {
+        const io = getIO();
+        if (io) {
+          const payload = { reservation_id: reservationId, new_status: targetStatus, reason: dbReason };
+          io.to("room:manager").emit("reservation:status_changed", payload);
+          io.to("room:staff").emit("reservation:status_changed", payload);
+
+          io.to("room:manager").emit("notification:new", {
+            title: "Check-in Rejected",
+            message: `Staff rejected reservation #${reservationId}. Reason: ${dbReason}`
+          });
+
+          // Notify table status changed to available for assigned tables
+          for (const tbl of assignedTables) {
+            io.to("room:manager").emit("table:status_changed", { table_id: tbl.table_id, new_status: 'Available' });
+            io.to("room:staff").emit("table:status_changed", { table_id: tbl.table_id, new_status: 'Available' });
+          }
         }
+      } catch (socketErr) {
+        console.error("[Socket.IO] Error emitting reject status:", socketErr);
       }
-    } catch (socketErr) {
-      console.error("[Socket.IO] Error emitting reject status:", socketErr);
+
+      // Fire-and-forget email
+      try {
+        const rawPool2 = await getRawPool();
+        const emailInfoReq = new sql.Request(rawPool2);
+        emailInfoReq.input('resId', sql.Int, reservationId);
+        const emailInfoRes = await emailInfoReq.query(
+          `SELECT COALESCE(ua.email, r.contact_email, N'') AS customer_email,
+                  COALESCE(ua.full_name, r.contact_name, N'Guest') AS customer_name
+           FROM dbo.Reservations r
+           LEFT JOIN dbo.UserAccounts ua ON r.customer_id = ua.user_id
+           WHERE r.reservation_id = @resId`
+        );
+        const row = emailInfoRes.recordset[0];
+        if (row?.customer_email) {
+          sendBookingRejectedEmail({
+            toEmail: row.customer_email,
+            customerName: row.customer_name,
+            reservationId,
+            reason: dbReason,
+          }).catch(e => console.error("[rejectEmail]", e?.message));
+        }
+      } catch (emailErr) {
+        console.error("[reject email query]", emailErr?.message);
+      }
+
+      return res.json({ success: true, message: `Reservation successfully rejected and set to ${targetStatus}.` });
+
+    } catch (innerErr) {
+      await transaction.rollback();
+      throw innerErr;
     }
-
-    // Fire-and-forget email
-    pool.query(
-      `SELECT COALESCE(ua.email, r.contact_email, N'') AS customer_email,
-              COALESCE(ua.full_name, r.contact_name, N'Guest') AS customer_name
-       FROM dbo.Reservations r
-       LEFT JOIN dbo.UserAccounts ua ON r.customer_id = ua.user_id
-       WHERE r.reservation_id = ?`,
-      [reservationId]
-    ).then(([rows]) => {
-      const row = rows[0];
-      if (row?.customer_email) {
-        sendBookingRejectedEmail({
-          toEmail: row.customer_email,
-          customerName: row.customer_name,
-          reservationId,
-          reason: dbReason,
-        }).catch(e => console.error("[rejectEmail]", e?.message));
-      }
-    }).catch(e => console.error("[reject email query]", e?.message));
-
-    return res.json({ success: true, message: `Reservation marked as No Show` });
 
   } catch (error) {
-    if (connection) {
-      try {
-        await connection.rollback();
-      } catch (e) { }
-      connection.release();
-    }
     console.error('Error rejecting reservation:', error);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -1365,7 +1426,7 @@ export const transferReservationTable = async (req, res) => {
       if (orderId) {
         // Find a dummy surcharge dish or use first available dish
         const [dishRows] = await connection.query(
-          `SELECT TOP 1 dish_id FROM dbo.Dishes WHERE dish_name LIKE N'%Phụ thu%' OR dish_name LIKE N'%Surcharge%'
+          `SELECT TOP 1 dish_id FROM dbo.Dishes WHERE dish_name LIKE N'%Surcharge%'
            UNION ALL
            SELECT TOP 1 dish_id FROM dbo.Dishes`
         );
@@ -1376,7 +1437,7 @@ export const transferReservationTable = async (req, res) => {
           await connection.query(
             `INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, item_status, notes, created_at, updated_at) 
              VALUES (?, ?, 1, ?, N'Served', ?, SYSDATETIME(), SYSDATETIME())`,
-            [orderId, dishId, surcharge, transferReason || 'Phụ thu đổi bàn / Table Transfer Surcharge']
+            [orderId, dishId, surcharge, transferReason || 'Table Transfer Surcharge']
           );
 
           // Trigger Order Math recalculation

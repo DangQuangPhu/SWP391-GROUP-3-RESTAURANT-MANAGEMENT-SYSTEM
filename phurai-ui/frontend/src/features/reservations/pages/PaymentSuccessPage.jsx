@@ -34,7 +34,7 @@ export default function PaymentSuccessPage() {
           <table>
             <tbody>
               <tr><td className="rp-receipt-label">Reservation</td><td className="rp-receipt-value">#{reservationId}</td></tr>
-              <tr><td className="rp-receipt-label">Deposit paid</td><td className="rp-receipt-value">200,000 đ via VNPAY</td></tr>
+              <tr><td className="rp-receipt-label">Deposit paid</td><td className="rp-receipt-value">200,000 VND via VNPAY</td></tr>
             </tbody>
           </table>
         </div>

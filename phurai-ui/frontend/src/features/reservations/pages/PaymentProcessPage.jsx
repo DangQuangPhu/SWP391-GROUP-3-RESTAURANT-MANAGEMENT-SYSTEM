@@ -32,7 +32,7 @@ export default function PaymentProcessPage() {
     } catch (err) {
       console.error('create_vnpay_url failed', err);
       setStatus('error');
-      setErrorMsg('Không thể kết nối tới VNPAY, vui lòng thử lại.');
+      setErrorMsg('Could not connect to VNPAY, please try again.');
     }
   }, [reservationId]);
 
@@ -43,7 +43,7 @@ export default function PaymentProcessPage() {
         <h2 className="rp-title">Pay deposit via VNPAY</h2>
 
         <div className="rp-amount-block">
-          <span className="rp-amount">{DEPOSIT_AMOUNT.toLocaleString('vi-VN')} đ</span>
+          <span className="rp-amount">{DEPOSIT_AMOUNT.toLocaleString('vi-VN')} VND</span>
           <span className="rp-amount-label">Deposit to hold your table</span>
         </div>
 

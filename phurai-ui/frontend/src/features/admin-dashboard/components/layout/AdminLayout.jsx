@@ -58,7 +58,7 @@ export default function AdminLayout({ children, onSignOut }) {
             className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg transition-colors font-medium"
           >
             <LogOut className="w-5 h-5" />
-            Đăng xuất
+            Log Out
           </button>
         </div>
       </aside>

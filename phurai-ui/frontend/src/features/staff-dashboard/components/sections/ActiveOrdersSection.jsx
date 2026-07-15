@@ -36,7 +36,7 @@ function ActiveOrdersSection({ orders, setOrders, dataSource, toast }) {
         subtitle={`${activeOrders.length} open orders on the floor`}
       />
 
-      {dataSource === "mock" ? <NotConnectedNote>{DEMO_NOTICE}</NotConnectedNote> : null}
+
 
       <div className="sfx-orderboard">
         {activeOrders.length === 0 ? (

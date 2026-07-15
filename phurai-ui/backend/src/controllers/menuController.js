@@ -18,7 +18,7 @@ export async function getMenu(req, res) {
       FROM dbo.Dishes d
       JOIN dbo.MenuCategories c ON d.category_id = c.category_id
       LEFT JOIN dbo.DishImages img ON d.dish_id = img.dish_id AND img.is_primary = 1
-      WHERE d.is_available = 1
+      WHERE c.is_active = 1
       ORDER BY c.display_order, d.dish_name
     `);
 

@@ -190,16 +190,15 @@ export const getAllReservations = async (req, res) => {
          r.has_pending_request, r.request_type, r.edit_used_count, r.pending_changes_json
        ORDER BY 
          CASE r.reservation_status
-           WHEN N'Pending Request' THEN 1
-           WHEN N'Pending Payment' THEN 2
-           WHEN N'Reserved' THEN 3
-           WHEN N'Confirmed' THEN 4
-           WHEN N'Dining' THEN 5
-           WHEN N'Cleaning' THEN 6
-           WHEN N'Check-out' THEN 7
-           WHEN N'Reject Request' THEN 8
-           ELSE 9
-         END ASC,
+            WHEN N'Pending Request' THEN 1
+            WHEN N'Awaiting Deposit' THEN 2
+            WHEN N'Await Check-in' THEN 3
+            WHEN N'Dining' THEN 4
+            WHEN N'Completed' THEN 5
+            WHEN N'Cancelled' THEN 6
+            WHEN N'No Show' THEN 7
+            ELSE 8
+          END ASC,
          r.reservation_start_at DESC
        OFFSET ? ROWS
        FETCH NEXT ? ROWS ONLY`,
@@ -609,7 +608,7 @@ export const confirmReservation = async (req, res) => {
       const reqEmail = new sql.Request(freshPool);
       reqEmail.input("resId", sql.Int, reservationId);
       const { recordset: emailRows } = await reqEmail.query(`
-        SELECT COALESCE(ua.full_name, r.contact_name, N'Quý khách') AS full_name,
+        SELECT COALESCE(ua.full_name, r.contact_name, N'Guest') AS full_name,
                COALESCE(ua.email,    r.contact_email)                AS email,
                r.reservation_start_at
         FROM dbo.Reservations r
@@ -1033,9 +1032,9 @@ export const updateReservation = async (req, res) => {
       VALUES (@managerId, N'MANAGER_EDIT_RESERVATION', N'Reservations', @resId, @newVal, @ip, SYSDATETIME())
     `);
 
-    // 4. Handle Request → Confirmed transition:
+    // 4. Handle Request → Await Check-in transition:
     //    If the reservation was in 'Request' status (customer change-request),
-    //    resolve it back to 'Confirmed' and log the resolution.
+    //    resolve it back to 'Await Check-in' and log the resolution.
     const reqCheckStatus = new sql.Request(transaction);
     reqCheckStatus.input("resId", sql.Int, reservationId);
     const { recordset: statusRows } = await reqCheckStatus.query(`
@@ -1048,7 +1047,7 @@ export const updateReservation = async (req, res) => {
       reqResolve.input("resId", sql.Int, reservationId);
       await reqResolve.query(`
         UPDATE dbo.Reservations
-        SET reservation_status = N'Confirmed', updated_at = SYSDATETIME()
+        SET reservation_status = N'Await Check-in', updated_at = SYSDATETIME()
         WHERE reservation_id = @resId
       `);
 
@@ -1057,7 +1056,7 @@ export const updateReservation = async (req, res) => {
       reqResolveAudit.input("managerId", sql.Int, managerId);
       reqResolveAudit.input("resId", sql.Int, reservationId);
       reqResolveAudit.input("oldVal", sql.NVarChar, JSON.stringify({ reservation_status: "Request" }));
-      reqResolveAudit.input("newVal", sql.NVarChar, JSON.stringify({ reservation_status: "Confirmed" }));
+      reqResolveAudit.input("newVal", sql.NVarChar, JSON.stringify({ reservation_status: "Await Check-in" }));
       reqResolveAudit.input("ip", sql.VarChar, req.ip || null);
       await reqResolveAudit.query(`
         INSERT INTO dbo.AuditLogs
@@ -1109,7 +1108,7 @@ export const updateReservation = async (req, res) => {
       console.error("[updateReservation] Post-commit external services (non-fatal):", externalErr.message);
     }
 
-    return res.json({ success: true, message: "Reservation updated.", status_transitioned: currentStatus === 'Request' ? 'Confirmed' : null });
+    return res.json({ success: true, message: "Reservation updated.", status_transitioned: currentStatus === 'Request' ? 'Await Check-in' : null });
   } catch (error) {
     if (transaction) {
       try { await transaction.rollback(); } catch (rErr) {

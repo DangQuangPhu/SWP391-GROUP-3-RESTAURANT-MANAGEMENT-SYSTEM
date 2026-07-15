@@ -25,6 +25,7 @@ import {
   getShiftReportAudit,
   shiftCheckIn,
   shiftCheckOut,
+  getOrderTimeline,
 } from "../controllers/staffController.js";
 import { getStaffShiftMapping } from "../controllers/shiftMappingController.js";
 import {
@@ -175,6 +176,8 @@ router.get("/payments/:tableId", getTableBill);
 router.post("/payments/:tableId/voucher", resolveUserId, applyTableVoucher);
 router.post("/payments/:tableId/checkout", resolveUserId, checkoutTablePayment);
 router.post("/payments/:tableId/void", resolveUserId, voidTableBill);
+
+router.get("/orders/:orderId/timeline", resolveUserId, requireUserId, getOrderTimeline);
 
 router.get("/kds/ready", getKdsReadyQueue);
 router.get("/kds/delayed", getKdsDelayedItems);

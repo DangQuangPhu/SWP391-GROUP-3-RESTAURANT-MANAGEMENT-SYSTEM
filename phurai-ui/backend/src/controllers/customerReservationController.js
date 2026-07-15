@@ -105,7 +105,7 @@ export const createPreSaveReservation = async (req, res) => {
         .input('deposit_amount', sql.Decimal(12, 2), deposit_amount)
         .input('final_total', sql.Decimal(12, 2), final_total)
         .input('applied_promo_code', sql.VarChar(50), promo_code || null)
-        .input('reservation_status', sql.NVarChar(25), RESERVATION_STATUS.PENDING_PAYMENT)
+        .input('reservation_status', sql.NVarChar(25), RESERVATION_STATUS.AWAITING_DEPOSIT)
         .input('reservation_source', sql.NVarChar(20), 'Online')
         .query(`
           INSERT INTO dbo.Reservations (
@@ -194,12 +194,20 @@ export const createPreSaveReservation = async (req, res) => {
       if (io) {
         io.emit("NEW_RESERVATION_REQUEST", {
           reservation_id,
-          reservation_status: RESERVATION_STATUS.PENDING_PAYMENT,
+          reservation_status: RESERVATION_STATUS.AWAITING_DEPOSIT,
           order_code,
           contact_name,
           guest_count,
           reservation_start_at,
           customer_id
+        });
+        io.to("room:manager").to("room:staff").emit("reservation:new", {
+          reservation_id,
+          reservation_status: RESERVATION_STATUS.AWAITING_DEPOSIT,
+          customer_id,
+          reservation_start_at,
+          guest_count,
+          contact_name
         });
       }
     } catch (socketErr) {
@@ -261,8 +269,8 @@ export const applyPromoCodeToReservation = async (req, res) => {
     }
 
     const reservation = resResult.recordset[0];
-    if (reservation.reservation_status !== RESERVATION_STATUS.PENDING_PAYMENT) {
-      return res.status(400).json({ success: false, message: "Can only apply promo to Pending Payment reservations" });
+    if (reservation.reservation_status !== RESERVATION_STATUS.AWAITING_DEPOSIT) {
+      return res.status(400).json({ success: false, message: "Can only apply promo to Awaiting Deposit reservations" });
     }
 
     if (reservation.applied_promo_code) {
@@ -441,14 +449,14 @@ export const cancelPendingPayment = async (req, res) => {
       }
 
       const reservation = resResult.recordset[0];
-      if (reservation.reservation_status !== RESERVATION_STATUS.PENDING_PAYMENT) {
+      if (reservation.reservation_status !== RESERVATION_STATUS.AWAITING_DEPOSIT) {
         await transaction.rollback();
-        return res.status(400).json({ success: false, message: "Only 'Pending Payment' reservations can be aborted." });
+        return res.status(400).json({ success: false, message: "Only 'Awaiting Deposit' reservations can be aborted." });
       }
 
       await transaction.request()
         .input('resId', sql.Int, reservationId)
-        .input('resStatus', sql.NVarChar(25), 'PaymentFailed')
+        .input('resStatus', sql.NVarChar(25), 'Cancelled')
         .input('cancelReason', sql.NVarChar(255), 'Aborted by customer during checkout')
         .query(`
           UPDATE dbo.Reservations 

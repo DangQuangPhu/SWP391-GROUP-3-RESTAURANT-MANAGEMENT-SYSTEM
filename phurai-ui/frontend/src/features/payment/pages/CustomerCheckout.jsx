@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import CheckoutQR from '../components/CheckoutQR';
 import CustomerReviewModal from '../../reviews/CustomerReviewModal';
@@ -17,6 +17,7 @@ export default function CustomerCheckout() {
 
   // Try to use location state first for instant loading
   const [amount, setAmount] = useState(location.state?.amount || null);
+  const [historyData, setHistoryData] = useState(null);
   const [isLoading, setIsLoading] = useState(!location.state?.amount);
 
   const { status } = usePaymentPolling(orderId);
@@ -56,8 +57,11 @@ export default function CustomerCheckout() {
       try {
         const res = await fetch(`/api/public/qr-order/session/${session.token}/history`);
         const result = await res.json();
-        if (result.success && result.data?.summary) {
-          setAmount(result.data.summary.remainingToPay);
+        if (result.success && result.data) {
+          setHistoryData(result.data);
+          if (result.data.summary) {
+            setAmount(result.data.summary.remainingToPay);
+          }
         }
       } catch (err) {
         console.error("Failed to fetch session history for checkout amount", err);
@@ -66,16 +70,14 @@ export default function CustomerCheckout() {
       }
     }
 
-    if (amount === null || amount === 0) {
-      fetchAmount();
-    } else {
-      setIsLoading(false);
-    }
-  }, [session, amount]);
+    fetchAmount();
+  }, [session]);
 
   useEffect(() => {
-    if (status === 'Paid' && !showReviewModal) {
-      setShowReviewModal(true);
+    if ((status === 'Paid' || status === 'Completed') && !showReviewModal) {
+      setTimeout(() => {
+        setShowReviewModal(true);
+      }, 0);
     }
   }, [status, showReviewModal]);
 
@@ -145,6 +147,7 @@ export default function CustomerCheckout() {
       <CheckoutQR
         orderId={orderId}
         amount={amount}
+        historyData={historyData}
         originalAmount={originalAmount}
         voucherCode={voucherCode}
         setVoucherCode={setVoucherCode}

@@ -41,6 +41,9 @@ export default defineConfig({
     outDir: '../dist',
     emptyOutDir: true
   },
+  define: {
+    'process.env': {}
+  },
   plugins: [react(), suppressWsProxyNoise()],
 
   server: {

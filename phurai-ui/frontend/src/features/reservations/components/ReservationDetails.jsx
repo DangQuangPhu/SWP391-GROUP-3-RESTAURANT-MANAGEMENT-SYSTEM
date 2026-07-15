@@ -343,6 +343,8 @@ export default function ReservationDetails({
       const [sh, sm] = form.startTime.split(':').map(Number);
       if ((sh * 60 + sm) < 600) {
         newErrors.startTime = "The restaurant opens at 10:00 AM. Please choose a valid time.";
+      } else if (isTimeConflicting(form.startTime)) {
+        newErrors.startTime = "This time slot is already booked, please select another time.";
       }
     }
 
@@ -360,6 +362,12 @@ export default function ReservationDetails({
 
       if (endMins <= startMins) {
         newErrors.endTime = "End time must be after start time.";
+      } else if (endMins - startMins < 60) {
+        newErrors.endTime = "Dining duration must be at least 1 hour.";
+      } else if (endMins - startMins > 90) {
+        newErrors.endTime = "Dining duration cannot exceed 1.5 hours.";
+      } else if (isTimeConflicting(form.endTime)) {
+        newErrors.endTime = "This time slot is already booked, please select another time.";
       }
     } else if (!form.endTime) {
       newErrors.endTime = "Please select an end time.";
@@ -452,16 +460,18 @@ export default function ReservationDetails({
             <input type="text" readOnly value="Not available for large groups" className="rd-disabled-input" />
           ) : (
             <>
-              <select
+              <input
+                type="time"
                 value={form.startTime}
                 onChange={(e) => handleStartTimeChange(e.target.value)}
+                list="startTimes"
                 className={`w-full px-4 py-2 mt-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white ${errors.startTime ? 'border-red-500 border-2' : 'border-gray-300'}`}
-              >
-                <option value="">Select start time</option>
+              />
+              <datalist id="startTimes">
                 {startHoursOptions.map(time => (
-                  <option key={time} value={time}>{time}</option>
+                  <option key={time} value={time} />
                 ))}
-              </select>
+              </datalist>
               {errors.startTime && <p className="text-red-500 text-sm mt-1">{errors.startTime}</p>}
             </>
           )}
@@ -472,17 +482,19 @@ export default function ReservationDetails({
             <input type="text" readOnly value="Not available" className="rd-disabled-input" />
           ) : (
             <>
-              <select
-                value={form.endTime}
+              <input
+                type="time"
+                value={form.endTime || ''}
                 onChange={(e) => handleEndTimeChange(e.target.value)}
                 disabled={!form.startTime}
+                list="endTimes"
                 className={`w-full px-4 py-2 mt-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white ${errors.endTime ? 'border-red-500 border-2' : 'border-gray-300'} ${!form.startTime ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-              >
-                <option value="">Select end time</option>
+              />
+              <datalist id="endTimes">
                 {endHoursOptions.map(time => (
-                  <option key={time} value={time}>{time}</option>
+                  <option key={time} value={time} />
                 ))}
-              </select>
+              </datalist>
               {errors.endTime && <p className="text-red-500 text-sm mt-1">{errors.endTime}</p>}
             </>
           )}

@@ -5,7 +5,7 @@ import { useSocket } from "@/core/socket/SocketContext.jsx";
 import { toast } from "react-toastify";
 import "@/styles/notifications/CustomerNotificationBell.css";
 
-export default function CustomerNotificationBell() {
+export default function CustomerNotificationBell({ variant = "navbar" }) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -13,6 +13,8 @@ export default function CustomerNotificationBell() {
   const navigate = useNavigate();
   const { socket } = useSocket();
   const hasToasted = useRef(false);
+
+  const isProfile = variant === "profile";
 
   const loadNotifications = (showToast = false) => {
     const token = localStorage.getItem("phurai_token") || localStorage.getItem("token");
@@ -86,7 +88,7 @@ export default function CustomerNotificationBell() {
     setOpen(false);
     // Route to context-appropriate page based on notification type
     if (notif.notification_type === 'Promotion') {
-      navigate('/loyalty');
+      navigate('/profile/loyalty');
     } else {
       navigate('/my-reservations');
     }
@@ -105,8 +107,6 @@ export default function CustomerNotificationBell() {
     }
   };
 
-  const hasPromotion = notifications.some((n) => !n.is_read && n.notification_type === 'Promotion');
-
   return (
     <div
       ref={dropdownRef}
@@ -116,7 +116,8 @@ export default function CustomerNotificationBell() {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        style={{
+        className={isProfile ? "profile-dashboard__icon-btn" : undefined}
+        style={!isProfile ? {
           background: "none",
           border: "none",
           cursor: "pointer",
@@ -126,19 +127,23 @@ export default function CustomerNotificationBell() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+        } : {
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
         aria-label="Notifications"
       >
         <svg
-          className={`notification-bell-icon${hasPromotion ? ' has-promotion' : ''}`}
-          width="24"
-          height="24"
+          className={`stroke-current ${isProfile ? "" : "w-6 h-6"} ${unreadCount > 0 && !open ? "animate-wiggle origin-[50%_4px]" : ""}`}
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
+          style={isProfile ? { width: "18px", height: "18px" } : undefined}
         >
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
           <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
@@ -148,8 +153,8 @@ export default function CustomerNotificationBell() {
           <span
             style={{
               position: "absolute",
-              top: "0px",
-              right: "0px",
+              top: isProfile ? "2px" : "0px",
+              right: isProfile ? "2px" : "0px",
               background: "#e06c6c",
               color: "#fff",
               fontSize: "10px",

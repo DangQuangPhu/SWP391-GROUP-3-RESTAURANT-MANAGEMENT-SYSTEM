@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { apiGet } from '@/core/api/httpClient';
 import PortalIcon from '@/components/portal/PortalIcon.jsx';
 import '../styles/AdminDashboardPage.css';
+import '../../manager-dashboard/styles/manager-dashboard.css';
 import {
   SkeletonPresence,
   Skeleton,
@@ -11,6 +12,7 @@ import {
   listContainerVariants,
   listItemVariants,
 } from '@/components/ui/Skeleton';
+import AdminReviewsTable from '../components/AdminReviewsTable.jsx';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, AreaChart, Area,
@@ -79,47 +81,17 @@ const ANALYTICS_META = {
   },
 };
 
-/* ── Filter bar ───────────────────────────────────────────────── */
-const DATE_RANGES = [
-  { value: 'all',   label: 'All Time' },
-  { value: '7d',    label: 'Last 7 Days' },
-  { value: '30d',   label: 'Last 30 Days' },
-  { value: '90d',   label: 'Last 90 Days' },
-];
-
-function FilterBar({ dateRange, onDateRange, onRefresh, refreshing }) {
-  return (
-    <div className="adp-filter-bar">
-      <div className="adp-filter-bar__left">
-        <span className="adp-filter-bar__label">Period:</span>
-        <div className="adp-filter-pills">
-          {DATE_RANGES.map(dr => (
-            <button
-              key={dr.value}
-              type="button"
-              className={`adp-filter-pill ${dateRange === dr.value ? 'adp-filter-pill--active' : ''}`}
-              onClick={() => onDateRange(dr.value)}
-            >
-              {dr.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <button
-        type="button"
-        className="adp-filter-bar__refresh"
-        onClick={onRefresh}
-        disabled={refreshing}
-        title="Refresh chart data"
-      >
-        <PortalIcon name="refresh" size={14} />
-        <span>{refreshing ? 'Refreshing…' : 'Refresh'}</span>
-      </button>
-    </div>
-  );
-}
+import DashboardDateRangePicker from '../../manager-dashboard/components/shared/DashboardDateRangePicker.jsx';
+import { useCountUp } from '@/hooks/useCountUp.js';
+import { getDefaultDateRange, formatDateRangeLabel } from '@/shared/constants.js';
 
 /* ── KPI summary row ──────────────────────────────────────────── */
+function AnimatedKpiValue({ value, formatFn = (v) => Math.round(v) }) {
+  const isNumeric = typeof value === 'number' && !isNaN(value);
+  const display = useCountUp(isNumeric ? value : 0, 0.8, formatFn);
+  return <>{isNumeric ? display : value}</>;
+}
+
 function KpiRow({ data, type }) {
   const cards = deriveKpis(data, type);
   if (!cards.length) return null;
@@ -145,7 +117,7 @@ function KpiRow({ data, type }) {
             </button>
           </div>
           <div className="sfx-kpi__value">
-            {c.value}
+            <AnimatedKpiValue value={c.value} formatFn={c.formatFn} />
             {c.suffix ? <span className="sfx-kpi__suffix">{c.suffix}</span> : null}
           </div>
           <p className="sfx-kpi__label">{c.label}</p>
@@ -159,14 +131,12 @@ function deriveKpis(data, type) {
   if (!data || !data.length) return [];
   switch (type) {
     case 'revenue': {
-      const total = data.reduce((s, d) => s + (Number(d.daily_revenue) || 0), 0);
-      const avg = total / data.length;
-      const max = Math.max(...data.map(d => Number(d.daily_revenue) || 0));
+      const total = data.reduce((sum, item) => sum + (item.daily_revenue || 0), 0);
+      const avg = data.length ? total / data.length : 0;
       return [
-        { icon: 'chart', label: 'Total Revenue', color: 'green', value: fmtVnd(total), suffix: '₫' },
-        { icon: 'calendar', label: 'Daily Average', color: 'blue', value: fmtVnd(avg), suffix: '₫' },
-        { icon: 'orders', label: 'Peak Day', color: 'amber', value: fmtVnd(max), suffix: '₫' },
-        { icon: 'calendar', label: 'Data Points', color: 'purple', value: data.length },
+        { icon: 'chart', label: 'Total Revenue', color: 'green', value: total, formatFn: fmtVnd, suffix: ' VND' },
+        { icon: 'chart', label: 'Daily Average', color: 'blue', value: avg, formatFn: fmtVnd, suffix: ' VND' },
+        { icon: 'orders', label: 'Days with Revenue', color: 'amber', value: data.filter(d => d.daily_revenue > 0).length, formatFn: v => Math.round(v) },
       ];
     }
     case 'reservations': {
@@ -174,37 +144,37 @@ function deriveKpis(data, type) {
       const completed = data.find(d => d.reservation_status === 'Completed')?.count || 0;
       const pending = data.find(d => d.reservation_status === 'Pending')?.count || 0;
       return [
-        { icon: 'calendar', label: 'Total Reservations', color: 'blue', value: total },
-        { icon: 'check', label: 'Completed', color: 'green', value: completed },
-        { icon: 'clock', label: 'Pending', color: 'amber', value: pending },
-        { icon: 'close', label: 'Statuses', color: 'purple', value: data.length },
+        { icon: 'calendar', label: 'Total Reservations', color: 'blue', value: total, formatFn: v => Math.round(v) },
+        { icon: 'check', label: 'Completed', color: 'green', value: completed, formatFn: v => Math.round(v) },
+        { icon: 'clock', label: 'Pending', color: 'amber', value: pending, formatFn: v => Math.round(v) },
+        { icon: 'close', label: 'Statuses', color: 'purple', value: data.length, formatFn: v => Math.round(v) },
       ];
     }
     case 'orders': {
       const total = data.reduce((s, d) => s + (Number(d.count) || 0), 0);
       const avgVal = data.reduce((s, d) => s + (Number(d.avg_value) || 0), 0) / (data.length || 1);
       return [
-        { icon: 'orders', label: 'Total Orders', color: 'amber', value: total },
-        { icon: 'chart', label: 'Avg Order Value', color: 'green', value: fmtVnd(avgVal), suffix: '₫' },
-        { icon: 'tag', label: 'Order Types', color: 'blue', value: data.length },
+        { icon: 'orders', label: 'Total Orders', color: 'amber', value: total, formatFn: v => Math.round(v) },
+        { icon: 'chart', label: 'Avg Order Value', color: 'green', value: avgVal, formatFn: fmtVnd, suffix: ' VND' },
+        { icon: 'tag', label: 'Order Types', color: 'blue', value: data.length, formatFn: v => Math.round(v) },
       ];
     }
     case 'reviews': {
       const total = data.reduce((s, d) => s + (Number(d.count) || 0), 0);
       const weighted = data.reduce((s, d) => s + (Number(d.overall_rating) * Number(d.count)), 0);
-      const avg = total ? (weighted / total).toFixed(1) : '—';
+      const avg = total ? (weighted / total) : 0;
       return [
-        { icon: 'star', label: 'Total Reviews', color: 'amber', value: total },
-        { icon: 'star', label: 'Avg Rating', color: 'green', value: avg, suffix: '★' },
-        { icon: 'chart', label: 'Rating Levels', color: 'blue', value: data.length },
+        { icon: 'star', label: 'Total Reviews', color: 'amber', value: total, formatFn: v => Math.round(v) },
+        { icon: 'star', label: 'Avg Rating', color: 'green', value: avg, formatFn: v => total === 0 ? '—' : v.toFixed(1), suffix: '★' },
+        { icon: 'chart', label: 'Rating Levels', color: 'blue', value: data.length, formatFn: v => Math.round(v) },
       ];
     }
     case 'staff-performance': {
       const totalShifts = data.reduce((s, d) => s + (Number(d.total_shifts) || 0), 0);
       const top = data.reduce((best, d) => (Number(d.total_shifts) > Number(best.total_shifts) ? d : best), data[0] || {});
       return [
-        { icon: 'staff', label: 'Staff Members', color: 'purple', value: data.length },
-        { icon: 'orders', label: 'Total Shifts', color: 'blue', value: totalShifts },
+        { icon: 'staff', label: 'Staff Members', color: 'purple', value: data.length, formatFn: v => Math.round(v) },
+        { icon: 'orders', label: 'Total Shifts', color: 'blue', value: totalShifts, formatFn: v => Math.round(v) },
         { icon: 'star', label: 'Top Performer', color: 'green', value: top?.staff_code || '—' },
       ];
     }
@@ -213,6 +183,12 @@ function deriveKpis(data, type) {
 }
 
 function fmtVnd(n) {
+  if (!n && n !== 0) return '—';
+  const num = Math.round(Number(n));
+  return new Intl.NumberFormat('en-US').format(num);
+}
+
+function fmtVndShort(n) {
   if (!n && n !== 0) return '—';
   const num = Math.round(Number(n));
   if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M';
@@ -234,7 +210,7 @@ function renderChart(type, data) {
     case 'revenue':
       return (
         <motion.div style={{ ...chartCard, height: 360 }} variants={fadeScaleVariants} initial="hidden" animate="visible">
-          <h3 className="adp-chart-title">Daily Revenue (₫)</h3>
+          <h3 className="adp-chart-title">Daily Revenue (VND)</h3>
           <ResponsiveContainer width="100%" height="90%">
             <AreaChart data={data}>
               <defs>
@@ -245,7 +221,7 @@ function renderChart(type, data) {
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} tickMargin={8} stroke="#c9c0b2" />
-              <YAxis tickFormatter={v => `${fmtVnd(v)}k`} tick={{ fontSize: 11 }} stroke="#c9c0b2" />
+              <YAxis tickFormatter={v => fmtVndShort(v)} tick={{ fontSize: 11 }} stroke="#c9c0b2" />
               <Tooltip formatter={v => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v)} />
               <Area type="monotone" dataKey="daily_revenue" name="Revenue" stroke="#9f8655" strokeWidth={2.5} fill="url(#revGrad)" activeDot={{ r: 6 }} />
             </AreaChart>
@@ -287,12 +263,12 @@ function renderChart(type, data) {
             </ResponsiveContainer>
           </div>
           <div style={{ ...chartCard, height: 360 }}>
-            <h3 className="adp-chart-title">Avg Order Value by Status (₫)</h3>
+            <h3 className="adp-chart-title">Avg Order Value by Status (VND)</h3>
             <ResponsiveContainer width="100%" height="88%">
               <BarChart data={data} barSize={36}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                 <XAxis dataKey="order_status" tick={{ fontSize: 11 }} stroke="#c9c0b2" />
-                <YAxis tickFormatter={v => `${fmtVnd(v)}k`} tick={{ fontSize: 11 }} stroke="#c9c0b2" />
+                <YAxis tickFormatter={v => fmtVndShort(v)} tick={{ fontSize: 11 }} stroke="#c9c0b2" />
                 <Tooltip formatter={v => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v)} />
                 <Bar dataKey="avg_value" name="Avg Value" fill="#b8a379" radius={[6, 6, 0, 0]} />
               </BarChart>
@@ -338,12 +314,33 @@ function renderChart(type, data) {
   }
 }
 
+import { useSocket } from '@/core/socket/SocketContext.jsx';
+
 /* ── Main component ───────────────────────────────────────────── */
 export default function Analytics({ type, title, description }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [dateRange, setDateRange] = useState('all');
+  const { socket } = useSocket();
+
+  const today = React.useMemo(() => new Date(), []);
+  const [dateRange, setDateRange] = useState(() => {
+    if (type === 'reviews') {
+      return { startDate: null, endDate: null, key: "selection" };
+    }
+    return getDefaultDateRange(today);
+  });
+  const [draftRange, setDraftRange] = useState(() => {
+    if (type === 'reviews') {
+      return { startDate: null, endDate: null, key: "selection" };
+    }
+    return getDefaultDateRange(today);
+  });
+  const [activePresetId, setActivePresetId] = useState(type === 'reviews' ? "allDates" : "last30");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerAnchorRef = React.useRef(null);
+  const dateRangeLabel = React.useMemo(() => formatDateRangeLabel(dateRange), [dateRange]);
+
   const [fetchTrigger, setFetchTrigger] = useState(0);
   const [localRefreshing, setLocalRefreshing] = useState(false);
 
@@ -355,13 +352,27 @@ export default function Analytics({ type, title, description }) {
   }, []);
 
   useEffect(() => {
+    if (!socket) return;
+    const handleNewReview = () => {
+      setFetchTrigger(t => t + 1);
+    };
+    socket.on('review:created', handleNewReview);
+    return () => {
+      socket.off('review:created', handleNewReview);
+    };
+  }, [socket]);
+
+  useEffect(() => {
     let alive = true;
     async function fetchAnalytics() {
       try {
         setLoading(true);
         setError(null);
-        const params = dateRange !== 'all' ? `?range=${dateRange}` : '';
-        const res = await apiGet(`/admin/analytics/${type}${params}`);
+        const queryParams = new URLSearchParams();
+        if (dateRange.startDate) queryParams.append('startDate', dateRange.startDate.toISOString());
+        if (dateRange.endDate) queryParams.append('endDate', dateRange.endDate.toISOString());
+        const qs = queryParams.toString() ? `?${queryParams.toString()}` : '';
+        const res = await apiGet(`/admin/analytics/${type}${qs}`);
         if (!alive) return;
         if (res.success && res.data) {
           setData(res.data);
@@ -398,13 +409,69 @@ export default function Analytics({ type, title, description }) {
         </div>
       </div>
 
-      {/* Filter bar */}
-      <FilterBar
-        dateRange={dateRange}
-        onDateRange={setDateRange}
-        onRefresh={handleLocalRefresh}
-        refreshing={localRefreshing || loading}
-      />
+      {/* Filter bar replacement */}
+      <div className="adp-filter-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', overflow: 'visible' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span className="adp-filter-bar__label" style={{ margin: 0 }}>Period: <span style={{ fontWeight: 500, color: '#1f1a17', marginLeft: 4 }}>{dateRangeLabel}</span></span>
+          <div
+            className={`sfx-chart__picker-anchor${pickerOpen ? " is-open" : ""}`}
+            ref={pickerAnchorRef}
+            style={{ position: "relative" }}
+          >
+            <button
+              type="button"
+              className="sfx-kpi__icon sfx-kpi__icon--trigger"
+              style={{ position: "relative", zIndex: 20, background: "#f8f5ef", border: "1px solid #e2dcd0", borderRadius: 8, width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#b09460", cursor: "pointer" }}
+              onClick={() => (pickerOpen ? setPickerOpen(false) : setPickerOpen(true))}
+              aria-label="Choose date range"
+              aria-expanded={pickerOpen}
+            >
+              <PortalIcon name="calendar" size={18} />
+            </button>
+            {pickerOpen && (
+              <div style={{
+                position: "absolute",
+                left: 0,
+                top: "calc(100% + 8px)",
+                zIndex: 1000,
+              }}>
+                <DashboardDateRangePicker
+                  inline={true}
+                  draftRange={draftRange}
+                  activePresetId={activePresetId}
+                  onDraftChange={(selection) => {
+                    setDraftRange(selection);
+                    setActivePresetId("custom");
+                  }}
+                  onPresetSelect={(preset) => {
+                    setActivePresetId(preset.id);
+                    setDraftRange(preset.range);
+                  }}
+                  onApply={(selection) => {
+                    setDateRange(selection);
+                    setPickerOpen(false);
+                    setFetchTrigger(t => t + 1);
+                  }}
+                  onCancel={() => {
+                    setPickerOpen(false);
+                    setDraftRange(dateRange);
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+        <button
+          type="button"
+          className="adp-filter-bar__refresh"
+          onClick={handleLocalRefresh}
+          disabled={localRefreshing || loading}
+          title="Refresh chart data"
+        >
+          <PortalIcon name="refresh" size={14} />
+          <span>{localRefreshing || loading ? 'Refreshing…' : 'Refresh'}</span>
+        </button>
+      </div>
 
       {/* KPI summary */}
       <AnimatePresence mode="wait">
@@ -441,6 +508,11 @@ export default function Analytics({ type, title, description }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Render Reviews Table if type is 'reviews' */}
+      {type === 'reviews' && (
+        <AdminReviewsTable startDate={dateRange.startDate} endDate={dateRange.endDate} />
+      )}
     </div>
   );
 }

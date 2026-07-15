@@ -101,7 +101,7 @@
   height: 500px;
   width: 100%;
   contain: layout style;
-  /* Giới hạn phạm vi tính toán layout của trình duyệt */
+  /* Limit the scope of the browser's layout calculations */
 }
 
 .uxp-panel {

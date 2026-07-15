@@ -44,7 +44,9 @@ export function SocketProvider({ children, user = null, sessionId = null }) {
 
     const instance = io(SOCKET_URL, {
       autoConnect: true,
-      transports: ["polling", "websocket"],
+      transports: ["websocket", "polling"],
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
       auth: {
         userId,
         roleId,

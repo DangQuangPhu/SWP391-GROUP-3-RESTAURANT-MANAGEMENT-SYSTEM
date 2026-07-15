@@ -48,6 +48,7 @@ export const getKitchenQueue = async (req, res) => {
                 COALESCE(oi.snapshot_table_name, t.table_number) AS table_number,
                 COALESCE(c.full_name, r.contact_name, N'Walk-in')  AS guest_label,
                 r.guest_count,
+                r.reservation_start_at,
                 d.dish_name,
                 d.category_id,
                 mc.category_name,
@@ -89,10 +90,10 @@ export const getKitchenQueue = async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 const FSM = {
     // [ currentStatus ][ requestedStatus ] → required actor type(s)
-    'Pending':          { 'Sent To Kitchen': ['staff'],                   'Cancelled': ['staff'] },
-    'Sent To Kitchen':  { 'Preparing':       ['kds_device'],              'Cancelled': ['staff'] },
-    'Preparing':        { 'Ready':           ['kds_device'],              'Cancelled': ['manager_override'] },
-    'Ready':            { 'Served':          ['staff'] /* Cancelled: BLOCKED */ },
+    'Pending':          { 'Sent To Kitchen': ['staff', 'manager_override'],                   'Cancelled': ['staff', 'manager_override'] },
+    'Sent To Kitchen':  { 'Preparing':       ['kds_device', 'staff', 'manager_override'],     'Cancelled': ['staff', 'manager_override'] },
+    'Preparing':        { 'Ready':           ['kds_device', 'staff', 'manager_override'],     'Cancelled': ['manager_override', 'staff'] },
+    'Ready':            { 'Served':          ['staff', 'manager_override'] /* Cancelled: BLOCKED */ },
     'Served':           { /* all transitions blocked */ },
     'Cancelled':        { /* terminal */ },
 };

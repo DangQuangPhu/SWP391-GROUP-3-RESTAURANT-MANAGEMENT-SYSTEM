@@ -23,7 +23,7 @@ export default function CustomerNotificationListener({ user, isAuthenticated }) 
 
   // Fetch unread notifications on mount
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("phurai_token") || localStorage.getItem("token");
     if (!token || !isAuthenticated || !isCustomerUser(user)) return;
     apiGet("/notifications?limit=10")
       .then((res) => {
@@ -41,7 +41,7 @@ export default function CustomerNotificationListener({ user, isAuthenticated }) 
   }, [isAuthenticated, user, navigate]);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("phurai_token") || localStorage.getItem("token");
     if (!token || !socket || !isAuthenticated || !isCustomerUser(user)) {
       return undefined;
     }

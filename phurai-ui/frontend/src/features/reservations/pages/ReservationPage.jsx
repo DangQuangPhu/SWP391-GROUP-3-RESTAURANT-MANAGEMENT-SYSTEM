@@ -208,30 +208,49 @@ function ReservationPage({
     }
   }, [urlStep, step, navigate]);
 
-  // Redirect to details if on payment or success step without a valid reservation
+  // Enforce payment or cancel for pending reservations:
+  // - If on payment/success without memory state, try to restore from localStorage.
+  // - If on details/summary but a valid pending reservation exists, force-redirect to payment.
   useEffect(() => {
-    const isPaymentOrSuccess = step === "payment" || step === "success";
-    if (isPaymentOrSuccess && !successReservation) {
-      const stored = localStorage.getItem("phurai_pending_reservation");
-      if (!stored) {
-        navigate('/reservations/details', { replace: true });
-      } else {
-        try {
-          const parsed = JSON.parse(stored);
-          const elapsed = Math.floor((Date.now() - parsed.createdAt) / 1000);
-          if (elapsed >= 15 * 60) {
-            navigate('/reservations/details', { replace: true });
-          } else {
-            // Restore the reservation state so the UI renders
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setSuccessReservation(parsed);
-          }
-        } catch {
-          navigate('/reservations/details', { replace: true });
+    const stored = localStorage.getItem("phurai_pending_reservation");
+    let activePending = null;
+
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        const elapsed = Math.floor((Date.now() - parsed.createdAt) / 1000);
+        if (elapsed < 15 * 60) {
+          activePending = parsed;
+        } else {
+          localStorage.removeItem("phurai_pending_reservation");
         }
+      } catch (err) {
+        console.error("Error parsing pending reservation:", err);
       }
     }
-  }, [step, successReservation, navigate]);
+
+    if (activePending) {
+      // Force redirect to payment if they try to go back to details/summary
+      if (step !== "payment" && step !== "success") {
+        setTimeout(() => {
+          setSuccessReservation(activePending);
+          navigate('/reservations/payment', { replace: true });
+        }, 0);
+      } else if (!successReservation) {
+        setTimeout(() => {
+          setSuccessReservation(activePending);
+        }, 0);
+      }
+    } else {
+      // No active reservation: if they try to access payment, kick them back to details.
+      // If they try to access success, kick them back to details ONLY if payment was NOT successful.
+      if (step === "payment" || (step === "success" && !isPaymentSuccess)) {
+        setTimeout(() => {
+          navigate('/reservations/details', { replace: true });
+        }, 0);
+      }
+    }
+  }, [step, successReservation, navigate, isPaymentSuccess]);
 
   const setField = useCallback((name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -336,10 +355,21 @@ function ReservationPage({
     let active = true;
     setLoadingAvailability(true);
     const handle = setTimeout(() => {
+      let calcDuration = 90 + (Number(form.holdDurationMinutes) || 30);
+      if (form.time && form.endTime) {
+        const [sh, sm] = form.time.split(':').map(Number);
+        const [eh, em] = form.endTime.split(':').map(Number);
+        let endMins = (eh === 0 && em === 0) ? 1440 : (eh * 60 + em);
+        if (eh === 0 && em > 0) endMins = 1440 + em;
+        if (endMins > sh * 60 + sm) {
+          calcDuration = endMins - (sh * 60 + sm);
+        }
+      }
+
       getAvailability({
         date: form.date,
         time: form.time,
-        durationMinutes: 90 + (Number(form.holdDurationMinutes) || 30),
+        durationMinutes: calcDuration,
         guestCount: form.guestCount,
         areaType: null,
         eventType: form.diningPurpose,
@@ -366,7 +396,7 @@ function ReservationPage({
       active = false;
       clearTimeout(handle);
     };
-  }, [form.date, form.time, form.holdDurationMinutes, form.guestCount, form.diningPurpose, settings]);
+  }, [form.date, form.time, form.endTime, form.holdDurationMinutes, form.guestCount, form.diningPurpose, settings]);
 
   const selectedTables = useMemo(() => {
     if (!selectedTableId) return [];
@@ -603,6 +633,7 @@ function ReservationPage({
                       setPromoCode={setPromoCode}
                       promoDiscount={promoDiscount}
                       setPromoDiscount={setPromoDiscount}
+                      currentUser={currentUser}
                     />
                   </div>
                 </div>

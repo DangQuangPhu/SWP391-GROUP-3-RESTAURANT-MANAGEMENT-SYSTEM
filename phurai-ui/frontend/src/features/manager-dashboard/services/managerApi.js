@@ -751,6 +751,12 @@ export async function revokeAccess(staffId) {
   return res;
 }
 
+export async function deleteEmployee(staffId) {
+  const res = await request("/manager/employees/" + staffId, { method: "DELETE" });
+  if (!res?.success) throw createApiError(res?.message || "Could not delete employee.");
+  return res;
+}
+
 export async function addPerformanceReview(staffId, { rating, notes }) {
   const res = await request("/manager/employees/" + staffId + "/performance", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rating, notes }) });
   if (!res?.success) throw createApiError(res?.message || "Could not save review.");

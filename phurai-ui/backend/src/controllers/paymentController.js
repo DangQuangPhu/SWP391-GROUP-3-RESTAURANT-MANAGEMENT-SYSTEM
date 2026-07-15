@@ -3,6 +3,8 @@ import { getRawPool } from '../db.js';
 import { getIO } from '../socket.js';
 import { sendReservationInvoiceEmail, sendCheckoutReceiptEmail } from '../email.js';
 import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
+import { handlePostCheckoutSuccess } from '../services/checkoutHelper.js';
+import { notifyStaffNewCustomerAction } from '../services/notificationService.js';
 
 
 /**
@@ -72,8 +74,8 @@ export const handleSepayWebhook = async (req, res) => {
         }
 
         const reservation = resResult.recordset[0];
-        // Guard: skip if already paid (Confirmed = paid & awaiting check-in in new enum)
-        const alreadyPaidStatuses = ['Confirmed', 'Completed', 'Check-in', 'Dining'];
+        // Guard: skip if already paid
+        const alreadyPaidStatuses = ['Await Check-in', 'Completed', 'Dining'];
         if (alreadyPaidStatuses.includes(reservation.reservation_status)) {
           await transaction.rollback();
           return res.status(200).json({ success: true, message: 'Webhook received, reservation is already confirmed/paid' });
@@ -86,10 +88,10 @@ export const handleSepayWebhook = async (req, res) => {
           return res.status(200).json({ success: true, message: 'Insufficient funds received' });
         }
 
-        // a. Update reservation to 'Confirmed' (the canonical paid/awaiting-check-in state)
+        // a. Update reservation to 'Await Check-in' (the canonical paid/awaiting-check-in state)
         await transaction.request()
           .input('resId', sql.Int, reservation.reservation_id)
-          .input('resStatus', sql.VarChar, 'Confirmed')
+          .input('resStatus', sql.VarChar, 'Await Check-in')
           .query(`
             UPDATE dbo.Reservations 
             SET reservation_status = @resStatus, 
@@ -208,21 +210,21 @@ export const handleSepayWebhook = async (req, res) => {
             VALUES (@actionName, @targetTable, @targetId, @newValue, SYSDATETIME())
           `);
 
-        // Emit socket event — frontend listens for these to advance to Confirmed step
+        // Emit socket event — frontend listens for these to advance to success step
         const io = getIO();
         if (io) {
           io.emit('RESERVATION_PAYMENT_SUCCESS', {
             reservationId: reservation.reservation_id,
             reservation_id: reservation.reservation_id,
             orderCode: reservation.order_code,
-            status: 'Confirmed',
+            status: 'Await Check-in',
             flashCompletePaid: true
           });
           io.emit('RESERVATION_STATUS_CHANGED', {
             id: reservation.reservation_id,
             reservationId: reservation.reservation_id,
             reservation_id: reservation.reservation_id,
-            status: 'Confirmed'
+            status: 'Await Check-in'
           });
         }
 
@@ -398,58 +400,9 @@ export const handleSepayWebhook = async (req, res) => {
 
         // Send email receipt
         try {
-          const rawPool = await getRawPool();
-          let emailTo = null;
-          let customerName = 'Guest';
-
-          if (order.reservation_id) {
-            const resQuery = await rawPool.request()
-              .input('resId', sql.Int, order.reservation_id)
-              .query('SELECT contact_email, contact_name FROM dbo.Reservations WHERE reservation_id = @resId');
-            if (resQuery.recordset.length > 0) {
-              emailTo = resQuery.recordset[0].contact_email;
-              customerName = resQuery.recordset[0].contact_name || 'Guest';
-            }
-          } else if (order.customer_id) {
-            const userQuery = await rawPool.request()
-              .input('cId', sql.Int, order.customer_id)
-              .query('SELECT email, full_name FROM dbo.UserAccounts WHERE user_id = @cId');
-            if (userQuery.recordset.length > 0) {
-              emailTo = userQuery.recordset[0].email;
-              customerName = userQuery.recordset[0].full_name || 'Guest';
-            }
-          }
-
-          if (emailTo) {
-            const itemQuery = await rawPool.request()
-              .input('orderId', sql.Int, orderId)
-              .query('SELECT d.dish_name as name, oi.quantity as qty, oi.unit_price FROM dbo.OrderItems oi JOIN dbo.Dishes d ON oi.dish_id = d.dish_id WHERE oi.order_id = @orderId');
-            
-            const tableQuery = await rawPool.request()
-              .input('tableId', sql.SmallInt, order.table_id)
-              .query('SELECT table_number FROM dbo.RestaurantTables WHERE table_id = @tableId');
-
-            let discountAmount = 0;
-            const vrQuery = await rawPool.request()
-              .input('orderId', sql.Int, orderId)
-              .query('SELECT SUM(discount_amount) as total_discount FROM dbo.VoucherRedemptions vr JOIN dbo.Payments p ON vr.payment_id = p.payment_id WHERE p.order_id = @orderId');
-            if (vrQuery.recordset.length > 0) {
-              discountAmount = vrQuery.recordset[0].total_discount || 0;
-            }
-
-            await sendCheckoutReceiptEmail({
-              toEmail: emailTo,
-              customerName: customerName,
-              orderId: orderId,
-              items: itemQuery.recordset,
-              discountAmount: discountAmount,
-              totalPaid: transferAmount,
-              tableNumber: tableQuery.recordset[0]?.table_number || 'N/A',
-              dateStr: new Date().toLocaleDateString('vi-VN') + ' ' + new Date().toLocaleTimeString('vi-VN')
-            });
-          }
+          await handlePostCheckoutSuccess(orderId, transferAmount);
         } catch (receiptErr) {
-          console.error('[SePay Webhook] Failed to send checkout receipt email:', receiptErr);
+          console.error('[SePay Webhook] Failed to process post-checkout success tasks:', receiptErr);
         }
 
         const io = getIO();
@@ -466,6 +419,15 @@ export const handleSepayWebhook = async (req, res) => {
           io.emit('QR_SESSION_PAYMENT_COMPLETED', payload);
           io.to("room:kitchen").emit("kds:clear_order", { orderId: orderId });
           io.to("room:staff").to("room:manager").emit("table:status_changed", { tableId: order.table_id, status: 'Cleaning' });
+          if (order.reservation_id) {
+            io.to('room:staff').to('room:manager').emit('reservation:status_changed', {
+              reservation_id: order.reservation_id,
+              id: order.reservation_id,
+              status: 'Completed',
+              new_status: 'Completed'
+            });
+            io.to('room:staff').emit('reservation:checkout_ready', { reservation_id: order.reservation_id });
+          }
           if (order.qr_session_id) {
             io.to(`session_${order.qr_session_id}`).emit('PAYMENT_STATUS_CHANGED', payload);
             io.to(`session_${order.qr_session_id}`).emit('QR_SESSION_PAYMENT_COMPLETED', payload);
@@ -485,5 +447,197 @@ export const handleSepayWebhook = async (req, res) => {
     console.error('[SePay Webhook] Error processing webhook:', error);
     // Important: return 500 so SePay will retry
     return res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+};
+
+/**
+ * Customer requests to pay by cash on delivery
+ * POST /api/payments/cash-on-delivery
+ */
+export const requestCashOnDelivery = async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    if (!orderId) {
+      return res.status(400).json({ success: false, message: 'Order ID is required' });
+    }
+
+    const pool = await getRawPool();
+    const result = await pool.request()
+      .input('orderId', sql.Int, orderId)
+      .query(`
+        SELECT o.order_id, o.table_id, o.total_amount, o.reservation_id, t.table_number 
+        FROM dbo.Orders o
+        LEFT JOIN dbo.RestaurantTables t ON o.table_id = t.table_id
+        WHERE o.order_id = @orderId
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    const order = result.recordset[0];
+
+    await pool.request()
+      .input('orderId', sql.Int, orderId)
+      .query(`
+        UPDATE dbo.Orders 
+        SET order_status = 'Billed' 
+        WHERE order_id = @orderId AND order_status != 'Paid'
+      `);
+
+    // 1. Insert DB notifications for all staff/managers and emit NEW_CUSTOMER_ACTION
+    await notifyStaffNewCustomerAction({
+      actionType: 'cash_payment',
+      title: 'Cash Payment Requested',
+      message: `Table ${order.table_number || 'N/A'} requested Cash on Delivery payment of ${Number(order.total_amount).toLocaleString('vi-VN')}₫.`,
+      payload: {
+        orderId: order.order_id,
+        tableId: order.table_id,
+        tableNumber: order.table_number,
+        amount: order.total_amount,
+        reservationId: order.reservation_id
+      }
+    });
+
+    // 2. Also emit custom socket events for immediate page warnings
+    const io = getIO();
+    if (io) {
+      io.to('room:staff').to('room:manager').emit('payment:cash_pending', {
+        orderId: order.order_id,
+        tableId: order.table_id,
+        tableNumber: order.table_number,
+        amount: order.total_amount,
+        reservationId: order.reservation_id
+      });
+    }
+
+    return res.json({ success: true, message: 'Staff notified' });
+  } catch (error) {
+    console.error('requestCashOnDelivery Error:', error);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+/**
+ * Staff confirms a cash payment
+ * POST /api/payments/staff-confirm-cash
+ */
+export const confirmCashPaymentStaff = async (req, res) => {
+  try {
+    const { orderId, tableId } = req.body;
+    
+    if (!orderId) {
+      return res.status(400).json({ success: false, message: 'Order ID is required' });
+    }
+
+    const pool = await getRawPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const orderRes = await transaction.request()
+        .input('orderId', sql.Int, orderId)
+        .query('SELECT total_amount, reservation_id FROM dbo.Orders WHERE order_id = @orderId');
+
+      if (orderRes.recordset.length === 0) {
+        await transaction.rollback();
+        return res.status(404).json({ success: false, message: 'Order not found' });
+      }
+
+      const order = orderRes.recordset[0];
+
+      // Insert into Payments table to ensure it appears in Revenue
+      const pmRes = await transaction.request()
+        .query(`SELECT payment_method_id FROM dbo.PaymentMethods WHERE method_name = N'Cash'`);
+      const paymentMethodId = pmRes.recordset.length > 0 ? pmRes.recordset[0].payment_method_id : 1;
+
+      await transaction.request()
+        .input('orderId', sql.Int, orderId)
+        .input('resId', sql.Int, order.reservation_id || null)
+        .input('pmId', sql.TinyInt, paymentMethodId)
+        .input('amountPaid', sql.Decimal(12, 2), order.total_amount)
+        .input('staffId', sql.Int, req.user?.user_id || req.user?.id || null)
+        .query(`
+          INSERT INTO dbo.Payments (order_id, reservation_id, payment_method_id, amount_paid, change_given, payment_status, processed_by_staff_id, paid_at, created_at, updated_at)
+          VALUES (@orderId, @resId, @pmId, @amountPaid, 0, N'Completed', @staffId, SYSDATETIME(), SYSDATETIME(), SYSDATETIME())
+        `);
+
+      // Update Order status
+      await transaction.request()
+        .input('orderId', sql.Int, orderId)
+        .input('amountPaid', sql.Decimal(10, 2), order.total_amount)
+        .query(`
+          UPDATE dbo.Orders 
+          SET order_status = 'Paid', amount_paid = @amountPaid
+          WHERE order_id = @orderId
+        `);
+
+      if (tableId) {
+        await transaction.request()
+          .input('tableId', sql.Int, tableId)
+          .query(`
+            UPDATE dbo.RestaurantTables 
+            SET table_status = 'Cleaning' 
+            WHERE table_id = @tableId
+          `);
+      }
+
+      if (order.reservation_id) {
+        await transaction.request()
+          .input('resId', sql.Int, order.reservation_id)
+          .query(`
+            UPDATE dbo.Reservations 
+            SET reservation_status = 'Completed' 
+            WHERE reservation_id = @resId AND reservation_status != 'Completed'
+          `);
+      }
+
+      // Insert into AuditLogs for Timeline feature
+      const staffName = req.user?.name || req.user?.full_name || 'Staff Member';
+      await transaction.request()
+        .input('userId', sql.Int, req.user?.user_id || req.user?.id || null)
+        .input('actionName', sql.NVarChar(100), 'Cash Payment Confirmed')
+        .input('targetTable', sql.NVarChar(128), 'Orders')
+        .input('targetId', sql.Int, orderId)
+        .input('newVal', sql.NVarChar(sql.MAX), JSON.stringify({
+          staffName,
+          amountPaid: order.total_amount,
+          method: 'Cash on Delivery',
+          tableId
+        }))
+        .query(`
+          INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, created_at)
+          VALUES (@userId, @actionName, @targetTable, @targetId, @newVal, SYSDATETIME())
+        `);
+
+      await transaction.commit();
+
+      try {
+        await handlePostCheckoutSuccess(orderId, order.total_amount);
+      } catch (receiptErr) {
+        console.error('[confirmCashPaymentStaff] Failed to process post-checkout success tasks:', receiptErr);
+      }
+
+      const io = getIO();
+      if (io) {
+        io.emit('payment:confirmed', { orderId });
+        if (order.reservation_id) {
+          io.to('room:staff').to('room:manager').emit('reservation:status_changed', {
+            reservation_id: order.reservation_id,
+            id: order.reservation_id,
+            status: 'Completed',
+            new_status: 'Completed'
+          });
+        }
+      }
+
+      return res.json({ success: true, message: 'Payment confirmed' });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  } catch (error) {
+    console.error('confirmCashPaymentStaff Error:', error);
+    return res.status(500).json({ success: false, message: 'Server error' });
   }
 };

@@ -1,5 +1,6 @@
 import sql from 'mssql';
 import { getRawPool } from '../db.js';
+import { getIO } from '../socket.js';
 
 /**
  * POST /api/public/reviews/:orderId
@@ -8,9 +9,16 @@ import { getRawPool } from '../db.js';
 export const submitOrderReviewPublic = async (req, res) => {
   try {
     const orderId = parseInt(req.params.orderId, 10);
-    const { rating, notes } = req.body;
+    const { rating, foodRating, serviceRating, ambianceRating, notes } = req.body;
     
-    if (isNaN(orderId) || orderId <= 0 || !rating || rating < 1 || rating > 5) {
+    const fRating = parseInt(foodRating || rating, 10);
+    const sRating = parseInt(serviceRating || rating, 10);
+    const aRating = parseInt(ambianceRating || rating, 10);
+
+    if (isNaN(orderId) || orderId <= 0 || 
+        isNaN(fRating) || fRating < 1 || fRating > 5 ||
+        isNaN(sRating) || sRating < 1 || sRating > 5 ||
+        isNaN(aRating) || aRating < 1 || aRating > 5) {
       return res.status(400).json({ success: false, message: "Invalid input" });
     }
 
@@ -40,15 +48,34 @@ export const submitOrderReviewPublic = async (req, res) => {
     await pool.request()
       .input('customerId', sql.Int, customerId || null)
       .input('orderId', sql.Int, orderId)
-      .input('rating', sql.TinyInt, rating)
+      .input('fRating', sql.TinyInt, fRating)
+      .input('sRating', sql.TinyInt, sRating)
+      .input('aRating', sql.TinyInt, aRating)
       .input('notes', sql.NVarChar(1000), notes || '')
       .query(`
         INSERT INTO dbo.CustomerReviews (
           customer_id, order_id, food_rating, service_rating, ambiance_rating, comment, is_visible, created_at
         ) VALUES (
-          @customerId, @orderId, @rating, @rating, @rating, @notes, 1, SYSDATETIME()
+          @customerId, @orderId, @fRating, @sRating, @aRating, @notes, 1, SYSDATETIME()
         )
       `);
+
+    try {
+      const io = getIO();
+      if (io) {
+        io.emit('review:created', {
+          order_id: orderId,
+          food_rating: fRating,
+          service_rating: sRating,
+          ambiance_rating: aRating,
+          overall_rating: Math.round((fRating + sRating + aRating) / 3),
+          comment: notes || '',
+          created_at: new Date()
+        });
+      }
+    } catch (socketErr) {
+      console.error("[Socket] Failed to emit review:created:", socketErr.message);
+    }
 
     return res.json({ success: true, message: "Review submitted successfully" });
 

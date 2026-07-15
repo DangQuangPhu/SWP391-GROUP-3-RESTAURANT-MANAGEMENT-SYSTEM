@@ -14,24 +14,139 @@ export const getRoles = async (req, res) => {
     }
 };
 
-// PUT /api/admin/roles/:id — update role description only
+// POST /api/admin/roles
+export const createRole = async (req, res) => {
+    try {
+        const { role_name, description } = req.body;
+
+        if (!role_name || typeof role_name !== 'string' || role_name.trim().length < 2) {
+            return res.status(400).json({ success: false, message: 'Role name is required (min 2 characters).' });
+        }
+
+        const trimmedRoleName = role_name.trim();
+        const pool = await getRawPool();
+
+        // Check if role name already exists (case-insensitive)
+        const checkRes = await pool.request()
+            .input('roleName', trimmedRoleName)
+            .query('SELECT 1 FROM dbo.Roles WHERE LOWER(role_name) = LOWER(@roleName)');
+
+        if (checkRes.recordset.length > 0) {
+            return res.status(409).json({ success: false, message: `Role "${trimmedRoleName}" already exists.` });
+        }
+
+        // Insert new role
+        const result = await pool.request()
+            .input('roleName', trimmedRoleName)
+            .input('description', description ? description.trim() : null)
+            .query(`
+                INSERT INTO dbo.Roles (role_name, description)
+                OUTPUT INSERTED.role_id, INSERTED.role_name, INSERTED.description
+                VALUES (@roleName, @description)
+            `);
+
+        // Insert audit log
+        const adminUserId = req.user?.user_id || req.userId;
+        if (adminUserId) {
+            await pool.request()
+                .input('userId', adminUserId)
+                .input('actionName', 'ROLE_CREATE')
+                .input('targetTable', 'Roles')
+                .input('targetId', result.recordset[0].role_id)
+                .input('newValue', JSON.stringify(result.recordset[0]))
+                .input('ip', req.ip || '127.0.0.1')
+                .query(`
+                    INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, ip_address)
+                    VALUES (@userId, @actionName, @targetTable, @targetId, @newValue, @ip)
+                `);
+        }
+
+        return res.status(201).json({
+            success: true,
+            message: 'Role created successfully',
+            data: result.recordset[0]
+        });
+    } catch (error) {
+        console.error('[adminRoleController] createRole error:', error);
+        return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+    }
+};
+
+// PUT /api/admin/roles/:id
 export const updateRole = async (req, res) => {
     try {
         const { id } = req.params;
-        const { role_name, description } = req.body; // Scaffolded fields
+        const { role_name, description } = req.body;
+
+        if (!role_name || typeof role_name !== 'string' || role_name.trim().length < 2) {
+            return res.status(400).json({ success: false, message: 'Role name is required (min 2 characters).' });
+        }
+
+        const trimmedRoleName = role_name.trim();
+        const parsedId = Number(id);
+
+        if (parsedId <= 4) {
+            // System roles cannot be renamed
+            const systemRoleNames = {
+                1: 'Customer',
+                2: 'Restaurant Staff',
+                3: 'Manager',
+                4: 'Admin'
+            };
+            const defaultName = systemRoleNames[parsedId];
+            if (trimmedRoleName.toLowerCase() !== defaultName.toLowerCase()) {
+                return res.status(403).json({ success: false, message: `System default role name "${defaultName}" cannot be renamed.` });
+            }
+        }
 
         const pool = await getRawPool();
-        const result = await pool.request()
-            .input('id', id)
-            .input('description', description)
+
+        // Check duplicate name (if name is changed)
+        const checkRes = await pool.request()
+            .input('id', parsedId)
+            .input('roleName', trimmedRoleName)
+            .query('SELECT 1 FROM dbo.Roles WHERE LOWER(role_name) = LOWER(@roleName) AND role_id <> @id');
+
+        if (checkRes.recordset.length > 0) {
+            return res.status(409).json({ success: false, message: `Another role named "${trimmedRoleName}" already exists.` });
+        }
+
+        // Fetch old value for audit logging
+        const oldRes = await pool.request()
+            .input('id', parsedId)
+            .query('SELECT role_id, role_name, description FROM dbo.Roles WHERE role_id = @id');
+
+        if (oldRes.recordset.length === 0) {
+            return res.status(404).json({ success: false, message: 'Role not found' });
+        }
+
+        const oldVal = oldRes.recordset[0];
+
+        await pool.request()
+            .input('id', parsedId)
+            .input('roleName', trimmedRoleName)
+            .input('description', description ? description.trim() : null)
             .query(`
                 UPDATE dbo.Roles 
-                SET description = @description
+                SET role_name = @roleName, description = @description
                 WHERE role_id = @id
             `);
 
-        if (result.rowsAffected[0] === 0) {
-            return res.status(404).json({ success: false, message: 'Role not found' });
+        // Insert audit log
+        const adminUserId = req.user?.user_id || req.userId;
+        if (adminUserId) {
+            await pool.request()
+                .input('userId', adminUserId)
+                .input('actionName', 'ROLE_UPDATE')
+                .input('targetTable', 'Roles')
+                .input('targetId', parsedId)
+                .input('oldValue', JSON.stringify(oldVal))
+                .input('newValue', JSON.stringify({ role_id: parsedId, role_name: trimmedRoleName, description }))
+                .input('ip', req.ip || '127.0.0.1')
+                .query(`
+                    INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, old_value_json, new_value_json, ip_address)
+                    VALUES (@userId, @actionName, @targetTable, @targetId, @oldValue, @newValue, @ip)
+                `);
         }
 
         return res.json({ success: true, message: 'Role updated successfully' });

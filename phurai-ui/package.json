@@ -6,17 +6,21 @@
   "scripts": {
     "dev:frontend": "sleep 3 && cd frontend && npx vite --host",
     "dev:backend": "node --watch --watch-path=backend/src backend/src/index.js",
-
     "clean-ports": "docker stop phurai-app phurai-app-local 2>/dev/null || true; for pid in $(lsof -t -i:5001 -i:5173 2>/dev/null); do kill -9 $pid 2>/dev/null || true; done",
     "dev:full": "npm run clean-ports && concurrently --kill-others \"npm run dev:backend\" \"npm run dev:frontend\"",
     "build": "cd frontend && npx vite build",
     "lint": "eslint .",
     "preview": "cd frontend && npx vite preview --host",
-    "db:init":       "node backend/src/run_master_schema.js",
-    "db:init:prod":  "npm run db:seed && node backend/src/run_master_schema.js --confirm",
+    "db:init": "node backend/src/run_master_schema.js",
+    "db:init:prod": "node backend/src/run_master_schema.js --confirm",
     "db:init:local": "node backend/src/run_master_schema.js --confirm --seed-full",
-    "db:seed":       "node backend/scripts/inject_seed_to_sql.mjs",
-    "migrate":       "node migrate.cjs"
+    "db:seed": "node backend/scripts/inject_seed_to_sql.mjs",
+    "migrate": "node migrate.cjs",
+    "deploy": "node deploy.mjs",
+    "docker:build": "docker build -t phurai-app:latest .",
+    "docker:up:local": "docker compose --profile local up -d --build",
+    "docker:up:cloud": "docker compose --profile cloud up -d --build",
+    "docker:down": "docker compose --profile local --profile cloud down"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -38,6 +42,7 @@
     "react": "^19.2.6",
     "react-date-range": "^2.0.1",
     "react-dom": "^19.2.6",
+    "react-draggable": "^4.7.0",
     "react-hot-toast": "^2.6.0",
     "react-router-dom": "^6.30.4",
     "react-toastify": "^11.1.0",

@@ -142,10 +142,29 @@ function PreorderPanel({ reservation, userId, onSaved, value, onChange }) {
               <ul className="rzv-preorder__list">
                 {dishes.map((dish) => {
                   const qty = quantities[dish.dish_id] || 0;
+                  const isAvailable = dish.is_available !== false && dish.is_available !== 0;
                   return (
-                    <li key={dish.dish_id} className="rzv-preorder__item">
+                    <li key={dish.dish_id} className={`rzv-preorder__item ${!isAvailable ? 'rzv-preorder__item--unavailable' : ''}`} style={!isAvailable ? { opacity: 0.6 } : {}}>
                       <div className="rzv-preorder__item-info">
-                        <span className="rzv-preorder__item-name">{dish.dish_name}</span>
+                        <span className="rzv-preorder__item-name">
+                          {dish.dish_name}
+                          {!isAvailable && (
+                            <span style={{
+                              display: 'inline-block',
+                              marginLeft: '8px',
+                              backgroundColor: '#fee2e2',
+                              color: '#dc2626',
+                              padding: '2px 8px',
+                              borderRadius: '9999px',
+                              fontFamily: "'Hanken Grotesk', system-ui, sans-serif",
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              verticalAlign: 'middle'
+                            }}>
+                              Sold Out
+                            </span>
+                          )}
+                        </span>
                         <span className="rzv-preorder__item-price">
                           {formatVND(dish.price)}
                         </span>
@@ -165,6 +184,7 @@ function PreorderPanel({ reservation, userId, onSaved, value, onChange }) {
                           type="button"
                           className="rzv-preorder__step"
                           aria-label={`Add one ${dish.dish_name}`}
+                          disabled={!isAvailable}
                           onClick={() => setQty(dish.dish_id, qty + 1)}
                         >
                           +

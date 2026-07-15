@@ -25,7 +25,7 @@ export default function QrCartSummary({ orderData }) {
       <div className="space-y-3 text-sm">
         {/* Subtotal */}
         <div className="flex justify-between text-gray-600">
-          <span>Tổng tiền món (Subtotal)</span>
+          <span>Subtotal</span>
           <span className="font-medium">{formatCurrency(subtotal)}</span>
         </div>
 
@@ -41,7 +41,7 @@ export default function QrCartSummary({ orderData }) {
 
         {/* Total Amount */}
         <div className="flex justify-between text-gray-800 font-semibold pt-2 border-t border-dashed">
-          <span>Tổng hóa đơn (Total)</span>
+          <span>Total</span>
           <span>{formatCurrency(totalAmount)}</span>
         </div>
 

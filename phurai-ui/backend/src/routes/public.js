@@ -1,10 +1,11 @@
 import express from "express";
-import { getQrSessionHistory, submitQrOrderPublic, cancelOrderItem, applyVoucherToQrSession } from '../controllers/qrSessionController.js';
+import { getQrSessionHistory, submitQrOrderPublic, cancelOrderItem, applyVoucherToQrSession, updateOrderItemQuantity } from '../controllers/qrSessionController.js';
 
 const router = express.Router();
 
 router.post("/qr-order/submit", submitQrOrderPublic);
 router.delete("/qr-order/items/:itemId", cancelOrderItem);
+router.patch("/qr-order/items/:itemId/quantity", updateOrderItemQuantity);
 router.get("/qr-order/session/:token/history", getQrSessionHistory);
 router.post("/qr-order/session/:token/apply-voucher", applyVoucherToQrSession);
 

@@ -12,10 +12,13 @@ import {
   voidStaffBill,
   createVnpayUrl,
   checkOrderStatus,
+  fetchOrderTimeline,
 } from "../services/staffApi.js";
 import { DEMO_NOTICE } from "@/shared/constants.js";
 import { SplitBillModal } from "./SplitBillModal.jsx";
 import CheckoutPayment from "./CheckoutPayment.jsx";
+import { apiPost, profileRequestHeaders } from "@/core/api/httpClient.js";
+import { useSocket } from "@/core/socket/SocketContext.jsx";
 import "../styles/staff-payment-tab.css";
 
 const PAYMENT_METHODS = [
@@ -76,6 +79,9 @@ function StaffPaymentTab({
   const [busyKey, setBusyKey] = useState(null);
   const [checkoutSuccess, setCheckoutSuccess] = useState(null);
   const [isSplitItemModalOpen, setIsSplitItemModalOpen] = useState(false);
+  const [timeline, setTimeline] = useState([]);
+  const [pendingCashTableIds, setPendingCashTableIds] = useState(new Set());
+  const { socket } = useSocket();
 
   const userId = user?.userId ?? user?.user_id ?? user?.id;
   const manager = isManagerUser(user);
@@ -89,6 +95,7 @@ function StaffPaymentTab({
     async (tableId) => {
       if (!tableId) {
         setBill(null);
+        setTimeline([]);
         return;
       }
       setBillLoading(true);
@@ -97,8 +104,15 @@ function StaffPaymentTab({
         setBill(res.data);
         setAmountPaid(String(res.data?.total_amount ?? ""));
         setCheckoutSuccess(null);
+        if (res.data?.order_id) {
+          const tlRes = await fetchOrderTimeline(res.data.order_id);
+          setTimeline(tlRes.data || []);
+        } else {
+          setTimeline([]);
+        }
       } catch (error) {
         setBill(null);
+        setTimeline([]);
         toast(error.message || "Could not load bill", "error");
       } finally {
         setBillLoading(false);
@@ -124,6 +138,21 @@ function StaffPaymentTab({
       loadBill(Number(selectedTableId));
     }
   }, [selectedTableId, loadBill]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleCashPending = (payload) => {
+      setPendingCashTableIds(prev => {
+        const next = new Set(prev);
+        next.add(payload.tableId);
+        return next;
+      });
+      // Optionally auto-select if nothing is selected
+      setSelectedTableId((current) => current || String(payload.tableId));
+    };
+    socket.on('payment:cash_pending', handleCashPending);
+    return () => socket.off('payment:cash_pending', handleCashPending);
+  }, [socket]);
 
   const changeDue = useMemo(() => {
     const paid = Number(amountPaid);
@@ -178,6 +207,48 @@ function StaffPaymentTab({
       onRefresh?.();
     } catch (error) {
       toast(error.message || "Payment failed", "error");
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const handleConfirmCashPayment = async () => {
+    if (!selectedTableId || !bill?.order_id) return;
+    setBusyKey("confirm_cash");
+    try {
+      const res = await apiPost('/payments/staff-confirm-cash', {
+        orderId: bill.order_id,
+        tableId: Number(selectedTableId)
+      }, { headers: profileRequestHeaders(userId) });
+
+      if (res.success) {
+        setCheckoutSuccess({
+          table_number: bill.table_number,
+          total_amount: bill.total_amount,
+          change_given: 0
+        });
+        toast("Cash Payment Confirmed — table moved to Cleaning", "success");
+        setPendingCashTableIds(prev => {
+          const next = new Set(prev);
+          next.delete(Number(selectedTableId));
+          return next;
+        });
+        setTables((prev) =>
+          prev.map((table) =>
+            table.table_id === Number(selectedTableId)
+              ? { ...table, table_status: "Cleaning", status: "cleaning" }
+              : table
+          )
+        );
+        setBill(null);
+        setSelectedTableId("");
+        setVoucherCode("");
+        onRefresh?.();
+      } else {
+        toast(res.message || "Confirmation failed", "error");
+      }
+    } catch (error) {
+      toast(error.message || "Network error", "error");
     } finally {
       setBusyKey(null);
     }
@@ -241,30 +312,55 @@ function StaffPaymentTab({
         </div>
       ) : (
         <div className="staff-payment-layout">
-          <aside className="staff-payment-sidebar staff-card staff-card--compact staff-card--flush" style={{ display: "flex", gap: "8px", alignItems: "center", padding: "12px 16px" }}>
-            <div style={{ flex: 1 }}>
-              <label htmlFor="staff-payment-table-select" style={{ display: "block", marginBottom: "4px" }}>Select table</label>
-              <select
-                id="staff-payment-table-select"
-                value={selectedTableId}
-                onChange={(e) => setSelectedTableId(e.target.value)}
-                style={{ width: "100%" }}
-              >
-                {occupiedTables.map((table) => (
-                  <option key={table.table_id} value={table.table_id}>
-                    {table.table_number} · {table.area_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div style={{ alignSelf: "flex-end" }}>
-              <Button
-                variant="ghost"
-                size="sm"
-                icon="refresh"
-                onClick={onRefresh}
-                disabled={refreshing}
-              />
+          <aside className="staff-payment-sidebar staff-card staff-card--compact staff-card--flush" style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "16px" }}>
+            
+            {pendingCashTableIds.size > 0 && (
+              <div className="staff-pending-cash-alerts" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <p style={{ margin: 0, fontWeight: "bold", color: "#065f46", fontSize: "0.875rem" }}>
+                  Action Required
+                </p>
+                {Array.from(pendingCashTableIds).map(tId => {
+                  const table = occupiedTables.find(t => t.table_id === tId);
+                  if (!table) return null;
+                  return (
+                    <button 
+                      key={tId}
+                      className="staff-btn staff-btn--glow-green w-full"
+                      onClick={() => setSelectedTableId(String(tId))}
+                      style={{ padding: "8px 12px", fontSize: "0.875rem", animation: "pulse 2s infinite" }}
+                    >
+                      💵 Table {table.table_number}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}>
+                <label htmlFor="staff-payment-table-select" style={{ display: "block", marginBottom: "4px" }}>Select table</label>
+                <select
+                  id="staff-payment-table-select"
+                  value={selectedTableId}
+                  onChange={(e) => setSelectedTableId(e.target.value)}
+                  style={{ width: "100%" }}
+                >
+                  {occupiedTables.map((table) => (
+                    <option key={table.table_id} value={table.table_id}>
+                      {table.table_number} · {table.area_name} {pendingCashTableIds.has(table.table_id) ? '(Cash Pending)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon="refresh"
+                  onClick={onRefresh}
+                  disabled={refreshing}
+                />
+              </div>
             </div>
           </aside>
 
@@ -328,6 +424,18 @@ function StaffPaymentTab({
                         <span>-{formatMoney(bill.discount_amount)}</span>
                       </div>
                     ) : null}
+                    {bill.reservation_deposit_amount > 0 ? (
+                      <>
+                        <div className="staff-receipt__line">
+                          <span>Reservation Subtotal</span>
+                          <span>{formatMoney(bill.reservation_remaining_balance + bill.reservation_deposit_amount)}</span>
+                        </div>
+                        <div className="staff-receipt__line staff-receipt__line--discount">
+                          <span>Deposit Paid</span>
+                          <span>-{formatMoney(bill.reservation_deposit_amount)}</span>
+                        </div>
+                      </>
+                    ) : null}
                     <div className="staff-receipt__line staff-receipt__line--total">
                       <span>Total</span>
                       <span>{formatMoney(bill.total_amount)}</span>
@@ -342,6 +450,28 @@ function StaffPaymentTab({
                 </section>
 
                 <section className="staff-payment-panel">
+                  {(bill?.order_status === 'Pending Payment' || bill?.order_status === 'Billed') && (
+                    <div className="staff-cash-pending-card">
+                      <div className="staff-cash-pending-content">
+                        <div className="staff-cash-icon-wrapper">
+                          <span className="staff-cash-icon">💵</span>
+                        </div>
+                        <div>
+                          <p className="staff-cash-title">Cash Payment Requested</p>
+                          <p className="staff-cash-desc">Customer is waiting for staff to collect {formatMoney(bill.total_amount)} at the table.</p>
+                        </div>
+                      </div>
+                      <button 
+                        className="staff-btn staff-btn--glow-green w-full"
+                        onClick={handleConfirmCashPayment}
+                        disabled={busyKey === 'confirm_cash'}
+                        style={{ marginTop: '12px' }}
+                      >
+                        {busyKey === 'confirm_cash' ? 'Confirming...' : 'Confirm Cash Received'}
+                      </button>
+                    </div>
+                  )}
+
                   <h3>Apply voucher</h3>
                   <p className="staff-payment-panel__hint">
                     Manual discounts are available to managers only.
@@ -479,6 +609,41 @@ function StaffPaymentTab({
                     </Button>
                   </div>
                 </section>
+
+                {timeline.length > 0 && (
+                  <section className="staff-payment-panel" style={{ marginTop: '1rem' }}>
+                    <h3>Order Timeline</h3>
+                    <div className="staff-timeline">
+                      {timeline.map((log) => {
+                        let details = {};
+                        try { details = JSON.parse(log.new_value_json || '{}'); } catch(e){}
+                        const dateStr = new Date(log.created_at).toLocaleString('vi-VN', {
+                          day: '2-digit', month: '2-digit', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit'
+                        });
+                        return (
+                          <div key={log.audit_log_id} className="staff-timeline-item" style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px dashed var(--border-subtle)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <strong style={{ color: 'var(--text-main)', fontSize: '14px' }}>{log.action_name}</strong>
+                              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{dateStr}</span>
+                            </div>
+                            <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                {log.full_name || log.username || details.staffName || 'System'}
+                              </span>
+                              {details.amountPaid && (
+                                <span style={{ marginLeft: '12px', color: 'var(--color-success)', fontWeight: '500' }}>
+                                  {formatMoney(details.amountPaid)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
               </div>
             )}
           </div>

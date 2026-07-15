@@ -24,7 +24,7 @@ export const RESERVATION_STATUS = {
   get PENDING_LEGACY() { return 'Pending Request'; }
 };
 
-// Nhóm hiển thị cho UI (badge color, filter group)
+// Display group for UI (badge color, filter group)
 export const STATUS_GROUP = {
   PENDING: 'pending',     // amber
   ACTIVE: 'active',       // blue

@@ -41,10 +41,10 @@ export async function getManagerReviews(req, res) {
   try {
     const { startDate, endDate } = req.query;
     
-    let dateFilter = "";
+    let dateFilter = "WHERE cr.is_visible = 1";
     let params = [];
     if (startDate && endDate) {
-      dateFilter = "WHERE cr.created_at >= ? AND cr.created_at <= ?";
+      dateFilter += " AND cr.created_at >= ? AND cr.created_at <= ?";
       params = [startDate, endDate + ' 23:59:59'];
     }
 

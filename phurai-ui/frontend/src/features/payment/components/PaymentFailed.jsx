@@ -30,7 +30,7 @@ export default function PaymentFailed({ onRetry }) {
           className="w-full flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white font-medium py-3 px-6 rounded-xl transition-colors duration-200"
         >
           <RefreshCcw className="w-5 h-5" />
-          <span>Tạo mã QR mới</span>
+          <span>Generate new QR code</span>
         </button>
       </motion.div>
     </div>

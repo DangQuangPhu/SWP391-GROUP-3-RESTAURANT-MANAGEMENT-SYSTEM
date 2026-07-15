@@ -123,7 +123,7 @@ const CONFIRM_ACTIONS = {
   checkin: {
     title: "Confirm Check-in",
     desc: (r) =>
-      `Confirm check-in for ${r.customer_name} (Booking #${String(r.reservation_id).padStart(6, "0")})?`,
+      `Confirm check-in for ${r.customer_name} at Table ${r.assigned_tables || "N/A"} (Reservation #${String(r.reservation_id).padStart(6, "0")})?`,
     btnLabel: "Confirm Check-in",
     btnVariant: "gold",
   },
@@ -142,14 +142,14 @@ const CONFIRM_ACTIONS = {
   },
   reject_checkin: {
     title: "Reject Check-in",
-    desc: (r) => `Reject check-in for ${r.customer_name} (Booking #${String(r.reservation_id).padStart(6, "0")})? Please state the reason.`,
+    desc: (r) => `Reject check-in for ${r.customer_name} (Reservation #${String(r.reservation_id).padStart(6, "0")})? Please state the reason.`,
     btnLabel: "Reject & Release",
     btnVariant: "danger",
     needsReason: true,
   },
   checkout: {
     title: "Confirm Check-out",
-    desc: (r) => `Confirm check-out for ${r.customer_name} (Booking #${String(r.reservation_id).padStart(6, "0")})?`,
+    desc: (r) => `Confirm check-out for ${r.customer_name} (Reservation #${String(r.reservation_id).padStart(6, "0")})?`,
     btnLabel: "Confirm Check-out",
     btnVariant: "gold",
   },
@@ -360,6 +360,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
   const [confirmedAtMap, setConfirmedAtMap] = useState(new Map());
   const [checkoutReadyIds, setCheckoutReadyIds] = useState(new Set());
   const [checkoutDoneIds, setCheckoutDoneIds] = useState(new Set());
+  const [actionSubmitting, setActionSubmitting] = useState(false);
 
   const [walkInOpen, setWalkInOpen] = useState(false);
   // Table-selection modal state (replaces standalone "Assign Table" flow)
@@ -371,16 +372,18 @@ function ReservationManagement({ user, toast, refreshKey }) {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const [draftRange, setDraftRange] = useState(() => {
-    return { startDate: null, endDate: null, key: "selection" };
+    const today = new Date();
+    return { startDate: today, endDate: today, key: "selection" };
   });
   const [appliedRange, setAppliedRange] = useState(() => {
-    return { startDate: null, endDate: null };
+    const today = new Date();
+    return { startDate: today, endDate: today };
   });
-  const [activePresetId, setActivePresetId] = useState("all_dates");
+  const [activePresetId, setActivePresetId] = useState("today");
 
   const closePicker = useCallback(() => setPickerOpen(false), []);
   const openPicker = useCallback(() => {
@@ -423,7 +426,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
 
       const params = {
         page: currentPage,
-        limit: 20,
+        limit: 10,
         search,
         status: statusFilter,
       };
@@ -469,8 +472,9 @@ function ReservationManagement({ user, toast, refreshKey }) {
           }
           return updated;
         });
+        loadReservations();
         if (newStatus) {
-          toast(`Booking #${String(data.reservation_id || "").padStart(6, "0")} → ${newStatus}`, "info");
+          toast(`Reservation #${String(data.reservation_id || "").padStart(6, "0")} → ${newStatus}`, "info");
         }
       };
 
@@ -510,7 +514,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
             }
             return updated;
           });
-          toast(`Payment verified for booking #${String(data.reservation_id || "").padStart(6, "0")}`, "success");
+          toast(`Payment verified for reservation #${String(data.reservation_id || "").padStart(6, "0")}`, "success");
         }
       };
 
@@ -540,7 +544,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
           });
           toast(`Walk-in #${String(data.reservation_id).padStart(6, '0')} — ${data.customer_name || 'Guest'} dining at Table ${data.table_number || ''}`, 'success');
         } else {
-          toast(`New booking #${String(data.reservation_id || '').padStart(6, '0')} from ${data.customer_name || 'Guest'}`, 'info');
+          toast(`New reservation #${String(data.reservation_id || '').padStart(6, '0')} from ${data.customer_name || 'Guest'}`, 'info');
         }
         // Always sync from server to replace the synthetic row with real data
         loadReservations();
@@ -554,7 +558,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
         loadReservations();
         // 10-second toast notification
         toast(
-          `✓ Manager confirmed edit request for booking #${String(data.reservation_id || "").padStart(6, "0")}. Data updated.`,
+          `✓ Manager confirmed edit request for reservation #${String(data.reservation_id || "").padStart(6, "0")}. Data updated.`,
           "success",
           10000
         );
@@ -562,7 +566,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
       const handleEditRejected = (data) => {
         loadReservations();
         toast(
-          `Booking #${String(data.reservation_id || "").padStart(6, "0")} edit request was rejected — original booking stands.`,
+          `Reservation #${String(data.reservation_id || "").padStart(6, "0")} edit request was rejected — original reservation stands.`,
           "info",
           10000
         );
@@ -619,28 +623,18 @@ function ReservationManagement({ user, toast, refreshKey }) {
   const filtered = useMemo(() => {
     const sorted = [...dateScopedQueue];
     sorted.sort((a, b) => {
-      const keyA = getReservationStatusKey(a);
-      const keyB = getReservationStatusKey(b);
-
-      const isPendingA = (keyA === "pending_request" || keyA === "request" || keyA === "pending");
-      const isPendingB = (keyB === "pending_request" || keyB === "request" || keyB === "pending");
-
-      const isCheckInA = (keyA === "check-in" || keyA === "checked-in" || keyA === "checked_in");
-      const isCheckInB = (keyB === "check-in" || keyB === "checked-in" || keyB === "checked_in");
-
-      const rankA = isPendingA ? 1 : (isCheckInA ? 2 : 3);
-      const rankB = isPendingB ? 1 : (isCheckInB ? 2 : 3);
-
-      if (rankA !== rankB) {
-        return rankA - rankB;
+      const timeA = new Date(a?.reservation_start_at || 0).getTime();
+      const timeB = new Date(b?.reservation_start_at || 0).getTime();
+      if (timeB !== timeA) {
+        return timeB - timeA;
       }
-      return new Date(a?.reservation_start_at || 0).getTime() - new Date(b?.reservation_start_at || 0).getTime();
+      return (b?.reservation_id || 0) - (a?.reservation_id || 0);
     });
     return sorted;
   }, [dateScopedQueue]);
 
   const kpiConfirmed = useMemo(
-    () => dateScopedQueue.filter((r) => r.reservation_status === "Confirmed").length,
+    () => dateScopedQueue.filter((r) => r.reservation_status === "Await Check-in" || r.reservation_status === "Confirmed").length,
     [dateScopedQueue]
   );
   const kpiDining = useMemo(
@@ -652,13 +646,17 @@ function ReservationManagement({ user, toast, refreshKey }) {
     [dateScopedQueue]
   );
 
-  /* ── Action handlers ── */
   const handleCheckIn = useCallback(async () => {
-    if (!confirmDialog?.target) return;
+    if (!confirmDialog?.target || actionSubmitting) return;
     const target = confirmDialog.target;
+    setActionSubmitting(true);
     try {
-      const result = await checkInStaffReservation(target.reservation_id, userId, { table_id: target.table_id });
-      toast("Check-in successful!", "success");
+      const result = await checkInStaffReservation(
+        target.reservation_id,
+        userId,
+        target.table_id ? { table_id: target.table_id } : {}
+      );
+      toast("Check-in successful! Table is now Occupied.", "success");
       setCheckedInIds((prev) => new Set([...prev, target.reservation_id]));
       if (result?.checked_in_at) {
         setConfirmedAtMap((prev) => new Map(prev).set(target.reservation_id, result.checked_in_at));
@@ -667,12 +665,15 @@ function ReservationManagement({ user, toast, refreshKey }) {
       setConfirmDialog(null);
     } catch (err) {
       toast(err.message || "Check-in failed.", "error");
+    } finally {
+      setActionSubmitting(false);
     }
-  }, [confirmDialog, toast, loadReservations, user]);
+  }, [confirmDialog, toast, loadReservations, user, actionSubmitting, userId]);
 
   const handleRejectWalkin = useCallback(async () => {
-    if (!confirmDialog?.target) return;
+    if (!confirmDialog?.target || actionSubmitting) return;
     const target = confirmDialog.target;
+    setActionSubmitting(true);
     try {
       await rejectStaffReservation(target.reservation_id, userId, { reason: "Customer No-Show", new_status: "No Show" });
       toast("Marked as No Show. Table released.", "info");
@@ -681,17 +682,20 @@ function ReservationManagement({ user, toast, refreshKey }) {
       setConfirmDialog(null);
     } catch (err) {
       toast(err.message || "Operation failed.", "error");
+    } finally {
+      setActionSubmitting(false);
     }
-  }, [confirmDialog, toast, loadReservations, user]);
+  }, [confirmDialog, toast, loadReservations, user, actionSubmitting]);
 
   const handleRejectCheckin = useCallback(async () => {
-    if (!confirmDialog?.target) return;
+    if (!confirmDialog?.target || actionSubmitting) return;
     const target = confirmDialog.target;
     const reason = confirmDialog.reason?.trim();
     if (!reason) {
       toast("A reason is required to reject check-in.", "error");
       return;
     }
+    setActionSubmitting(true);
     try {
       await rejectStaffReservation(target.reservation_id, userId, { reason, new_status: "Check-in Rejected" });
       toast("Check-in rejected. Table released.", "info");
@@ -700,17 +704,20 @@ function ReservationManagement({ user, toast, refreshKey }) {
       setConfirmDialog(null);
     } catch (err) {
       toast(err.message || "Operation failed.", "error");
+    } finally {
+      setActionSubmitting(false);
     }
-  }, [confirmDialog, toast, loadReservations, user]);
+  }, [confirmDialog, toast, loadReservations, user, actionSubmitting]);
 
   const handleRejectCheckout = useCallback(async () => {
-    if (!confirmDialog?.target) return;
+    if (!confirmDialog?.target || actionSubmitting) return;
     const target = confirmDialog.target;
     const reason = confirmDialog.reason?.trim();
     if (!reason) {
       toast("A reason is required to reject check-out.", "error");
       return;
     }
+    setActionSubmitting(true);
     try {
       await rejectStaffReservation(target.reservation_id, userId, { reason, new_status: "Reject Check-out" });
       toast("Check-out rejected.", "info");
@@ -718,17 +725,20 @@ function ReservationManagement({ user, toast, refreshKey }) {
       setConfirmDialog(null);
     } catch (err) {
       toast(err.message || "Rejection failed.", "error");
+    } finally {
+      setActionSubmitting(false);
     }
-  }, [confirmDialog, toast, loadReservations, user]);
+  }, [confirmDialog, toast, loadReservations, user, actionSubmitting]);
 
   const handleRejectMismatch = useCallback(async () => {
-    if (!confirmDialog?.target) return;
+    if (!confirmDialog?.target || actionSubmitting) return;
     const target = confirmDialog.target;
     const reason = confirmDialog.reason?.trim();
     if (!reason) {
       toast("A reason is required to reject check-in.", "error");
       return;
     }
+    setActionSubmitting(true);
     try {
       await rejectStaffReservation(target.reservation_id, userId, { reason, new_status: "Check-in Rejected" });
       toast("Check-in rejected. Table released.", "info");
@@ -737,12 +747,15 @@ function ReservationManagement({ user, toast, refreshKey }) {
       setConfirmDialog(null);
     } catch (err) {
       toast(err.message || "Rejection failed.", "error");
+    } finally {
+      setActionSubmitting(false);
     }
-  }, [confirmDialog, toast, loadReservations, user]);
+  }, [confirmDialog, toast, loadReservations, user, actionSubmitting]);
 
   const handleConfirmCheckout = useCallback(async () => {
-    if (!confirmDialog?.target) return;
+    if (!confirmDialog?.target || actionSubmitting) return;
     const target = confirmDialog.target;
+    setActionSubmitting(true);
     try {
       await confirmCheckoutReservation(target.reservation_id, userId);
       toast("Check-out confirmed!", "success");
@@ -756,8 +769,10 @@ function ReservationManagement({ user, toast, refreshKey }) {
       setConfirmDialog(null);
     } catch (err) {
       toast(err.message || "Check-out confirmation failed.", "error");
+    } finally {
+      setActionSubmitting(false);
     }
-  }, [confirmDialog, toast, loadReservations, user]);
+  }, [confirmDialog, toast, loadReservations, user, actionSubmitting]);
 
   // Open table selection modal and fetch tables
   const openTableSelect = useCallback(async (reservation) => {
@@ -775,6 +790,14 @@ function ReservationManagement({ user, toast, refreshKey }) {
       setTableSelectLoading(false);
     }
   }, [userId, toast]);
+
+  const handleCheckInClick = useCallback((reservation) => {
+    if (reservation.assigned_tables && reservation.assigned_tables.trim()) {
+      setConfirmDialog({ action: "checkin", target: reservation });
+    } else {
+      openTableSelect(reservation);
+    }
+  }, [openTableSelect]);
 
   // Check-in with chosen table → atomic: Reservation→Dining, Table→Occupied
   const handleCheckInWithTable = useCallback(async (tableId) => {
@@ -862,7 +885,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
       );
     }
 
-    if (statusKey === "check-in") {
+    if (statusKey === "await_check-in" || statusKey === "confirmed" || statusKey === "check-in") {
       return (
         <div className="sfx-rowacts" style={{ justifyContent: "center", gap: 8, display: "flex", alignItems: "center" }}>
           <Button
@@ -874,7 +897,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
               fontWeight: 600,
               border: "none"
             }}
-            onClick={() => openTableSelect(reservation)}
+            onClick={() => handleCheckInClick(reservation)}
           >
             Check-in
           </Button>
@@ -887,21 +910,6 @@ function ReservationManagement({ user, toast, refreshKey }) {
     if (isOccupied) {
       return (
         <div className="sfx-rowacts" style={{ justifyContent: "center", gap: 8, display: "flex", alignItems: "center" }}>
-          <button
-            type="button"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 5,
-              padding: "5px 12px", borderRadius: 20, border: "none",
-              cursor: "pointer", fontSize: 12, fontWeight: 700,
-              color: "#fff", background: "linear-gradient(135deg, #f59e0b, #d97706)",
-              boxShadow: "0 2px 8px rgba(245,158,11,0.30)",
-              animation: "sfxFadeRise 0.5s ease both",
-            }}
-            onClick={() => handleSendToKitchen(resId)}
-          >
-            <Icon name="fire" size={14} /> Send to Kitchen
-          </button>
-
           {isCheckoutReady && isSameDay(new Date(reservation.reservation_start_at), new Date()) && (
             <button
               type="button"
@@ -941,7 +949,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
               fontWeight: 600,
               border: "none"
             }}
-            onClick={() => openTableSelect(reservation)}
+            onClick={() => handleCheckInClick(reservation)}
           >
             Check-in
           </Button>
@@ -1066,28 +1074,12 @@ function ReservationManagement({ user, toast, refreshKey }) {
                     </span>
                   )}
                 </p>
-                {/* Send to Kitchen button — only if there are unsent items and reservation is Occupied */}
-                {unsentItems.length > 0 && (getReservationStatusKey(target) === 'occupied' || getReservationStatusKey(target) === 'dining' || getReservationStatusKey(target) === 'check-in') && (
-                  <button
-                    type="button"
-                    onClick={() => handleSendToKitchen(target.reservation_id)}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
-                      padding: '5px 13px', borderRadius: 20, border: 'none',
-                      cursor: 'pointer', fontSize: 12, fontWeight: 700,
-                      color: '#fff', background: 'linear-gradient(135deg, #f97316, #ea580c)',
-                      boxShadow: '0 2px 8px rgba(249,115,22,0.35)',
-                    }}
-                  >
-                    🍳 Send {unsentItems.length} to Kitchen
-                  </button>
-                )}
-                {hasSent && unsentItems.length === 0 && (
+                {preorders.length > 0 && (
                   <span style={{
                     fontSize: 11, fontWeight: 600,
                     color: '#059669', background: 'rgba(16,185,129,0.1)', padding: '3px 8px', borderRadius: 10
                   }}>
-                    ✓ All sent to kitchen
+                    ✓ Kitchen Display synced
                   </span>
                 )}
               </div>
@@ -1175,7 +1167,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
                   <span className="sfx-kpi__icon" aria-hidden="true"><Icon name="bell" size={18} /></span>
                 </div>
                 <p className="sfx-kpi__value">{kpiConfirmed}</p>
-                <p className="sfx-kpi__label">Confirmed</p>
+                <p className="sfx-kpi__label">Await Check-in</p>
               </article>
 
               <article className="sfx-kpi sfx-kpi--green">
@@ -1303,6 +1295,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
                       >
                         <thead>
                           <tr style={{ background: "#ffffff" }}>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle", width: '50px' }}>#</th>
                             <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Reservation ID</th>
                             <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Date</th>
                             <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Customer</th>
@@ -1317,7 +1310,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
                           initial="hidden"
                           animate="visible"
                         >
-                          {filtered.map((reservation) => {
+                          {filtered.map((reservation, index) => {
                             const resId = reservation.reservation_id;
                             const dateIso = getReservationDateIso(reservation);
                             const displayDate = (() => {
@@ -1334,6 +1327,9 @@ function ReservationManagement({ user, toast, refreshKey }) {
                                 style={{ background: "#ffffff" }}
                                 className={`sfx-table__row${checkedInIds.has(resId) ? " sfx-table__row--just-actioned" : ""}${rejectedIds.has(resId) ? " sfx-table__row--just-rejected" : ""}`}
                               >
+                                <td style={{ fontSize: 13, fontWeight: 600, color: "#555", textAlign: "center", verticalAlign: "middle" }}>
+                                  {(currentPage - 1) * 10 + index + 1}
+                                </td>
                                 <td style={{ fontSize: 13, fontWeight: 600, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
                                   #{String(resId).padStart(6, "0")}
                                 </td>
@@ -1397,7 +1393,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
                   const target = confirmDialog?.target;
                   if (!target) return null;
                   const sk = getReservationStatusKey(target);
-                  const isConfirmedState = sk === "confirmed" && !checkedInIds.has(target.reservation_id);
+                  const isConfirmedState = (sk === "await_check-in" || sk === "confirmed" || sk === "check-in") && !checkedInIds.has(target.reservation_id);
                   const isOccupiedState = sk === "occupied" || sk === "dining" || checkedInIds.has(target.reservation_id);
                   const isFutureDate = new Date(target.reservation_start_at).setHours(0, 0, 0, 0) > new Date().setHours(0, 0, 0, 0);
 
@@ -1407,7 +1403,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
                         <Button variant="danger" onClick={() => setConfirmDialog({ action: "reject_checkin", target, reason: "" })}>
                           Reject Check-in
                         </Button>
-                        <Button variant="gold" onClick={() => openTableSelect(target)}>
+                        <Button variant="gold" onClick={() => handleCheckInClick(target)}>
                           Confirm Check-in
                         </Button>
                         {isTargetLate && (
@@ -1438,16 +1434,17 @@ function ReservationManagement({ user, toast, refreshKey }) {
               <div
                 style={{
                   position: "fixed", inset: 0, zIndex: 1100,
-                  background: "rgba(0,0,0,0.55)",
+                  background: "rgba(15, 23, 42, 0.45)",
+                  backdropFilter: "blur(8px)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}
                 onClick={() => setConfirmDialog(null)}
               >
                 <div
                   style={{
-                    background: "#ffffff", borderRadius: 14,
-                    padding: "28px 32px", maxWidth: 420, width: "92%",
-                    boxShadow: "0 24px 64px rgba(0,0,0,0.35)",
+                    background: "#ffffff", borderRadius: 20,
+                    padding: "36px", maxWidth: 420, width: "92%",
+                    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05)",
                     animation: "sfx-drawer-in 0.22s ease",
                   }}
                   onClick={(e) => e.stopPropagation()}
@@ -1457,15 +1454,15 @@ function ReservationManagement({ user, toast, refreshKey }) {
                     if (!cfg) return null;
                     return (
                       <>
-                        <h3 style={{ margin: "0 0 12px", fontSize: 17, fontWeight: 700, color: "#1a1a1a" }}>
+                        <h3 style={{ margin: "0 0 10px", fontSize: 20, fontWeight: 800, color: "#1e293b", letterSpacing: "-0.025em" }}>
                           {cfg.title}
                         </h3>
-                        <p style={{ margin: "0 0 20px", fontSize: 14, color: "#6b6459", lineHeight: 1.6 }}>
+                        <p style={{ margin: "0 0 24px", fontSize: 14.5, color: "#4b5563", lineHeight: 1.6 }}>
                           {cfg.desc(confirmDialog.target)}
                         </p>
                         {cfg.needsReason && (
-                          <div style={{ marginTop: 16 }}>
-                            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--sfx-muted)", marginBottom: 6, textTransform: "uppercase" }}>Reason (required) <span style={{ color: "#ef4444" }}>*</span></label>
+                          <div style={{ marginBottom: 24 }}>
+                            <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Reason (required) <span style={{ color: "#ef4444" }}>*</span></label>
                             <input
                               type="text"
                               autoFocus
@@ -1473,14 +1470,24 @@ function ReservationManagement({ user, toast, refreshKey }) {
                               value={confirmDialog.reason || ""}
                               onChange={(e) => setConfirmDialog({ ...confirmDialog, reason: e.target.value })}
                               placeholder="Enter reason for rejection…"
-                              style={{ width: "100%", boxSizing: "border-box" }}
+                              style={{ 
+                                width: "100%", 
+                                boxSizing: "border-box",
+                                padding: "12px 16px",
+                                borderRadius: "10px",
+                                border: "1.5px solid #e2e8f0",
+                                fontSize: "14px",
+                                color: "#1e293b",
+                                outline: "none"
+                              }}
                             />
                           </div>
                         )}
                         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                          <Button variant="ghost" onClick={() => setConfirmDialog(null)}>Cancel</Button>
+                          <Button variant="ghost" onClick={() => setConfirmDialog(null)} disabled={actionSubmitting}>Cancel</Button>
                           <Button
                             variant={cfg.btnVariant}
+                            disabled={actionSubmitting || (cfg.needsReason && !confirmDialog.reason?.trim())}
                             onClick={() => {
                               if (confirmDialog.action === "checkin") handleCheckIn();
                               else if (confirmDialog.action === "noshow") handleRejectWalkin();
@@ -1491,7 +1498,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
                               else if (confirmDialog.action === "checkout") handleConfirmCheckout();
                             }}
                           >
-                            {cfg.btnLabel}
+                            {actionSubmitting ? "Processing..." : cfg.btnLabel}
                           </Button>
                         </div>
                       </>

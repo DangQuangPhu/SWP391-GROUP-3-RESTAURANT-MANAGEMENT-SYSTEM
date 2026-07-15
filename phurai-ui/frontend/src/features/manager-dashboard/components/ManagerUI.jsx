@@ -25,9 +25,9 @@ export function SectionHead({ title, subtitle, actions, children }) {
 
 export function ContentPanel({ children, className = "", compact = false }) {
   const classes = [
-    "manager-card",
-    compact ? "manager-card--compact" : "",
-    "manager-card--flush",
+    "sfx-card",
+    compact ? "sfx-card--compact" : "",
+    "sfx-card--flush",
     className,
   ]
     .filter(Boolean)
@@ -62,13 +62,16 @@ export function Button({
   icon,
   type = "button",
   disabled = false,
+  className = "",
+  ...props
 }) {
   return (
     <button
       type={type}
-      className={`sfx-btn sfx-btn--${variant} sfx-btn--${size}`}
+      className={`sfx-btn sfx-btn--${variant} sfx-btn--${size} ${className}`.trim()}
       onClick={onClick}
       disabled={disabled}
+      {...props}
     >
       {icon ? <Icon name={icon} size={size === "sm" ? 14 : 16} /> : null}
       {children ? <span>{children}</span> : null}

@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { apiGet, apiPut } from '@/core/api/httpClient';
+import { useEffect, useState } from 'react';
+import { apiGet, apiPut, apiPost } from '@/core/api/httpClient';
 import AdminPageHeader from '@/features/admin-dashboard/components/AdminPageHeader';
 import AdminDataTable from '@/features/admin-dashboard/components/AdminDataTable';
+import RoleFormModal from '../components/RoleFormModal';
 import { toast } from 'react-hot-toast';
 
 export default function Roles() {
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activeModalRole, setActiveModalRole] = useState(null);
 
   const fetchRoles = async () => {
     try {
@@ -28,15 +30,50 @@ export default function Roles() {
   };
 
   useEffect(() => {
-    fetchRoles();
+    let active = true;
+    Promise.resolve().then(() => {
+      if (active) fetchRoles();
+    });
     // Listen for Refresh Data button in AdminLayout header
-    window.addEventListener("phurai_admin_refresh", fetchRoles);
-    return () => window.removeEventListener("phurai_admin_refresh", fetchRoles);
+    const handleRefresh = () => {
+      if (active) fetchRoles();
+    };
+    window.addEventListener("phurai_admin_refresh", handleRefresh);
+    return () => {
+      active = false;
+      window.removeEventListener("phurai_admin_refresh", handleRefresh);
+    };
   }, []);
 
   const handleEditRole = (row) => {
-    alert(`Edit Role feature coming soon. Role ID: ${row.role_id}`);
-    // You can implement the modal logic and call apiPut('/admin/roles/' + row.role_id, {...})
+    setActiveModalRole(row);
+  };
+
+  const handleCreateRole = () => {
+    setActiveModalRole({});
+  };
+
+  const handleSaveRole = async (formData) => {
+    try {
+      const isEdit = !!activeModalRole.role_id;
+      let res;
+      if (isEdit) {
+        res = await apiPut(`/admin/roles/${activeModalRole.role_id}`, formData);
+      } else {
+        res = await apiPost('/admin/roles', formData);
+      }
+
+      if (res.success) {
+        toast.success(res.message || (isEdit ? 'Role updated successfully' : 'Role created successfully'));
+        setActiveModalRole(null);
+        fetchRoles();
+      } else {
+        toast.error(res.message || 'Failed to save role');
+      }
+    } catch (err) {
+      console.error('Error saving role:', err);
+      toast.error(err.message || 'An error occurred while saving the role.');
+    }
   };
 
   const columns = [
@@ -80,7 +117,7 @@ export default function Roles() {
         description="Manage system access levels and role definitions."
         primaryAction={{
           label: '+ Create Role',
-          onClick: () => alert('Create Role feature coming soon!'),
+          onClick: handleCreateRole,
         }}
       />
 
@@ -94,6 +131,14 @@ export default function Roles() {
           data={roles}
           loading={loading}
           emptyMessage="No roles found."
+        />
+      )}
+
+      {activeModalRole && (
+        <RoleFormModal
+          role={activeModalRole.role_id ? activeModalRole : null}
+          onClose={() => setActiveModalRole(null)}
+          onSave={handleSaveRole}
         />
       )}
     </div>

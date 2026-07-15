@@ -37,7 +37,7 @@ function StaffReportTab({ toast, onRefresh, refreshing }) {
   const [summary, setSummary] = useState(null);
   const [auditRows, setAuditRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [dataSource, setDataSource] = useState("mock");
+
 
   const loadReport = useCallback(async () => {
     setLoading(true);
@@ -48,9 +48,7 @@ function StaffReportTab({ toast, onRefresh, refreshing }) {
       ]);
       setSummary(summaryRes.data ?? null);
       setAuditRows(Array.isArray(auditRes.data) ? auditRes.data : []);
-      setDataSource(
-        summaryRes.source === "api" || auditRes.source === "api" ? "api" : "mock"
-      );
+
     } catch {
       toast?.("Could not load shift report", "error");
     } finally {

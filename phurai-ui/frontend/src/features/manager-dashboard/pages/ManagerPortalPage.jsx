@@ -597,7 +597,7 @@ function ManagerPortalPage({
           });
           return { ...prev, reservations };
         });
-        toast(`Payment verified for booking #${resId}`, "success");
+        toast(`Payment verified for reservation #${resId}`, "success");
       } else {
         // Fallback for older code if it passes status
         setData(prev => {

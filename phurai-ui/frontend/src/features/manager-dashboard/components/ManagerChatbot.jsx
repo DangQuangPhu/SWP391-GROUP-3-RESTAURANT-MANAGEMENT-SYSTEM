@@ -5,7 +5,7 @@ import { sendChatMessage } from "../services/managerApi.js";
 export function ManagerChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { id: 1, sender: "bot", text: "Xin chào! Mình là Trợ lý Ảo. Mình có thể báo cáo nhanh về doanh thu, đặt bàn, số lượng bàn, đánh giá, hay món bán chạy. Bạn muốn hỏi gì nào?" }
+    { id: 1, sender: "bot", text: "Hello! I am your Virtual Assistant. I can provide quick reports on revenue, reservations, table counts, reviews, or best-selling dishes. What would you like to ask?" }
   ]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -37,12 +37,12 @@ export function ManagerChatbot() {
       const botMsg = {
         id: Date.now() + 1,
         sender: "bot",
-        text: res.success ? res.reply : (res.message || "Lỗi kết nối máy chủ.")
+        text: res.success ? res.reply : (res.message || "Server connection error.")
       };
       setMessages(prev => [...prev, botMsg]);
     } catch (error) {
       setIsTyping(false);
-      setMessages(prev => [...prev, { id: Date.now() + 1, sender: "bot", text: "Xin lỗi, hiện tại mình không thể trả lời." }]);
+      setMessages(prev => [...prev, { id: Date.now() + 1, sender: "bot", text: "Sorry, I cannot answer right now." }]);
     }
   };
 
@@ -57,8 +57,8 @@ export function ManagerChatbot() {
                 <Star size={16} />
               </div>
               <div>
-                <h3 className="font-semibold text-sm">Trợ lý Quản lý</h3>
-                <p className="text-xs text-white/80">Trực tuyến</p>
+                <h3 className="font-semibold text-sm">Manager Assistant</h3>
+                <p className="text-xs text-white/80">Online</p>
               </div>
             </div>
             <button
@@ -105,7 +105,7 @@ export function ManagerChatbot() {
           <form onSubmit={handleSend} className="p-3 bg-white border-t border-gray-100 flex gap-2 shrink-0">
             <input
               type="text"
-              placeholder="Nhắn tin cho trợ lý..."
+              placeholder="Message assistant..."
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               className="flex-1 bg-gray-100 border-transparent focus:bg-white focus:border-[#8c764b] focus:ring-1 focus:ring-[#8c764b] rounded-full px-4 py-2 text-sm transition-all"

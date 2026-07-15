@@ -172,8 +172,6 @@ CREATE TABLE dbo.StaffProfiles (
     updated_at         DATETIME2(0) NOT NULL CONSTRAINT DF_StaffProfiles_updated_at DEFAULT SYSDATETIME(),
     CONSTRAINT PK_StaffProfiles PRIMARY KEY (staff_id),
     CONSTRAINT UQ_StaffProfiles_staff_code UNIQUE (staff_code),
-    -- user_id uniqueness: only enforced when not NULL
-    CONSTRAINT UQ_StaffProfiles_user UNIQUE (user_id),
     CONSTRAINT FK_StaffProfiles_UserAccounts FOREIGN KEY (user_id) REFERENCES dbo.UserAccounts(user_id),
     CONSTRAINT FK_StaffProfiles_JobTitles FOREIGN KEY (job_title_id) REFERENCES dbo.JobTitles(job_title_id),
     CONSTRAINT CK_StaffProfiles_status CHECK (employment_status IN (N'Active', N'On Leave', N'Resigned')),
@@ -183,6 +181,11 @@ CREATE TABLE dbo.StaffProfiles (
         (has_system_account = 0 AND user_id IS NULL) OR has_system_account = 1
     )
 );
+GO
+
+CREATE UNIQUE NONCLUSTERED INDEX UX_StaffProfiles_user_id_filtered
+ON dbo.StaffProfiles(user_id)
+WHERE user_id IS NOT NULL;
 GO
 
 -- PerformanceReviews: manager/admin-only history of staff ratings
@@ -243,6 +246,8 @@ CREATE TABLE dbo.RestaurantTables (
     static_qr_code       NVARCHAR(120) NULL,
     notes                NVARCHAR(255) NULL,
     is_counter           BIT NOT NULL CONSTRAINT DF_RestaurantTables_is_counter DEFAULT 0,
+    position_x           SMALLINT NOT NULL CONSTRAINT DF_RestaurantTables_px DEFAULT 0,
+    position_y           SMALLINT NOT NULL CONSTRAINT DF_RestaurantTables_py DEFAULT 0,
     merged_into_table_id SMALLINT NULL REFERENCES dbo.RestaurantTables(table_id),
     created_at           DATETIME2(0) NOT NULL CONSTRAINT DF_RestaurantTables_created_at DEFAULT SYSDATETIME(),
     updated_at           DATETIME2(0) NOT NULL CONSTRAINT DF_RestaurantTables_updated_at DEFAULT SYSDATETIME(),
@@ -414,9 +419,8 @@ CREATE TABLE dbo.Reservations (
     CONSTRAINT CK_Reservations_guest_count CHECK (guest_count > 0),
     CONSTRAINT CK_Reservations_time CHECK (reservation_end_at > reservation_start_at),
     CONSTRAINT CK_Reservations_status CHECK (reservation_status IN (
-        N'Pending Request', N'Awaiting Deposit', N'Confirmed',
-        N'Check-in', N'Dining', N'Payment Pending',
-        N'Completed', N'Cancelled', N'No Show'
+        N'Pending Request', N'Awaiting Deposit', N'Await Check-in',
+        N'Dining', N'Pending Payment', N'Completed', N'Cancelled', N'No Show'
     )),
     CONSTRAINT CK_Reservations_source CHECK (reservation_source IN (N'Online', N'Walk-in', N'Phone')),
     CONSTRAINT CK_Reservations_RequestType CHECK (request_type IN (N'edit', N'cancel') OR request_type IS NULL)
@@ -1057,7 +1061,7 @@ GO
 SET IDENTITY_INSERT dbo.Roles ON;
 INSERT INTO dbo.Roles (role_id, role_name, description) VALUES
 (1, N'Customer', N'Registered customer using the public web app'),
-(2, N'Restaurant Staff', N'Receptionist, waiter, cashier and floor staff'),
+(2, N'Restaurant Staff', N'Receptionist, waiter and floor staff'),
 (3, N'Manager', N'Restaurant manager with operational and reporting access'),
 (4, N'Admin', N'System administrator or restaurant owner');
 SET IDENTITY_INSERT dbo.Roles OFF;
@@ -1072,9 +1076,6 @@ VALUES
 (2, 3, N'Dang Quang Phu',  N'phumanager@phurai.vn',  '0901000002', N'scrypt$8b83430313edc67abc8eadeefc31e841$ce82bbdd63b2f38cc66e8cb939a52599c91f53a8396a40ec2ee1d3d28dd106eedb890ddbe0a4b462080f268b0f848fc5d3f1974aa3930dab29612cb25cb887f0', 1, 1, '2026-05-18T08:10:00'),
 (3, 2, N'Dang Quang Phu',       N'phustaff1@phurai.vn',   '0901000003', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, '2026-05-18T08:30:00'),
 (4, 2, N'Pham Thi Thuy',    N'thuystaff@phurai.vn',   '0901000004', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, NULL),
--- Kitchen Staff accounts soft-deleted — KDS is device-based; mapped to Restaurant Staff role (role_id=2) with suspended status.
-(5, 2, N'Hoang Van Tho',    N'kitchen1@phurai.vn', '0901000005', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',   0, 1, '2026-05-18T09:00:00'),
-(6, 2, N'Do Thi Hao',       N'kitchen2@phurai.vn', '0901000006', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',   0, 1, NULL),
 (7, 1, N'Minh Khoa',         N'khoa@gmail.com',     '0908000001', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6',   1, 1, '2026-05-17T20:00:00'),
 (8, 1, N'Thu Huong',         N'huong@gmail.com',    '0908000002', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6',   1, 1, '2026-05-17T21:00:00'),
 (9, 1, N'Bao Nguyen',        N'bao@gmail.com',      '0908000003', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6',   1, 0, NULL),
@@ -1082,8 +1083,44 @@ VALUES
 (11,1, N'Nguyen Minh An',    N'nguyenminhan@gmail.com', '0909000001', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
 (12,1, N'Tran My Linh',       N'tranmylinh@gmail.com',   '0909000002', N'$2b$10$Al78.9LQ9vPbFK9gnbV8Z.sjNOz28idW6tqD5Y5Am8Kc.1jYENt7K', 1, 1, NULL),
 (13,1, N'Le Bao Khanh',       N'lebaokhanh@gmail.com',   '0909000003', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
-(14, 2, N'Le Huy Manh Tan',    N'tanstaff@phurai.vn',   '0901000004', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, NULL),
-(15, 1, N'Đặng Quang Phú',    N'quagphu159@gmail.com', '0964813966', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL);
+(14, 2, N'Le Huy Manh Tan',    N'tanstaff@phurai.vn',   '0901000014', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1, NULL),
+(15, 1, N'Đặng Quang Phú',    N'quagphu159@gmail.com', '0964813966', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+-- 3 additional staff accounts
+(20, 2, N'Nguyễn Văn Hùng',  N'hungnv@phurai.vn',   '0901000020', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6', 1, 1, NULL),
+(21, 2, N'Trần Thị Mai',     N'maitt@phurai.vn',    '0901000021', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6', 1, 1, NULL),
+(22, 2, N'Lê Hoàng Nam',     N'namlh@phurai.vn',    '0901000022', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6', 1, 1, NULL),
+(23, 2, N'Phạm Hồng Sơn',    N'sonph@phurai.vn',    '0901000023', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6', 1, 1, NULL),
+(24, 2, N'Vũ Thị Hà',        N'havt@phurai.vn',     '0901000024', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6', 1, 1, NULL),
+(25, 2, N'Đỗ Anh Tuấn',      N'tuanda@phurai.vn',   '0901000025', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6', 1, 1, NULL),
+(26, 2, N'Hoàng Kim Chi',    N'chihk@phurai.vn',    '0901000026', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6', 1, 1, NULL),
+(27, 2, N'Ngô Quốc Bảo',     N'baonq@phurai.vn',    '0901000027', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6', 1, 1, NULL),
+(28, 2, N'Bùi Minh Quân',    N'quanbm@phurai.vn',   '0901000028', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6', 1, 1, NULL),
+(29, 2, N'Võ Thị Ngọc',      N'ngocvt@phurai.vn',   '0901000029', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6', 1, 1, NULL),
+(101, 1, N'Nguyễn Hữu Trí', N'seeduser1@gmail.com', '0908000001', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 0, 1, NULL),
+(102, 1, N'Trần Phương Ly', N'seeduser2@gmail.com', '0908000002', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 0, 1, NULL),
+(103, 1, N'Lê Bích Ngọc', N'seeduser3@gmail.com', '0908000003', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 0, 1, NULL),
+(104, 1, N'Phạm Công Thành', N'seeduser4@gmail.com', '0908000004', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 0, 1, NULL),
+(105, 1, N'Vũ Đức Tâm', N'seeduser5@gmail.com', '0908000005', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 0, 1, NULL),
+(106, 1, N'Hoàng Minh Trí', N'seeduser6@gmail.com', '0908000006', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(107, 1, N'Ngô Thanh Sơn', N'seeduser7@gmail.com', '0908000007', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(108, 1, N'Đỗ Quỳnh Anh', N'seeduser8@gmail.com', '0908000008', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(109, 1, N'Bùi Ngọc Yến', N'seeduser9@gmail.com', '0908000009', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(110, 1, N'Trịnh Hữu Minh', N'seeduser10@gmail.com', '0908000010', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(111, 1, N'Phan Đình Phùng', N'seeduser11@gmail.com', '0908000011', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(112, 1, N'Võ Thị Thanh', N'seeduser12@gmail.com', '0908000012', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(113, 1, N'Lý Quang Vinh', N'seeduser13@gmail.com', '0908000013', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(114, 1, N'Hồ Bích Phương', N'seeduser14@gmail.com', '0908000014', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(115, 1, N'Đinh Tiến Đạt', N'seeduser15@gmail.com', '0908000015', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(116, 1, N'Đoàn Bảo Châu', N'seeduser16@gmail.com', '0908000016', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(117, 1, N'Lâm Thu Hiền', N'seeduser17@gmail.com', '0908000017', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(118, 1, N'Đặng Đức Giang', N'seeduser18@gmail.com', '0908000018', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(119, 1, N'Cao Quỳnh Hương', N'seeduser19@gmail.com', '0908000019', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(120, 1, N'Mai Vĩnh Phát', N'seeduser20@gmail.com', '0908000020', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(121, 1, N'Châu Tuấn Kiệt', N'seeduser21@gmail.com', '0908000021', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(122, 1, N'Thạch Kim Lan', N'seeduser22@gmail.com', '0908000022', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(123, 1, N'Trương Hải Nam', N'seeduser23@gmail.com', '0908000023', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(124, 1, N'Khúc Tường Vy', N'seeduser24@gmail.com', '0908000024', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL),
+(125, 1, N'Diệp Vấn', N'seeduser25@gmail.com', '0908000025', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, NULL);
 SET IDENTITY_INSERT dbo.UserAccounts OFF;
 GO
 
@@ -1103,7 +1140,32 @@ VALUES
 (5, 11, N'annguyen',  '2004-01-12', N'Male',   N'Vietnam', N'Vietnamese', N'Enjoys casual dining and signature dishes.', 120,  N'["Window seat","Mild spicy","Salmon sushi"]'),
 (6, 12, N'linhtran',  '2003-08-21', N'Female', N'Vietnam', N'English', N'Prefers elegant seating and light desserts.', 823,  N'["VIP area","Desserts","No seafood allergy"]'),
 (7, 13, N'baokhanh',  '2001-12-05', N'Other',  N'Vietnam', N'Vietnamese', N'Guest who often books private rooms.', 1800, N'["Private room","Chef recommendation","Premium wine pairing"]'),
-(8, 15, N'dangquangphu', '2004-12-29', N'Male',   N'Vietnam', N'Vietnamese', N'VIP customer since 2025.', 1250, N'["Quiet seating","Window seat"]');
+(8, 15, N'dangquangphu', '2004-12-29', N'Male',   N'Vietnam', N'Vietnamese', N'VIP customer since 2025.', 1250, N'["Quiet seating","Window seat"]'),
+(11, 101, N'nguyễnhữutrí', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(12, 102, N'trầnphươngly', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(13, 103, N'lêbíchngọc', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(14, 104, N'phạmcôngthành', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(15, 105, N'vũđứctâm', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(16, 106, N'hoàngminhtrí', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(17, 107, N'ngôthanhsơn', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(18, 108, N'đỗquỳnhanh', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(19, 109, N'bùingọcyến', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(20, 110, N'trịnhhữuminh', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(21, 111, N'phanđìnhphùng', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(22, 112, N'võthịthanh', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(23, 113, N'lýquangvinh', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(24, 114, N'hồbíchphương', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(25, 115, N'đinhtiếnđạt', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(26, 116, N'đoànbảochâu', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(27, 117, N'lâmthuhiền', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(28, 118, N'đặngđứcgiang', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(29, 119, N'caoquỳnhhương', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(30, 120, N'maivĩnhphát', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(31, 121, N'châutuấnkiệt', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(32, 122, N'thạchkimlan', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(33, 123, N'trươnghảinam', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(34, 124, N'khúctườngvy', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]'),
+(35, 125, N'diệpvấn', '1990-01-01', N'Other', N'Vietnam', N'English', N'VIP Customer', 0, N'[]');
 SET IDENTITY_INSERT dbo.CustomerProfiles OFF;
 GO
 
@@ -1145,16 +1207,15 @@ INSERT INTO dbo.JobTitles (job_title_id, title_name, requires_system_access, def
 (1,  N'System Admin',        1, 4),
 (2,  N'Manager',  1, 3),
 (3,  N'Receptionist',        1, 2),
-(4,  N'Waiter',              1, 2),
+(4,  N'Waiter',              0, NULL),
 (5,  N'Head Chef',           0, NULL),
 (6,  N'Sous Chef',           0, NULL),
-(7,  N'Bartender',           1, 2),
-(8,  N'Host/Hostess',        1, 2),
-(9,  N'Cashier',             1, 2),
+(7,  N'Bartender',           0, NULL),
+(8,  N'Host/Hostess',        0, NULL),
 (10, N'Kitchen Porter',      0, NULL),
 (11, N'Pastry Chef',         0, NULL),
 (12, N'Line Cook',           0, NULL),
-(13, N'Server',              1, 2);
+(13, N'Server',              0, NULL);
 SET IDENTITY_INSERT dbo.JobTitles OFF;
 GO
 
@@ -1162,16 +1223,26 @@ GO
 -- has_system_account=1 for all rows that have a linked UserAccounts row.
 -- Kitchen staff (KIT001/KIT002) kept as Resigned since their UserAccounts are soft-deleted.
 SET IDENTITY_INSERT dbo.StaffProfiles ON;
-INSERT INTO dbo.StaffProfiles (staff_id, user_id, staff_code, job_title, job_title_id, hire_date, employment_status, base_salary, has_system_account)
+INSERT INTO dbo.StaffProfiles (staff_id, user_id, staff_code, job_title, job_title_id, hire_date, employment_status, base_salary, has_system_account, full_name, email, phone)
 VALUES
-(1, 1, 'ADM001', N'System Admin',       1,  '2025-01-01', N'Active',   25000000, 1),
-(2, 2, 'MGR001', N'Restaurant Manager', 2,  '2025-01-15', N'Active',   22000000, 1),
-(3, 3, 'STF001', N'Receptionist',       3,  '2025-02-01', N'Active',   12000000, 1),
-(4, 4, 'STF002', N'Waiter',             4,  '2025-02-05', N'Active',   11000000, 1),
--- Kitchen staff soft-linked: their UserAccounts rows are is_active=0 (KDS device-based model)
-(5, 5, 'KIT001', N'Head Chef',          5,  '2025-01-20', N'Resigned', 18000000, 1),
-(6, 6, 'KIT002', N'Sous Chef',          6,  '2025-03-01', N'Resigned', 15000000, 1),
-(7, 14,'STF003', N'Waiter',             4,  '2025-04-01', N'Active',   11000000, 1);
+(1, 1, 'ADM001', N'System Admin',       1,  '2025-01-01', N'Active',   25000000, 1, NULL, NULL, NULL),
+(2, 2, 'MGR001', N'Restaurant Manager', 2,  '2025-01-15', N'Active',   22000000, 1, NULL, NULL, NULL),
+(3, 3, 'STF001', N'Receptionist',       3,  '2025-02-01', N'Active',   12000000, 1, NULL, NULL, NULL),
+(4, 4, 'STF002', N'Receptionist',       3,  '2025-02-05', N'Active',   12000000, 1, NULL, NULL, NULL),
+(7, 14,'STF003', N'Receptionist',       3,  '2025-04-01', N'Active',   12000000, 1, NULL, NULL, NULL),
+-- 10 additional staff profiles (including ones without system accounts populated with contact info)
+(8, 20, 'STF004', N'Waiter',             4,  '2025-05-01', N'Active',   11000000, 1, NULL, NULL, NULL),
+(9, 21, 'STF005', N'Receptionist',       3,  '2025-05-02', N'Active',   12000000, 1, NULL, NULL, NULL),
+(10,22, 'STF006', N'Waiter',             4,  '2025-05-03', N'Active',   11000000, 1, NULL, NULL, NULL),
+(11,NULL,'STF007', N'Bartender',           7,  '2025-05-04', N'Active',   13000000, 0, N'Nguyễn Hoàng Nam', N'namnh@phurai.vn', '0902000007'),
+(12,NULL,'STF008', N'Host/Hostess',        8,  '2025-05-05', N'Active',   12000000, 0, N'Trần Thị Hương', N'huongtt@phurai.vn', '0902000008'),
+(14,NULL,'STF010', N'Server',             13, '2025-05-07', N'Active',   11000000, 0, N'Lê Thanh Hải', N'hailt@phurai.vn', '0902000010'),
+(15,NULL,'STF011', N'Waiter',             4,  '2025-05-08', N'Active',   11000000, 0, N'Hoàng Đức Anh', N'anhhd@phurai.vn', '0902000011'),
+(16,NULL,'STF012', N'Bartender',           7,  '2025-05-09', N'Active',   13000000, 0, N'Phan Quốc Khánh', N'khanhpq@phurai.vn', '0902000012'),
+(17,NULL,'STF013', N'Receptionist',       3,  '2025-05-10', N'Active',   12000000, 0, N'Vũ Ngọc Linh', N'linhvn@phurai.vn', '0902000013'),
+(18,NULL,'STF014', N'Pastry Chef',        11, '2025-05-11', N'Active',   14000000, 0, N'Đặng Gia Bảo', N'baodg@phurai.vn', '0902000014'),
+(19,NULL,'STF015', N'Line Cook',          12, '2025-05-12', N'Active',   11500000, 0, N'Bùi Hữu Đạt', N'datbh@phurai.vn', '0902000015'),
+(20,NULL,'STF016', N'Kitchen Porter',     10, '2025-05-13', N'Active',   10000000, 0, N'Võ Văn Dũng', N'dungvv@phurai.vn', '0902000016');
 SET IDENTITY_INSERT dbo.StaffProfiles OFF;
 GO
 
@@ -1372,24 +1443,24 @@ INSERT INTO dbo.Reservations
  guest_count, special_request, dining_purpose, reservation_status, reservation_source, confirmed_by_staff_id, confirmed_at, checked_in_at,
  contact_name, contact_phone, contact_email)
 VALUES
-(1,  7, NULL, 1, '2026-05-20T18:30:00', '2026-05-20T20:30:00', 2, N'Window seat if possible', N'Casual Dining', N'Confirmed',  N'Online',  3, '2026-05-18T09:15:00', NULL, NULL, NULL, NULL),
-(2,  8, NULL, 4, '2026-05-20T19:00:00', '2026-05-20T21:00:00', 4, N'VIP area requested', N'Anniversary', N'Confirmed',  N'Online',  3, '2026-05-18T10:00:00', NULL, NULL, NULL, NULL),
+(1,  7, NULL, 1, '2026-05-20T18:30:00', '2026-05-20T20:30:00', 2, N'Window seat if possible', N'Casual Dining', N'Await Check-in',  N'Online',  3, '2026-05-18T09:15:00', NULL, NULL, NULL, NULL),
+(2,  8, NULL, 4, '2026-05-20T19:00:00', '2026-05-20T21:00:00', 4, N'VIP area requested', N'Anniversary', N'Await Check-in',  N'Online',  3, '2026-05-18T10:00:00', NULL, NULL, NULL, NULL),
 (3,  9, NULL, 2, '2026-05-21T12:00:00', '2026-05-21T14:00:00', 3, NULL, N'Casual Dining', N'Pending Request',     N'Online',  NULL, NULL, NULL, NULL, NULL, NULL),
-(4, 10, NULL, 5, '2026-05-21T20:00:00', '2026-05-21T22:00:00', 6, N'Business dinner', N'Business', N'Confirmed',  N'Online',  4, '2026-05-19T08:00:00', NULL, NULL, NULL, NULL),
-(5, NULL,3,    2, '2026-05-18T18:00:00', '2026-05-18T20:00:00', 2, N'Walk-in guest', N'Casual Dining', N'Check-in', N'Walk-in', 3, '2026-05-18T17:55:00', '2026-05-18T18:00:00', N'Nguyen Hoang An', '0908111222', 'hoangan@gmail.com'),
+(4, 10, NULL, 5, '2026-05-21T20:00:00', '2026-05-21T22:00:00', 6, N'Business dinner', N'Business', N'Await Check-in',  N'Online',  4, '2026-05-19T08:00:00', NULL, NULL, NULL, NULL),
+(5, NULL,3,    2, '2026-05-18T18:00:00', '2026-05-18T20:00:00', 2, N'Walk-in guest', N'Casual Dining', N'Await Check-in', N'Walk-in', 3, '2026-05-18T17:55:00', '2026-05-18T18:00:00', N'Nguyen Hoang An', '0908111222', 'hoangan@gmail.com'),
 (6,  7, NULL, 2, '2026-04-10T19:00:00', '2026-04-10T21:00:00', 2, NULL, N'Casual Dining', N'Completed',  N'Online',  3, '2026-04-08T10:00:00', '2026-04-10T18:55:00', NULL, NULL, NULL),
 (7,  12, NULL, 4, '2026-04-15T20:00:00', '2026-04-15T22:00:00', 4, N'VIP birthday dinner', N'Birthday', N'Completed',  N'Online',  4, '2026-04-13T09:30:00', '2026-04-15T19:55:00', NULL, NULL, NULL),
 (8, 10, NULL, 1, '2026-06-25T19:00:00', '2026-06-25T21:00:00', 3, N'Customer requested date change', N'Casual Dining', N'Pending Request', N'Online', 3, '2026-06-18T10:00:00', NULL, NULL, NULL, NULL),
-(9,  7, NULL, 1, '2026-06-24T18:30:00', '2026-06-24T20:30:00', 2, NULL, N'Casual Date', N'Confirmed',  N'Online',  3, '2026-06-20T09:15:00', NULL, NULL, NULL, NULL),
+(9,  7, NULL, 1, '2026-06-24T18:30:00', '2026-06-24T20:30:00', 2, NULL, N'Casual Date', N'Await Check-in',  N'Online',  3, '2026-06-20T09:15:00', NULL, NULL, NULL, NULL),
 (10, 8, NULL, 4, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 4, N'window seat', N'Business', N'Pending Request', N'Online', NULL, NULL, NULL, NULL, NULL, NULL),
 (11, 9, NULL, 2, '2026-06-24T12:00:00', '2026-06-24T14:00:00', 3, NULL, N'Casual Dining', N'Awaiting Deposit', N'Online', NULL, NULL, NULL, NULL, NULL, NULL),
-(12, 12, NULL, 5, DATEADD(hour, 1, SYSDATETIME()), DATEADD(hour, 3, SYSDATETIME()), 6, N'extra cake', N'Birthday', N'Check-in', N'Online', 4, DATEADD(day, -1, SYSDATETIME()), NULL, NULL, NULL, NULL),
+(12, 12, NULL, 5, DATEADD(hour, 1, SYSDATETIME()), DATEADD(hour, 3, SYSDATETIME()), 6, N'extra cake', N'Birthday', N'Await Check-in', N'Online', 4, DATEADD(day, -1, SYSDATETIME()), NULL, NULL, NULL, NULL),
 (13, NULL, 3, 2, '2026-06-24T18:00:00', '2026-06-24T20:00:00', 2, NULL, N'Anniversary', N'Dining', N'Walk-in', 3, '2026-06-24T17:55:00', '2026-06-24T18:00:00', N'Pham Minh Tuan', '0909555666', 'minhtuan@gmail.com'),
-(14, 7, NULL, 2, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 2, NULL, N'Casual Dining', N'Payment Pending', N'Online', 3, '2026-06-20T10:00:00', '2026-06-24T18:55:00', NULL, NULL, NULL),
+(14, 7, NULL, 2, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 2, NULL, N'Casual Dining', N'Awaiting Deposit', N'Online', 3, '2026-06-20T10:00:00', '2026-06-24T18:55:00', NULL, NULL, NULL),
 (15, 8, NULL, 4, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 4, NULL, N'Celebration', N'Completed', N'Online', 4, '2026-06-20T09:30:00', '2026-06-24T19:55:00', NULL, NULL, NULL),
 (16, 10, NULL, 1, '2026-06-24T19:00:00', '2026-06-24T21:00:00', 3, NULL, N'Casual Date', N'Cancelled', N'Online', 3, '2026-06-20T10:00:00', NULL, NULL, NULL, NULL),
 (17, 9, NULL, 2, '2026-06-24T18:30:00', '2026-06-24T20:30:00', 2, NULL, N'Business', N'No Show', N'Online', 3, '2026-06-20T11:00:00', NULL, NULL, NULL, NULL),
-(18, 7, NULL, 1, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 2, NULL, N'Casual Dining', N'Confirmed', N'Online', 3, '2026-06-20T12:00:00', NULL, NULL, NULL, NULL),
+(18, 7, NULL, 1, '2026-06-24T20:00:00', '2026-06-24T22:00:00', 2, NULL, N'Casual Dining', N'Await Check-in', N'Online', 3, '2026-06-20T12:00:00', NULL, NULL, NULL, NULL),
 (19, 12, NULL, 1, DATEADD(day, -2, SYSDATETIME()), DATEADD(hour, 2, DATEADD(day, -2, SYSDATETIME())), 2, NULL, N'Anniversary', N'Completed', N'Online', 3, DATEADD(day, -4, SYSDATETIME()), DATEADD(minute, -5, DATEADD(day, -2, SYSDATETIME())), NULL, NULL, NULL);
 
 SET IDENTITY_INSERT dbo.Reservations OFF;
@@ -1465,8 +1536,8 @@ VALUES
 (13, 5, 18, 2,  89000, NULL,             N'Ready'),
 (14, 6,  7, 1, 188000, NULL,             N'Preparing'),
 (15, 6,  6, 1, 148000, N'No mushrooms', N'Pending'),
-(16, 7,  9, 1, 499000, N'QR Món 1 (Live)', N'Sent To Kitchen'),
-(17, 7, 12, 1, 248000, N'QR Món 2 (Live)', N'Sent To Kitchen'),
+(16, 7,  9, 1, 499000, NULL, N'Sent To Kitchen'),
+(17, 7, 12, 1, 248000, NULL, N'Sent To Kitchen'),
 (18, 8, 13, 1, 890000, N'Completed order', N'Served'),
 (19, 8, 18, 2,  89000, NULL,              N'Served'),
 (20, 8,  7, 1, 182000, NULL,              N'Served');
@@ -1797,10 +1868,10 @@ INSERT INTO dbo.Reservations
    reservation_status, reservation_source, confirmed_by_staff_id, confirmed_at, created_at)
 VALUES
 -- Upcoming Confirmed
-(100, 7,  N'Nguyen Minh Khoa', '0901111001', DATEADD(day,1,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,1,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 2, N'Confirmed',       N'Online', 3, GETDATE(), GETDATE()),
-(101, 8,  N'Pham Thu Huong',   '0901111002', DATEADD(day,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,2,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 4, N'Confirmed',       N'Online', 3, GETDATE(), GETDATE()),
+(100, 7,  N'Nguyen Minh Khoa', '0901111001', DATEADD(day,1,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,1,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 2, N'Await Check-in',       N'Online', 3, GETDATE(), GETDATE()),
+(101, 8,  N'Pham Thu Huong',   '0901111002', DATEADD(day,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,2,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 4, N'Await Check-in',       N'Online', 3, GETDATE(), GETDATE()),
 (102, 9,  N'Le Bao Nguyen',    '0901111003', DATEADD(day,3,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,3,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 3, N'Pending Request', N'Online', NULL, NULL, GETDATE()),
-(103, 10, N'Nguyen Lan Anh',   '0901111004', DATEADD(day,5,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,5,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 6, N'Confirmed',       N'Online', 4, GETDATE(), GETDATE()),
+(103, 10, N'Nguyen Lan Anh',   '0901111004', DATEADD(day,5,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,5,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 6, N'Await Check-in',       N'Online', 4, GETDATE(), GETDATE()),
 -- Pending (manager needs to action)
 (104, 11, N'Tran An Nguyen',   '0901111005', DATEADD(day,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,2,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 4, N'Pending Request', N'Online', NULL, NULL, GETDATE()),
 (105, 12, N'Tran My Linh',     '0909000002', DATEADD(day,4,CAST(CAST(GETDATE() AS DATE) AS DATETIME)), DATEADD(day,4,DATEADD(hour,2,CAST(CAST(GETDATE() AS DATE) AS DATETIME))), 2, N'Pending Request', N'Online', NULL, NULL, GETDATE()),
@@ -1903,4 +1974,526 @@ WHERE sp.employment_status = N'Active'
 GO
 
 PRINT N'✅ seed-demo.sql complete — production demo data inserted.';
+GO
+
+
+-- ==========================================
+-- PHU TEST DATA OVERRIDE
+-- ==========================================
+BEGIN TRANSACTION;
+
+DECLARE @CustomerRoleId TINYINT;
+SELECT @CustomerRoleId = role_id FROM dbo.Roles WHERE role_name = N'Customer';
+
+-- Ensure phuadmin@phurai.vn stays Admin — never demote it
+UPDATE dbo.UserAccounts
+SET role_id = 4, is_active = 1, email_verified = 1
+WHERE email = N'phuadmin@phurai.vn';
+
+-- Upsert the customer test account
+MERGE dbo.UserAccounts AS target
+USING (SELECT N'quagphu159@gmail.com' AS email) AS source
+ON target.email = source.email
+WHEN MATCHED THEN
+    UPDATE SET
+        role_id        = @CustomerRoleId,
+        full_name      = N'Dang Quang Phu',
+        is_active      = 1,
+        email_verified = 1,
+        created_at     = DATEADD(month, -6, SYSDATETIME())
+WHEN NOT MATCHED THEN
+    INSERT (role_id, full_name, email, password_hash, is_active, email_verified, created_at, updated_at)
+    VALUES (@CustomerRoleId, N'Dang Quang Phu', source.email,
+            N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',
+            1, 1, DATEADD(month, -6, SYSDATETIME()), DATEADD(month, -6, SYSDATETIME()));
+
+-- Target ONLY the customer account for all subsequent seed data
+DECLARE @PhuUsers TABLE (user_id INT);
+INSERT INTO @PhuUsers (user_id)
+SELECT user_id FROM dbo.UserAccounts WHERE email = N'quagphu159@gmail.com';
+
+
+-- CLEAN UP previous seed data to avoid duplicates or index errors
+DELETE FROM dbo.OrderItems WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE customer_id IN (SELECT user_id FROM @PhuUsers));
+DELETE FROM dbo.Payments WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE customer_id IN (SELECT user_id FROM @PhuUsers));
+DELETE FROM dbo.Orders WHERE customer_id IN (SELECT user_id FROM @PhuUsers);
+DELETE FROM dbo.Reservations WHERE customer_id IN (SELECT user_id FROM @PhuUsers);
+DELETE FROM dbo.CustomerVouchers WHERE customer_id IN (SELECT user_id FROM @PhuUsers);
+DELETE FROM dbo.LoyaltyTransactions WHERE customer_id IN (SELECT user_id FROM @PhuUsers);
+
+-- 1. Ensure a CustomerProfile exists for the customer account
+MERGE dbo.CustomerProfiles AS target
+USING @PhuUsers AS source
+ON target.user_id = source.user_id
+WHEN MATCHED THEN
+    UPDATE SET created_at = DATEADD(month, -6, SYSDATETIME())
+WHEN NOT MATCHED THEN
+    INSERT (user_id, username, date_of_birth, gender, country, [language], bio, loyalty_points, preferences, created_at, updated_at)
+    VALUES (source.user_id, N'quagphu159', '2004-12-29', N'Male', N'Vietnam', N'Vietnamese', N'CEO & Regular VIP customer.', 1010, N'["VIP area","Window seat","Steak"]', DATEADD(month, -6, SYSDATETIME()), DATEADD(month, -6, SYSDATETIME()));
+
+-- Update loyalty points to 1010 so he has Gold status and can redeem vouchers
+-- Also set username to quagphu159 for his Google account
+UPDATE target
+SET target.loyalty_points = 1010,
+    target.username = CASE WHEN ua.email = 'quagphu159@gmail.com' THEN 'quagphu159' ELSE target.username END
+FROM dbo.CustomerProfiles target
+INNER JOIN @PhuUsers source ON target.user_id = source.user_id
+INNER JOIN dbo.UserAccounts ua ON target.user_id = ua.user_id;
+
+-- 2. Insert Loyalty Point Transactions (so the user sees points history)
+-- We will insert Earn and Redeem transactions
+INSERT INTO dbo.LoyaltyTransactions (customer_id, points, transaction_type, reference_type, description, created_at)
+SELECT source.user_id, 350, N'Earn', N'Payment', N'Points earned from order payment', DATEADD(day, -15, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.LoyaltyTransactions (customer_id, points, transaction_type, reference_type, description, created_at)
+SELECT source.user_id, 760, N'Earn', N'Payment', N'Points earned from premium dining', DATEADD(day, -5, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.LoyaltyTransactions (customer_id, points, transaction_type, reference_type, description, created_at)
+SELECT source.user_id, -100, N'Redeem', N'VoucherRedeem', N'Redeemed 50K Voucher', DATEADD(day, -2, GETDATE())
+FROM @PhuUsers source;
+
+-- 3. Insert Vouchers into CustomerVouchers (so the user has active and used vouchers)
+INSERT INTO dbo.CustomerVouchers (customer_id, promotion_id, points_spent, voucher_code, status, redeemed_at, expires_at)
+SELECT source.user_id, 4, 100, N'PHU50K_' + CAST(source.user_id AS NVARCHAR(10)), N'active', DATEADD(day, -2, GETDATE()), DATEADD(day, 28, GETDATE())
+FROM @PhuUsers source;
+
+-- 4. Insert 6-Month Spread of Reservations, Orders, Payments, and OrderItems
+-- This creates a beautiful wave-like curve in the Expenditure chart!
+
+DECLARE @TableId INT;
+SELECT TOP 1 @TableId = table_id FROM dbo.RestaurantTables;
+
+DECLARE @AreaId INT;
+SELECT TOP 1 @AreaId = area_id FROM dbo.RestaurantAreas;
+
+-- ==========================================
+-- MONTH 5 AGO (5 months ago)
+-- ==========================================
+INSERT INTO dbo.Reservations (customer_id, contact_name, contact_phone, contact_email, preferred_area_id, reservation_start_at, reservation_end_at, guest_count, special_request, deposit_amount, final_total, reservation_status, created_at)
+SELECT source.user_id, N'Dang Quang Phu', '0964813966', N'phuadmin@phurai.vn', @AreaId, DATEADD(month, -5, GETDATE()), DATEADD(month, -5, DATEADD(hour, 2, GETDATE())), 4, N'Window seat please', 100000.00, 1489000.00, N'Completed', DATEADD(month, -5, DATEADD(day, -5, GETDATE()))
+FROM @PhuUsers source;
+
+INSERT INTO dbo.Orders (reservation_id, table_id, customer_id, order_type, order_status, subtotal, discount_amount, service_charge, total_amount, amount_paid, created_at)
+SELECT 
+    (SELECT TOP 1 reservation_id FROM dbo.Reservations WHERE customer_id = source.user_id AND DATEPART(month, reservation_start_at) = DATEPART(month, DATEADD(month, -5, GETDATE()))),
+    @TableId,
+    source.user_id,
+    N'Dine In',
+    N'Paid',
+    1489000.00,
+    100000.00,
+    50000.00,
+    1439000.00,
+    1439000.00,
+    DATEADD(month, -5, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.Payments (order_id, payment_method_id, amount_paid, change_given, payment_status, paid_at, created_at)
+SELECT 
+    (SELECT TOP 1 order_id FROM dbo.Orders WHERE customer_id = source.user_id AND DATEPART(month, created_at) = DATEPART(month, DATEADD(month, -5, GETDATE()))),
+    1, 
+    1439000.00,
+    0,
+    N'Completed',
+    DATEADD(month, -5, GETDATE()),
+    DATEADD(month, -5, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 13, 1, 890000.00, N'Medium-rare', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(month, -5, GETDATE()));
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 9, 1, 499000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(month, -5, GETDATE()));
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 15, 1, 98000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(month, -5, GETDATE()));
+
+
+-- ==========================================
+-- MONTH 4 AGO (4 months ago)
+-- ==========================================
+INSERT INTO dbo.Reservations (customer_id, contact_name, contact_phone, contact_email, preferred_area_id, reservation_start_at, reservation_end_at, guest_count, special_request, deposit_amount, final_total, reservation_status, created_at)
+SELECT source.user_id, N'Dang Quang Phu', '0901000001', N'phuadmin@phurai.vn', @AreaId, DATEADD(month, -4, GETDATE()), DATEADD(month, -4, DATEADD(hour, 2, GETDATE())), 2, N'', 100000.00, 1250000.00, N'Completed', DATEADD(month, -4, DATEADD(day, -5, GETDATE()))
+FROM @PhuUsers source;
+
+INSERT INTO dbo.Orders (reservation_id, table_id, customer_id, order_type, order_status, subtotal, discount_amount, service_charge, total_amount, amount_paid, created_at)
+SELECT 
+    (SELECT TOP 1 reservation_id FROM dbo.Reservations WHERE customer_id = source.user_id AND DATEPART(month, reservation_start_at) = DATEPART(month, DATEADD(month, -4, GETDATE()))),
+    @TableId,
+    source.user_id,
+    N'Dine In',
+    N'Paid',
+    1250000.00,
+    100000.00,
+    50000.00,
+    1200000.00,
+    1200000.00,
+    DATEADD(month, -4, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.Payments (order_id, payment_method_id, amount_paid, change_given, payment_status, paid_at, created_at)
+SELECT 
+    (SELECT TOP 1 order_id FROM dbo.Orders WHERE customer_id = source.user_id AND DATEPART(month, created_at) = DATEPART(month, DATEADD(month, -4, GETDATE()))),
+    1, 
+    1200000.00,
+    0,
+    N'Completed',
+    DATEADD(month, -4, GETDATE()),
+    DATEADD(month, -4, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 13, 1, 890000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(month, -4, GETDATE()));
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 14, 1, 360000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(month, -4, GETDATE()));
+
+
+-- ==========================================
+-- MONTH 3 AGO (3 months ago)
+-- ==========================================
+INSERT INTO dbo.Reservations (customer_id, contact_name, contact_phone, contact_email, preferred_area_id, reservation_start_at, reservation_end_at, guest_count, special_request, deposit_amount, final_total, reservation_status, created_at)
+SELECT source.user_id, N'Dang Quang Phu', '0901000001', N'phuadmin@phurai.vn', @AreaId, DATEADD(month, -3, GETDATE()), DATEADD(month, -3, DATEADD(hour, 2, GETDATE())), 5, N'', 200000.00, 2568000.00, N'Completed', DATEADD(month, -3, DATEADD(day, -5, GETDATE()))
+FROM @PhuUsers source;
+
+INSERT INTO dbo.Orders (reservation_id, table_id, customer_id, order_type, order_status, subtotal, discount_amount, service_charge, total_amount, amount_paid, created_at)
+SELECT 
+    (SELECT TOP 1 reservation_id FROM dbo.Reservations WHERE customer_id = source.user_id AND DATEPART(month, reservation_start_at) = DATEPART(month, DATEADD(month, -3, GETDATE()))),
+    @TableId,
+    source.user_id,
+    N'Dine In',
+    N'Paid',
+    2568000.00,
+    200000.00,
+    100000.00,
+    2468000.00,
+    2468000.00,
+    DATEADD(month, -3, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.Payments (order_id, payment_method_id, amount_paid, change_given, payment_status, paid_at, created_at)
+SELECT 
+    (SELECT TOP 1 order_id FROM dbo.Orders WHERE customer_id = source.user_id AND DATEPART(month, created_at) = DATEPART(month, DATEADD(month, -3, GETDATE()))),
+    1, 
+    2468000.00,
+    0,
+    N'Completed',
+    DATEADD(month, -3, GETDATE()),
+    DATEADD(month, -3, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 20, 2, 990000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(month, -3, GETDATE()));
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 9, 1, 499000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(month, -3, GETDATE()));
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 18, 1, 89000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(month, -3, GETDATE()));
+
+
+-- ==========================================
+-- MONTH 2 AGO (2 months ago)
+-- ==========================================
+INSERT INTO dbo.Reservations (customer_id, contact_name, contact_phone, contact_email, preferred_area_id, reservation_start_at, reservation_end_at, guest_count, special_request, deposit_amount, final_total, reservation_status, created_at)
+SELECT source.user_id, N'Dang Quang Phu', '0901000001', N'phuadmin@phurai.vn', @AreaId, DATEADD(month, -2, GETDATE()), DATEADD(month, -2, DATEADD(hour, 2, GETDATE())), 3, N'', 150000.00, 1857000.00, N'Completed', DATEADD(month, -2, DATEADD(day, -5, GETDATE()))
+FROM @PhuUsers source;
+
+INSERT INTO dbo.Orders (reservation_id, table_id, customer_id, order_type, order_status, subtotal, discount_amount, service_charge, total_amount, amount_paid, created_at)
+SELECT 
+    (SELECT TOP 1 reservation_id FROM dbo.Reservations WHERE customer_id = source.user_id AND DATEPART(month, reservation_start_at) = DATEPART(month, DATEADD(month, -2, GETDATE()))),
+    @TableId,
+    source.user_id,
+    N'Dine In',
+    N'Paid',
+    1857000.00,
+    150000.00,
+    80000.00,
+    1787000.00,
+    1787000.00,
+    DATEADD(month, -2, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.Payments (order_id, payment_method_id, amount_paid, change_given, payment_status, paid_at, created_at)
+SELECT 
+    (SELECT TOP 1 order_id FROM dbo.Orders WHERE customer_id = source.user_id AND DATEPART(month, created_at) = DATEPART(month, DATEADD(month, -2, GETDATE()))),
+    1, 
+    1787000.00,
+    0,
+    N'Completed',
+    DATEADD(month, -2, GETDATE()),
+    DATEADD(month, -2, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 7, 1, 188000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(month, -2, GETDATE()));
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 13, 1, 890000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(month, -2, GETDATE()));
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 10, 1, 690000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(month, -2, GETDATE()));
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 18, 1, 89000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(month, -2, GETDATE()));
+
+
+-- ==========================================
+-- MONTH 1 AGO (1 month ago)
+-- ==========================================
+INSERT INTO dbo.Reservations (customer_id, contact_name, contact_phone, contact_email, preferred_area_id, reservation_start_at, reservation_end_at, guest_count, special_request, deposit_amount, final_total, reservation_status, created_at)
+SELECT source.user_id, N'Dang Quang Phu', '0901000001', N'phuadmin@phurai.vn', @AreaId, DATEADD(month, -1, GETDATE()), DATEADD(month, -1, DATEADD(hour, 2, GETDATE())), 4, N'', 200000.00, 2279000.00, N'Completed', DATEADD(month, -1, DATEADD(day, -5, GETDATE()))
+FROM @PhuUsers source;
+
+INSERT INTO dbo.Orders (reservation_id, table_id, customer_id, order_type, order_status, subtotal, discount_amount, service_charge, total_amount, amount_paid, created_at)
+SELECT 
+    (SELECT TOP 1 reservation_id FROM dbo.Reservations WHERE customer_id = source.user_id AND DATEPART(month, reservation_start_at) = DATEPART(month, DATEADD(month, -1, GETDATE()))),
+    @TableId,
+    source.user_id,
+    N'Dine In',
+    N'Paid',
+    5279000.00,
+    200000.00,
+    100000.00,
+    5179000.00,
+    5179000.00,
+    DATEADD(day, -45, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.Payments (order_id, payment_method_id, amount_paid, change_given, payment_status, paid_at, created_at)
+SELECT 
+    (SELECT TOP 1 order_id FROM dbo.Orders WHERE customer_id = source.user_id AND DATEPART(month, created_at) = DATEPART(month, DATEADD(day, -45, GETDATE())) ORDER BY created_at DESC),
+    1, 
+    5179000.00,
+    0,
+    N'Completed',
+    DATEADD(day, -45, GETDATE()),
+    DATEADD(day, -45, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 13, 2, 890000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(month, -1, GETDATE()));
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 9, 1, 499000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(month, -1, GETDATE()));
+
+
+-- ==========================================
+-- CURRENT MONTH (Today / 15 days ago)
+-- ==========================================
+INSERT INTO dbo.Reservations (customer_id, contact_name, contact_phone, contact_email, preferred_area_id, reservation_start_at, reservation_end_at, guest_count, special_request, deposit_amount, final_total, reservation_status, created_at)
+SELECT source.user_id, N'Dang Quang Phu', '0901000001', N'phuadmin@phurai.vn', @AreaId, DATEADD(day, -15, GETDATE()), DATEADD(day, -15, DATEADD(hour, 2, GETDATE())), 4, N'Window seat', 100000.00, 1250000.00, N'Completed', DATEADD(day, -20, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.Orders (reservation_id, table_id, customer_id, order_type, order_status, subtotal, discount_amount, service_charge, total_amount, amount_paid, created_at)
+SELECT 
+    (SELECT TOP 1 reservation_id FROM dbo.Reservations WHERE customer_id = source.user_id AND DATEPART(month, reservation_start_at) = DATEPART(month, DATEADD(day, -15, GETDATE())) AND deposit_amount = 100000.00),
+    @TableId,
+    source.user_id,
+    N'Dine In',
+    N'Paid',
+    1250000.00,
+    100000.00,
+    50000.00,
+    1200000.00,
+    1200000.00,
+    DATEADD(day, -15, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.Payments (order_id, payment_method_id, amount_paid, change_given, payment_status, paid_at, created_at)
+SELECT 
+    (SELECT TOP 1 order_id FROM dbo.Orders WHERE customer_id = source.user_id AND DATEPART(month, created_at) = DATEPART(month, DATEADD(day, -15, GETDATE())) AND subtotal = 1250000.00),
+    1, 
+    1200000.00,
+    0,
+    N'Completed',
+    DATEADD(day, -15, GETDATE()),
+    DATEADD(day, -15, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 13, 1, 890000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(day, -15, GETDATE())) AND o.subtotal = 1250000.00;
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 14, 1, 360000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, DATEADD(day, -15, GETDATE())) AND o.subtotal = 1250000.00;
+
+
+-- Second order this month
+INSERT INTO dbo.Reservations (customer_id, contact_name, contact_phone, contact_email, preferred_area_id, reservation_start_at, reservation_end_at, guest_count, special_request, deposit_amount, final_total, reservation_status, created_at)
+SELECT source.user_id, N'Dang Quang Phu', '0901000001', N'phuadmin@phurai.vn', @AreaId, DATEADD(day, -5, GETDATE()), DATEADD(day, -5, DATEADD(hour, 2, GETDATE())), 2, N'Anniversary', 200000.00, 2568000.00, N'Completed', DATEADD(day, -10, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.Orders (reservation_id, table_id, customer_id, order_type, order_status, subtotal, discount_amount, service_charge, total_amount, amount_paid, created_at)
+SELECT 
+    (SELECT TOP 1 reservation_id FROM dbo.Reservations WHERE customer_id = source.user_id AND DATEPART(month, reservation_start_at) = DATEPART(month, GETDATE()) AND deposit_amount = 200000.00),
+    @TableId,
+    source.user_id,
+    N'Dine In',
+    N'Paid',
+    2568000.00,
+    200000.00,
+    100000.00,
+    2468000.00,
+    2468000.00,
+    DATEADD(day, -5, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.Payments (order_id, payment_method_id, amount_paid, change_given, payment_status, paid_at, created_at)
+SELECT 
+    (SELECT TOP 1 order_id FROM dbo.Orders WHERE customer_id = source.user_id AND DATEPART(month, created_at) = DATEPART(month, GETDATE()) AND subtotal = 2568000.00),
+    1, 
+    2468000.00,
+    0,
+    N'Completed',
+    DATEADD(day, -5, GETDATE()),
+    DATEADD(day, -5, GETDATE())
+FROM @PhuUsers source;
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 20, 2, 990000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, GETDATE()) AND o.subtotal = 2568000.00;
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 9, 1, 499000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, GETDATE()) AND o.subtotal = 2568000.00;
+
+INSERT INTO dbo.OrderItems (order_id, dish_id, quantity, unit_price, notes, item_status)
+SELECT o.order_id, 18, 1, 89000.00, N'', N'Served'
+FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART(month, o.created_at) = DATEPART(month, GETDATE()) AND o.subtotal = 2568000.00;
+
+
+-- Upcoming Confirmed Reservation (No Order/Payment yet)
+INSERT INTO dbo.Reservations (customer_id, contact_name, contact_phone, contact_email, preferred_area_id, reservation_start_at, reservation_end_at, guest_count, special_request, deposit_amount, final_total, reservation_status, created_at)
+SELECT source.user_id, N'Dang Quang Phu', '0901000001', N'phuadmin@phurai.vn', @AreaId, DATEADD(day, 2, GETDATE()), DATEADD(day, 2, DATEADD(hour, 2, GETDATE())), 6, N'Private room', 500000.00, NULL, N'Await Check-in', DATEADD(day, -1, GETDATE())
+FROM @PhuUsers source;
+
+COMMIT TRANSACTION;
+GO
+
+
+
+-- ==========================================
+-- 100 REALISTIC MOCK REVIEWS SEED
+-- ==========================================
+DELETE FROM dbo.CustomerReviews;
+GO
+INSERT INTO dbo.CustomerReviews (customer_id, order_id, food_rating, service_rating, ambiance_rating, comment, is_visible, created_at) VALUES
+(9, NULL, 3, 2, 3, NULL, 1, '2026-07-12 23:02:55'),
+(9, NULL, 4, 5, 5, N'Black Cod Miso was divine. Staff were warm throughout.', 1, '2026-03-26 23:02:55'),
+(12, NULL, 5, 5, 5, NULL, 1, '2026-05-28 23:02:55'),
+(13, NULL, 3, 2, 2, N'Food was bland and overpriced. Will not return.', 1, '2026-05-31 23:02:55'),
+(11, NULL, 4, 3, 2, NULL, 1, '2026-05-01 23:02:55'),
+(11, NULL, 4, 5, 4, NULL, 1, '2026-01-30 23:02:55'),
+(13, NULL, 1, 2, 2, N'The meat was cold and tough. Very disappointed.', 1, '2026-05-24 23:02:55'),
+(15, NULL, 5, 4, 5, N'Salmon Mentaiko beautifully presented. Will return for omakase.', 1, '2026-05-11 23:02:55'),
+(8, NULL, 1, 3, 2, N'The meat was cold and tough. Very disappointed.', 1, '2026-04-14 23:02:55'),
+(13, NULL, 4, 5, 3, N'A truly memorable meal. The wagyu beef literally melted in my mouth.', 1, '2026-01-21 23:02:55'),
+(7, NULL, 5, 5, 4, N'Fabulous food! The presentation was as good as the taste.', 1, '2026-03-12 23:02:55'),
+(11, NULL, 5, 5, 4, N'Black Cod Miso was divine. Staff were warm throughout.', 1, '2026-05-29 23:02:55'),
+(11, NULL, 4, 4, 3, N'Highly recommend the chef''s special. Will definitely come back.', 1, '2026-02-13 23:02:55'),
+(13, NULL, 4, 4, 5, N'Superb experience. Highly professional staff and great flavors.', 1, '2026-06-02 23:02:55'),
+(8, NULL, 3, 3, 2, N'Good drinks, but the main courses took too long to arrive.', 1, '2026-01-20 23:02:55'),
+(9, NULL, 3, 3, 2, N'Decent steak, but nothing special. Ambiance was nice though.', 1, '2026-04-25 23:02:55'),
+(10, NULL, 4, 4, 5, N'Highly recommend the chef''s special. Will definitely come back.', 1, '2026-06-13 23:02:55'),
+(15, NULL, 2, 1, 1, N'Bad experience. The staff was rude when we complained about the food.', 1, '2026-07-06 23:02:55'),
+(11, NULL, 4, 4, 4, N'Best tasting menu in the city. Every dish was a work of art.', 1, '2026-03-11 23:02:55'),
+(12, NULL, 2, 1, 1, NULL, 1, '2026-07-06 23:02:55'),
+(13, NULL, 2, 3, 3, N'Decent experience. Food was okay, service could be improved.', 1, '2026-06-25 23:02:55'),
+(15, NULL, 3, 4, 5, N'Attentive staff and great food. The desserts were amazing.', 1, '2026-06-15 23:02:55'),
+(10, NULL, 4, 5, 3, N'Salmon Mentaiko beautifully presented. Will return for omakase.', 1, '2026-01-17 23:02:55'),
+(12, NULL, 3, 4, 3, NULL, 1, '2026-04-01 23:02:55'),
+(7, NULL, 3, 4, 2, NULL, 1, '2026-07-05 23:02:55'),
+(11, NULL, 4, 2, 4, NULL, 1, '2026-01-22 23:02:55'),
+(11, NULL, 4, 4, 5, N'Excellent service and food quality. A must-visit place.', 1, '2026-05-31 23:02:55'),
+(12, NULL, 5, 4, 4, N'Absolutely stunning. Japanese A5 Wagyu was perfect.', 1, '2026-06-15 23:02:55'),
+(9, NULL, 4, 2, 4, NULL, 1, '2026-06-04 23:02:55'),
+(7, NULL, 2, 2, 2, N'Too expensive for subpar quality. Service was also inattentive.', 1, '2026-02-15 23:02:55'),
+(11, NULL, 3, 3, 3, NULL, 1, '2026-06-18 23:02:55'),
+(11, NULL, 2, 2, 3, N'Food was bland and overpriced. Will not return.', 1, '2026-04-09 23:02:55'),
+(8, NULL, 5, 3, 3, NULL, 1, '2026-03-03 23:02:55'),
+(9, NULL, 2, 2, 3, NULL, 1, '2026-03-22 23:02:55'),
+(11, NULL, 4, 4, 3, N'Superb experience. Highly professional staff and great flavors.', 1, '2026-01-29 23:02:55'),
+(9, NULL, 3, 4, 3, NULL, 1, '2026-05-19 23:02:55'),
+(13, NULL, 1, 1, 3, N'Extremely noisy and the table was dirty. Food was cold.', 1, '2026-07-02 23:02:55'),
+(13, NULL, 3, 2, 3, N'The food was decent but service was quite slow.', 1, '2026-04-20 23:02:55'),
+(8, NULL, 2, 2, 1, N'Worst service ever. We waited 45 minutes for our table.', 1, '2026-04-09 23:02:55'),
+(7, NULL, 2, 2, 2, N'Worst service ever. We waited 45 minutes for our table.', 1, '2026-04-25 23:02:55'),
+(12, NULL, 2, 3, 2, N'Poor customer service. No one checked on our table.', 1, '2026-05-31 23:02:55'),
+(11, NULL, 4, 2, 3, N'Decent experience. Food was okay, service could be improved.', 1, '2026-02-19 23:02:55'),
+(9, NULL, 4, 4, 4, NULL, 1, '2026-03-27 23:02:55'),
+(7, NULL, 4, 5, 5, N'Highly recommend the chef''s special. Will definitely come back.', 1, '2026-02-21 23:02:55'),
+(13, NULL, 1, 2, 1, N'Food was bland and overpriced. Will not return.', 1, '2026-06-02 23:02:55'),
+(8, NULL, 3, 3, 4, NULL, 1, '2026-05-16 23:02:55'),
+(9, NULL, 3, 2, 3, NULL, 1, '2026-04-04 23:02:55'),
+(15, NULL, 2, 3, 2, N'Very slow service, and the food was not cooked properly.', 1, '2026-07-12 23:02:55'),
+(7, NULL, 4, 3, 4, N'Outstanding dishes, every bite was flavorful.', 1, '2026-04-12 23:02:55'),
+(13, NULL, 4, 5, 5, NULL, 1, '2026-03-10 23:02:55'),
+(8, NULL, 4, 5, 5, N'Attentive staff and great food. The desserts were amazing.', 1, '2026-05-22 23:02:55'),
+(8, NULL, 5, 5, 4, NULL, 1, '2026-07-13 23:02:55'),
+(13, NULL, 1, 2, 1, N'Poor customer service. No one checked on our table.', 1, '2026-07-12 23:02:55'),
+(15, NULL, 1, 3, 2, NULL, 1, '2026-02-15 23:02:55'),
+(11, NULL, 5, 5, 3, NULL, 1, '2026-06-01 23:02:55'),
+(12, NULL, 4, 5, 4, N'Outstanding dishes, every bite was flavorful.', 1, '2026-03-29 23:02:55'),
+(9, NULL, 1, 2, 1, N'Too expensive for subpar quality. Service was also inattentive.', 1, '2026-04-22 23:02:55'),
+(15, NULL, 4, 4, 5, N'Fabulous food! The presentation was as good as the taste.', 1, '2026-03-01 23:02:55'),
+(7, NULL, 5, 4, 3, NULL, 1, '2026-04-29 23:02:55'),
+(11, NULL, 2, 3, 3, NULL, 1, '2026-05-03 23:02:55'),
+(8, NULL, 5, 5, 5, NULL, 1, '2026-06-01 23:02:55'),
+(11, NULL, 4, 3, 5, N'Outstanding dishes, every bite was flavorful.', 1, '2026-06-17 23:02:55'),
+(10, NULL, 3, 3, 4, N'Decent experience. Food was okay, service could be improved.', 1, '2026-05-23 23:02:55'),
+(12, NULL, 5, 5, 5, N'Best tasting menu in the city. Every dish was a work of art.', 1, '2026-04-12 23:02:55'),
+(12, NULL, 4, 3, 3, NULL, 1, '2026-06-12 23:02:55'),
+(15, NULL, 2, 2, 2, N'Bad experience. The staff was rude when we complained about the food.', 1, '2026-07-12 23:02:55'),
+(13, NULL, 2, 1, 1, N'Extremely noisy and the table was dirty. Food was cold.', 1, '2026-05-26 23:02:55'),
+(9, NULL, 2, 2, 2, NULL, 1, '2026-02-13 23:02:55'),
+(10, NULL, 4, 4, 5, N'Superb experience. Highly professional staff and great flavors.', 1, '2026-06-03 23:02:55'),
+(8, NULL, 3, 3, 5, NULL, 1, '2026-05-09 23:02:55'),
+(13, NULL, 4, 2, 2, NULL, 1, '2026-07-02 23:02:55'),
+(7, NULL, 3, 3, 2, N'The food was decent but service was quite slow.', 1, '2026-04-06 23:02:55'),
+(9, NULL, 3, 3, 2, N'Average experience. The atmosphere was good but food was a bit salty.', 1, '2026-05-22 23:02:55'),
+(15, NULL, 2, 3, 3, N'A bit overpriced for the portion size, but taste was okay.', 1, '2026-06-21 23:02:55'),
+(13, NULL, 5, 3, 5, N'Wonderful service and Wagyu was incredibly delicious!', 1, '2026-05-17 23:02:55'),
+(12, NULL, 4, 3, 5, NULL, 1, '2026-06-03 23:02:55'),
+(7, NULL, 4, 4, 3, N'Highly recommend the chef''s special. Will definitely come back.', 1, '2026-01-25 23:02:55'),
+(10, NULL, 5, 4, 5, N'Attentive staff and great food. The desserts were amazing.', 1, '2026-05-16 23:02:55'),
+(12, NULL, 2, 2, 4, NULL, 1, '2026-03-24 23:02:55'),
+(15, NULL, 5, 5, 5, N'Exquisite dining experience! The ambiance was lovely.', 1, '2026-03-28 23:02:55'),
+(8, NULL, 3, 3, 2, NULL, 1, '2026-01-22 23:02:55'),
+(12, NULL, 5, 5, 5, N'Exquisite dining experience! The ambiance was lovely.', 1, '2026-07-11 23:02:55'),
+(12, NULL, 4, 2, 3, N'Good drinks, but the main courses took too long to arrive.', 1, '2026-04-23 23:02:55'),
+(13, NULL, 4, 5, 4, N'Salmon Mentaiko beautifully presented. Will return for omakase.', 1, '2026-02-12 23:02:55'),
+(12, NULL, 2, 2, 3, N'Extremely noisy and the table was dirty. Food was cold.', 1, '2026-05-27 23:02:55'),
+(15, NULL, 4, 5, 4, N'Fabulous food! The presentation was as good as the taste.', 1, '2026-03-07 23:02:55'),
+(10, NULL, 4, 5, 4, NULL, 1, '2026-06-19 23:02:55'),
+(7, NULL, 3, 4, 3, NULL, 1, '2026-04-17 23:02:55'),
+(11, NULL, 4, 2, 2, N'The food was decent but service was quite slow.', 1, '2026-06-09 23:02:55'),
+(13, NULL, 3, 5, 3, N'Black Cod Miso was divine. Staff were warm throughout.', 1, '2026-05-22 23:02:55'),
+(13, NULL, 4, 4, 3, NULL, 1, '2026-01-15 23:02:55'),
+(15, NULL, 1, 2, 2, NULL, 1, '2026-02-03 23:02:55'),
+(7, NULL, 5, 5, 5, N'Salmon Mentaiko beautifully presented. Will return for omakase.', 1, '2026-04-01 23:02:55'),
+(13, NULL, 5, 4, 4, NULL, 1, '2026-02-28 23:02:55'),
+(9, NULL, 5, 5, 4, NULL, 1, '2026-05-26 23:02:55'),
+(7, NULL, 4, 2, 4, N'Good drinks, but the main courses took too long to arrive.', 1, '2026-04-28 23:02:55'),
+(9, NULL, 3, 3, 2, N'Nothing outstanding, just your average restaurant.', 1, '2026-06-11 23:02:55'),
+(10, NULL, 2, 4, 4, N'Decent steak, but nothing special. Ambiance was nice though.', 1, '2026-06-16 23:02:55'),
+(10, NULL, 2, 4, 2, NULL, 1, '2026-04-23 23:02:55'),
+(13, NULL, 2, 1, 2, N'Food was bland and overpriced. Will not return.', 1, '2026-05-09 23:02:55');
 GO

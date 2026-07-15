@@ -242,8 +242,9 @@ function MyReservationsPage({
 
   const renderCard = (r) => {
     const hasPending = Boolean(r.has_pending_request);
-    const canEdit = !hasPending && (r.edit_used_count ?? 0) < 1 && r.reservation_status === "Confirmed";
-    const canCancel = !hasPending && r.reservation_status === "Confirmed";
+    const isValidStatus = r.reservation_status === "Confirmed" || r.reservation_status === "AWAIT CHECK-IN";
+    const canEdit = !hasPending && (r.edit_used_count ?? 0) < 1 && isValidStatus;
+    const canCancel = !hasPending && isValidStatus;
     const displayStatus = getDisplayStatus(r);
 
     return (
@@ -255,7 +256,7 @@ function MyReservationsPage({
         <header className="rzv-res-card__head" style={{ display: "flex", gap: "24px", alignItems: "center", borderBottom: "none", paddingBottom: 0, margin: 0, flex: 1 }}>
           <div style={{ display: "flex", gap: "24px", alignItems: "center", flexWrap: "wrap", flex: 1 }}>
             <span className="rzv-res-card__id" style={{ minWidth: "120px", margin: 0, color: "var(--rzv-muted)", fontSize: "0.8rem", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>
-              Booking #{String(r.reservation_id).padStart(6, "0")}
+              Reservation #{String(r.reservation_id).padStart(6, "0")}
             </span>
             <h3 className="rzv-res-card__when rzv-serif" style={{ margin: 0, fontSize: "1.35rem", color: "var(--rzv-text)", fontWeight: 500 }}>
               {formatDateTime(r.reservation_start_at)}
@@ -379,7 +380,7 @@ function MyReservationsPage({
             <div style={{ textAlign: "center", marginBottom: "40px" }}>
               <h2 style={{ fontSize: "2rem", fontWeight: 500, color: "var(--rzv-gold)", margin: "0 0 16px 0", letterSpacing: "0.02em" }}>Reservation Invoice</h2>
               <div style={{ fontSize: "0.85rem", color: "var(--rzv-muted)", letterSpacing: "0.15em", textTransform: "uppercase" }}>
-                Booking #{String(viewDetailsTarget.reservation_id).padStart(6, "0")}
+                Reservation #{String(viewDetailsTarget.reservation_id).padStart(6, "0")}
               </div>
             </div>
 
@@ -511,7 +512,7 @@ function MyReservationsPage({
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", borderTop: "1px solid var(--rzv-line)", paddingTop: "24px" }}>
               {!viewDetailsTarget.has_pending_request &&
                 (viewDetailsTarget.edit_used_count ?? 0) < 1 &&
-                viewDetailsTarget.reservation_status === "Confirmed" && (
+                (viewDetailsTarget.reservation_status === "Confirmed" || viewDetailsTarget.reservation_status === "AWAIT CHECK-IN") && (
                   <button
                     type="button"
                     className="rzv-btn rzv-btn--ghost"
@@ -522,7 +523,7 @@ function MyReservationsPage({
                   </button>
                 )}
               {!viewDetailsTarget.has_pending_request &&
-                viewDetailsTarget.reservation_status === "Confirmed" && (
+                (viewDetailsTarget.reservation_status === "Confirmed" || viewDetailsTarget.reservation_status === "AWAIT CHECK-IN") && (
                   <button
                     type="button"
                     className="rzv-btn rzv-btn--danger"

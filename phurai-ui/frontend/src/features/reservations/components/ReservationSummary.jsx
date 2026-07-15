@@ -59,6 +59,7 @@ function ReservationSummary({
   setPromoCode,
   promoDiscount,
   setPromoDiscount,
+  currentUser,
 }) {
   const [showPreorder, setShowPreorder] = useState(false);
   const [showPromoModal, setShowPromoModal] = useState(false);
@@ -196,7 +197,7 @@ function ReservationSummary({
                 <span className="rzv-summary__value" style={{ fontWeight: 500 }}>{form.diningPurpose || "—"}</span>
               </div>
               <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "7px 0" }}>
-                <span className="rzv-summary__label">Duration</span>
+                <span className="rzv-summary__label">Hold Duration</span>
                 <span className="rzv-summary__value" style={{ fontWeight: 500 }}>{form.holdDurationMinutes} minutes</span>
               </div>
               <div className="rzv-summary__row" style={{ borderBottom: "1px solid #f0f0f0", padding: "7px 0" }}>
@@ -275,6 +276,7 @@ function ReservationSummary({
                   const total = Object.values(newItems).reduce((sum, i) => sum + (i.price * i.quantity), 0);
                   setPreorderTotal(total);
                 }}
+                currentUser={currentUser}
               />
             </div>
 
@@ -347,11 +349,10 @@ function ReservationSummary({
             {(() => {
               const discountAmt = promoDiscount ? Number(promoDiscount.discount_amount) : 0;
               const foodTotal = Math.max(0, preorderTotal - discountAmt);
-              const foodDeposit = Math.round(foodTotal * 0.3);
-              const tableDeposit = 20000;
-              const depositRequired = tableDeposit + foodDeposit;
-              const remainingBalance = Math.round(foodTotal * 0.7);
-              const netTotal = depositRequired + remainingBalance;
+              const baseTableFee = 20000;
+              const netTotal = baseTableFee + foodTotal;
+              const depositRequired = Math.round(netTotal * 0.3);
+              const remainingBalance = netTotal - depositRequired;
 
               return (
                 <>
@@ -362,15 +363,19 @@ function ReservationSummary({
 
                   <div style={{ marginTop: "0.75rem", background: "#f8fafc", padding: "1rem", borderRadius: "0.75rem", border: "1px solid #e2e8f0" }}>
                     <div className="rzv-summary__row" style={{ padding: "2px 0", fontWeight: 700, color: "var(--rzv-gold)" }}>
-                      <span className="rzv-summary__label" style={{ fontSize: "0.95rem" }}>Required Deposit (30%)</span>
+                      <span className="rzv-summary__label" style={{ fontSize: "0.95rem" }}>
+                        Required Deposit (30%)
+                      </span>
                       <span className="rzv-summary__value" style={{ fontSize: "1.1rem" }}>{formatVND(depositRequired)}</span>
                     </div>
                     <div className="rzv-summary__row" style={{ padding: "2px 0", color: "#64748b", fontSize: "0.9rem" }}>
-                      <span className="rzv-summary__label">Remaining Balance (70%)</span>
+                      <span className="rzv-summary__label">
+                        Remaining Balance (70%)
+                      </span>
                       <span className="rzv-summary__value" style={{ fontWeight: 600 }}>{formatVND(remainingBalance)}</span>
                     </div>
                     <p style={{ margin: "6px 0 0 0", fontSize: "11px", color: "#64748b", fontStyle: "italic", lineHeight: "1.4" }}>
-                      * The required deposit secures your table and pre-ordered items. The remaining balance is paid during checkout.
+                      * The required deposit (30%) secures your table and pre-ordered items. The remaining balance (70%) is paid during checkout.
                     </p>
                   </div>
                 </>

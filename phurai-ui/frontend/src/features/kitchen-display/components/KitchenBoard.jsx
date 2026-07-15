@@ -74,7 +74,7 @@ export default function KitchenBoard() {
           className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg transition-colors text-sm font-medium"
         >
           <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          Làm mới
+          Refresh
         </button>
       </div>
 
@@ -82,19 +82,19 @@ export default function KitchenBoard() {
       <div className="flex-1 min-h-0 overflow-x-auto">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full min-w-[900px]">
           <KitchenColumn 
-            title="Chờ nấu" 
+            title="Pending" 
             color="bg-red-500" 
             tickets={pendingTickets} 
             onStatusUpdated={fetchTickets}
           />
           <KitchenColumn 
-            title="Đang nấu" 
+            title="Preparing" 
             color="bg-blue-500" 
             tickets={preparingTickets} 
             onStatusUpdated={fetchTickets}
           />
           <KitchenColumn 
-            title="Đã xong" 
+            title="Ready" 
             color="bg-green-500" 
             tickets={readyTickets} 
             onStatusUpdated={fetchTickets}

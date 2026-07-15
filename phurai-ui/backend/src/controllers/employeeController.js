@@ -3,9 +3,9 @@
  * Implements the Employee Registry (Part B of the KDS plan).
  *
  * Security rules:
- *   - salary: only returned to Manager (role_id=4) or Admin (role_id=5)
+ *   - salary: only returned to Manager (role_id=3) or Admin (role_id=4)
  *   - performance ratings: read/write Manager/Admin only (enforced by route middleware)
- *   - grantSystemAccess: Manager→role 2 only; Admin→role 2,4; role 3 blocked; role 5 blocked
+ *   - grantSystemAccess: Manager→role 2 only; Admin→role 2,3; role 4 blocked
  */
 import { getRawPool } from '../db.js';
 import sql from 'mssql';
@@ -29,6 +29,38 @@ const generateTempPassword = () => {
   return pass.split('').sort(() => Math.random() - 0.5).join('');
 };
 
+const CORPORATE_DOMAIN = 'phurai.vn';
+
+/**
+ * Normalize an email to use the corporate @phurai.vn domain.
+ * - If the input already contains '@', strip everything after '@' and re-append.
+ * - If no '@', treat the whole string as the local part.
+ * - Returns null if the input is falsy/empty.
+ */
+const formatPhuraiEmail = (raw) => {
+  if (!raw || !raw.trim()) return null;
+  const cleaned = raw.trim().toLowerCase();
+  const localPart = cleaned.includes('@') ? cleaned.split('@')[0] : cleaned;
+  if (!localPart) return null;
+  return `${localPart}@${CORPORATE_DOMAIN}`;
+};
+
+/**
+ * Generate an email prefix suggestion from a Vietnamese full name.
+ * "Nguyễn Văn Anh" → "nguyenvananh"
+ * Strips diacritics, removes non-alphanumeric chars, lowercases.
+ */
+const suggestEmailFromName = (fullName) => {
+  if (!fullName || !fullName.trim()) return '';
+  const slug = fullName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')  // strip diacritics
+    .replace(/đ/gi, 'd')
+    .replace(/[^a-zA-Z0-9]/g, '')     // remove non-alnum
+    .toLowerCase();
+  return slug || '';
+};
+
 const MANAGER_GRANTABLE_ROLES  = [2];       // Staff only
 const ADMIN_GRANTABLE_ROLES    = [2, 3];    // Staff + Manager
 // role_id=4 blocked for all via this endpoint
@@ -48,6 +80,7 @@ export const listEmployees = async (req, res) => {
         sp.user_id,
         sp.has_system_account,
         sp.department,
+        sp.employment_status,
         ${includeSalary ? 'sp.salary,' : ''}
         COALESCE(ua.full_name, sp.full_name) AS full_name,
         COALESCE(ua.email,     sp.email)     AS email,
@@ -89,7 +122,7 @@ export const listJobTitles = async (req, res) => {
   try {
     const pool = await getRawPool();
     const result = await pool.request().query(
-      `SELECT job_title_id, title_name FROM dbo.JobTitles ORDER BY title_name ASC`
+      `SELECT job_title_id, title_name, requires_system_access FROM dbo.JobTitles ORDER BY title_name ASC`
     );
     return res.json({ success: true, data: result.recordset });
   } catch (err) {
@@ -102,10 +135,22 @@ export const listJobTitles = async (req, res) => {
 // POST /api/manager/employees  — create employee WITHOUT system account
 // ─────────────────────────────────────────────────────────────
 export const createEmployee = async (req, res) => {
-  const { full_name, email, phone, job_title_id, salary, department } = req.body ?? {};
+  let { full_name, email, phone, job_title_id, salary, department, password } = req.body ?? {};
 
   if (!full_name?.trim()) {
     return res.status(400).json({ success: false, message: 'full_name is required.' });
+  }
+
+  // ── Auto-format corporate email ──────────────────────────────
+  email = formatPhuraiEmail(email);
+
+  // If job title requires system access and email is empty, auto-generate
+  if (!email && job_title_id) {
+    // We'll check if the job title requires access below; pre-generate slug here
+    const suggestedPrefix = suggestEmailFromName(full_name);
+    if (suggestedPrefix) {
+      email = `${suggestedPrefix}@${CORPORATE_DOMAIN}`;
+    }
   }
 
   try {
@@ -138,30 +183,89 @@ export const createEmployee = async (req, res) => {
       }
     }
 
+    // Check if the selected job title requires system access
+    let hasSystemAccount = 0;
+    let userId = null;
+    let jobTitleName = 'Staff';
+
+    if (job_title_id) {
+      const jtCheck = await pool.request()
+        .input('jtId', sql.TinyInt, job_title_id)
+        .query(`SELECT requires_system_access, default_role_id, title_name FROM dbo.JobTitles WHERE job_title_id = @jtId`);
+      const jobTitle = jtCheck.recordset[0];
+
+      if (jobTitle) {
+        jobTitleName = jobTitle.title_name;
+        if (jobTitle.requires_system_access) {
+        const targetEmail = email?.trim();
+        if (!targetEmail) {
+          return res.status(400).json({ success: false, message: 'Employee must have an email to create a system account.' });
+        }
+
+        // Create system account
+        const tempPassword = password || generateTempPassword();
+        const hash = await bcrypt.hash(tempPassword, 10);
+
+        const newAcct = await pool.request()
+          .input('roleId',   sql.TinyInt,     jobTitle.default_role_id)
+          .input('fullName', sql.NVarChar(200), full_name.trim())
+          .input('email',    sql.NVarChar(255), targetEmail)
+          .input('phone',    sql.NVarChar(20),  phone?.trim() ?? null)
+          .input('hash',     sql.VarChar(255), hash)
+          .query(`
+            INSERT INTO dbo.UserAccounts
+              (role_id, full_name, email, phone, password_hash, is_active,
+               email_verified, force_password_reset, created_at, updated_at)
+            OUTPUT inserted.user_id
+            VALUES (@roleId, @fullName, @email, @phone, @hash, 1, 1, 1, SYSDATETIME(), SYSDATETIME())
+          `);
+        userId = newAcct.recordset[0].user_id;
+        hasSystemAccount = 1;
+
+        // Send email
+        if (!password) {
+          try {
+            await sendOtpEmail({
+              to: targetEmail,
+              otp: tempPassword,
+              purpose: 'temp_password',
+            });
+          } catch (emailErr) {
+            console.warn('[employeeController] auto grant access email failed:', emailErr.message);
+          }
+        }
+      }
+    }
+    }
+
     const callerIncludeSalary = [3, 4].includes(req.user?.role_id);
-    const salaryVal = callerIncludeSalary ? (salary ?? null) : null;
+    const salaryVal = callerIncludeSalary ? (salary ?? 0) : 0;
+    const staffCode = `STF-${Math.floor(1000 + Math.random() * 9000)}-${Date.now().toString().slice(-4)}`;
 
     const result = await pool.request()
       .input('fullName',    sql.NVarChar(200), full_name.trim())
       .input('email',       sql.NVarChar(255), email?.trim() ?? null)
       .input('phone',       sql.NVarChar(20),  phone?.trim() ?? null)
       .input('jobTitleId',  sql.TinyInt,       job_title_id ?? null)
+      .input('jobTitle',    sql.NVarChar(80),  jobTitleName)
+      .input('staffCode',   sql.VarChar(30),   staffCode)
       .input('salary',      sql.Decimal(18,2), salaryVal)
       .input('department',  sql.NVarChar(60),  department?.trim() ?? null)
+      .input('hasAccount',  sql.Bit,           hasSystemAccount)
+      .input('userId',      sql.Int,           userId)
       .query(`
         INSERT INTO dbo.StaffProfiles
-          (full_name, email, phone, job_title_id, salary, department,
-           has_system_account, user_id)
+          (staff_code, full_name, email, phone, job_title, job_title_id, hire_date, salary, department,
+           has_system_account, user_id, employment_status, created_at, updated_at)
         OUTPUT inserted.staff_id, inserted.full_name, inserted.email
         VALUES
-          (@fullName, @email, @phone, @jobTitleId, @salary, @department, 0, NULL)
+          (@staffCode, @fullName, @email, @phone, @jobTitle, @jobTitleId, CAST(GETDATE() AS DATE), @salary, @department, @hasAccount, @userId, 'Active', SYSDATETIME(), SYSDATETIME())
       `);
 
-    // AuditLog
     await pool.request()
-      .input('actorId',  sql.Int,        req.user.user_id)
+      .input('actorId',  sql.Int,        req.user?.user_id || 1)
       .input('staffId',  sql.Int,        result.recordset[0].staff_id)
-      .input('payload',  sql.NVarChar(sql.MAX), JSON.stringify({ full_name, email, job_title_id }))
+      .input('payload',  sql.NVarChar(sql.MAX), JSON.stringify(req.body))
       .query(`
         INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, created_at)
         VALUES (@actorId, N'EMPLOYEE_CREATED', N'StaffProfiles', @staffId, @payload, SYSDATETIME())
@@ -183,46 +287,257 @@ export const updateEmployee = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Invalid employee ID.' });
   }
 
-  const { full_name, email, phone, job_title_id, salary, department } = req.body ?? {};
+  let { full_name, email, phone, job_title_id, salary, department, role_id, is_active, employment_status, password } = req.body ?? {};
   const callerRoleId = req.user?.role_id;
   const includeSalary = [3, 4].includes(callerRoleId);
 
+  // ── Auto-format corporate email ──────────────────────────────
+  if (email !== undefined) {
+    email = formatPhuraiEmail(email);
+  }
+
   try {
     const pool = await getRawPool();
-    const request = pool.request().input('staffId', sql.Int, staffId);
 
+    // Fetch existing profile details
+    const empResult = await pool.request()
+      .input('staffId', sql.Int, staffId)
+      .query(`
+        SELECT sp.user_id, sp.has_system_account, sp.job_title_id,
+               COALESCE(sp.full_name, ua.full_name) AS full_name,
+               COALESCE(sp.email, ua.email) AS email,
+               COALESCE(sp.phone, ua.phone) AS phone
+        FROM dbo.StaffProfiles sp
+        LEFT JOIN dbo.UserAccounts ua ON ua.user_id = sp.user_id
+        WHERE sp.staff_id = @staffId
+      `);
+    
+    const employee = empResult.recordset[0];
+    if (!employee) {
+      return res.status(404).json({ success: false, message: 'Employee not found.' });
+    }
+
+    let newUserId = employee.user_id;
+    let hasAccount = employee.has_system_account;
+
+    // Check if job_title_id is changing
+    if (job_title_id !== undefined && job_title_id !== employee.job_title_id) {
+      const jtCheck = await pool.request()
+        .input('jtId', sql.TinyInt, job_title_id)
+        .query(`SELECT requires_system_access, default_role_id FROM dbo.JobTitles WHERE job_title_id = @jtId`);
+      const jobTitle = jtCheck.recordset[0];
+
+      if (jobTitle) {
+        if (jobTitle.requires_system_access) {
+          // Case A: Needs system access but doesn't have an account
+          if (!hasAccount) {
+            let targetEmail = email?.trim() || employee.email;
+            // Auto-generate email from name if still empty
+            if (!targetEmail) {
+              const prefix = suggestEmailFromName(full_name?.trim() || employee.full_name);
+              if (prefix) targetEmail = `${prefix}@${CORPORATE_DOMAIN}`;
+            }
+            if (!targetEmail) {
+              return res.status(400).json({ success: false, message: 'Employee must have an email to create a system account.' });
+            }
+            // Ensure the target email uses @phurai.vn
+            targetEmail = formatPhuraiEmail(targetEmail) || targetEmail;
+
+            // Create account
+            const tempPassword = password || generateTempPassword();
+            const hash = await bcrypt.hash(tempPassword, 10);
+
+            // Re-grant collision fix: check if account exists
+            const existingAcct = await pool.request()
+              .input('email', sql.NVarChar(255), targetEmail)
+              .query(`SELECT user_id, is_active FROM dbo.UserAccounts WHERE email = @email`);
+
+            if (existingAcct.recordset.length > 0) {
+              const acct = existingAcct.recordset[0];
+              newUserId = acct.user_id;
+              await pool.request()
+                .input('userId',    sql.Int,          newUserId)
+                .input('roleId',    sql.TinyInt,      jobTitle.default_role_id)
+                .input('hash',      sql.VarChar(255), hash)
+                .query(`
+                  UPDATE dbo.UserAccounts
+                  SET is_active = 1, role_id = @roleId, password_hash = @hash,
+                      force_password_reset = 1, updated_at = SYSDATETIME()
+                  WHERE user_id = @userId
+                `);
+            } else {
+              const newAcct = await pool.request()
+                .input('roleId',   sql.TinyInt,     jobTitle.default_role_id)
+                .input('fullName', sql.NVarChar(200), full_name?.trim() || employee.full_name)
+                .input('email',    sql.NVarChar(255), targetEmail)
+                .input('phone',    sql.NVarChar(20),  phone?.trim() || employee.phone || null)
+                .input('hash',     sql.VarChar(255), hash)
+                .query(`
+                  INSERT INTO dbo.UserAccounts
+                    (role_id, full_name, email, phone, password_hash, is_active,
+                     email_verified, force_password_reset, created_at, updated_at)
+                  OUTPUT inserted.user_id
+                  VALUES (@roleId, @fullName, @email, @phone, @hash, 1, 1, 1, SYSDATETIME(), SYSDATETIME())
+                `);
+              newUserId = newAcct.recordset[0].user_id;
+            }
+
+            // Update StaffProfile has_system_account and user_id (will be written to DB at the end)
+            hasAccount = 1;
+
+            // Send email
+            if (!password) {
+              try {
+                await sendOtpEmail({
+                  to: targetEmail,
+                  otp: tempPassword,
+                  purpose: 'temp_password',
+                });
+              } catch (emailErr) {
+                console.warn('[employeeController] auto grant access email failed:', emailErr.message);
+              }
+            }
+          }
+        } else {
+          // Case B: Does NOT need access, but currently has an account -> auto revoke!
+          if (hasAccount && employee.user_id) {
+            await pool.request()
+              .input('userId', sql.Int, employee.user_id)
+              .query(`
+                UPDATE dbo.UserAccounts
+                SET is_active = 0, session_revoked_at = SYSDATETIME(), updated_at = SYSDATETIME()
+                WHERE user_id = @userId
+              `);
+
+            // Socket expulsion
+            try {
+              const { getIO } = await import('../socket.js');
+              const io = getIO();
+              if (io) {
+                io.to(`room:user:${employee.user_id}`).emit('auth:session_revoked', {
+                  reason: 'Your system access has been revoked because your job role changed.',
+                  code: 'ACCESS_REVOKED',
+                });
+              }
+            } catch (socketErr) {
+              console.warn('[employeeController] socket emit failed:', socketErr.message);
+            }
+
+            newUserId = null;
+            hasAccount = 0;
+          }
+        }
+      }
+    }
+
+    // Now update UserAccounts parameters if the account still exists
+    if (newUserId) {
+      const userUpdates = [];
+      const userRequest = pool.request().input('userId', sql.Int, newUserId);
+
+      if (role_id !== undefined) {
+        if (role_id === 4) {
+          return res.status(403).json({ success: false, message: 'Cannot assign Admin role.' });
+        }
+        if (callerRoleId === 3 && role_id !== 2) {
+          return res.status(403).json({ success: false, message: 'Managers can only set role to Restaurant Staff (role_id=2).' });
+        }
+        if (callerRoleId === 4 && role_id !== 2 && role_id !== 3) {
+          return res.status(403).json({ success: false, message: 'Admins can only set role to Staff (2) or Manager (3).' });
+        }
+        userUpdates.push('role_id = @roleId');
+        userRequest.input('roleId', sql.TinyInt, role_id);
+      }
+
+      if (is_active !== undefined) {
+        const isActiveVal = is_active ? 1 : 0;
+        userUpdates.push('is_active = @isActive');
+        userRequest.input('isActive', sql.Bit, isActiveVal);
+
+        if (!is_active) {
+          userUpdates.push('session_revoked_at = SYSDATETIME()');
+          // Socket expulsion
+          try {
+            const { getIO } = await import('../socket.js');
+            const io = getIO();
+            if (io) {
+              io.to(`room:user:${newUserId}`).emit('auth:session_revoked', {
+                reason: 'Your account has been deactivated by an administrator.',
+                code: 'ACCOUNT_DEACTIVATED',
+              });
+            }
+          } catch (socketErr) {
+            console.warn('[employeeController] socket emit failed:', socketErr.message);
+          }
+        }
+      }
+
+      // ── Sync name/email/phone to UserAccounts ──────────────────
+      if (full_name !== undefined) {
+        userUpdates.push('full_name = @syncFullName');
+        userRequest.input('syncFullName', sql.NVarChar(200), full_name.trim());
+      }
+      if (email !== undefined && email) {
+        userUpdates.push('email = @syncEmail');
+        userRequest.input('syncEmail', sql.NVarChar(255), email);
+      }
+      if (phone !== undefined) {
+        userUpdates.push('phone = @syncPhone');
+        userRequest.input('syncPhone', sql.NVarChar(20), phone?.trim() ?? null);
+      }
+
+      if (userUpdates.length > 0) {
+        await userRequest.query(`
+          UPDATE dbo.UserAccounts
+          SET ${userUpdates.join(', ')}, updated_at = SYSDATETIME()
+          WHERE user_id = @userId
+        `);
+      }
+    }
+
+    // Update StaffProfiles
+    const request = pool.request().input('staffId', sql.Int, staffId);
     const updates = [];
     if (full_name !== undefined)    { updates.push('full_name = @fullName');   request.input('fullName',   sql.NVarChar(200), full_name.trim()); }
     if (email !== undefined)        { updates.push('email = @email');          request.input('email',      sql.NVarChar(255), email?.trim() ?? null); }
     if (phone !== undefined)        { updates.push('phone = @phone');          request.input('phone',      sql.NVarChar(20),  phone?.trim() ?? null); }
     if (job_title_id !== undefined) { updates.push('job_title_id = @jtId');   request.input('jtId',       sql.TinyInt,       job_title_id ?? null); }
     if (department !== undefined)   { updates.push('department = @dept');      request.input('dept',       sql.NVarChar(60),  department?.trim() ?? null); }
-    if (salary !== undefined && includeSalary) { updates.push('salary = @salary'); request.input('salary', sql.Decimal(18,2), salary ?? null); }
+    if (salary !== undefined && includeSalary) { updates.push('salary = @salary'); request.input('salary', sql.Decimal(18,2), salary ?? 0); }
 
-    if (updates.length === 0) {
-      return res.status(400).json({ success: false, message: 'No fields to update.' });
+    if (employment_status !== undefined) {
+      if (!['Active', 'On Leave', 'Resigned'].includes(employment_status)) {
+        return res.status(400).json({ success: false, message: 'Invalid employment_status value.' });
+      }
+      updates.push('employment_status = @empStatus');
+      request.input('empStatus', sql.NVarChar(20), employment_status);
+    } else if (!newUserId && is_active !== undefined) {
+      const targetStatus = is_active ? 'Active' : 'On Leave';
+      updates.push('employment_status = @empStatusMapped');
+      request.input('empStatusMapped', sql.NVarChar(20), targetStatus);
     }
 
-    const result = await request.query(`
-      UPDATE dbo.StaffProfiles
-      SET ${updates.join(', ')}
-      OUTPUT inserted.staff_id
-      WHERE staff_id = @staffId
-    `);
+    updates.push('user_id = @newUserId');
+    request.input('newUserId', sql.Int, newUserId);
+    updates.push('has_system_account = @hasAccount');
+    request.input('hasAccount', sql.Bit, hasAccount);
 
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ success: false, message: 'Employee not found.' });
+    if (updates.length > 0) {
+      await request.query(`
+        UPDATE dbo.StaffProfiles
+        SET ${updates.join(', ')}, updated_at = SYSDATETIME()
+        WHERE staff_id = @staffId
+      `);
     }
 
-    // AuditLog
     await pool.request()
-      .input('actorId', sql.Int, req.user.user_id)
+      .input('actorId', sql.Int, req.user?.user_id || 1)
       .input('staffId', sql.Int, staffId)
       .input('payload', sql.NVarChar(sql.MAX), JSON.stringify(req.body))
       .query(`INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, created_at)
               VALUES (@actorId, N'EMPLOYEE_UPDATED', N'StaffProfiles', @staffId, @payload, SYSDATETIME())`);
 
-    return res.json({ success: true, message: 'Employee updated.' });
+    return res.json({ success: true, message: 'Employee updated successfully.' });
   } catch (err) {
     console.error('[employeeController] updateEmployee error:', err);
     return res.status(500).json({ success: false, message: 'Failed to update employee.' });
@@ -269,7 +584,21 @@ export const grantSystemAccess = async (req, res) => {
 
     const employee = empResult.recordset[0];
     if (!employee) return res.status(404).json({ success: false, message: 'Employee not found.' });
-    if (!employee.email) return res.status(400).json({ success: false, message: 'Employee must have an email before granting system access.' });
+
+    // ── Auto-format / auto-generate corporate email ───────────
+    let empEmail = formatPhuraiEmail(employee.email);
+    if (!empEmail) {
+      const prefix = suggestEmailFromName(employee.full_name);
+      if (prefix) {
+        empEmail = `${prefix}@${CORPORATE_DOMAIN}`;
+        // Save the auto-generated email back to StaffProfile
+        await pool.request()
+          .input('staffId', sql.Int, staffId)
+          .input('email', sql.NVarChar(255), empEmail)
+          .query(`UPDATE dbo.StaffProfiles SET email = @email, updated_at = SYSDATETIME() WHERE staff_id = @staffId`);
+      }
+    }
+    if (!empEmail) return res.status(400).json({ success: false, message: 'Employee must have an email before granting system access.' });
 
     const tempPassword = generateTempPassword();
     const hash = await bcrypt.hash(tempPassword, 10);
@@ -277,7 +606,7 @@ export const grantSystemAccess = async (req, res) => {
 
     // ── Re-grant collision fix: check for existing inactive account ──
     const existingAcct = await pool.request()
-      .input('email', sql.NVarChar(255), employee.email)
+      .input('email', sql.NVarChar(255), empEmail)
       .query(`SELECT user_id, is_active FROM dbo.UserAccounts WHERE email = @email`);
 
     if (existingAcct.recordset.length > 0) {
@@ -298,51 +627,46 @@ export const grantSystemAccess = async (req, res) => {
           WHERE user_id = @userId
         `);
     } else {
-      // Create new account
       const newAcct = await pool.request()
         .input('roleId',   sql.TinyInt,     requestedRoleId)
         .input('fullName', sql.NVarChar(200), employee.full_name)
-        .input('email',    sql.NVarChar(255), employee.email)
+        .input('email',    sql.NVarChar(255), empEmail)
         .input('phone',    sql.NVarChar(20),  employee.phone ?? null)
         .input('hash',     sql.VarChar(255), hash)
         .query(`
-          INSERT INTO dbo.UserAccounts
-            (role_id, full_name, email, phone, password_hash, is_active,
-             email_verified, force_password_reset, created_at, updated_at)
+          INSERT INTO dbo.UserAccounts (role_id, full_name, email, phone, password_hash, is_active, email_verified, force_password_reset, created_at, updated_at)
           OUTPUT inserted.user_id
           VALUES (@roleId, @fullName, @email, @phone, @hash, 1, 1, 1, SYSDATETIME(), SYSDATETIME())
         `);
       userId = newAcct.recordset[0].user_id;
     }
 
-    // Link user_id back to StaffProfiles
+    // Link UserAccount to StaffProfile
     await pool.request()
-      .input('userId',  sql.Int, userId)
       .input('staffId', sql.Int, staffId)
+      .input('userId',  sql.Int, userId)
       .query(`
         UPDATE dbo.StaffProfiles
-        SET user_id = @userId, has_system_account = 1, updated_at = SYSDATETIME()
+        SET has_system_account = 1, user_id = @userId, updated_at = SYSDATETIME()
         WHERE staff_id = @staffId
       `);
 
-    // Send temp-password email (reuse sendOtpEmail with custom purpose)
+    // Send temporary password email
     try {
       await sendOtpEmail({
-        to: employee.email,
+        to: empEmail,
         otp: tempPassword,
         purpose: 'temp_password',
-        // sendOtpEmail reads purpose to pick the email template
       });
     } catch (emailErr) {
-      console.warn('[employeeController] grantSystemAccess: email send failed:', emailErr.message);
-      // Non-fatal — access still granted, password can be communicated manually
+      console.warn('[employeeController] grantSystemAccess: email sending failed:', emailErr.message);
     }
 
     // AuditLog
     await pool.request()
-      .input('actorId',  sql.Int, req.user.user_id)
+      .input('actorId',  sql.Int, req.user?.user_id || 1)
       .input('staffId',  sql.Int, staffId)
-      .input('payload',  sql.NVarChar(sql.MAX), JSON.stringify({ role_id: requestedRoleId, granted_by: req.user.email }))
+      .input('payload',  sql.NVarChar(sql.MAX), JSON.stringify({ role_id: requestedRoleId, email: empEmail }))
       .query(`
         INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, created_at)
         VALUES (@actorId, N'GRANT_SYSTEM_ACCESS', N'StaffProfiles', @staffId, @payload, SYSDATETIME())
@@ -382,7 +706,6 @@ export const revokeSystemAccess = async (req, res) => {
     const linkedUserId = employee.user_id;
 
     // Soft-revoke: deactivate account AND set session_revoked_at so all existing JWTs are invalidated
-    // Phase 2: session_revoked_at > JWT.iat → all active tokens for this user are rejected
     await pool.request()
       .input('userId', sql.Int, linkedUserId)
       .query(`
@@ -400,8 +723,7 @@ export const revokeSystemAccess = async (req, res) => {
         WHERE staff_id = @staffId
       `);
 
-    // Phase 2: Emit auth:session_revoked to the user's socket room → frontend redirects to Home
-    // Room name must match the convention in AuthContext: room:user:{user_id}
+    // Emit auth:session_revoked to the user's socket room
     try {
       const { getIO } = await import('../socket.js');
       const io = getIO();
@@ -417,9 +739,9 @@ export const revokeSystemAccess = async (req, res) => {
 
     // AuditLog
     await pool.request()
-      .input('actorId',  sql.Int, req.user.user_id)
+      .input('actorId',  sql.Int, req.user?.user_id || 1)
       .input('staffId',  sql.Int, staffId)
-      .input('payload',  sql.NVarChar(sql.MAX), JSON.stringify({ revoked_user_id: linkedUserId, revoked_by: req.user.email }))
+      .input('payload',  sql.NVarChar(sql.MAX), JSON.stringify({ revoked_user_id: linkedUserId, revoked_by: req.user?.email || 'System' }))
       .query(`
         INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, created_at)
         VALUES (@actorId, N'REVOKE_SYSTEM_ACCESS', N'StaffProfiles', @staffId, @payload, SYSDATETIME())
@@ -461,7 +783,7 @@ export const addPerformanceReview = async (req, res) => {
       .input('staffId',     sql.Int,          staffId)
       .input('rating',      sql.Decimal(3,1), Math.round(ratingNum * 10) / 10) // ensure 1 decimal
       .input('notes',       sql.NVarChar(1000), notes?.trim() ?? null)
-      .input('reviewedBy',  sql.Int,          req.user.user_id)
+      .input('reviewedBy',  sql.Int,          req.user?.user_id || 1)
       .query(`
         INSERT INTO dbo.PerformanceReviews (staff_id, rating, notes, reviewed_by, review_date, created_at)
         OUTPUT inserted.review_id, inserted.rating, inserted.review_date
@@ -470,7 +792,7 @@ export const addPerformanceReview = async (req, res) => {
 
     // AuditLog
     await pool.request()
-      .input('actorId',  sql.Int, req.user.user_id)
+      .input('actorId',  sql.Int, req.user?.user_id || 1)
       .input('staffId',  sql.Int, staffId)
       .input('payload',  sql.NVarChar(sql.MAX), JSON.stringify({ rating: ratingNum, notes }))
       .query(`INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, created_at)
@@ -507,5 +829,120 @@ export const listPerformanceHistory = async (req, res) => {
   } catch (err) {
     console.error('[employeeController] listPerformanceHistory error:', err);
     return res.status(500).json({ success: false, message: 'Failed to fetch performance history.' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// DELETE /api/manager/employees/:id — delete employee completely
+// ─────────────────────────────────────────────────────────────
+export const deleteEmployee = async (req, res) => {
+  const staffId = parseInt(req.params.id, 10);
+  if (!Number.isFinite(staffId)) {
+    return res.status(400).json({ success: false, message: 'Invalid employee ID.' });
+  }
+
+  try {
+    const pool = await getRawPool();
+
+    // 1. Get linked user_id
+    const empResult = await pool.request()
+      .input('staffId', sql.Int, staffId)
+      .query(`SELECT user_id FROM dbo.StaffProfiles WHERE staff_id = @staffId`);
+    const employee = empResult.recordset[0];
+    if (!employee) {
+      return res.status(404).json({ success: false, message: 'Employee not found.' });
+    }
+
+    const linkedUserId = employee.user_id;
+
+    // 2. Perform deletions inside a transaction
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      // Delete from StaffSchedules
+      await transaction.request()
+        .input('staffId', sql.Int, staffId)
+        .query(`DELETE FROM dbo.StaffSchedules WHERE staff_id = @staffId`);
+
+      // Delete from PerformanceReviews
+      await transaction.request()
+        .input('staffId', sql.Int, staffId)
+        .query(`DELETE FROM dbo.PerformanceReviews WHERE staff_id = @staffId`);
+
+      // Set user_id to NULL on StaffProfiles to break the foreign key before deletion
+      await transaction.request()
+        .input('staffId', sql.Int, staffId)
+        .query(`UPDATE dbo.StaffProfiles SET user_id = NULL WHERE staff_id = @staffId`);
+
+      // Delete StaffProfiles row
+      await transaction.request()
+        .input('staffId', sql.Int, staffId)
+        .query(`DELETE FROM dbo.StaffProfiles WHERE staff_id = @staffId`);
+
+      // 3. If there is a linked user_id, try to delete it
+      if (linkedUserId) {
+        try {
+          // Delete from OtpTokens first
+          await transaction.request()
+            .input('userId', sql.Int, linkedUserId)
+            .query(`DELETE FROM dbo.OtpTokens WHERE user_id = @userId`);
+
+          // Delete from CustomerProfiles
+          await transaction.request()
+            .input('userId', sql.Int, linkedUserId)
+            .query(`DELETE FROM dbo.CustomerProfiles WHERE user_id = @userId`);
+
+          // Try to delete UserAccounts
+          await transaction.request()
+            .input('userId', sql.Int, linkedUserId)
+            .query(`DELETE FROM dbo.UserAccounts WHERE user_id = @userId`);
+        } catch (acctErr) {
+          // If deletion fails (e.g. historical data in Orders/Reservations), fall back to deactivating the account
+          await transaction.request()
+            .input('userId', sql.Int, linkedUserId)
+            .query(`
+              UPDATE dbo.UserAccounts
+              SET is_active = 0, session_revoked_at = SYSDATETIME(), updated_at = SYSDATETIME()
+              WHERE user_id = @userId
+            `);
+        }
+      }
+
+      await transaction.commit();
+    } catch (txErr) {
+      await transaction.rollback();
+      throw txErr;
+    }
+
+    // Emit socket session revocation just in case
+    if (linkedUserId) {
+      try {
+        const { getIO } = await import('../socket.js');
+        const io = getIO();
+        if (io) {
+          io.to(`room:user:${linkedUserId}`).emit('auth:session_revoked', {
+            reason: 'Your account has been deleted or deactivated by an administrator.',
+            code: 'ACCOUNT_DELETED',
+          });
+        }
+      } catch (socketErr) {
+        console.warn('[employeeController] deleteEmployee: socket emit failed:', socketErr.message);
+      }
+    }
+
+    // AuditLog
+    await pool.request()
+      .input('actorId', sql.Int, req.user?.user_id || 1)
+      .input('staffId', sql.Int, staffId)
+      .query(`
+        INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, created_at)
+        VALUES (@actorId, N'EMPLOYEE_DELETED', N'StaffProfiles', @staffId, NULL, SYSDATETIME())
+      `);
+
+    return res.json({ success: true, message: 'Employee deleted successfully.' });
+  } catch (err) {
+    console.error('[employeeController] deleteEmployee error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to delete employee.' });
   }
 };

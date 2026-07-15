@@ -5,7 +5,7 @@ const ALLOWED_STATUSES = new Set([
   'Cancelled', 'Completed', 'No Show', 'Dining', 'Cleaning',
   'Check-out', 'Reject Check-in', 'Reject Request', 'Reject Check-out',
   'Paid', 'PaymentFailed', 'Pending', 'Await Check-in', 'Check-in',
-  'Complete Paid', 'Overdue'
+  'Complete Paid', 'Overdue', 'Awaiting Deposit'
 ]);
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -179,27 +179,27 @@ export const validateReservationCreate = async (req, res, next) => {
     // Duration Check: 90 minutes dining base plus selected hold duration
     const durationMinutes = Math.round((slotEnd - slotStart) / 60000);
     const selectedDuration = Number(body.durationMinutes) || 30;
-    const maxAllowedDuration = 90 + selectedDuration;
+    
     console.log("[validateReservationCreate] DEBUG:", {
       slotStart: slotStart.toISOString(),
       slotEnd: slotEnd.toISOString(),
       durationMinutes,
       selectedDuration,
-      maxAllowedDuration,
       body
     });
-    if (durationMinutes < maxAllowedDuration) {
+
+    if (durationMinutes < 60) {
       return res.status(400).json({
         success: false,
         error: "VALIDATION_FAILED",
-        message: `Reservation duration must be at least 90 minutes plus hold duration (${maxAllowedDuration} minutes total).`
+        message: `Dining duration must be at least 1 hour (60 minutes).`
       });
     }
-    if (durationMinutes > maxAllowedDuration) {
+    if (durationMinutes > 90) {
       return res.status(400).json({
         success: false,
         error: "VALIDATION_FAILED",
-        message: `Reservation duration cannot exceed selected hold duration (${selectedDuration} minutes) plus dining time (90 minutes) (${maxAllowedDuration} minutes total).`
+        message: `Dining duration cannot exceed 1.5 hours (90 minutes).`
       });
     }
 
@@ -278,9 +278,9 @@ export const validateReservationCreate = async (req, res, next) => {
          JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
          WHERE rt.table_id IN (${tableIds.join(',')})
            AND (
-             r.reservation_status IN (N'Confirmed', N'Reserved', N'Dining')
+             r.reservation_status IN (N'Await Check-in', N'Dining')
              OR
-             (r.reservation_status IN (N'Pending Request', N'Pending Payment') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
+             (r.reservation_status IN (N'Pending Request', N'Awaiting Deposit') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
            )
            AND DATEADD(minute, -60, r.reservation_start_at) < ?
            AND DATEADD(minute, 60, r.reservation_end_at) > ?`,
@@ -529,30 +529,30 @@ export const validateReservationUpdate = async (req, res, next) => {
         });
       }
 
-      // Duration Check: 90 minutes dining base plus selected hold duration
+      // Duration Check: 60-90 minutes dining
       const durationMinutes = Math.round((slotEnd - slotStart) / 60000);
       const selectedDuration = Number(target.durationMinutes) || 30;
-      const maxAllowedDuration = 90 + selectedDuration;
+      
       console.log("[validateReservationUpdate] DEBUG:", {
         slotStart: slotStart.toISOString(),
         slotEnd: slotEnd.toISOString(),
         durationMinutes,
         selectedDuration,
-        maxAllowedDuration,
         target
       });
-      if (durationMinutes < maxAllowedDuration) {
+
+      if (durationMinutes < 60) {
         return res.status(400).json({
           success: false,
           error: "VALIDATION_FAILED",
-          message: `Reservation duration must be at least 90 minutes plus hold duration (${maxAllowedDuration} minutes total).`
+          message: `Dining duration must be at least 1 hour (60 minutes).`
         });
       }
-      if (durationMinutes > maxAllowedDuration) {
+      if (durationMinutes > 90) {
         return res.status(400).json({
           success: false,
           error: "VALIDATION_FAILED",
-          message: `Reservation duration cannot exceed selected hold duration (${selectedDuration} minutes) plus dining time (90 minutes) (${maxAllowedDuration} minutes total).`
+          message: `Dining duration cannot exceed 1.5 hours (90 minutes).`
         });
       }
 
@@ -646,9 +646,9 @@ export const validateReservationUpdate = async (req, res, next) => {
            WHERE rt.table_id IN (${activeTableIds.join(',')})
              AND r.reservation_id != ?
              AND (
-               r.reservation_status IN (N'Confirmed', N'Reserved', N'Dining')
+               r.reservation_status IN (N'Await Check-in', N'Dining')
                OR
-               (r.reservation_status IN (N'Pending Request', N'Pending Payment') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
+               (r.reservation_status IN (N'Pending Request', N'Awaiting Deposit') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
              )
              AND DATEADD(minute, -60, r.reservation_start_at) < ?
              AND DATEADD(minute, 60, r.reservation_end_at) > ?`,

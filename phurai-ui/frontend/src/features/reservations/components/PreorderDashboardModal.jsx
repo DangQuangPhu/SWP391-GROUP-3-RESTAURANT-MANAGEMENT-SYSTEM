@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { formatVND } from "@/core/utils/formatCurrency.js";
 import { imagePathMap } from "@/features/menu/data/menuAssets.js";
 import { Search, Filter, ArrowUpDown } from "lucide-react";
+import { useFavoritesStore } from "@/features/menu/context/MenuFavoritesContext.jsx";
 
-function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave }) {
+function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave, currentUser }) {
   const [dishes, setDishes] = useState([]);
   const [loading, setLoading] = useState(false);
   
@@ -15,6 +16,12 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave }) {
   
   // Local cart state for the modal
   const [cart, setCart] = useState({});
+
+  const { favorites, toggleFavorite } = useFavoritesStore(currentUser);
+  
+  const isFavorite = useCallback((dishId) => {
+    return favorites.some((f) => String(f.id) === String(dishId) || String(f.dish_id) === String(dishId));
+  }, [favorites]);
 
   useEffect(() => {
     if (isOpen) {
@@ -34,8 +41,8 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave }) {
       .then((json) => {
         if (!active) return;
         const data = json.data || [];
-        // Filter out items that are not available or not preorderable
-        const valid = data.filter((d) => d.is_available && d.is_preorderable);
+        // Filter out items that are not preorderable
+        const valid = data.filter((d) => d.is_preorderable);
         setDishes(valid);
       })
       .catch((err) => console.error("Failed to load preorder menu:", err))
@@ -79,9 +86,12 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave }) {
   if (!isOpen) return null;
 
   // Filter and Sort Logic
-  const categories = ["All", ...new Set(dishes.map(d => d.category).filter(Boolean))];
+  const categories = ["All", ...(currentUser ? ["Bookmarks"] : []), ...new Set(dishes.map(d => d.category).filter(Boolean))];
   
   const filteredDishes = dishes.filter(d => {
+    if (selectedCategory === "Bookmarks") {
+      return isFavorite(d.dish_id || d.id);
+    }
     if (selectedCategory !== "All" && d.category !== selectedCategory) return false;
     const name = d.dish_name || d.name || "";
     if (searchTerm && !name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
@@ -164,27 +174,94 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave }) {
                   imageUrl = imagePathMap[imageUrl];
                 }
                 
+                const isAvailable = dish.is_available !== false && dish.is_available !== 0;
+                
                 return (
                   <div key={dishId || dish.id || dish._id || index} style={{ 
                     background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column',
-                    animation: 'sfxRise 0.4s both', animationDelay: `${index * 0.05}s`
+                    animation: 'sfxRise 0.4s both', animationDelay: `${index * 0.05}s`,
+                    opacity: isAvailable ? 1 : 0.6
                   }}>
                     <div style={{ height: '180px', background: '#eee', position: 'relative' }}>
                       {imageUrl ? (
                         <img 
                           src={imageUrl} 
                           alt={dishName} 
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isAvailable ? 'none' : 'grayscale(100%)' }} 
                           onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
                         />
                       ) : null}
                       <div style={{ width: '100%', height: '100%', display: imageUrl ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>No Image</div>
+                      {currentUser && isAvailable && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite(dish);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: '12px',
+                            right: '12px',
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            background: 'rgba(255, 255, 255, 0.9)',
+                            border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                            transition: 'all 0.2s',
+                            zIndex: 2,
+                          }}
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill={isFavorite(dishId || dish.id) ? "var(--rzv-gold, #c2a67a)" : "none"}
+                            stroke={isFavorite(dishId || dish.id) ? "var(--rzv-gold, #c2a67a)" : "#666"}
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                          </svg>
+                        </button>
+                      )}
                     </div>
                     <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1 }}>
-                      <h3 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', color: '#222' }}>{dishName}</h3>
+                      <h3 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', color: '#222' }}>
+                        {dishName}
+                        {!isAvailable && (
+                          <span style={{
+                            display: 'inline-block',
+                            marginLeft: '8px',
+                            backgroundColor: '#fee2e2',
+                            color: '#dc2626',
+                            padding: '2px 8px',
+                            borderRadius: '9999px',
+                            fontFamily: "'Hanken Grotesk', system-ui, sans-serif",
+                            fontSize: '11px',
+                            fontWeight: '700',
+                            verticalAlign: 'middle'
+                          }}>
+                            Sold Out
+                          </span>
+                        )}
+                      </h3>
                       <p style={{ margin: '0 0 16px 0', color: '#111', fontWeight: 'bold' }}>{formatVND(dish.price)}</p>
                       <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        {qty === 0 ? (
+                        {!isAvailable && qty === 0 ? (
+                          <button 
+                            style={{ width: '100%', padding: '10px', background: '#ccc', color: '#666', border: 'none', borderRadius: '6px', cursor: 'not-allowed', fontWeight: 600 }}
+                            disabled
+                          >
+                            Sold Out
+                          </button>
+                        ) : qty === 0 ? (
                           <button 
                             style={{ width: '100%', padding: '10px', background: '#111', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
                             onClick={() => updateQuantity(dish, 1)}
@@ -201,8 +278,9 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave }) {
                             </button>
                             <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>{qty}</span>
                             <button 
-                              style={{ width: '32px', height: '32px', border: 'none', background: '#111', color: '#fff', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                              onClick={() => updateQuantity(dish, 1)}
+                              style={{ width: '32px', height: '32px', border: 'none', background: isAvailable ? '#111' : '#ccc', color: isAvailable ? '#fff' : '#666', borderRadius: '4px', cursor: isAvailable ? 'pointer' : 'not-allowed', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              onClick={() => isAvailable && updateQuantity(dish, 1)}
+                              disabled={!isAvailable}
                             >
                               +
                             </button>

@@ -121,7 +121,7 @@ function TableMapSection({ tables, setTables, dataSource, toast }) {
         subtitle={`${tableList.length} tables across ${STAFF_AREAS.length} areas`}
       />
 
-      {dataSource === "mock" ? <NotConnectedNote>{DEMO_NOTICE}</NotConnectedNote> : null}
+
 
       <Toolbar>
         <div className="sfx-legend">

@@ -126,7 +126,7 @@ export async function submitReservation(req, res, next) {
             @StartAt, @EndAt,
             @Guests, @Request, @DiningPurpose,
             @GuestName, @GuestPhone, @GuestEmail,
-            N'Pending Payment', N'Online',
+            N'Awaiting Deposit', N'Online',
             SYSDATETIME(),
             SYSDATETIME(), SYSDATETIME())`,
         {
@@ -227,7 +227,7 @@ export async function submitReservation(req, res, next) {
         targetId: reservationId,
         newValue: {
           reservation_id: reservationId,
-          status: 'Pending Payment',
+          status: 'Awaiting Deposit',
           customer_id: customerId,
           start_at: startAt.toISOString(),
           guest_count: guestNum,
@@ -247,7 +247,7 @@ export async function submitReservation(req, res, next) {
     if (io) {
       io.to('room:manager').to('room:staff').emit('reservation:new', {
         reservation_id: reservationId,
-        reservation_status: RESERVATION_STATUS.PENDING_PAYMENT,
+        reservation_status: RESERVATION_STATUS.AWAITING_DEPOSIT,
         customer_id: customerId,
         reservation_start_at: startAt.toISOString(),
         guest_count: guestNum,

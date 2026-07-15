@@ -74,7 +74,7 @@ function MenuHistoryDrawer({ isOpen, onClose }) {
   const totalItems = history.preorders.length + history.sessionOrders.length;
   const hasItems = totalItems > 0;
   const orderItems = [...history.preorders, ...history.sessionOrders];
-  const isReadyToPay = orderItems.length > 0 && orderItems.every(item => item.item_status === 'Served' || item.item_status === 'Cancelled');
+  const isReadyToPay = orderItems.length > 0 && history.summary.remainingToPay > 0 && orderItems.every(item => item.item_status === 'Served' || item.item_status === 'Cancelled');
   return (
     <AnimatePresence>
       {isOpen && (
@@ -160,7 +160,7 @@ function MenuHistoryDrawer({ isOpen, onClose }) {
                                 <span className="text-sm font-bold text-gray-900">{formatVND(item.unit_price)}</span>
                               </div>
                             </div>
-                            {item.item_status === 'Pending' && (
+                            {(item.item_status === 'Pending' || item.item_status === 'Sent To Kitchen') && (
                               <button
                                 onClick={() => handleCancelItem(item.order_item_id)}
                                 className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center font-bold"
@@ -205,7 +205,7 @@ function MenuHistoryDrawer({ isOpen, onClose }) {
                                 </span>
                               </div>
                             </div>
-                            {item.item_status === 'Pending' && (
+                            {(item.item_status === 'Pending' || item.item_status === 'Sent To Kitchen') && (
                               <button
                                 onClick={() => handleCancelItem(item.order_item_id)}
                                 className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center font-bold"

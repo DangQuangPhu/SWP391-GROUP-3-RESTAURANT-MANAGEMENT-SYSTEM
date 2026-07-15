@@ -872,7 +872,7 @@ function TableManagementReservationModal() {
               onClick={handleRejectReservation}
               disabled={busy}
             >
-              Reject Booking
+              Reject Reservation
             </button>
           </div>
           <button

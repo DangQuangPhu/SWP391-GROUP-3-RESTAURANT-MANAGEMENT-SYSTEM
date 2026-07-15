@@ -1,0 +1,24 @@
+{
+  "repoId": "70263a4b-ebab-4584-8434-515199d05b74",
+  "repoName": "phurai-ui",
+  "server": "https://api.grapuco.com",
+  "language": "javascript",
+  "features": {
+    "embeddings": true,
+    "dataFlowAnalysis": true
+  },
+  "ignore": [
+    "node_modules",
+    "dist",
+    ".next",
+    ".git",
+    ".grapuco",
+    "__pycache__",
+    "vendor",
+    "target",
+    "build"
+  ],
+  "workspaceId": "f46f4189-35ba-4426-8c7f-60285391665a",
+  "workspaceName": "Restaurant",
+  "lastPush": "2026-07-14T21:05:06.725Z"
+}

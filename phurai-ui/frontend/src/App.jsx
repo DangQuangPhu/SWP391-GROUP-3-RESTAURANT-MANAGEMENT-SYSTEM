@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Navigate,
   Route,
@@ -12,7 +12,6 @@ import {
   TakeOutPage as TakeOut,
   CateringPage as Catering,
   PrivateEventsPage as PrivateEvents,
-  CareersPage as Careers,
   ContactHoursPage as ContactHours,
 } from "@/features/content";
 import { MenuPage as Menu } from "@/features/menu";
@@ -35,12 +34,12 @@ import { StaffDashboardPage as StaffDashboard } from "@/features/staff-dashboard
 import { KitchenLayout, KitchenDashboardPage } from "@/features/kitchen-dashboard";
 import AdminLayout from '@/features/admin-dashboard/layout/AdminLayout';
 import AdminDashboardPage from '@/features/admin-dashboard/pages/AdminDashboardPage';
-import AdminAccountsPage from '@/pages/admin/Accounts';
-import AdminAuditLogsPage from '@/pages/admin/AuditLogs';
-import AdminSystemSettingsPage from '@/pages/admin/SystemSettings';
-import AdminRolesPage from '@/pages/admin/Roles';
-import AdminAnalyticsPage from '@/pages/admin/Analytics';
-import AdminRestaurantInfoPage from '@/pages/admin/RestaurantInfo';
+import AdminAccountsPage from '@/features/admin-dashboard/pages/Accounts';
+import AdminAuditLogsPage from '@/features/admin-dashboard/pages/AuditLogs';
+import AdminSystemSettingsPage from '@/features/admin-dashboard/pages/SystemSettings';
+import AdminRolesPage from '@/features/admin-dashboard/pages/Roles';
+import AdminAnalyticsPage from '@/features/admin-dashboard/pages/Analytics';
+import AdminRestaurantInfoPage from '@/features/admin-dashboard/pages/RestaurantInfo';
 import AdminFloorPlanConfigPage from '@/features/admin-dashboard/pages/FloorPlanSetup';
 import RequireRole from "@/features/auth/components/RequireRole";
 import NotFound from "@/pages/NotFound";
@@ -52,7 +51,6 @@ import FloatingActionButtons from "@/components/common/FloatingActionButtons";
 import { ProfileModal, Register, VerifyEmail } from "@/features/auth";
 import { saveAuthUser } from "@/core/api";
 import { useAuth } from "@/features/auth/context/AuthContext";
-import RatingDashboard from "@/features/manager-dashboard/pages/RatingDashboard.jsx";
 import CustomerCheckout from "@/features/payment/pages/CustomerCheckout.jsx";
 
 const PAGE_PATHS = {
@@ -230,7 +228,8 @@ function App() {
     pathname.startsWith("/profile") || pathname.startsWith("/settings") || pathname.startsWith("/dashboard");
   const isReservationPage = pathname === "/reservations" || pathname.startsWith("/reservations/");
   const isKdsPage = pathname === "/kds" || pathname.startsWith("/kds/");
-  const isPortalPage = isAccountPage || isManagerPage || isStaffPage || isAdminPage || isReservationPage || isKdsPage;
+  const isQrPage = pathname.startsWith("/scan") || pathname.startsWith("/checkout") || pathname.startsWith("/menus");
+  const isPortalPage = isAccountPage || isManagerPage || isStaffPage || isAdminPage || isReservationPage || isKdsPage || isQrPage;
 
   if (!authReady) {
     return null; // Or a loading spinner

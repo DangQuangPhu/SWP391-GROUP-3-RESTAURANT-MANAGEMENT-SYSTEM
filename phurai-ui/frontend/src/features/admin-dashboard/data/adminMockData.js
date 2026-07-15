@@ -1,8 +1,8 @@
 // adminMockData.js
-// Frontend-only mock data — KHÔNG chứa password hash (không bao giờ đưa hash
-// xuống frontend dù là mock, để tránh thói quen xấu khi nối API thật sau này).
-// TODO: đối chiếu lại đúng tên cột thật của bảng accounts/staff khi nối API,
-// hiện đang đoán role_id=5 là "Admin" dựa theo dòng INSERT bạn gửi.
+// Frontend-only mock data — does NOT contain password hashes (never send hashes
+// to the frontend even if it is mock, to avoid bad habits when connecting to the real API later).
+// TODO: cross-reference with the actual column names of the accounts/staff table when connecting to the API,
+// currently guessing role_id=5 is "Admin" based on the INSERT query provided.
 
 export const ROLE_OPTIONS = [
   { id: 1, label: 'Customer' },

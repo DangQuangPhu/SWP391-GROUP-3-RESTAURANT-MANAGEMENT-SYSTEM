@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useMenuCart } from '../context/MenuCartContext.jsx';
 import { formatVND } from '@/core/utils/formatCurrency';
 import { appToastError } from '@/core/notifications/appToast.js';
@@ -30,6 +31,7 @@ function MenuCartDrawer() {
     setQuantity,
     removeItem,
     clearCart,
+    addItem,
   } = useMenuCart();
 
   const panelRef = useRef(null);
@@ -40,6 +42,7 @@ function MenuCartDrawer() {
   const [history, setHistory] = useState({ preorders: [], sessionOrders: [], summary: null });
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState(null);
+  const [expandedItemId, setExpandedItemId] = useState(null);
 
   const { session } = useTableSession();
   const navigate = useNavigate();
@@ -88,18 +91,61 @@ function MenuCartDrawer() {
     }
   }, [isDrawerOpen]);
 
-  const handleCancelItem = async (itemId) => {
-    if (!window.confirm("Are you sure you want to cancel this item?")) return;
+  const handleCancelItem = (itemId) => {
+    toast(
+      (t) => (
+        <div className="flex flex-col gap-3 p-1">
+          <div className="flex items-center gap-2 text-red-600">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            <span className="font-bold text-gray-900">Confirm cancel item?</span>
+          </div>
+          <span className="text-sm text-gray-600">This action cannot be undone. Are you sure?</span>
+          <div className="flex gap-2 justify-end mt-2">
+            <button className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg font-bold text-gray-700 transition-colors" onClick={() => toast.dismiss(t.id)}>Close</button>
+            <button className="px-4 py-2 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold transition-colors shadow-sm shadow-red-500/30" onClick={() => {
+              toast.dismiss(t.id);
+              executeCancel(itemId);
+            }}>Confirm Cancel</button>
+          </div>
+        </div>
+      ),
+      { duration: Infinity, style: { minWidth: '300px' } }
+    );
+  };
+
+  const executeCancel = async (itemId) => {
     try {
       const res = await fetch(`/api/public/qr-order/items/${itemId}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
         fetchHistory(); // Refresh history
+        toast.success('Item has been cancelled successfully');
       } else {
-        alert(data.message || 'Failed to cancel item');
+        appToastError(data.message || 'Failed to cancel item');
       }
     } catch (err) {
-      alert('Network error while cancelling item');
+      appToastError('Network error while cancelling item');
+    }
+  };
+
+  const handleUpdateQuantity = async (itemId, currentQuantity, change) => {
+    const newQuantity = currentQuantity + change;
+    if (newQuantity < 1) return handleCancelItem(itemId);
+    
+    try {
+      const res = await fetch(`/api/public/qr-order/items/${itemId}/quantity`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: newQuantity })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchHistory();
+      } else {
+        appToastError(data.message || 'Failed to update quantity');
+      }
+    } catch (err) {
+      appToastError('Network error while updating quantity');
     }
   };
 
@@ -133,7 +179,9 @@ function MenuCartDrawer() {
     }
   };
 
-  const historyItems = [...history.preorders, ...history.sessionOrders];
+  const validPreorders = history.preorders.filter(item => item.item_status !== 'Cancelled');
+  const validSessionOrders = history.sessionOrders.filter(item => item.item_status !== 'Cancelled');
+  const historyItems = [...validPreorders, ...validSessionOrders];
   const activeOrder = history.sessionOrders[0] || history.preorders[0];
   const orderId = activeOrder?.order_id;
   const isReadyToPay = historyItems.length > 0;
@@ -255,19 +303,19 @@ function MenuCartDrawer() {
               ) : (
                 <div className="space-y-6 pb-2">
 
-                  {history.preorders.length > 0 && (
+                  {validPreorders.length > 0 && (
                     <section>
                       <div className="flex justify-between items-end mb-3">
                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Pre-ordered</h3>
-                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Còn lại 70%</span>
+                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Remaining 70%</span>
                       </div>
                       <div className="space-y-3">
-                        {history.preorders.map((item) => (
+                        {validPreorders.map((item) => (
                           <div key={item.order_item_id} className="bg-white rounded-xl p-3 flex gap-3 shadow-sm border border-gray-100 relative overflow-hidden group">
                             <div className="w-12 h-12 shrink-0">
                               <img src={item.image_url} alt="" onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/150x150/f8fafc/94a3b8?text=Dish'; }} className="w-full h-full object-cover rounded-md border border-gray-50" />
                             </div>
-                            <div className="flex-1 min-w-0 pr-10">
+                            <div className="flex-1 min-w-0 pr-16">
                               <h4 className="font-semibold text-gray-800 text-sm truncate">{item.dish_name}</h4>
                               <div className="flex items-center gap-2 mt-1">
                                 <span className="text-xs font-medium text-gray-500">x{item.quantity}</span>
@@ -275,45 +323,82 @@ function MenuCartDrawer() {
                                 <span className="text-xs font-bold text-gray-900">{formatVND(item.unit_price)}</span>
                               </div>
                             </div>
-                            {item.item_status === 'Pending' && (
-                              <button onClick={() => handleCancelItem(item.order_item_id)} className="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center font-bold">✕</button>
-                            )}
+                            <div className="absolute bottom-2 right-2 flex gap-1">
+                              <button 
+                                onClick={() => {
+                                  addItem({ id: item.dish_id, name: item.dish_name, price: item.unit_price, image: item.image_url });
+                                  toast.success(`Added ${item.dish_name} to cart`);
+                                }} 
+                                className="w-7 h-7 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 flex items-center justify-center font-bold text-lg" title="Order More">
+                                +
+                              </button>
+                              {(item.item_status === 'Pending' || item.item_status === 'Sent To Kitchen') && (
+                                <button onClick={() => handleCancelItem(item.order_item_id)} className="w-7 h-7 rounded-full bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center font-bold" title="Cancel Item">✕</button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
                     </section>
                   )}
 
-                  {history.sessionOrders.length > 0 && (
+                  {validSessionOrders.length > 0 && (
                     <section>
                       <div className="flex justify-between items-end mb-3">
                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Session Orders</h3>
                         <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Unpaid (100%)</span>
                       </div>
                       <div className="space-y-3">
-                        {history.sessionOrders.map((item) => (
-                          <div key={item.order_item_id} className="bg-white rounded-xl p-3 flex gap-3 shadow-sm border border-gray-100">
-                            <div className="w-12 h-12 shrink-0">
-                              <img src={item.image_url} alt="" onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/150x150/f8fafc/94a3b8?text=Dish'; }} className="w-full h-full object-cover rounded-md border border-gray-50" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-gray-800 text-sm truncate pr-2">{item.dish_name}</h4>
-                              <div className="flex items-center justify-between mt-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-medium text-gray-500">x{item.quantity}</span>
-                                  <span className="text-gray-300">•</span>
-                                  <span className="text-xs font-bold text-gray-900">{formatVND(item.unit_price)}</span>
+                        {validSessionOrders.map((item) => {
+                          const isExpanded = expandedItemId === item.order_item_id;
+                          return (
+                          <div key={item.order_item_id} 
+                               className="bg-white rounded-xl p-3 flex flex-col gap-3 shadow-sm border border-gray-100 relative overflow-hidden group cursor-pointer transition-all"
+                               onClick={() => setExpandedItemId(isExpanded ? null : item.order_item_id)}>
+                            <div className="flex gap-3">
+                              <div className="w-12 h-12 shrink-0">
+                                <img src={item.image_url} alt="" onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/150x150/f8fafc/94a3b8?text=Dish'; }} className="w-full h-full object-cover rounded-md border border-gray-50" />
+                              </div>
+                              <div className="flex-1 min-w-0 pr-16">
+                                <h4 className="font-semibold text-gray-800 text-sm truncate pr-2">{item.dish_name}</h4>
+                                <div className="flex items-center justify-between mt-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-medium text-gray-500">x{item.quantity}</span>
+                                    <span className="text-gray-300">•</span>
+                                    <span className="text-xs font-bold text-gray-900">{formatVND(item.unit_price)}</span>
+                                  </div>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${getStatusColor(item.item_status)}`}>
+                                    {item.item_status.toUpperCase()}
+                                  </span>
                                 </div>
-                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${getStatusColor(item.item_status)}`}>
-                                  {item.item_status.toUpperCase()}
-                                </span>
+                              </div>
+                              <div className="absolute bottom-2 right-2 flex gap-1">
+                                {(item.item_status === 'Pending' || item.item_status === 'Sent To Kitchen') && !isExpanded && (
+                                  <button onClick={(e) => { e.stopPropagation(); handleCancelItem(item.order_item_id); }} className="w-7 h-7 rounded-full bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center font-bold" title="Cancel Item">✕</button>
+                                )}
                               </div>
                             </div>
-                            {item.item_status === 'Pending' && (
-                              <button onClick={() => handleCancelItem(item.order_item_id)} className="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center font-bold">✕</button>
-                            )}
+                            
+                            <AnimatePresence>
+                              {isExpanded && (item.item_status === 'Pending' || item.item_status === 'Sent To Kitchen') && (
+                                <motion.div 
+                                  initial={{ height: 0, opacity: 0 }} 
+                                  animate={{ height: 'auto', opacity: 1 }} 
+                                  exit={{ height: 0, opacity: 0 }}
+                                  className="border-t border-gray-50 pt-3 mt-1 flex items-center justify-between overflow-hidden"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="flex items-center bg-gray-100 rounded-full p-0.5">
+                                    <button type="button" className="w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-sm text-gray-600 hover:text-emerald-600 font-bold text-lg" onClick={() => handleUpdateQuantity(item.order_item_id, item.quantity, -1)}>−</button>
+                                    <span className="w-8 text-center text-sm font-bold text-gray-800">{item.quantity}</span>
+                                    <button type="button" className="w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-sm text-gray-600 hover:text-emerald-600 font-bold text-lg" onClick={() => handleUpdateQuantity(item.order_item_id, item.quantity, 1)}>+</button>
+                                  </div>
+                                  <button onClick={() => handleCancelItem(item.order_item_id)} className="px-4 py-1.5 rounded-full bg-red-50 text-red-500 hover:bg-red-100 font-bold text-sm">Cancel item</button>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </div>
-                        ))}
+                        )})}
                       </div>
                     </section>
                   )}
@@ -363,18 +448,20 @@ function MenuCartDrawer() {
                       <span className="font-bold text-amber-600 text-lg">{formatVND(history.summary.remainingToPay)}</span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      closeDrawer();
-                      navigate(`/checkout/${orderId}`, { state: { amount: history.summary.remainingToPay } });
-                    }}
-                    className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-emerald-500/30 transition-all flex items-center justify-center gap-2"
-                  >
-                    Pay Now
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </button>
+                  {history.summary.remainingToPay > 0 && (
+                    <button
+                      onClick={() => {
+                        closeDrawer();
+                        navigate(`/checkout/${orderId}`, { state: { amount: history.summary.remainingToPay } });
+                      }}
+                      className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-emerald-500/30 transition-all flex items-center justify-center gap-2"
+                    >
+                      Pay Now
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </button>
+                  )}
                 </>
               )}
             </>

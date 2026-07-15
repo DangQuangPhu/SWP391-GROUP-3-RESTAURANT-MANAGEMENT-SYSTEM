@@ -90,7 +90,7 @@ async function testStateMachine() {
       const timelineRes = await pool.request()
         .input('resId', sql.Int, reservationId)
         .query(`
-          SELECT al.action_name, ISNULL(u.full_name, N'Hệ thống tự động') AS actor, al.new_value_json
+          SELECT al.action_name, ISNULL(u.full_name, N'System') AS actor, al.new_value_json
           FROM dbo.AuditLogs al
           LEFT JOIN dbo.UserAccounts u ON al.user_id = u.user_id
           WHERE al.target_table = 'Reservations' AND al.target_id = @resId

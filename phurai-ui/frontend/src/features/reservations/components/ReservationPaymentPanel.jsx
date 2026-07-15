@@ -1,5 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState, useRef } from "react";
 import { apiPost, apiPatch, apiGet } from "@/core/api/httpClient";
 import { useSocket } from "@/core/socket/SocketContext.jsx";
 import { motion, AnimatePresence } from "framer-motion";
@@ -47,6 +46,7 @@ function CopyableField({ label, copyValue, children }) {
 
 export default function ReservationPaymentPanel({ reservation, amount, orderCode, qrUrl, onSuccess, onCancel }) {
   const [phase, setPhase] = useState("pending"); // pending | processing | success | expired
+  const [processingStep, setProcessingStep] = useState(0);
   const [customAlert, setCustomAlert] = useState(null);
   const [secondsLeft, setSecondsLeft] = useState(() => {
     if (reservation?.createdAt) {
@@ -56,14 +56,7 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
     }
     return 15 * 60;
   });
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
-  const [promoCodeInput, setPromoCodeInput] = useState("");
-  const [appliedDiscount, setAppliedDiscount] = useState(0);
-  const [promoErrorMessage, setPromoErrorMessage] = useState("");
-  const [isValidating, setIsValidating] = useState(false);
-  const [validPromoName, setValidPromoName] = useState("");
-  const navigate = useNavigate();
-  const Maps = navigate;
+  const [appliedDiscount] = useState(0);
   const { socket } = useSocket();
   const phaseRef = useRef(phase);
 
@@ -75,7 +68,9 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
   useEffect(() => {
     if (phase !== "pending") return;
     if (secondsLeft <= 0) {
-      setPhase("expired");
+      setTimeout(() => {
+        setPhase("expired");
+      }, 0);
       localStorage.removeItem("phurai_pending_reservation");
       return;
     }
@@ -85,32 +80,56 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
 
   // Guard: prevent duplicate payment detection calls
   const paymentDetectedRef = useRef(false);
+  const timersRef = useRef([]);
+
+  useEffect(() => {
+    const currentTimers = timersRef.current;
+    return () => {
+      currentTimers.forEach(clearTimeout);
+    };
+  }, []);
 
   // Helper: triggered whenever we detect payment was received
-  // Uses setTimeout(0) to defer parent state updates past the current React render cycle,
-  // preventing the "Cannot update a component while rendering" React error.
   const handlePaymentDetected = useRef(null);
-  handlePaymentDetected.current = () => {
-    if (paymentDetectedRef.current) return; // already handled
-    paymentDetectedRef.current = true;
+  useEffect(() => {
+    handlePaymentDetected.current = () => {
+      if (paymentDetectedRef.current) return; // already handled
+      paymentDetectedRef.current = true;
 
-    // Show "Processing Payment" spinning loader first
-    setPhase('processing');
+      // Show "Processing Payment" spinning loader first
+      setPhase('processing');
+      setProcessingStep(0);
 
-    setTimeout(() => {
-      // Then show green tick checkmark
-      setPhase('success');
+      // Step 1: Checking transfer content (takes 1.2s)
+      const t1 = setTimeout(() => {
+        setProcessingStep(1);
+      }, 1200);
+      timersRef.current.push(t1);
 
-      setTimeout(() => {
-        // Then clear localStorage and notify parent
-        localStorage.removeItem('phurai_pending_reservation');
-        localStorage.removeItem('phurai_applied_promo');
-        localStorage.removeItem('phurai_applied_promo_discount');
+      // Step 2: Verifying deposit amount (takes 1.2s)
+      const t2 = setTimeout(() => {
+        setProcessingStep(2);
+      }, 2400);
+      timersRef.current.push(t2);
 
-        if (onSuccess) onSuccess();
-      }, 2000); // Show tick for 2s
-    }, 1500); // Show spinner for 1.5s
-  };
+      // Step 3: Finalizing table reservation (takes 1.1s)
+      const t3 = setTimeout(() => {
+        setProcessingStep(3);
+        setPhase('success');
+
+        const t4 = setTimeout(() => {
+          // Then clear localStorage and notify parent
+          localStorage.removeItem('phurai_pending_reservation');
+          localStorage.removeItem('phurai_applied_promo');
+          localStorage.removeItem('phurai_applied_promo_discount');
+
+          if (onSuccess) onSuccess();
+        }, 2000); // Show tick for 2s
+        timersRef.current.push(t4);
+      }, 3500);
+      timersRef.current.push(t3);
+    };
+  }, [onSuccess]);
 
   // Socket listener — real-time push from server when SePay webhook fires
   useEffect(() => {
@@ -189,20 +208,12 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
     return () => clearInterval(intervalId);
   }, [reservation?.reservation_id]);
 
-  // Handle "I have paid" button — calls verify-deposit endpoint which triggers
-  // the same webhook logic (DB update → socket emit → polling detects status change)
   const handleIHavePaid = async () => {
     setPhase('processing');
     try {
       const res = await apiPost(`/payments/verify-deposit/${reservation.reservation_id}`, {});
-      // If already paid or just confirmed, advance immediately
       if (res?.success) {
-        // The verify-deposit endpoint already updated DB + emitted socket.
-        // The polling will pick it up within 3s. But if already_paid, trigger now.
-        if (res.already_paid) {
-          handlePaymentDetected.current();
-        }
-        // Otherwise wait for polling to detect the status change (≤3s)
+        handlePaymentDetected.current();
         return;
       }
     } catch (err) {
@@ -235,31 +246,9 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
 
   const displayAmount = Math.max(0, baseAmount - appliedDiscount);
 
-  const handleApplyPromo = async () => {
-    if (!promoCodeInput.trim()) return;
-    setIsValidating(true);
-    setPromoErrorMessage("");
-    try {
-      const res = await apiPatch(`/reservations/${reservation.reservation_id}/apply-promo`, { promo_code: promoCodeInput.trim() });
-      if (res.data?.success) {
-        setAppliedDiscount(res.data.discount_amount);
-        setValidPromoName(res.data.promotion_name);
-        setPromoErrorMessage("");
-      } else {
-        setPromoErrorMessage(res.data?.message || "Invalid promo code");
-        setAppliedDiscount(0);
-        setValidPromoName("");
-      }
-    } catch (err) {
-      setPromoErrorMessage(err.response?.data?.message || "Failed to apply promo code");
-      setAppliedDiscount(0);
-      setValidPromoName("");
-    } finally {
-      setIsValidating(false);
-    }
-  };
-
-  const generatedOrderCode = orderCode || `PHURAIRESTAURANT${reservation?.reservation_id || Math.floor(1000 + Math.random() * 9000)}`;
+  const [generatedOrderCode] = useState(() => {
+    return orderCode || `PHURAIRESTAURANT${reservation?.reservation_id || Math.floor(1000 + Math.random() * 9000)}`;
+  });
   const finalQrUrl = qrUrl;
 
   // When payment is detected, onSuccess() advances the parent to the Confirmed step.
@@ -340,39 +329,70 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
                   <CopyableField label="Description" copyValue={generatedOrderCode}>
                     <span className="font-semibold text-blue-600 dark:text-blue-400 font-mono text-base">{generatedOrderCode}</span>
                   </CopyableField>
-                  <div className="flex justify-between items-center pb-2 pt-1 border-b border-gray-200 dark:border-white/10">
-                    <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">Total Bill</span>
+                  {/* Pre-ordered Items List */}
+                  <div className="pt-1 pb-3 border-b border-gray-200 dark:border-white/10 text-left">
+                    <span className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-3 block">Pre-ordered Dishes</span>
+                    {(reservation?.preorderItems || reservation?.preorder_items || []).length > 0 ? (
+                      <ul className="space-y-2.5">
+                        {(reservation.preorderItems || reservation.preorder_items).map((item, idx) => {
+                          const price = Number(item.price || item.unit_price || 0);
+                          const qty = Number(item.quantity || 1);
+                          return (
+                            <li key={idx} className="flex justify-between items-start text-sm">
+                              <div className="text-gray-700 dark:text-gray-300 flex flex-col">
+                                <span className="font-medium">{item.name || item.dish_name || `Item #${item.dish_id}`}</span>
+                                <span className="text-xs text-gray-400">x{qty} · {formatVND(price)}</span>
+                              </div>
+                              <span className="text-gray-900 dark:text-white font-semibold">{formatVND(price * qty)}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic">No preordered items (Table booking only)</p>
+                    )}
+                  </div>
+
+                  {/* Cashflow Breakdown */}
+                  <div className="space-y-2.5 pt-3 pb-3 border-b border-gray-200 dark:border-white/10 text-sm">
+                    {(() => {
+                      const preorderList = reservation?.preorderItems || reservation?.preorder_items || [];
+                      const subTotal = preorderList.reduce((sum, item) => sum + (Number(item.price || item.unit_price || 0) * Number(item.quantity || 1)), 0);
+                      const totalBillVal = (reservation?.final_total || 0) + baseAmount;
+                      const bookingFeeVal = Math.max(0, totalBillVal - subTotal);
+
+                      return (
+                        <>
+                          {preorderList.length > 0 && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-500 dark:text-gray-400">Preorder Subtotal</span>
+                              <span className="font-medium text-gray-900 dark:text-white">{formatVND(subTotal)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-500 dark:text-gray-400">Table Booking Fee</span>
+                            <span className="font-medium text-gray-900 dark:text-white">{formatVND(bookingFeeVal)}</span>
+                          </div>
+                          <div className="flex justify-between items-center pt-1 border-t border-gray-100 dark:border-white/5">
+                            <span className="text-gray-900 dark:text-white font-semibold">Total Bill</span>
+                            <span className="font-bold text-gray-900 dark:text-white">{formatVND(totalBillVal)}</span>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Remaining Balance (Pay Later 70%) */}
+                  <div className="flex justify-between items-center py-3 border-b border-gray-200 dark:border-white/10 text-sm">
+                    <span className="text-gray-500 dark:text-gray-400 font-medium">Remaining Balance (Pay Later 70%)</span>
                     <span className="font-semibold text-gray-900 dark:text-white text-lg">
-                      {formatVND((reservation?.final_total || 0) + baseAmount)}
+                      {formatVND(reservation?.final_total !== undefined ? reservation.final_total : (((reservation?.final_total || 0) + baseAmount) * 0.70))}
                     </span>
                   </div>
 
-                  {reservation?.final_total !== undefined && (
-                    <div className="flex justify-between items-center py-3 border-b border-gray-200 dark:border-white/10">
-                      <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">Remaining Balance (Pay Later 70%)</span>
-                      <span className="font-semibold text-gray-900 dark:text-white text-lg">{formatVND(reservation.final_total)}</span>
-                    </div>
-                  )}
-
-                  {reservation?.preorderItems && reservation.preorderItems.length > 0 && (
-                    <div className="pt-3 pb-1 border-b border-gray-200 dark:border-white/10">
-                      <span className="text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2 block">Pre-ordered Items</span>
-                      <ul className="space-y-2 mb-3">
-                        {reservation.preorderItems.map((item, idx) => (
-                          <li key={idx} className="flex justify-between items-center text-sm">
-                            <span className="text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                              <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-                              {item.name || item.dish_name || `Item #${item.dish_id}`}
-                            </span>
-                            <span className="text-gray-500 dark:text-gray-400 font-mono text-xs font-semibold bg-gray-200 dark:bg-white/10 px-1.5 py-0.5 rounded">x{item.quantity}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
+                  {/* To Pay Now (Deposit 30%) */}
                   <div className="flex justify-between items-center pt-4">
-                    <span className="text-gray-900 dark:text-white font-semibold text-lg">To Pay Now (Deposit 30%)</span>
+                    <span className="text-gray-900 dark:text-white font-bold text-base">To Pay Now (Deposit 30%)</span>
                     <span className="font-bold text-blue-600 dark:text-blue-400 text-2xl">{formatVND(displayAmount)}</span>
                   </div>
                 </div>
@@ -413,11 +433,65 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="w-full flex flex-col items-center justify-center py-12"
+            className="w-full flex flex-col items-center justify-center py-8 text-center"
           >
-            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-6"></div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Processing Payment</h3>
-            <p className="text-gray-500 dark:text-gray-400">Please wait while we verify your transaction...</p>
+            <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-8 shadow-sm"></div>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Verifying Payment</h3>
+            
+            <div className="w-full max-w-sm bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/10 rounded-2xl p-5 text-left space-y-4 shadow-inner">
+              {/* Step 1: Check Content */}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500 dark:text-gray-400 font-medium">1. Checking transfer content</span>
+                {processingStep === 0 ? (
+                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <span className="text-green-500 font-bold flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Matched
+                  </span>
+                )}
+              </div>
+
+              {/* Step 2: Check Amount */}
+              <div className="flex items-center justify-between text-sm border-t border-gray-100 dark:border-white/5 pt-3">
+                <span className={`${processingStep < 1 ? 'text-gray-400' : 'text-gray-500 dark:text-gray-400'} font-medium`}>
+                  2. Verifying deposit amount
+                </span>
+                {processingStep === 0 ? (
+                  <span className="text-gray-350 font-mono text-xs">Waiting...</span>
+                ) : processingStep === 1 ? (
+                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <span className="text-green-500 font-bold flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Matched
+                  </span>
+                )}
+              </div>
+
+              {/* Step 3: Finalize DB */}
+              <div className="flex items-center justify-between text-sm border-t border-gray-100 dark:border-white/5 pt-3">
+                <span className={`${processingStep < 2 ? 'text-gray-400' : 'text-gray-500 dark:text-gray-400'} font-medium`}>
+                  3. Confirming reservation status
+                </span>
+                {processingStep < 2 ? (
+                  <span className="text-gray-350 font-mono text-xs">Waiting...</span>
+                ) : processingStep === 2 ? (
+                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <span className="text-green-500 font-bold flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Done
+                  </span>
+                )}
+              </div>
+            </div>
           </motion.div>
         )}
 

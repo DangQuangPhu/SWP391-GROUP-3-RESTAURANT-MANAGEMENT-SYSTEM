@@ -17,7 +17,7 @@ export const getReservationTimeline = async (req, res) => {
           al.action_name,
           al.new_value_json,
           al.created_at,
-          ISNULL(u.full_name, N'Hệ thống tự động') AS actor_name,
+          ISNULL(u.full_name, N'System') AS actor_name,
           al.user_id
         FROM dbo.AuditLogs al
         LEFT JOIN dbo.UserAccounts u ON al.user_id = u.user_id

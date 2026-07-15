@@ -207,5 +207,32 @@ export function useFavoritesStore(currentUser) {
     [favorites, storageKey]
   );
 
-  return { favorites, removeFavorite };
+  const toggleFavorite = useCallback(
+    (dish) => {
+      if (!storageKey) return;
+      const targetId = dish.dish_id || dish.id;
+      const exists = favorites.some((f) => f.id === targetId || f.dish_id === targetId);
+      let next;
+      if (exists) {
+        next = favorites.filter((f) => f.id !== targetId && f.dish_id !== targetId);
+      } else {
+        next = [
+          ...favorites,
+          {
+            id: targetId,
+            dish_id: targetId,
+            name: dish.dish_name || dish.name,
+            price: dish.price,
+            image: dish.image || dish.image_url || null,
+            description: dish.description || "",
+          },
+        ];
+      }
+      setFavorites(next);
+      persistFavorites(storageKey, next);
+    },
+    [favorites, storageKey]
+  );
+
+  return { favorites, removeFavorite, toggleFavorite };
 }

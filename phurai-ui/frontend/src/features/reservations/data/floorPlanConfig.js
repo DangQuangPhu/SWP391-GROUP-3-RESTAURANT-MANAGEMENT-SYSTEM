@@ -18,35 +18,35 @@ export const SHAPES = {
 
 // Visual position & styling keyed by DB table_number.
 export const TABLE_LAYOUT = {
-  // ---- Dãy Cửa sổ (Tăng dần: 2, 4, 6, 8 ghế) ----
+  // ---- Window Row (Ascending: 2, 4, 6, 8 seats) ----
   "WIN-A": { x: 140, y: 120, type: "round2", fill: "#dceaf5", chair: "#cfe3da" },
   "WIN-B": { x: 400, y: 120, type: "round4", fill: "#dceaf5", chair: "#cfe3da" },
   "WIN-C": { x: 880, y: 120, type: "booth6", fill: "#dceaf5", chair: "#cfe3da" },
   "WIN-D": { x: 1165, y: 120, type: "booth8", fill: "#dceaf5", chair: "#cfe3da" },
 
-  // ---- Dãy Phòng VIP (6 ghế) ----
+  // ---- VIP Rooms Row (6 seats) ----
   "VIP-1": { x: 140, y: 305, type: "vip6", fill: "#f6d6d6", chair: "#f1c2c2" },
   "VIP-2": { x: 140, y: 475, type: "vip6", fill: "#f6d6d6", chair: "#f1c2c2" },
   "VIP-3": { x: 140, y: 645, type: "vip6", fill: "#f6d6d6", chair: "#f1c2c2" },
 
-  // ---- Sảnh Thường (4 cột x 3 hàng = 12 bàn 4 ghế) ----
+  // ---- Standard Hall (4 columns x 3 rows = 12 tables of 4 seats) ----
   "S-01": { x: 350, y: 300, type: "round4" }, "S-02": { x: 490, y: 300, type: "round4" }, "S-03": { x: 630, y: 300, type: "round4" }, "S-04": { x: 770, y: 300, type: "round4" },
   "S-05": { x: 350, y: 450, type: "round4" }, "S-06": { x: 490, y: 450, type: "round4" }, "S-07": { x: 630, y: 450, type: "round4" }, "S-08": { x: 770, y: 450, type: "round4" },
   "S-09": { x: 350, y: 600, type: "round4" }, "S-10": { x: 490, y: 600, type: "round4" }, "S-11": { x: 630, y: 600, type: "round4" }, "S-12": { x: 770, y: 600, type: "round4" },
 
-  // ---- Sảnh Premium (4 bàn 4 ghế xếp dọc) ----
+  // ---- Premium Hall (4 tables of 4 seats arranged vertically) ----
   "PRE-01": { x: 930, y: 300, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
   "PRE-02": { x: 930, y: 420, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
   "PRE-03": { x: 930, y: 540, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
   "PRE-04": { x: 930, y: 660, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
 
-  // ---- Private Rooms (Tăng dần: 2, 4, 6, 8 ghế hình chữ nhật) ----
+  // ---- Private Rooms (Ascending: 2, 4, 6, 8 rectangular seats) ----
   "PR-01": { x: 1165, y: 320, type: "rect2", fill: "#ece1f0", chair: "#ddc9e6" },
   "PR-02": { x: 1165, y: 460, type: "rect4", fill: "#ece1f0", chair: "#ddc9e6" },
   "PR-03": { x: 1165, y: 610, type: "rect6", fill: "#ece1f0", chair: "#ddc9e6" },
   "PR-04": { x: 1165, y: 790, type: "rect8", fill: "#ece1f0", chair: "#ddc9e6" },
 
-  // ---- Kitchen View (Khu vực sát bếp, 4 bàn) ----
+  // ---- Kitchen View (Area close to kitchen, 4 tables) ----
   "K-01": { x: 330, y: 825, type: "round4" },
   "K-02": { x: 410, y: 825, type: "round4" },
   "K-03": { x: 490, y: 825, type: "round4" },

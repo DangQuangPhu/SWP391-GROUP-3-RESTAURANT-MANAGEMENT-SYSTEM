@@ -7,20 +7,36 @@ import {
 import { RESERVATION_STATUS_META } from "@/shared/reservationStatus.js";
 
 import { asArray } from "@/core/utils/asArray.js";
+import { isSameDay } from "date-fns";
 
 /* Operations-focused view (no revenue) for floor & kitchen manager. */
 function TodaySection({ kpis, reservations, tables, orders, onNavigate }) {
   const kpiList = asArray(kpis);
   const reservationList = asArray(reservations);
+
+  const todaysReservations = reservationList.filter((r) => {
+    if (!r.reservation_start_at) return false;
+    return isSameDay(new Date(r.reservation_start_at), new Date());
+  });
+
   const tableList = asArray(tables);
   const orderList = asArray(orders);
 
-  const opsKpis = kpiList.filter((k) =>
-    ["reservations", "occupied", "pendingOrders", "kitchen"].includes(k.id)
-  );
-  const arriving = reservationList.filter((r) =>
-    ["pending", "confirmed"].includes(r.status)
-  );
+  const opsKpis = kpiList
+    .filter((k) =>
+      ["reservations", "occupied", "pendingOrders", "kitchen"].includes(k.id)
+    )
+    .map((k) => {
+      if (k.id === "reservations") {
+        return { ...k, value: todaysReservations.length };
+      }
+      return k;
+    });
+
+  const arriving = todaysReservations.filter((r) => {
+    const s = r.reservation_status || r.status;
+    return ["Await Check-in", "Pending Request", "pending", "confirmed"].includes(s);
+  });
   const kitchenQueue = orderList.filter((o) => o.kitchen_status !== "done");
 
   return (
@@ -34,7 +50,6 @@ function TodaySection({ kpis, reservations, tables, orders, onNavigate }) {
       <div className="sfx-grid sfx-grid--2">
         <Card
           title="Arriving guests"
-          action={<Button size="sm" variant="ghost" onClick={() => onNavigate("reservations", "filter-arriving")}>Check-in</Button>}
         >
           <ul className="sfx-timeline">
             {arriving.length ? (

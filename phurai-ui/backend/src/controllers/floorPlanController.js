@@ -6,11 +6,13 @@ export const getFloorPlanData = async (req, res) => {
         const result = await pool.request().query(`
             SELECT 
                 a.area_id, a.area_name, a.area_type,
-                t.table_id, t.table_number, t.capacity, t.is_counter, t.is_active as table_active, t.table_status
+                t.table_id, t.table_number, t.capacity, t.is_counter, 
+                CAST(CASE WHEN t.table_status = 'Inactive' THEN 0 ELSE 1 END AS BIT) as table_active, 
+                t.table_status, t.position_x, t.position_y
             FROM dbo.RestaurantAreas a
-            LEFT JOIN dbo.RestaurantTables t ON a.area_id = t.area_id AND t.is_active = 1
+            LEFT JOIN dbo.RestaurantTables t ON a.area_id = t.area_id AND t.table_status != 'Inactive'
             WHERE a.is_active = 1
-            ORDER BY a.area_id, CAST(t.table_number AS INT)
+            ORDER BY a.area_id, LEN(t.table_number), t.table_number
         `);
 
         // Group into structured JSON
@@ -32,7 +34,9 @@ export const getFloorPlanData = async (req, res) => {
                     capacity: row.capacity,
                     is_counter: !!row.is_counter,
                     table_status: row.table_status,
-                    is_active: !!row.table_active
+                    is_active: !!row.table_active,
+                    position_x: row.position_x,
+                    position_y: row.position_y
                 });
             }
         });
@@ -42,6 +46,6 @@ export const getFloorPlanData = async (req, res) => {
         return res.json({ success: true, data: areas });
     } catch (error) {
         console.error('[floorPlanController] getFloorPlanData error:', error);
-        return res.status(500).json({ success: false, message: 'Internal server error fetching floor plan.' });
+        return res.status(500).json({ success: false, message: 'Internal server error fetching floor plan.', error: error.message });
     }
 };

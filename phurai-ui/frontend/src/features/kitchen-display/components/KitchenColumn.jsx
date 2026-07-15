@@ -24,7 +24,7 @@ export default function KitchenColumn({ title, count, color, tickets, onStatusUp
         ))}
         {tickets.length === 0 && (
           <div className="h-full flex items-center justify-center text-gray-400 text-sm italic">
-            Trống
+            Empty
           </div>
         )}
       </div>

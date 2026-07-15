@@ -1,10 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Khởi tạo SDK với API Key từ file env
+// Initialize the SDK with the API Key from env file
 const ai = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 export const generateAIResponse = async (userPrompt) => {
-    // Danh sách các model để thử nghiệm, ưu tiên các model mới nhất hoạt động trong năm 2026
+    // List of models to try, prioritizing the latest active models working in 2026
     const modelsToTry = [
         "gemini-3.5-flash",
         "gemini-2.5-flash",
@@ -20,11 +20,11 @@ export const generateAIResponse = async (userPrompt) => {
             const response = await model.generateContent(userPrompt);
             return response.response.text();
         } catch (error) {
-            console.warn(`Lỗi kết nối model ${modelName}:`, error.message || error);
+            console.warn(`Connection error with model ${modelName}:`, error.message || error);
             lastError = error;
         }
     }
 
-    console.error("Tất cả các model Gemini API đều kết nối thất bại:", lastError);
-    throw new Error("Không thể kết nối với trí tuệ nhân tạo.");
+    console.error("All Gemini API models failed to connect:", lastError);
+    throw new Error("Unable to connect to artificial intelligence service.");
 };

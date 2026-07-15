@@ -120,6 +120,12 @@ export async function request(path, options = {}) {
   const data = await parseResponseBody(response);
 
   if (!response.ok) {
+    if (response.status === 401 && !path.includes("/login") && !path.includes("/auth")) {
+      clearAuthUser();
+      window.location.href = "/";
+      return;
+    }
+
     const rawMessage = data.message || null;
     const message =
       sanitizeResponseMessage(rawMessage, response.status) ||

@@ -1,22 +1,22 @@
 :root {
   --color-bg: #FAF7F2;
-  /* nền tổng thể, kem ấm */
+  /* overall background, warm cream */
   --color-surface: #FFFFFF;
-  /* nền card */
+  /* card background */
   --color-primary: #7A2E2E;
-  /* burgundy - rượu vang, dùng cho heading/active */
+  /* burgundy - wine, used for heading/active states */
   --color-primary-light: #FDF3E7;
-  /* nền active/hover nhạt */
+  /* light active/hover background */
   --color-accent-gold: #C9A227;
-  /* vàng gold - Loyalty Points, highlight */
+  /* gold - Loyalty Points, highlights */
   --color-accent-olive: #8B7355;
-  /* nâu olive - đồng bộ avatar có sẵn */
+  /* olive brown - matches default avatar */
   --color-success: #5B8C5A;
-  /* sage green - tăng trưởng dương */
+  /* sage green - positive growth */
   --color-danger: #C1440E;
-  /* terracotta - giảm/âm */
+  /* terracotta - decrease/negative */
   --color-text-main: #2B2118;
-  /* chữ chính, nâu đen ấm */
+  /* main text, warm dark brown */
   --color-text-muted: #8A7F73;
   --color-border: #ECE5DA;
   --gradient-banner: linear-gradient(135deg, #F3E5C8 0%, #EFD9D2 100%);

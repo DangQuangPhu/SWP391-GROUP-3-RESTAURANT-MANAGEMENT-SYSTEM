@@ -44,7 +44,7 @@ const ACTION_DISPLAY = {
   REJECT_RESERVATION: "Reject Request Check-in Create",
   REJECT_CHECKIN: "Reject Check-in Create",
   MANAGER_CANCELLED_RESERVATION: "Reject Request Check-in Create",
-  CANCEL_RESERVATION: "Booking Cancelled",
+  CANCEL_RESERVATION: "Reservation Cancelled",
   CUSTOMER_CANCEL_REQUEST: "Cancellation Requested",
   CUSTOMER_EDIT_REQUEST: "Edit Request Sent",
   MANAGER_RESOLVE_REQUEST: "Confirm Request Check-in Create",
@@ -332,14 +332,6 @@ function StaffReservationDetail({ reservation, userId, checkedInAt: checkedInAtP
             <p style={{ margin: 0 }}><EmptyVal val="" fallback="None" /></p>
           );
         })()}
-      </div>
-
-      {/* ── Timeline ── */}
-      <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--border-color, rgba(0,0,0,0.08))" }}>
-        <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text-color, #1a1a1a)", marginBottom: 12, display: "block" }}>
-          Reservation Timeline
-        </span>
-        <TimelineList reservationId={reservation_id} userId={userId} customerName={customer_name || reservation.contact_name} />
       </div>
     </div>
   );

@@ -142,7 +142,7 @@ export async function listStaffTables(_req, res) {
            FROM dbo.Reservations AS r
            INNER JOIN dbo.ReservationTables AS rt ON r.reservation_id = rt.reservation_id
            WHERE rt.table_id = t.table_id
-             AND r.reservation_status IN (N'Confirmed', N'Reserved', N'Await Check-in')
+             AND r.reservation_status IN (N'Await Check-in')
              AND CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
            ORDER BY r.reservation_start_at ASC
          ) AS active_reservation_id,
@@ -152,7 +152,7 @@ export async function listStaffTables(_req, res) {
            LEFT JOIN dbo.UserAccounts AS ua ON r.customer_id = ua.user_id
            INNER JOIN dbo.ReservationTables AS rt ON r.reservation_id = rt.reservation_id
            WHERE rt.table_id = t.table_id
-             AND r.reservation_status IN (N'Confirmed', N'Reserved', N'Await Check-in')
+             AND r.reservation_status IN (N'Await Check-in')
              AND CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
            ORDER BY r.reservation_start_at ASC
          ) AS active_reservation_customer_name
@@ -224,14 +224,13 @@ export async function listTodayReservations(req, res) {
        LEFT JOIN dbo.UserAccounts AS ua ON r.customer_id = ua.user_id
        LEFT JOIN dbo.CustomerProfiles AS cp ON cp.user_id = ua.user_id
        LEFT JOIN dbo.RestaurantAreas AS a ON r.preferred_area_id = a.area_id
+       WHERE r.reservation_status IN (
          N'Pending Request',
-         N'Pending Payment',
-         N'Reserved',
-         N'Confirmed',
+         N'Awaiting Deposit',
+         N'Await Check-in',
          N'Dining',
-         N'Cleaning',
-         N'Check-out',
          N'Completed',
+         N'Cancelled',
          N'No Show'
        )
        AND r.reservation_start_at >= DATEADD(day, -120, CAST(SYSDATETIME() AS DATE))${shiftFilterSql}
@@ -347,11 +346,11 @@ export async function checkInReservation(req, res) {
 
     // Replaced manual check with state machine validation in updateReservationStatus later,
     // but doing a quick preview check here:
-    if (!["Pending Request", "Pending Payment", "Paid", "Confirmed", "Reserved", "Pending"].includes(reservation.reservation_status)) {
+    if (!["Pending Request", "Awaiting Deposit", "Await Check-in", "Pending"].includes(reservation.reservation_status)) {
       await connection.rollback();
       return jsonError(
         res,
-        "Only pending or confirmed reservations can be checked in.",
+        "Only pending, awaiting deposit, or await check-in reservations can be checked in.",
         409
       );
     }
@@ -551,11 +550,11 @@ export async function rejectReservation(req, res) {
       return jsonError(res, "Reservation not found.", 404);
     }
 
-    if (!["Pending Request", "Pending Payment", "Paid", "Confirmed", "Reserved", "Pending"].includes(reservation.reservation_status)) {
+    if (!["Pending Request", "Awaiting Deposit", "Await Check-in", "Pending"].includes(reservation.reservation_status)) {
       await connection.rollback();
       return jsonError(
         res,
-        "Only pending or confirmed reservations can be rejected.",
+        "Only pending, awaiting deposit, or await check-in reservations can be rejected.",
         409
       );
     }
@@ -1745,11 +1744,12 @@ export async function getTableBill(req, res) {
       area_name: table.area_name,
       capacity: table.capacity,
       order_id: order.order_id,
-      order_status: "Billed",
+      order_status: order.order_status,
       items,
       applied_voucher: null,
       reservation_id: reservation ? reservation.reservation_id : null,
       reservation_order_code: reservation ? reservation.order_code : null,
+      reservation_deposit_amount: reservation ? Number(reservation.deposit_amount) : 0,
       reservation_remaining_balance,
       ...totals,
       total_amount: totals.total_amount + reservation_remaining_balance,
@@ -2858,5 +2858,32 @@ export async function deleteStaffTable(req, res) {
   } catch (error) {
     console.error("DELETE /api/staff/tables/:tableId failed:", error);
     return jsonError(res, "Could not delete virtual table.");
+  }
+}
+
+/**
+ * GET /api/staff/orders/:orderId/timeline
+ * Returns the timeline of events for an order.
+ */
+export async function getOrderTimeline(req, res) {
+  const orderId = Number(req.params.orderId);
+  if (!Number.isFinite(orderId)) {
+    return jsonError(res, "Invalid order id.", 400);
+  }
+
+  try {
+    const [logs] = await pool.query(
+      `SELECT a.audit_log_id, a.action_name, a.new_value_json, a.created_at, u.full_name, u.username
+       FROM dbo.AuditLogs a
+       LEFT JOIN dbo.UserAccounts u ON a.user_id = u.user_id
+       WHERE a.target_table = N'Orders' AND a.target_id = ?
+       ORDER BY a.created_at DESC`,
+      [orderId]
+    );
+
+    return res.json({ success: true, data: logs });
+  } catch (error) {
+    console.error("GET /api/staff/orders/:orderId/timeline failed:", error);
+    return jsonError(res, "Could not load order timeline.");
   }
 }

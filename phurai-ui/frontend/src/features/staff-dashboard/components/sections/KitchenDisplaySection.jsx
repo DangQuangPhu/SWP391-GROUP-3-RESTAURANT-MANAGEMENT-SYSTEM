@@ -94,7 +94,7 @@ function KitchenDisplaySection({ tickets, setTickets, dataSource, toast }) {
         subtitle={`${tickets.length} kitchen tickets in progress`}
       />
 
-      {dataSource === "mock" ? <NotConnectedNote>{DEMO_NOTICE}</NotConnectedNote> : null}
+
 
       <div className="sfx-kdsboard">
         {renderLane("Queued", lanes.queued, "muted")}

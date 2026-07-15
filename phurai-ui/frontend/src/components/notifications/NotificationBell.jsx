@@ -26,26 +26,34 @@ function formatSentAt(value) {
 
 function buildDetailLines(item, payload = {}) {
   const lines = [];
-  if (payload.reservation_id || item?.reservation_id) {
-    lines.push(`Reservation #${payload.reservation_id ?? item.reservation_id}`);
+  const resId = payload.reservation_id || payload.reservationId || item?.reservation_id || item?.reservationId;
+  const ordId = payload.order_id || payload.orderId || item?.order_id || item?.orderId;
+  const tblNum = payload.table_number || payload.tableNumber || payload.table_label;
+  const amt = payload.amount || item?.amount;
+
+  if (resId) {
+    lines.push(`Reservation: #${resId}`);
   }
-  if (payload.order_id || item?.order_id) {
-    lines.push(`Order #${payload.order_id ?? item.order_id}`);
+  if (ordId) {
+    lines.push(`Order: #${ordId}`);
   }
-  if (payload.customer_name) {
-    lines.push(`Guest: ${payload.customer_name}`);
+  if (payload.customer_name || payload.customerName) {
+    lines.push(`Guest: ${payload.customer_name || payload.customerName}`);
   }
-  if (payload.table_number || payload.table_label) {
-    lines.push(`Table: ${payload.table_number || payload.table_label}`);
+  if (tblNum) {
+    lines.push(`Table: ${tblNum}`);
   }
-  if (payload.start_time) {
-    lines.push(`Time: ${payload.start_time}`);
+  if (amt) {
+    lines.push(`Amount: ${Number(amt).toLocaleString('vi-VN')}₫`);
   }
-  if (payload.guest_count) {
-    lines.push(`Guests: ${payload.guest_count}`);
+  if (payload.start_time || payload.startTime) {
+    lines.push(`Time: ${payload.start_time || payload.startTime}`);
   }
-  if (payload.dish_name) {
-    lines.push(`Dish: ${payload.dish_name}`);
+  if (payload.guest_count || payload.guestCount) {
+    lines.push(`Guests: ${payload.guest_count || payload.guestCount}`);
+  }
+  if (payload.dish_name || payload.dishName) {
+    lines.push(`Dish: ${payload.dish_name || payload.dishName}`);
   }
   return lines;
 }
@@ -251,13 +259,37 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
       );
     };
 
+    const handleCashPending = (payload = {}) => {
+      appToastSuccess(`Table ${payload.tableNumber || 'Unknown'} requested Cash Payment (${new Intl.NumberFormat("vi-VN").format(payload.amount || 0)}đ)`);
+      const notificationId = `cash-${payload.orderId}-${Date.now()}`;
+      setNotifications((prev) =>
+        mergeNotifications(
+          [
+            {
+              notification_id: notificationId,
+              title: "Cash Payment Request",
+              message_body: `Table ${payload.tableNumber} wants to pay by cash.`,
+              notification_type: "Payment",
+              is_read: false,
+              sent_at: new Date().toISOString(),
+              _live: true,
+              _payload: payload,
+            },
+          ],
+          prev
+        )
+      );
+    };
+
     socket.on("NEW_CUSTOMER_ACTION", handleIncoming);
     socket.on("notification:new", handleSystemAlert);
     socket.on("NEW_QR_SESSION_PENDING", handleQrRequest);
+    socket.on("payment:cash_pending", handleCashPending);
     return () => {
       socket.off("NEW_CUSTOMER_ACTION", handleIncoming);
       socket.off("notification:new", handleSystemAlert);
       socket.off("NEW_QR_SESSION_PENDING", handleQrRequest);
+      socket.off("payment:cash_pending", handleCashPending);
     };
   }, [socket, listenForStaffEvents]);
 

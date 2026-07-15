@@ -15,7 +15,7 @@ export default function KitchenTicketCard({ ticket, onStatusUpdated }) {
       if (onStatusUpdated) onStatusUpdated();
     } catch (err) {
       console.error('Failed to update ticket status', err);
-      alert('Không thể cập nhật trạng thái');
+      alert('Could not update status');
     } finally {
       setIsLoading(false);
     }
@@ -66,7 +66,7 @@ export default function KitchenTicketCard({ ticket, onStatusUpdated }) {
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded-lg transition-colors flex justify-center items-center gap-2"
           >
             {isLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : <Utensils className="w-4 h-4" />}
-            Bắt đầu nấu
+            Start Cooking
           </button>
         )}
 
@@ -77,7 +77,7 @@ export default function KitchenTicketCard({ ticket, onStatusUpdated }) {
             className="w-full bg-green-500 hover:bg-green-600 disabled:bg-green-400 text-white font-medium py-2 px-4 rounded-lg transition-colors flex justify-center items-center gap-2"
           >
             {isLoading ? <span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full" /> : null}
-            Hoàn tất
+            Complete
           </button>
         )}
       </div>

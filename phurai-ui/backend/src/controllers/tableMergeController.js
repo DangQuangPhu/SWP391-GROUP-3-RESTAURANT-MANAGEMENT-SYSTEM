@@ -8,14 +8,28 @@ function getIo(req) {
 
 export async function mergeTables(req, res) {
   const { source_table_id, target_table_id } = req.body;
-  const userId = req.user?.userId || req.user?.id || null;
-  const userName = req.user?.full_name || req.user?.username || "Staff";
+  const userId = req.userId || req.user?.userId || req.user?.id || null;
+  let userName = req.user?.full_name || req.user?.username || "Staff";
   
   if (!source_table_id || !target_table_id || source_table_id === target_table_id) {
     return res.status(400).json({ success: false, message: "Invalid source or target table." });
   }
 
   const pool = await getRawPool();
+
+  if (userId && (!req.user || !req.user.full_name)) {
+    try {
+      const userRes = await pool.request()
+        .input("uid", sql.Int, userId)
+        .query("SELECT full_name FROM dbo.UserAccounts WHERE user_id = @uid");
+      if (userRes.recordset[0]) {
+        userName = userRes.recordset[0].full_name;
+      }
+    } catch (err) {
+      console.warn("Could not fetch user name for merge log:", err.message);
+    }
+  }
+
   const transaction = new sql.Transaction(pool);
 
   try {
@@ -210,7 +224,7 @@ export async function unmergeTable(req, res) {
 
     // 3. Insert AuditLog
     const reqAudit = new sql.Request(transaction);
-    reqAudit.input("userId", sql.Int, req.user?.userId || req.user?.id || null);
+    reqAudit.input("userId", sql.Int, req.userId || req.user?.userId || req.user?.id || null);
     reqAudit.input("targetId", sql.Int, parent.table_id);
     reqAudit.input("newVal", sql.NVarChar, JSON.stringify({ action: "unmerge" }));
     await reqAudit.query(`
@@ -267,7 +281,7 @@ export async function verifyClearTable(req, res) {
   try {
     const parentTableId = Number(req.params.tableId);
     const { order_id } = req.body;
-    const staff_id = req.user?.userId || req.user?.id || null;
+    const staff_id = req.userId || req.user?.userId || req.user?.id || null;
 
     if (!order_id) {
       return res.status(400).json({ success: false, message: 'order_id is required' });

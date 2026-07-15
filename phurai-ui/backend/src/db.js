@@ -40,12 +40,24 @@ function getPool() {
         -- 2. Reservations status constraint
         IF OBJECT_ID('dbo.CK_Reservations_status', 'C') IS NOT NULL
           ALTER TABLE dbo.Reservations DROP CONSTRAINT CK_Reservations_status;
-        UPDATE dbo.Reservations SET reservation_status = N'Check-in'  WHERE reservation_status = N'Checked-in';
-        UPDATE dbo.Reservations SET reservation_status = N'Cancelled' WHERE reservation_status = N'Reject Check-in';
+        
+        -- Sanitize old values to prevent check constraint conflicts
+        UPDATE dbo.Reservations SET reservation_status = N'Await Check-in' WHERE reservation_status IN (N'Confirmed', N'Confirm');
+        UPDATE dbo.Reservations SET reservation_status = N'Dining' WHERE reservation_status IN (N'Checked-in', N'Check-in');
+        UPDATE dbo.Reservations SET reservation_status = N'Cancelled' WHERE reservation_status IN (N'Reject Check-in', N'Check-in Rejected', N'Rejected');
+        
+        -- Fallback safety update for any unknown/outdated values
+        UPDATE dbo.Reservations
+        SET reservation_status = N'Cancelled'
+        WHERE reservation_status NOT IN (
+          N'Pending Request', N'Awaiting Deposit', N'Await Check-in',
+          N'Dining', N'Pending Payment', N'Completed', N'Cancelled', N'No Show'
+        );
+
         ALTER TABLE dbo.Reservations ADD CONSTRAINT CK_Reservations_status CHECK (
           reservation_status IN (
-            N'Pending Request', N'Awaiting Deposit', N'Confirmed', N'Check-in',
-            N'Dining', N'Payment Pending', N'Completed', N'Cancelled', N'No Show'
+            N'Pending Request', N'Awaiting Deposit', N'Await Check-in',
+            N'Dining', N'Pending Payment', N'Completed', N'Cancelled', N'No Show'
           )
         );
 
@@ -83,6 +95,15 @@ function getPool() {
         IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name=N'updated_at' AND Object_ID=OBJECT_ID(N'dbo.KitchenTickets'))
           ALTER TABLE dbo.KitchenTickets ADD updated_at DATETIME2(0) NOT NULL CONSTRAINT DF_KitchenTickets_updated_at DEFAULT SYSDATETIME();
 
+        -- 7. RestaurantTables position columns
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name=N'position_x' AND Object_ID=OBJECT_ID(N'dbo.RestaurantTables'))
+          ALTER TABLE dbo.RestaurantTables ADD position_x SMALLINT NOT NULL CONSTRAINT DF_RestaurantTables_px DEFAULT 0;
+        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name=N'position_y' AND Object_ID=OBJECT_ID(N'dbo.RestaurantTables'))
+          ALTER TABLE dbo.RestaurantTables ADD position_y SMALLINT NOT NULL CONSTRAINT DF_RestaurantTables_py DEFAULT 0;
+
+        -- 8. Drop Roles name check constraint to support custom roles
+        IF OBJECT_ID('dbo.CK_Roles_role_name', 'C') IS NOT NULL
+          ALTER TABLE dbo.Roles DROP CONSTRAINT CK_Roles_role_name;
 
       `).then(() => console.log("[DB] Schema synchronized."))
         .catch((err) => console.error("[DB] Schema sync error:", err.message));

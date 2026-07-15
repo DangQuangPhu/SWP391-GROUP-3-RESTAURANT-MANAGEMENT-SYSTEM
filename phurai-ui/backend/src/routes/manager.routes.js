@@ -52,6 +52,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { validateReservationUpdate } from '../middleware/validateReservation.js';
 import { createArea, updateArea, deactivateArea } from '../controllers/areaController.js';
 import { processRefund, emitRefundNotification } from '../services/refundService.js';
+import { resolveUserId, requireUserId } from '../middleware/authMiddleware.js';
 
 
 const router = express.Router();
@@ -64,6 +65,9 @@ const requireManagerOrAdmin = (req, res, next) => {
     next();
 };
 
+import { getFloorPlanData } from '../controllers/floorPlanController.js';
+import { updateTablePosition } from '../controllers/tablePositionController.js';
+
 router.patch('/qr-sessions/:id/approve', requireManagerOrAdmin, approveQrSession);
 router.post('/orders/:id/force-settle', requireManagerOrAdmin, forceSettleOrder);
 router.get('/areas', requireManagerOrAdmin, getAreas);
@@ -71,6 +75,8 @@ router.post('/areas', requireManagerOrAdmin, createArea);
 router.patch('/areas/:id', requireManagerOrAdmin, updateArea);
 router.delete('/areas/:id', requireManagerOrAdmin, deactivateArea);
 router.get('/tables-filtered', requireManagerOrAdmin, getFilteredTables);
+router.get('/floor-plan', requireManagerOrAdmin, getFloorPlanData);
+router.patch('/floor-plan/tables/:id/position', requireManagerOrAdmin, updateTablePosition);
 
 // Mock Data routes — seed removed permanently; purge only
 router.delete('/mock-data/purge', requireManagerOrAdmin, purgeMockData);
@@ -99,9 +105,9 @@ router.put('/shift-mapping/:id', requireManagerOrAdmin, updateShiftMapping);
 router.post('/tables', requireManagerOrAdmin, createTable);
 router.post('/tables/virtual', requireManagerOrAdmin, createVirtualTable);
 router.get('/next-table-number', requireManagerOrAdmin, getNextTableNumber);
-router.post('/tables/merge', requireManagerOrAdmin, mergeTables);
-router.post('/tables/unmerge', requireManagerOrAdmin, unmergeTable);
-router.get('/tables/:id/timeline', requireManagerOrAdmin, getTableTimeline);
+router.post('/tables/merge', resolveUserId, requireUserId, requireManagerOrAdmin, mergeTables);
+router.post('/tables/unmerge', resolveUserId, requireUserId, requireManagerOrAdmin, unmergeTable);
+router.get('/tables/:id/timeline', resolveUserId, requireManagerOrAdmin, getTableTimeline);
 router.patch('/tables/:id', requireManagerOrAdmin, updateTable);
 router.delete('/tables/:id', requireManagerOrAdmin, deleteTable);
 
@@ -152,6 +158,7 @@ import {
   listJobTitles,
   createEmployee,
   updateEmployee,
+  deleteEmployee,
   grantSystemAccess,
   revokeSystemAccess,
   addPerformanceReview,
@@ -165,6 +172,7 @@ router.get('/job-titles', requireManagerOrAdmin, listJobTitles);
 router.get('/employees',     requireManagerOrAdmin, listEmployees);
 router.post('/employees',    requireManagerOrAdmin, createEmployee);
 router.patch('/employees/:id', requireManagerOrAdmin, updateEmployee);
+router.delete('/employees/:id', requireManagerOrAdmin, deleteEmployee);
 
 // System Account Management
 router.post('/employees/:id/grant-access',  requireManagerOrAdmin, grantSystemAccess);

@@ -27,10 +27,10 @@ export default function AdminAccountsPage() {
 
   const handleSave = (form) => {
     if (form.id) {
-      // Update — TODO: gọi PATCH /api/admin/accounts/:id khi nối backend
+      // Update — TODO: call PATCH /api/admin/accounts/:id when connecting to backend
       setAccounts((prev) => prev.map((a) => (a.id === form.id ? { ...a, ...form } : a)));
     } else {
-      // Create — TODO: gọi POST /api/admin/accounts khi nối backend
+      // Create — TODO: call POST /api/admin/accounts when connecting to backend
       setAccounts((prev) => [
         ...prev,
         { ...form, id: nextId++, createdAt: new Date().toISOString() },
@@ -41,7 +41,7 @@ export default function AdminAccountsPage() {
   };
 
   const handleDelete = () => {
-    // TODO: gọi DELETE /api/admin/accounts/:id khi nối backend
+    // TODO: call DELETE /api/admin/accounts/:id when connecting to backend
     setAccounts((prev) => prev.filter((a) => a.id !== deletingAccount.id));
     setDeletingAccount(null);
   };

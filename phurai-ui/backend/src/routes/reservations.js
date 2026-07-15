@@ -209,7 +209,7 @@ async function expireOldHolds() {
     const [rows] = await pool.query(`
       SELECT reservation_id, reservation_start_at, special_request, reservation_status
       FROM dbo.Reservations
-      WHERE reservation_status IN (N'Pending Request', N'Confirmed', N'Reserved', N'Pending Payment')
+      WHERE reservation_status IN (N'Pending Request', N'Await Check-in', N'Awaiting Deposit')
     `);
 
     if (rows.length === 0) return;
@@ -292,11 +292,10 @@ router.get("/settings", async (_req, res) => {
 router.get("/menu", async (_req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT d.dish_id, d.dish_name, d.price, c.category_name, c.display_order
+      `SELECT d.dish_id, d.dish_name, d.price, c.category_name, c.display_order, d.is_available
        FROM dbo.Dishes d
        JOIN dbo.MenuCategories c ON d.category_id = c.category_id
-       WHERE d.is_available = 1
-         AND c.is_active = 1
+       WHERE c.is_active = 1
        ORDER BY c.display_order, d.dish_name;`
     );
 
@@ -305,6 +304,7 @@ router.get("/menu", async (_req, res) => {
       dish_name: r.dish_name,
       price: Number(r.price),
       category_name: r.category_name,
+      is_available: r.is_available === true || r.is_available === 1 || r.is_available === '1',
     }));
 
     return res.json({ success: true, dishes });
@@ -351,21 +351,22 @@ router.get("/availability", async (req, res) => {
          t.notes,
          t.table_status AS current_status,
          t.merged_into_table_id,
+         t.is_counter,
          a.area_id,
          a.area_name,
          a.area_type,
          CASE
-           WHEN t.table_status IN (N'Occupied', N'Cleaning', N'Inactive', N'Reserved')
-             THEN t.table_status
+            WHEN t.table_status = N'Inactive'
+              THEN N'Inactive'
            WHEN EXISTS (
              SELECT 1
              FROM dbo.ReservationTables rt
              JOIN dbo.Reservations r ON rt.reservation_id = r.reservation_id
              WHERE rt.table_id = t.table_id
                AND (
-                 r.reservation_status IN (N'Confirmed', N'Reserved', N'Dining')
-                 OR
-                 (r.reservation_status IN (N'Pending Request', N'Pending Payment') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
+                  r.reservation_status IN (N'Await Check-in', N'Dining')
+                  OR
+                  (r.reservation_status IN (N'Pending Request', N'Awaiting Deposit') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
                )
                AND DATEADD(minute, -60, r.reservation_start_at) < ?
                AND DATEADD(minute, 60, r.reservation_end_at) > ?
@@ -396,6 +397,7 @@ router.get("/availability", async (req, res) => {
         area_type: row.area_type,
         capacity: row.capacity,
         merged_into_table_id: row.merged_into_table_id || null,
+        is_counter: Boolean(row.is_counter),
         notes: row.notes || null,
         current_status: row.current_status,
         availability_at_slot: availability,
@@ -467,7 +469,7 @@ router.get("/table-bookings", async (req, res) => {
        FROM dbo.Reservations r
        JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
        WHERE rt.table_id = ?
-         AND r.reservation_status IN (N'Confirmed', N'Reserved', N'Dining')
+         AND r.reservation_status IN (N'Await Check-in', N'Dining')
          AND r.reservation_start_at >= ?
          AND r.reservation_start_at <= ?
        ORDER BY r.reservation_start_at ASC;`,
@@ -822,9 +824,9 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
                ), 0)
              ) AS capacity,
              t.table_status,
-             CASE
-               WHEN t.table_status IN (N'Occupied', N'Cleaning', N'Inactive', N'Reserved')
-                 THEN t.table_status
+              CASE
+                WHEN t.table_status = N'Inactive'
+                  THEN N'Inactive'
                WHEN EXISTS (
                  SELECT 1
                  FROM dbo.ReservationTables rt WITH (UPDLOCK, HOLDLOCK)
@@ -832,9 +834,9 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
                    ON rt.reservation_id = r.reservation_id
                  WHERE rt.table_id = t.table_id
                    AND (
-                     r.reservation_status IN (N'Confirmed', N'Reserved', N'Dining')
-                     OR
-                     (r.reservation_status IN (N'Pending Request', N'Pending Payment') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
+                      r.reservation_status IN (N'Await Check-in', N'Dining')
+                      OR
+                      (r.reservation_status IN (N'Pending Request', N'Awaiting Deposit') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
                    )
                     AND DATEADD(minute, -60, r.reservation_start_at) < ?
                     AND DATEADD(minute, 60, r.reservation_end_at) > ?
@@ -910,7 +912,7 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
         });
       }
 
-      const initialStatus = "Pending Payment";
+      const initialStatus = "Awaiting Deposit";
 
       // AUTO-CONFIRM: INSERT directly as 'Pending Request'
       const [scopeRows] = await connection.query(

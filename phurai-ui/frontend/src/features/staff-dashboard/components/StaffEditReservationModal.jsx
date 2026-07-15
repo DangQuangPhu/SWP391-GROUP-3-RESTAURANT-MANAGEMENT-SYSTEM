@@ -79,7 +79,7 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
     setError('');
 
     if (!form.date || !form.startTime || !form.endTime || !form.guests) {
-      setError('Vui lòng điền đầy đủ thông tin.');
+      setError('Please fill in all information.');
       return;
     }
 
@@ -92,20 +92,20 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
     const endMins = parseInt(form.endTime.split(':')[0]) * 60 + parseInt(form.endTime.split(':')[1]);
 
     if (startMins < 600) {
-      setError('Nhà hàng mở cửa từ 10:00 sáng.');
+      setError('Restaurant opens from 10:00 AM.');
       return;
     }
     if (endMins > 1440 || (endMins === 0 && form.endTime !== '00:00')) {
-      setError('Thời gian kết thúc không được vượt quá giờ đóng cửa (00:00).');
+      setError('End time cannot exceed closing time (00:00).');
       return;
     }
     if (startMins >= endMins && endMins !== 0) { // 0 can be midnight
-      setError('Giờ kết thúc phải sau giờ bắt đầu.');
+      setError('End time must be after start time.');
       return;
     }
 
     if (checkOverlap()) {
-      setError('Khung giờ này đã bị trùng với một lịch đặt khác');
+      setError('This slot overlaps with another reservation');
       return;
     }
 
@@ -145,7 +145,7 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
       <div className="staff-table-modal__panel relative z-[101]" style={{ padding: '24px', maxWidth: '400px' }}>
         <header className="staff-table-modal__head" style={{ marginBottom: '20px' }}>
           <div>
-            <h2 className="staff-table-modal__title">Chỉnh sửa lịch</h2>
+            <h2 className="staff-table-modal__title">Edit Reservation</h2>
             <p className="staff-table-modal__eyebrow">#{String(reservation.reservation_id).padStart(6, '0')} - {reservation.customer_name}</p>
           </div>
           <button type="button" className="staff-table-modal__close" onClick={onClose}>✕</button>
@@ -154,7 +154,7 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Tên khách hàng</label>
+              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Customer Name</label>
               <input
                 type="text"
                 value={form.contact_name}
@@ -163,7 +163,7 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Số điện thoại</label>
+              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Phone Number</label>
               <input
                 type="text"
                 value={form.contact_phone}
@@ -184,7 +184,7 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Ngày đặt</label>
+              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Date</label>
               <input
                 type="date"
                 value={form.date}
@@ -197,7 +197,7 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
 
           <div style={{ display: 'flex', gap: '16px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Giờ đến</label>
+              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Start Time</label>
               <input
                 type="time"
                 min="10:00"
@@ -208,7 +208,7 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Giờ kết thúc</label>
+              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>End Time</label>
               <input
                 type="time"
                 max="23:59"
@@ -221,7 +221,7 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Số khách</label>
+              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Guests</label>
               <input
                 type="number"
                 min="1"
@@ -231,17 +231,17 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Bàn số</label>
+              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Table No.</label>
               <input
                 type="number"
                 value={form.table_id}
                 onChange={e => handleUpdate('table_id', e.target.value)}
-                placeholder="Trống"
+                placeholder="Empty"
                 style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Trạng thái</label>
+              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Status</label>
               <select
                 value={form.reservation_status}
                 onChange={e => handleUpdate('reservation_status', e.target.value)}
@@ -257,7 +257,7 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Yêu cầu đặc biệt</label>
+            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Special Request</label>
             <textarea
               value={form.special_request}
               onChange={e => handleUpdate('special_request', e.target.value)}
@@ -278,7 +278,7 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
                 opacity: loading || !!error ? 0.5 : 1
               }}
             >
-              {loading ? 'Đang cập nhật...' : 'Xác nhận (Override)'}
+              {loading ? 'Updating...' : 'Confirm (Override)'}
             </button>
             <button
               type="button"

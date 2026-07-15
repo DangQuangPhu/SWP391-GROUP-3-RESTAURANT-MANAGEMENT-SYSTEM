@@ -55,12 +55,15 @@ export async function fetchRecentTransactions({ limit = 20, since = null } = {})
  * @returns {Promise<{found: boolean, transaction?: Object}>}
  */
 export async function checkPaymentReceived(orderCode, expectedAmount) {
+  if (!orderCode) {
+    return { found: false, reason: 'missing_orderCode' };
+  }
   try {
     // Look back at last 30 minutes of transactions
     const since = new Date(Date.now() - 30 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
     const transactions = await fetchRecentTransactions({ limit: 50, since });
 
-    console.log(`[SePay] Checking ${transactions.length} recent transactions for order ${orderCode}`);
+    // console.log(`[SePay] Checking ${transactions.length} recent transactions for order ${orderCode}`);
 
     for (const txn of transactions) {
       const content = (txn.transaction_content || txn.content || '').toUpperCase();

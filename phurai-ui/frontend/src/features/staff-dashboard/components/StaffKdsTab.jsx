@@ -38,80 +38,138 @@ function formatWait(seconds) {
   return `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
-// ── Ticket Card ───────────────────────────────────────────────────────────────
-function TicketCard({ ticket, busy, onAction, onCancel }) {
-  const meta = statusMeta(ticket.kitchen_status);
-  const isOverdue = ticket.is_overdue;
+// ── Order Group Card ────────────────────────────────────────────────────────────
+function OrderGroupCard({ tickets, busyId, onAction }) {
+  if (!tickets || tickets.length === 0) return null;
+  
+  const first = tickets[0];
+  const isOverdue = tickets.some(t => t.is_overdue);
+  const isPending = first.kitchen_status === "Pending";
+  const isSent = first.kitchen_status === "Sent To Kitchen";
+  const isPreparing = first.kitchen_status === "Preparing";
+  const isReady = first.kitchen_status === "Ready";
 
-  const canSendToKitchen = ticket.kitchen_status === "Pending";
-  const canMarkServed    = ticket.kitchen_status === "Ready";
-  const canFreeCancel    = ["Pending", "Sent To Kitchen"].includes(ticket.kitchen_status);
-  const isBusy = busy === ticket.kitchen_ticket_id;
+  const handleGroupAction = async (newStatus) => {
+    for (const t of tickets) {
+      await onAction(t, newStatus);
+    }
+  };
+
+  const totalItems = tickets.reduce((sum, t) => sum + t.quantity, 0);
+
+  const getStatusPill = () => {
+    if (isPreparing) return { label: "Cooking", bg: "#fce8e8", color: "#c94f4f" };
+    if (isSent) return { label: "In Progress", bg: "#fdf3e7", color: "#b87c3a" };
+    if (isReady) return { label: "Ready", bg: "#e9f5e9", color: "#4caf50" };
+    return { label: "Pending", bg: "#f4f6f8", color: "#6b7280" };
+  };
+
+  const pill = getStatusPill();
+
+  const actionButtonStyle = {
+    background: "#a88658",
+    color: "#fff",
+    borderRadius: "10px",
+    border: "none",
+    padding: "8px 16px",
+    fontWeight: "700",
+    fontSize: "13px",
+    cursor: "pointer",
+    boxShadow: "0 2px 4px rgba(168, 134, 88, 0.2)"
+  };
 
   return (
     <article
       style={{
-        background: isOverdue ? "rgba(224,82,82,.08)" : "var(--surface-1, #1e1e1e)",
-        border: `1px solid ${isOverdue ? "rgba(224,82,82,.4)" : "var(--border, #2a2a2a)"}`,
-        borderRadius: "12px",
-        padding: "14px 16px",
+        background: isOverdue ? "#fff9f9" : "#ffffff",
+        border: isOverdue ? "1px solid #fca5a5" : "none",
+        borderRadius: "16px",
+        padding: "20px",
         display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "space-between",
-        gap: "12px",
+        flexDirection: "column",
+        gap: "16px",
+        boxShadow: "0 2px 16px rgba(0,0,0,0.06)"
       }}
     >
-      {/* Priority indicator */}
-      {ticket.priority_level >= 4 && (
-        <div style={{ width: "3px", background: "#f0a500", borderRadius: "2px", alignSelf: "stretch", flexShrink: 0 }} />
-      )}
-
-      {/* Info */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
-          <span style={{ fontWeight: "600", fontSize: "15px" }}>{ticket.dish_name}</span>
-          <span style={{
-            fontSize: "11px", padding: "2px 8px", borderRadius: "12px", fontWeight: "500",
-            background: meta.bg, color: meta.color,
-          }}>
-            {meta.label}
-          </span>
-          {isOverdue && (
-            <span style={{ fontSize: "11px", color: "#e05252", fontWeight: "600" }}>⚠ OVERDUE</span>
-          )}
-        </div>
-        <div style={{ fontSize: "12px", color: "var(--text-muted, #888)", display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <span>Table {ticket.table_number ?? "—"}</span>
-          <span>×{ticket.quantity}</span>
-          {ticket.category_name && <span>{ticket.category_name}</span>}
-          {ticket.wait_time_seconds > 0 && (
-            <span style={{ color: isOverdue ? "#e05252" : undefined }}>
-              Wait: {formatWait(ticket.wait_time_seconds)}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontWeight: "800", fontSize: "20px", color: "#2d2d2d" }}>
+              Table {first.table_number ?? "—"}
             </span>
-          )}
-          {ticket.special_notes && (
-            <span style={{ color: "#f0a500", fontStyle: "italic" }}>📝 {ticket.special_notes}</span>
-          )}
+            {first.order_type?.includes("QR") && (
+              <span style={{
+                fontSize: "11px", padding: "2px 6px", borderRadius: "6px", fontWeight: "700",
+                background: "#ffeed6", color: "#d97706"
+              }}>
+                QR
+              </span>
+            )}
+          </div>
+          <span style={{ fontSize: "13px", color: "#888", fontWeight: "500" }}>
+            {totalItems} items
+          </span>
         </div>
+        
+        <span style={{
+          background: pill.bg, color: pill.color,
+          padding: "4px 12px", borderRadius: "20px",
+          fontSize: "12px", fontWeight: "700"
+        }}>
+          {pill.label}
+        </span>
       </div>
 
-      {/* Actions */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "6px", flexShrink: 0 }}>
-        {canSendToKitchen && (
-          <Button size="sm" variant="primary" onClick={() => onAction(ticket, "Sent To Kitchen")} disabled={isBusy}>
-            {isBusy ? "…" : "Send to Kitchen"}
-          </Button>
-        )}
-        {canMarkServed && (
-          <Button size="sm" variant="success" onClick={() => onAction(ticket, "Served")} disabled={isBusy}>
-            {isBusy ? "…" : "Mark Served"}
-          </Button>
-        )}
-        {canFreeCancel && (
-          <Button size="sm" variant="ghost" onClick={() => onCancel(ticket)} disabled={isBusy}>
-            Cancel
-          </Button>
-        )}
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        {tickets.map(t => (
+          <div key={t.kitchen_ticket_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <span style={{ fontWeight: "700", fontSize: "15px", color: "#4a4a4a" }}>{t.dish_name}</span>
+              {t.special_notes && (
+                <span style={{ fontSize: "12px", color: "#b87c3a", fontStyle: "italic", marginTop: "2px" }}>* {t.special_notes}</span>
+              )}
+            </div>
+            <span style={{ fontWeight: "800", fontSize: "15px", color: "#2d2d2d", whiteSpace: "nowrap" }}>
+              × {t.quantity}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
+        <div>
+          {first.reservation_start_at && isPending && (
+            <span style={{ color: "#4a90e2", fontWeight: "600", fontSize: "12px" }}>
+              Start: {new Date(new Date(first.reservation_start_at).getTime() - 15 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          {isOverdue && (
+            <span style={{ fontSize: "12px", color: "#e05252", fontWeight: "700" }}>OVERDUE</span>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: "8px", marginLeft: "auto" }}>
+          {isPending && (
+            <button style={actionButtonStyle} onClick={() => handleGroupAction("Sent To Kitchen")} disabled={!!busyId}>
+              Send to Kitchen
+            </button>
+          )}
+          {isSent && (
+            <button style={actionButtonStyle} onClick={() => handleGroupAction("Preparing")} disabled={!!busyId}>
+              Start Cooking
+            </button>
+          )}
+          {isPreparing && (
+            <button style={actionButtonStyle} onClick={() => handleGroupAction("Ready")} disabled={!!busyId}>
+              Mark Ready
+            </button>
+          )}
+          {isReady && (
+            <button style={{...actionButtonStyle, background: "#4caf50", boxShadow: "0 2px 4px rgba(76, 175, 80, 0.2)"}} onClick={() => handleGroupAction("Served")} disabled={!!busyId}>
+              Mark Served
+            </button>
+          )}
+        </div>
       </div>
     </article>
   );
@@ -168,7 +226,6 @@ function StaffKdsTab({ user, toast, onRefresh, refreshing }) {
   const [busyId, setBusyId]         = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [cancelTarget, setCancelTarget] = useState(null); // ticket | null
-  const [dataSource, setDataSource] = useState("mock");
   const [activeFilter, setActiveFilter] = useState("all"); // 'all' | 'ready' | 'preparing' | 'pending'
 
   const userId = user?.userId ?? user?.user_id ?? user?.id;
@@ -181,7 +238,6 @@ function StaffKdsTab({ user, toast, onRefresh, refreshing }) {
       const rows = Array.isArray(res?.data) ? res.data : [];
       setQueue(rows);
       setReadyItems(rows.filter(t => t.kitchen_status === "Ready"));
-      setDataSource(res?.source === "api" ? "api" : "mock");
       setLastUpdated(new Date());
     } catch {
       // Fall back to legacy endpoints
@@ -218,13 +274,14 @@ function StaffKdsTab({ user, toast, onRefresh, refreshing }) {
       "NEW_KITCHEN_ORDER", "NEW_KITCHEN_TICKET", "kitchen:new_preorder",
       "kitchen:new_ticket", "kds:clear_order", "kitchen:dish_ready",
       "kitchen:dish_cancelled", "kitchen:dish_preparing", "kds:ticket_updated",
+      "kds:ticket_cancelled", "ORDER_ITEM_CANCELLED"
     ];
     events.forEach(e => socket.on(e, reload));
     return () => events.forEach(e => socket.off(e, reload));
   }, [socket, loadQueue, onRefresh]);
 
   // ── FSM action ──────────────────────────────────────────────────────────────
-  const handleAction = async (ticket, newStatus) => {
+  const handleAction = useCallback(async (ticket, newStatus) => {
     setBusyId(ticket.kitchen_ticket_id);
     try {
       const res = await updateKitchenTicketFSM(ticket.kitchen_ticket_id, {
@@ -248,7 +305,24 @@ function StaffKdsTab({ user, toast, onRefresh, refreshing }) {
       setBusyId(null);
       loadQueue(true);
     }
-  };
+  }, [toast, loadQueue, onRefresh]);
+
+  // ── Auto-transition pre-orders ─────────────────────────────────────────────
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      queue.forEach((ticket) => {
+        if (ticket.kitchen_status === "Pending" && ticket.reservation_start_at) {
+          const startAt = new Date(ticket.reservation_start_at);
+          const diffMins = (startAt - now) / 60000;
+          if (diffMins <= 15 && diffMins > -120) { // Add safety boundary so it doesn't fire for very old reservations
+            handleAction(ticket, "Sent To Kitchen");
+          }
+        }
+      });
+    }, 15000); // Check every 15s
+    return () => clearInterval(timer);
+  }, [queue, handleAction]);
 
   // ── Cancel (free cancel — Pending/Sent To Kitchen) ──────────────────────────
   const handleCancelConfirm = async (reason) => {
@@ -275,20 +349,7 @@ function StaffKdsTab({ user, toast, onRefresh, refreshing }) {
     }
   };
 
-  // ── Filter ──────────────────────────────────────────────────────────────────
-  const FILTER_OPTS = [
-    { id: "all",       label: "All" },
-    { id: "Ready",     label: `Ready (${queue.filter(t => t.kitchen_status === "Ready").length})` },
-    { id: "Preparing", label: `Preparing (${queue.filter(t => t.kitchen_status === "Preparing").length})` },
-    { id: "Sent To Kitchen", label: `Sent (${queue.filter(t => t.kitchen_status === "Sent To Kitchen").length})` },
-    { id: "Pending",   label: `Pending (${queue.filter(t => t.kitchen_status === "Pending").length})` },
-  ];
-
-  const displayed = activeFilter === "all"
-    ? [...queue].sort((a, b) => (statusMeta(b.kitchen_status).order - statusMeta(a.kitchen_status).order) || new Date(a.sent_at) - new Date(b.sent_at))
-    : queue.filter(t => t.kitchen_status === activeFilter);
-
-  const overdueCount = queue.filter(t => t.is_overdue).length;
+  // Kanban layout replaced the old filter and summary strip
 
   return (
     <div className="staff-kds-tab">
@@ -296,76 +357,87 @@ function StaffKdsTab({ user, toast, onRefresh, refreshing }) {
         title="Kitchen Display"
         subtitle="Live kitchen queue — send items, track progress, confirm service"
         actions={
-          <Button variant="ghost" size="sm" icon="refresh" onClick={() => { onRefresh?.(); loadQueue(false); }} disabled={refreshing || loading}>
-            Refresh
-          </Button>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {lastUpdated && (
+              <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                Updated: {lastUpdated.toLocaleTimeString("vi-VN")}
+              </span>
+            )}
+            <Button variant="ghost" size="sm" icon="refresh" onClick={() => { onRefresh?.(); loadQueue(false); }} disabled={refreshing || loading}>
+              Refresh
+            </Button>
+          </div>
         }
       />
 
-      {/* Summary strip */}
-      <div style={{ display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap" }}>
-        {[
-          { label: "Ready to Serve", value: queue.filter(t => t.kitchen_status === "Ready").length, color: "#4caf7d" },
-          { label: "Preparing",      value: queue.filter(t => t.kitchen_status === "Preparing").length, color: "#4a90e2" },
-          { label: "Overdue",        value: overdueCount, color: overdueCount > 0 ? "#e05252" : "var(--text-muted)" },
-          { label: "In Queue",       value: queue.length, color: "var(--text-muted)" },
-        ].map(s => (
-          <div key={s.label} style={{
-            padding: "10px 16px", borderRadius: "10px", background: "var(--surface-1, #1e1e1e)",
-            border: "1px solid var(--border, #2a2a2a)", textAlign: "center", minWidth: "90px"
-          }}>
-            <div style={{ fontSize: "22px", fontWeight: "700", color: s.color }}>{s.value}</div>
-            <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{s.label}</div>
-          </div>
-        ))}
-        {lastUpdated && (
-          <div style={{ alignSelf: "center", fontSize: "11px", color: "var(--text-muted)", marginLeft: "auto" }}>
-            Updated {lastUpdated.toLocaleTimeString("vi-VN")}
-          </div>
-        )}
-      </div>
-
-      {/* Filter pills */}
-      <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" }}>
-        {FILTER_OPTS.map(f => (
-          <button
-            key={f.id}
-            onClick={() => setActiveFilter(f.id)}
-            style={{
-              padding: "6px 14px", borderRadius: "20px", border: "none", cursor: "pointer", fontSize: "12px",
-              fontWeight: activeFilter === f.id ? "600" : "400",
-              background: activeFilter === f.id ? "var(--accent, #c8a96e)" : "var(--surface-2, #252525)",
-              color: activeFilter === f.id ? "#fff" : "var(--text-muted, #aaa)",
-            }}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Ticket list */}
-      {loading ? (
+      {/* Kanban Board */}
+      {loading && queue.length === 0 ? (
         <div className="sfx-loading staff-kds-tab__loading">
           <span className="sfx-spinner" />
           <p>Loading kitchen queue…</p>
         </div>
-      ) : displayed.length === 0 ? (
-        <EmptyState
-          icon="fire"
-          title={activeFilter === "all" ? "Queue empty" : `No ${activeFilter} items`}
-          hint="Tickets appear when orders are placed or sent to kitchen"
-        />
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          {displayed.map(ticket => (
-            <TicketCard
-              key={ticket.kitchen_ticket_id}
-              ticket={ticket}
-              busy={busyId}
-              onAction={handleAction}
-              onCancel={setCancelTarget}
-            />
-          ))}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, minmax(300px, 1fr))",
+          gap: "20px",
+          alignItems: "stretch",
+          minHeight: "500px",
+          marginTop: "20px",
+          width: "100%"
+        }}>
+          {["Pending", "Sent To Kitchen", "Preparing", "Ready"].map(status => {
+            const colTickets = queue.filter(t => t.kitchen_status === status);
+            const statusLabel = status === "Sent To Kitchen" ? "Sent" : status;
+            
+            const markerColor = 
+              status === "Pending" ? "#f5a623" :
+              status === "Sent To Kitchen" ? "#4a90e2" :
+              status === "Preparing" ? "#bd10e0" : "#7ed321";
+
+            return (
+              <div key={status} style={{
+                background: "#f3f4f6",
+                border: "1px solid #e5e7eb",
+                borderRadius: "16px",
+                padding: "16px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "16px",
+                minHeight: "350px",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "12px", borderBottom: "2px solid #e5e7eb", marginBottom: "4px", paddingLeft: "4px", paddingRight: "4px" }}>
+                  <h3 style={{ fontSize: "16px", fontWeight: "800", margin: 0, color: "#2d2d2d" }}>{statusLabel}</h3>
+                  <span style={{ background: "#e5e7eb", padding: "2px 10px", borderRadius: "12px", fontSize: "12px", fontWeight: "700", color: "#555" }}>
+                    {colTickets.length}
+                  </span>
+                </div>
+                {colTickets.length === 0 ? (
+                  <div style={{ color: "#9ca3af", fontSize: "13px", textAlign: "center", padding: "20px 0", fontWeight: "500" }}>
+                    No {statusLabel.toLowerCase()} items
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    {Object.values(
+                      colTickets.reduce((acc, ticket) => {
+                        const key = ticket.order_id || `${ticket.table_number}-${ticket.sent_at}`;
+                        if (!acc[key]) acc[key] = [];
+                        acc[key].push(ticket);
+                        return acc;
+                      }, {})
+                    ).map((groupTickets, i) => (
+                      <OrderGroupCard
+                        key={groupTickets[0].order_id || i}
+                        tickets={groupTickets}
+                        busyId={busyId}
+                        onAction={handleAction}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

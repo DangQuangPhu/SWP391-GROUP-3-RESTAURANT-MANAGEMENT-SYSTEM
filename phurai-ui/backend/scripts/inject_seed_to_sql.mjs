@@ -268,7 +268,7 @@ export function generateAllData() {
                 if (prng.chance(0.8)) {
                     const shiftId = prng.nextRange(1, 2);
                     const uid = s.user_id;
-                    const sid = (uid === 2) ? 1 : (uid === 3) ? 2 : (uid === 4) ? 3 : (uid === 5) ? 4 : (uid === 6) ? 5 : (uid === 14) ? 6 : null;
+                    const sid = (uid === 2) ? 1 : (uid === 3) ? 2 : (uid === 4) ? 3 : (uid === 14) ? 7 : null;
                     allStaffSchedules.push(`(${uid}, ${sid}, ${shiftId}, '${currentDate.toISOString().split('T')[0]}', N'Present', 1, '${currentDate.toISOString()}', '${currentDate.toISOString()}')`);
                 }
             }
@@ -279,7 +279,7 @@ export function generateAllData() {
                 let rating = prng.chance(0.9) ? prng.nextRange(35, 50)/10.0 : prng.nextRange(20, 30)/10.0;
                 // mapping to staff_id
                 const uid = s.user_id;
-                const sid = (uid === 2) ? 1 : (uid === 3) ? 2 : (uid === 4) ? 3 : (uid === 5) ? 4 : (uid === 6) ? 5 : (uid === 14) ? 6 : null;
+                const sid = (uid === 2) ? 1 : (uid === 3) ? 2 : (uid === 4) ? 3 : (uid === 14) ? 7 : null;
                 allPerformanceReviews.push(`(${sid}, ${rating}, N'Monthly Review', 1, '${currentDate.toISOString().split('T')[0]}', '${currentDate.toISOString()}')`);
             }
         }
@@ -709,7 +709,7 @@ FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART
 
 -- Upcoming Confirmed Reservation (No Order/Payment yet)
 INSERT INTO dbo.Reservations (customer_id, contact_name, contact_phone, contact_email, preferred_area_id, reservation_start_at, reservation_end_at, guest_count, special_request, deposit_amount, final_total, reservation_status, created_at)
-SELECT source.user_id, N'Dang Quang Phu', '0901000001', N'phuadmin@phurai.vn', @AreaId, DATEADD(day, 2, GETDATE()), DATEADD(day, 2, DATEADD(hour, 2, GETDATE())), 6, N'Private room', 500000.00, NULL, N'Confirmed', DATEADD(day, -1, GETDATE())
+SELECT source.user_id, N'Dang Quang Phu', '0901000001', N'phuadmin@phurai.vn', @AreaId, DATEADD(day, 2, GETDATE()), DATEADD(day, 2, DATEADD(hour, 2, GETDATE())), 6, N'Private room', 500000.00, NULL, N'Await Check-in', DATEADD(day, -1, GETDATE())
 FROM @PhuUsers source;
 
 COMMIT TRANSACTION;
@@ -725,7 +725,111 @@ if (currentContent.includes(marker)) {
     currentContent = currentContent.split(marker)[0];
 }
 
-const finalOutput = currentContent.trim() + '\n\n' + phuDataSql;
+function generateReviewsSql() {
+  const comments12 = [
+    "Worst service ever. We waited 45 minutes for our table.",
+    "The meat was cold and tough. Very disappointed.",
+    "Too expensive for subpar quality. Service was also inattentive.",
+    "Extremely noisy and the table was dirty. Food was cold.",
+    "Bad experience. The staff was rude when we complained about the food.",
+    "Food was bland and overpriced. Will not return.",
+    "Poor customer service. No one checked on our table.",
+    "Very slow service, and the food was not cooked properly."
+  ];
+
+  const comments3 = [
+    "The food was decent but service was quite slow.",
+    "Average experience. The atmosphere was good but food was a bit salty.",
+    "A bit overpriced for the portion size, but taste was okay.",
+    "Decent steak, but nothing special. Ambiance was nice though.",
+    "Good drinks, but the main courses took too long to arrive.",
+    "Decent experience. Food was okay, service could be improved.",
+    "Nothing outstanding, just your average restaurant."
+  ];
+
+  const comments45 = [
+    "Absolutely stunning. Japanese A5 Wagyu was perfect.",
+    "Black Cod Miso was divine. Staff were warm throughout.",
+    "Best tasting menu in the city. Every dish was a work of art.",
+    "Salmon Mentaiko beautifully presented. Will return for omakase.",
+    "Wonderful service and Wagyu was incredibly delicious!",
+    "Exquisite dining experience! The ambiance was lovely.",
+    "Highly recommend the chef's special. Will definitely come back.",
+    "Excellent service and food quality. A must-visit place.",
+    "Outstanding dishes, every bite was flavorful.",
+    "Attentive staff and great food. The desserts were amazing.",
+    "A truly memorable meal. The wagyu beef literally melted in my mouth.",
+    "Perfect ambiance for our anniversary. The service was impeccable.",
+    "Fabulous food! The presentation was as good as the taste.",
+    "Superb experience. Highly professional staff and great flavors."
+  ];
+
+  const reviewRows = [];
+  const reviewPrng = new LCG(99);
+
+  for (let i = 0; i < 100; i++) {
+    const customerId = reviewPrng.nextElement([7, 8, 9, 10, 11, 12, 13, 15]);
+
+    const roll = reviewPrng.next();
+    let baseRating;
+    if (roll < 0.10) {
+      baseRating = 1;
+    } else if (roll < 0.25) {
+      baseRating = 2;
+    } else if (roll < 0.50) {
+      baseRating = 3;
+    } else if (roll < 0.75) {
+      baseRating = 4;
+    } else {
+      baseRating = 5;
+    }
+
+    const getRating = (base) => {
+      const noise = reviewPrng.nextRange(-1, 1);
+      return Math.max(1, Math.min(5, base + noise));
+    };
+
+    const food = getRating(baseRating);
+    const service = getRating(baseRating);
+    const ambiance = getRating(baseRating);
+    
+    const overall = Math.round((food + service + ambiance) / 3);
+
+    let comment = "NULL";
+    if (reviewPrng.chance(0.60)) {
+      let text = "";
+      if (overall <= 2) {
+        text = reviewPrng.nextElement(comments12);
+      } else if (overall === 3) {
+        text = reviewPrng.nextElement(comments3);
+      } else {
+        text = reviewPrng.nextElement(comments45);
+      }
+      comment = `N'${text.replace(/'/g, "''")}'`;
+    }
+
+    const dateOffsetDays = reviewPrng.nextRange(0, 180);
+    const reviewDate = new Date();
+    reviewDate.setDate(reviewDate.getDate() - dateOffsetDays);
+    const dateStr = reviewDate.toISOString().slice(0, 19).replace('T', ' ');
+
+    reviewRows.push(`(${customerId}, NULL, ${food}, ${service}, ${ambiance}, ${comment}, 1, '${dateStr}')`);
+  }
+
+  return `
+-- ==========================================
+-- 100 REALISTIC MOCK REVIEWS SEED
+-- ==========================================
+DELETE FROM dbo.CustomerReviews;
+GO
+INSERT INTO dbo.CustomerReviews (customer_id, order_id, food_rating, service_rating, ambiance_rating, comment, is_visible, created_at) VALUES
+${reviewRows.join(',\n')};
+GO
+`;
+}
+
+const reviewsSql = generateReviewsSql();
+const finalOutput = currentContent.trim() + '\n\n' + phuDataSql + '\n\n' + reviewsSql;
 
 fs.writeFileSync(sqlFile, finalOutput);
-console.log("✅ Successfully injected PHU 6-MONTH TEST DATA natively into System_Restaurant.sql!");
+console.log("✅ Successfully injected PHU 6-MONTH TEST DATA and 100 REALISTIC REVIEWS into System_Restaurant.sql!");

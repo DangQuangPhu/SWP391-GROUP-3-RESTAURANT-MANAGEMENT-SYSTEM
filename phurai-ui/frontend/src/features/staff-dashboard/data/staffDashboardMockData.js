@@ -69,7 +69,7 @@ export const STAFF_PAYMENT_BILL = {
       quantity: 1,
       unit_price: 320000,
       line_total: 320000,
-      notes: "Ít cay",
+      notes: "Less spicy",
       item_status: "Ready",
     },
     {

@@ -143,7 +143,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
     try {
       const params = {
         page: currentPage,
-        limit: 20,
+        limit: 10,
         search,
         status: statusFilter,
       };
@@ -620,6 +620,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
           <table className="sfx-table sfx-table--hover staff-reservations-table" style={{ background: "#ffffff" }}>
             <thead>
               <tr style={{ background: "#ffffff" }}>
+                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle", width: '50px' }}>#</th>
                 <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Reservation ID</th>
                 <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Date</th>
                 <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Customer</th>
@@ -634,7 +635,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
               initial="hidden"
               animate="visible"
             >
-              {sortedFiltered.filter(Boolean).map((r) => {
+              {sortedFiltered.filter(Boolean).map((r, index) => {
                 const currentId = r.id || r.reservation_id;
                 // Use display_status (computed by backend CASE expression) over raw reservation_status
                 const displayStatusRaw = r.display_status || r.reservation_status || RESERVATION_STATUS.PENDING_PAYMENT;
@@ -655,6 +656,10 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                     variants={listItemVariants}
                     style={{ background: "#ffffff" }}
                   >
+                    {/* Index Sequence */}
+                    <td style={{ fontSize: 13, fontWeight: 600, color: "#555", textAlign: "center", verticalAlign: "middle" }}>
+                      {(currentPage - 1) * 10 + index + 1}
+                    </td>
                     {/* Reservation ID — sans-serif, black */}
                     <td style={{ fontSize: 13, fontWeight: 600, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
                       #{String(currentId).padStart(6, "0")}
@@ -1076,22 +1081,22 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                           SEED_TEST_RESERVATION: "#c9a96e",
                         };
                         const ACTION_LABEL = {
-                          RESERVATION_CREATED: "Reservation Create",
-                          CHECK_IN_RESERVATION: "Confirm Check-in Create",
-                          STAFF_CHECKIN_CONFIRMED: "Confirm Check-in Create",
-                          PAYMENT_CHECKOUT_AUTO: "Complete Paid Create",
-                          STAFF_CHECKOUT_CONFIRMED: "Confirm Check-out Created",
-                          REJECT_RESERVATION: "Reject Request Check-in Create",
-                          REJECT_CHECKIN: "Reject Check-in Create",
-                          MANAGER_CONFIRMED: "Confirm Request Check-in Create",
-                          MANAGER_RESOLVE_REQUEST: "Confirm Request Check-in Create",
+                          RESERVATION_CREATED: "Reservation Created",
+                          CHECK_IN_RESERVATION: "Check-in Confirmed",
+                          STAFF_CHECKIN_CONFIRMED: "Check-in Confirmed",
+                          PAYMENT_CHECKOUT_AUTO: "Payment Completed",
+                          STAFF_CHECKOUT_CONFIRMED: "Check-out Confirmed",
+                          REJECT_RESERVATION: "Reservation Rejected",
+                          REJECT_CHECKIN: "Check-in Rejected",
+                          MANAGER_CONFIRMED: "Manager Confirmed",
+                          MANAGER_RESOLVE_REQUEST: "Manager Approved",
                           MANAGER_APPROVED_EDIT: "Edit Approved",
-                          MANAGER_DECLINE_REQUEST: "Reject Request Check-in Create",
-                          CANCEL_RESERVATION: "Booking Cancelled",
+                          MANAGER_DECLINE_REQUEST: "Edit Request Rejected",
+                          CANCEL_RESERVATION: "Reservation Cancelled",
                           STAFF_SEND_COOKING_QUEUE: "Sent to Kitchen",
                           "Staff Send Cooking Queue": "Sent to Kitchen",
                           SEED_TEST_RESERVATION: "Seed Test Reservation",
-                          REJECT_CHECKOUT: "Reject Check-out Created",
+                          REJECT_CHECKOUT: "Check-out Rejected",
                         };
                         const color = ACTION_COLOR[hist.action_name] || "#8a8175";
                         const label = ACTION_LABEL[hist.action_name] || hist.label || hist.action_name;
@@ -1138,10 +1143,16 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                                   By {actorRole}{hist.action_name === "RESERVATION_CREATED" ? " : " : " "}{performerName}{destInfo}
                                 </span>
                               )}
-                              {hist.notes && (hist.notes.cancel_reason || hist.notes.reject_reason || hist.notes.reason) && (
-                                <div style={{ fontSize: "12px", color: "#ef4444", marginTop: 4 }}>
-                                  Reason: {hist.notes.cancel_reason || hist.notes.reject_reason || hist.notes.reason}
-                                </div>
+                              {hist.notes && (
+                                typeof hist.notes === "string" ? (
+                                  <div style={{ fontSize: "12px", color: "#ef4444", marginTop: 4 }}>
+                                    Reason: {hist.notes}
+                                  </div>
+                                ) : (hist.notes.cancel_reason || hist.notes.reject_reason || hist.notes.reason) ? (
+                                  <div style={{ fontSize: "12px", color: "#ef4444", marginTop: 4 }}>
+                                    Reason: {hist.notes.cancel_reason || hist.notes.reject_reason || hist.notes.reason}
+                                  </div>
+                                ) : null
                               )}
                             </div>
                           </div>
@@ -1166,7 +1177,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
       >
         <div className="sfx-form sfx-form--vert">
           <p className="sfx-text-muted" style={{ marginBottom: "20px" }}>
-            Are you sure you want to {pendingAction?.type} booking #{String(pendingAction?.reservation?.reservation_id || pendingAction?.reservation?.id).padStart(6, "0")}? This will notify the customer.
+            Are you sure you want to {pendingAction?.type} reservation #{String(pendingAction?.reservation?.reservation_id || pendingAction?.reservation?.id).padStart(6, "0")}? This will notify the customer.
           </p>
 
           <div className="sfx-detail">
@@ -1300,12 +1311,12 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
             </h3>
             <p style={{ margin: "0 0 18px", fontSize: "13px", color: "var(--sfx-muted)", lineHeight: 1.6 }}>
               {resolveConfirmPending.type === "cancel" && resolveConfirmPending.decision === "process"
-                ? `This will cancel booking #${String(active?.reservation_id || "").padStart(6, "0")}, release the table, and send a refund confirmation email. This cannot be undone.`
+                ? `This will cancel reservation #${String(active?.reservation_id || "").padStart(6, "0")}, release the table, and send a refund confirmation email. This cannot be undone.`
                 : resolveConfirmPending.type === "cancel" && resolveConfirmPending.decision === "reject"
-                  ? `Reject the cancellation request. Booking #${String(active?.reservation_id || "").padStart(6, "0")} stays Confirmed.`
+                  ? `Reject the cancellation request. Reservation #${String(active?.reservation_id || "").padStart(6, "0")} stays Await Check-in.`
                   : resolveConfirmPending.decision === "confirm"
-                    ? `Apply all requested changes to booking #${String(active?.reservation_id || "").padStart(6, "0")}. A confirmation email with the comparison table will be sent to the customer.`
-                    : `Decline the edit request for booking #${String(active?.reservation_id || "").padStart(6, "0")}. The original booking remains unchanged and the customer will be notified.`}
+                    ? `Apply all requested changes to reservation #${String(active?.reservation_id || "").padStart(6, "0")}. A confirmation email with the comparison table will be sent to the customer.`
+                    : `Decline the edit request for reservation #${String(active?.reservation_id || "").padStart(6, "0")}. The original reservation remains unchanged and the customer will be notified.`}
             </p>
             {/* Reject reason input for edit decline */}
             {resolveConfirmPending.type !== "cancel" && resolveConfirmPending.decision === "decline" && (

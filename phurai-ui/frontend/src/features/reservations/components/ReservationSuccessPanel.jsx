@@ -13,7 +13,7 @@ const QUICK_NOTES = [
 
 function ReservationSuccessPanel({ reservation, onReturnHome, onViewReservation }) {
   const [countdown, setCountdown] = useState(5);
-  const [hasRated, setHasRated] = useState(false);
+  const [hasRated, setHasRated] = useState(true);
   
   // Rating states
   const [rating, setRating] = useState(0);

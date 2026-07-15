@@ -458,6 +458,21 @@ async function grantWelcomeVoucher(userId) {
         0, SYSDATETIME())
     `, [userId]);
 
+    // Real-time socket notification push
+    try {
+      const { getIO } = await import("../socket.js");
+      const io = getIO();
+      if (io) {
+        io.to(`user_${userId}`).emit("STAFF_ACTION_UPDATE", {
+          title: "🎉 Welcome Gift Received!",
+          message: `You have received a welcome voucher (${voucherCode}). Use it on your first order or reservation!`,
+          type: "Promotion"
+        });
+      }
+    } catch (socketErr) {
+      console.warn('[Auth] Socket emit failed for welcome voucher:', socketErr.message);
+    }
+
   } catch (err) {
     // Non-fatal — log and continue
     console.warn('[Auth] grantWelcomeVoucher failed (non-fatal):', err.message);
