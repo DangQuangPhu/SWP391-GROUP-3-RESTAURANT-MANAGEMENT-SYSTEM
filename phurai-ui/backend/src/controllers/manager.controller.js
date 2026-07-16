@@ -1,5 +1,4 @@
 import { query, withTransaction }       from '../config/db.js';
-import { resolveShift, getShiftStaff } from '../services/shift.service.js';
 import { saveNotification, TYPE }       from '../services/notification.service.js';
 import { writeAudit, ACTION }           from '../services/audit.service.js';
 import { createError }                  from '../middleware/errorHandler.js';
@@ -148,8 +147,7 @@ export async function confirmReservation(req, res, next) {
     if (existing.reservation_status !== RESERVATION_STATUS.PENDING_REQUEST && existing.reservation_status !== RESERVATION_STATUS.PENDING_LEGACY)  throw createError(409,
       `Cannot confirm. Current status is "${existing.reservation_status}".`);
 
-    const shift      = await resolveShift(existing.reservation_start_at);
-    const shiftStaff = await getShiftStaff(shift.shift_id, new Date(existing.reservation_start_at));
+    // Shift resolution removed
 
     const result = await withTransaction(async (tx) => {
       const updated = await tx(
@@ -233,21 +231,7 @@ export async function confirmReservation(req, res, next) {
       const custName = customer?.full_name || 'Walk-in Guest';
       const arrivalStr = new Date(existing.reservation_start_at).toLocaleString('en-GB');
 
-      for (const staff of shiftStaff) {
-        await saveNotification(tx, {
-          userId: staff.user_id,
-          type:   TYPE.BOOKING_CONFIRMED,
-          title:  `Reservation #${id} Confirmed — Check-in Ready`,
-          body:
-            `Manager confirmed Reservation #${id}. ` +
-            `Customer: ${custName} (${customer?.phone || 'N/A'}). ` +
-            `Arrival: ${arrivalStr}. ` +
-            `Guests: ${existing.guest_count}. Tables: ${tableNumbers}. ` +
-            `Shift: ${shift.shift_name}. ` +
-            `ACTION: Verify identity on walk-in then perform check-in.`,
-        });
-      }
-
+      // Shift notifications removed
       await saveNotification(tx, {
         userId: managerId,
         type:   TYPE.BOOKING_CONFIRMED,

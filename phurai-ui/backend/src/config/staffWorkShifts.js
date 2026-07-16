@@ -1,10 +1,5 @@
 /** Logical work-shift definitions (no DB migration). */
 
-import {
-  getShiftLabelForUserId,
-  shiftLabelToId,
-} from "../services/shiftMappingStore.js";
-
 export const WORK_SHIFTS = {
   morning: {
     id: "morning",
@@ -33,8 +28,8 @@ export function isPrivilegedReservationViewer(roleId) {
 }
 
 export async function resolveWorkShiftForStaff({ userId }) {
-  const label = await getShiftLabelForUserId(userId);
-  return shiftLabelToId(label);
+  // Always return 'morning' since shifts are removed
+  return "morning";
 }
 
 export function getWorkShiftMeta(shiftId) {
