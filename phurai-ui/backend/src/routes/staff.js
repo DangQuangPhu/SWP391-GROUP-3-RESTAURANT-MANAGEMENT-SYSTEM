@@ -807,17 +807,10 @@ router.get("/staff", async (_req, res) => {
          sp.staff_code,
          sp.job_title,
          sp.employment_status,
-         ws.shift_name
+         NULL AS shift_name
        FROM dbo.UserAccounts AS ua
        INNER JOIN dbo.Roles AS r ON ua.role_id = r.role_id
        LEFT JOIN dbo.StaffProfiles AS sp ON sp.user_id = ua.user_id
-       OUTER APPLY (
-          SELECT TOP 1 ws_inner.shift_name
-          FROM dbo.StaffSchedules ss
-          INNER JOIN dbo.Shifts ws_inner ON ss.shift_id = ws_inner.shift_id
-          WHERE ss.user_id = ua.user_id AND ss.work_date >= CAST(GETDATE() AS DATE)
-          ORDER BY ss.work_date ASC
-       ) AS ws
        WHERE r.role_name IN (N'Manager', N'Restaurant Staff')
 
          AND ua.is_active = 1
@@ -834,7 +827,7 @@ router.get("/staff", async (_req, res) => {
       phone: row.phone || "",
       email: row.email || "",
       status: mapEmploymentStatus(row.employment_status),
-      shift: row.shift_name || "Morning",
+      shift: "Morning",
     }));
 
     return jsonOk(res, staff);

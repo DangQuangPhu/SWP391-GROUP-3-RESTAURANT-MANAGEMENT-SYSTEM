@@ -70,7 +70,7 @@ const ADMIN_GRANTABLE_ROLES    = [2, 3];    // Staff + Manager
 // ─────────────────────────────────────────────────────────────
 export const listEmployees = async (req, res) => {
   const callerRoleId = req.user?.role_id;
-  const includeSalary = [3, 4].includes(callerRoleId);
+  const includeSalary = false;
 
   try {
     const pool = await getRawPool();
@@ -238,8 +238,6 @@ export const createEmployee = async (req, res) => {
     }
     }
 
-    const callerIncludeSalary = [3, 4].includes(req.user?.role_id);
-    const salaryVal = callerIncludeSalary ? (salary ?? 0) : 0;
     const staffCode = `STF-${Math.floor(1000 + Math.random() * 9000)}-${Date.now().toString().slice(-4)}`;
 
     const result = await pool.request()
@@ -249,17 +247,16 @@ export const createEmployee = async (req, res) => {
       .input('jobTitleId',  sql.TinyInt,       job_title_id ?? null)
       .input('jobTitle',    sql.NVarChar(80),  jobTitleName)
       .input('staffCode',   sql.VarChar(30),   staffCode)
-      .input('salary',      sql.Decimal(18,2), salaryVal)
       .input('department',  sql.NVarChar(60),  department?.trim() ?? null)
       .input('hasAccount',  sql.Bit,           hasSystemAccount)
       .input('userId',      sql.Int,           userId)
       .query(`
         INSERT INTO dbo.StaffProfiles
-          (staff_code, full_name, email, phone, job_title, job_title_id, hire_date, salary, department,
+          (staff_code, full_name, email, phone, job_title, job_title_id, hire_date, department,
            has_system_account, user_id, employment_status, created_at, updated_at)
         OUTPUT inserted.staff_id, inserted.full_name, inserted.email
         VALUES
-          (@staffCode, @fullName, @email, @phone, @jobTitle, @jobTitleId, CAST(GETDATE() AS DATE), @salary, @department, @hasAccount, @userId, 'Active', SYSDATETIME(), SYSDATETIME())
+          (@staffCode, @fullName, @email, @phone, @jobTitle, @jobTitleId, CAST(GETDATE() AS DATE), @department, @hasAccount, @userId, 'Active', SYSDATETIME(), SYSDATETIME())
       `);
 
     await pool.request()
@@ -289,7 +286,7 @@ export const updateEmployee = async (req, res) => {
 
   let { full_name, email, phone, job_title_id, salary, department, role_id, is_active, employment_status, password } = req.body ?? {};
   const callerRoleId = req.user?.role_id;
-  const includeSalary = [3, 4].includes(callerRoleId);
+  const includeSalary = false;
 
   // ── Auto-format corporate email ──────────────────────────────
   if (email !== undefined) {
@@ -860,11 +857,6 @@ export const deleteEmployee = async (req, res) => {
     await transaction.begin();
 
     try {
-      // Delete from StaffSchedules
-      await transaction.request()
-        .input('staffId', sql.Int, staffId)
-        .query(`DELETE FROM dbo.StaffSchedules WHERE staff_id = @staffId`);
-
       // Delete from PerformanceReviews
       await transaction.request()
         .input('staffId', sql.Int, staffId)

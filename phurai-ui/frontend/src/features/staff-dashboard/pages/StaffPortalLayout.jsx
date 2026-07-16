@@ -12,7 +12,6 @@ const REFRESH_LABELS = {
   reservations: "Refresh Reservations",
   kds:          "Refresh KDS",
   payments:     "Refresh Payments",
-  shifts:       "Refresh Shift Report",
 };
 
 function StaffPortalLayout({ onSignOut }) {

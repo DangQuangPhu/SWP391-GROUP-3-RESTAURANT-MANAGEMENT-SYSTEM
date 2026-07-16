@@ -209,14 +209,13 @@ export default function Accounts() {
       }
     },
     {
-      header: 'SHIFT & ONLINE',
+      header: 'ONLINE STATUS',
       render: () => (
         <div className="adm-shift-col">
           <div className="adm-shift-status">
             <span className="adm-status-dot adm-status-dot--offline"></span>
             Offline
           </div>
-          <div className="adm-shift-time">No Shift Today</div>
         </div>
       )
     },

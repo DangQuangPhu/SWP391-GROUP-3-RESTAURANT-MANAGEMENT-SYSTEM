@@ -385,22 +385,20 @@ export const getTodayShiftReservations = async (req, res) => {
                 r.created_at,
                 r.checked_in_at,
                 STRING_AGG(t.table_number, ', ') AS assigned_tables,
-                sh.shift_name,
-                sh.start_time       AS shift_start_time,
-                sh.end_time         AS shift_end_time
+                N'Morning' AS shift_name,
+                '06:30:00' AS shift_start_time,
+                '14:30:00' AS shift_end_time
              FROM dbo.Reservations r
              LEFT JOIN dbo.UserAccounts ua ON r.customer_id = ua.user_id
              LEFT JOIN dbo.CustomerProfiles cp ON r.customer_id = cp.user_id
              LEFT JOIN dbo.ReservationTables res_t ON r.reservation_id = res_t.reservation_id
              LEFT JOIN dbo.RestaurantTables t ON res_t.table_id = t.table_id
-             LEFT JOIN dbo.StaffSchedules ss ON ss.user_id = ? AND ss.work_date = CAST(r.reservation_start_at AS DATE)
-             LEFT JOIN dbo.Shifts sh ON sh.shift_id = ss.shift_id AND sh.is_active = 1
              WHERE ${whereClause}
              GROUP BY
                  r.reservation_id, ua.full_name, r.contact_name, ua.phone, r.contact_phone,
                  ua.email, r.contact_email, cp.username, r.reservation_start_at,
                  r.reservation_end_at, r.guest_count, r.special_request, r.dining_purpose, r.reservation_status,
-                 r.has_pending_request, r.created_at, r.checked_in_at, sh.shift_name, sh.start_time, sh.end_time
+                 r.has_pending_request, r.created_at, r.checked_in_at
              ORDER BY 
                  CASE r.reservation_status
                      WHEN N'${RESERVATION_STATUS.AWAIT_CHECK_IN}' THEN 1
@@ -415,7 +413,7 @@ export const getTodayShiftReservations = async (req, res) => {
                  r.reservation_start_at ASC
              OFFSET ? ROWS
              FETCH NEXT ? ROWS ONLY`,
-      [staffId, ...queryParams, offset, limitNum]
+      [...queryParams, offset, limitNum]
     );
 
     return res.json({

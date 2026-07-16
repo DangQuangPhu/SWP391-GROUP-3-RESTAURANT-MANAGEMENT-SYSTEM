@@ -105,6 +105,13 @@ async function run() {
     content = content.split('-- seed-demo.sql')[0];
   }
 
+  // Inject the actual database name from environment variables
+  const targetDbName = process.env.DB_NAME || "System_Restaurant";
+  if (targetDbName !== "System_Restaurant") {
+    console.log(`  [INFO] Rewriting schema for database: ${targetDbName}`);
+    content = content.replace(/System_Restaurant/g, targetDbName);
+  }
+
   const batches = content.split(/^\s*GO\s*$/im);
   console.log(`  → System_Restaurant.sql  (${batches.length} batches)`);
   for (let i = 0; i < batches.length; i++) {

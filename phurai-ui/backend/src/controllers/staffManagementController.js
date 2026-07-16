@@ -311,41 +311,5 @@ export const deleteStaffAccount = async (req, res) => {
 };
 
 export const updateStaffShift = async (req, res) => {
-    try {
-        const { id } = req.params; // staff_id
-        const { shift_id } = req.body;
-        
-        if (!id || !shift_id) return res.status(400).json({ success: false, message: 'Missing fields' });
-
-        const pool = await getRawPool();
-        const profileResult = await pool.request()
-            .input('staffId', sql.Int, id)
-            .query('SELECT user_id FROM dbo.StaffProfiles WHERE staff_id = @staffId');
-            
-        if (profileResult.recordset.length === 0) {
-            return res.status(404).json({ success: false, message: 'Staff profile not found.' });
-        }
-        const userId = profileResult.recordset[0].user_id;
-
-        // Upsert StaffSchedules for TODAY
-        await pool.request()
-            .input('userId', sql.Int, userId)
-            .input('shiftId', sql.TinyInt, shift_id)
-            .query(`
-                IF EXISTS (SELECT 1 FROM dbo.StaffSchedules WHERE user_id = @userId AND work_date = CAST(GETDATE() AS DATE))
-                BEGIN
-                    UPDATE dbo.StaffSchedules SET shift_id = @shiftId, updated_at = SYSDATETIME() WHERE user_id = @userId AND work_date = CAST(GETDATE() AS DATE)
-                END
-                ELSE
-                BEGIN
-                    INSERT INTO dbo.StaffSchedules (user_id, shift_id, work_date, attendance_status)
-                    VALUES (@userId, @shiftId, CAST(GETDATE() AS DATE), N'Scheduled')
-                END
-            `);
-            
-        return res.json({ success: true, message: 'Shift updated.' });
-    } catch (e) {
-        console.error('[staffManagementController] updateStaffShift error:', e);
-        return res.status(500).json({ success: false, message: 'Failed to update shift' });
-    }
+    return res.json({ success: true, message: 'Shift updated (deprecated).' });
 };

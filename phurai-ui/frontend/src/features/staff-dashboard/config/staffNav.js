@@ -38,13 +38,7 @@ export const STAFF_NAV = [
       { id: "kds", label: "Kitchen Display", segment: "kds", icon: "fire" },
     ],
   },
-  {
-    group: "Insights & Reports",
-    roles: [STAFF_ROLE.RESTAURANT],
-    items: [
-      { id: "shifts",       label: "Shift Reports", segment: "shifts",      icon: "chart" },
-    ],
-  },
+
 ];
 
 export const FLAT_NAV = STAFF_NAV.flatMap((group) =>

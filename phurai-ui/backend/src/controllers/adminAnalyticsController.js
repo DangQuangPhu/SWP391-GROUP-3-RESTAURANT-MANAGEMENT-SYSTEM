@@ -104,25 +104,14 @@ export const getReviewsAnalytics = async (req, res) => {
     }
 };
 
-// GET /api/admin/analytics/staff-performance
 export const getStaffPerformanceAnalytics = async (req, res) => {
-    const { startDate, endDate } = req.query;
     try {
         const pool = await getRawPool();
-        const request = pool.request();
-        let shiftJoinCondition = 'sp.user_id = s.staff_user_id';
-        if (startDate && endDate) {
-            shiftJoinCondition += ` AND s.check_in_time >= @startDate AND s.check_in_time <= @endDate`;
-            request.input('startDate', startDate);
-            request.input('endDate', endDate);
-        }
-        const query = `
-            SELECT sp.staff_code, COUNT(s.log_id) as total_shifts 
+        const result = await pool.request().query(`
+            SELECT sp.staff_code, 0 as total_shifts 
             FROM dbo.StaffProfiles sp 
-            LEFT JOIN dbo.ShiftLogs s ON ${shiftJoinCondition}
             GROUP BY sp.staff_code
-        `;
-        const result = await request.query(query);
+        `);
         return res.json({ success: true, data: result.recordset });
     } catch (error) {
         console.error('[adminAnalyticsController] getStaffPerformanceAnalytics error:', error);

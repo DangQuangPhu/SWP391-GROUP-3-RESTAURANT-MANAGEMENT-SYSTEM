@@ -27,6 +27,42 @@ function getPool() {
         return pool;
       }
 
+      // Check if dbo.UserAccounts table exists. If not, auto-initialize the master schema.
+      try {
+        const tableCheck = await pool.request().query(`
+          SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'UserAccounts'
+        `);
+        
+        if (tableCheck.recordset.length === 0) {
+          console.log("[DB] dbo.UserAccounts table not found. Auto-initializing master schema...");
+          
+          const fs = await import("fs");
+          const path = await import("path");
+          const { fileURLToPath } = await import("url");
+          
+          const __filename = fileURLToPath(import.meta.url);
+          const __dirname = path.dirname(__filename);
+          const schemaFile = path.join(__dirname, "../../database/System_Restaurant.sql");
+          
+          if (fs.existsSync(schemaFile)) {
+            const content = fs.readFileSync(schemaFile, "utf-8");
+            const batches = content.split(/^\s*GO\s*$/im);
+            console.log(`[DB] Executing System_Restaurant.sql (${batches.length} batches)...`);
+            
+            for (let i = 0; i < batches.length; i++) {
+              const batch = batches[i].trim();
+              if (!batch) continue;
+              await pool.request().query(batch);
+            }
+            console.log("[DB] Master schema successfully auto-initialized!");
+          } else {
+            console.error(`[DB] Schema file not found at ${schemaFile}`);
+          }
+        }
+      } catch (checkErr) {
+        console.error("[DB] Table check/auto-initialize error:", checkErr.message);
+      }
+
       // ── Fast startup: run all schema migrations in 2 parallel batches ─────
       // Batch 1: structural schema changes (idempotent)
       const schemaBatch = pool.request().query(`

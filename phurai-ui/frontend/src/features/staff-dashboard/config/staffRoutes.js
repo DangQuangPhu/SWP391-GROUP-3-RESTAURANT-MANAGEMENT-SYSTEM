@@ -7,7 +7,6 @@ export { STAFF_ROLE, STAFF_ROLE_LABEL };
 
 const ROLE_ID_MAP = {
   2: STAFF_ROLE.RESTAURANT,
-  3: STAFF_ROLE.KITCHEN,
 };
 
 const ROLE_NAME_MAP = {
@@ -27,7 +26,6 @@ const SEGMENT_ROLE_ACCESS = {
   tables:       [STAFF_ROLE.RESTAURANT],
   orders:       [STAFF_ROLE.RESTAURANT],
   payments:     [STAFF_ROLE.RESTAURANT],
-  shifts:       [STAFF_ROLE.RESTAURANT],
   kds:          [STAFF_ROLE.RESTAURANT],  // Staff (user-JWT): Ready alerts + Served action
 };
 

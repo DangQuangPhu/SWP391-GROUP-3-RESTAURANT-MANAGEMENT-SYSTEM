@@ -26,7 +26,6 @@ export const ADMIN_NAV_GROUPS = [
       { id: "revenue-analytics",      label: "Revenue",           icon: "wallet",   to: "/admin/analytics/revenue" },
       { id: "orders-analytics",       label: "Orders",            icon: "receipt",  to: "/admin/analytics/orders" },
       { id: "reviews-analytics",      label: "Customer reviews",  icon: "star",     to: "/admin/analytics/reviews" },
-      { id: "staff-performance",      label: "Staff performance", icon: "chart",    to: "/admin/analytics/staff-performance" },
     ],
   },
   {

@@ -43,31 +43,7 @@ export function initSocket(httpServer, { allowedOrigins = [] } = {}) {
     // NOTE: KDS devices (role_id=3 deprecated) join room:kds via their own
     // device-token handshake, handled separately in the KDS activate flow.
 
-    // All staff with shifts → shift-specific rooms
-    if (STAFF_ROLE_IDS.has(roleId)) {
-      if (Number.isFinite(userId) && userId > 0) {
-        try {
-          const today = new Date().toISOString().split('T')[0];
-          const [schedule] = await pool.query(
-            `SELECT shift_id FROM dbo.StaffSchedules
-             WHERE user_id = ?
-               AND work_date = ?
-               AND attendance_status IN (N'Scheduled', N'Present')`,
-            [userId, today]
-          );
-          
-          if (schedule && schedule.length > 0) {
-            schedule.forEach(row => {
-              if (row.shift_id) {
-                socket.join(`room:shift:${row.shift_id}`);
-              }
-            });
-          }
-        } catch (error) {
-          console.error("Socket shift query error:", error);
-        }
-      }
-    }
+    // Shift-specific rooms logic removed (no shifts)
 
     if (roleId === CUSTOMER_ROLE_ID && Number.isFinite(userId) && userId > 0) {
       socket.join(`customer_${userId}`);

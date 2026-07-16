@@ -81,7 +81,7 @@ const EMPTY_GRANT  = { role_id: 2 };
 function StaffSection({ toast, hideHeader = false }) {
   const { currentUser } = useManagerPortal();
   const callerRoleId = currentUser?.role_id;
-  const showSalary   = [3, 4].includes(callerRoleId);
+  const showSalary   = false;
   const grantableRoles = callerRoleId === 4 ? GRANTABLE_ROLES_ADMIN : GRANTABLE_ROLES_MANAGER;
 
   // ── Data state ────────────────────────────────────────────────────────────
@@ -368,7 +368,7 @@ function StaffSection({ toast, hideHeader = false }) {
       { label: "Total Employees", value: employees.length, color: "blue", icon: "users" },
       { label: "Active Accounts", value: employees.filter(e => e.has_system_account && e.account_is_active).length, color: "green", icon: "check" },
       { label: "Online Now", value: employees.filter(e => e.is_online).length, color: "amber", icon: "clock" },
-      { label: "No Shift Today", value: employees.filter(e => !e.scheduled_shift_name).length, color: "purple", icon: "calendar" }
+      { label: "Registry Pending", value: employees.filter(e => !e.has_system_account).length, color: "purple", icon: "calendar" }
     ];
   }, [employees]);
 
@@ -378,7 +378,7 @@ function StaffSection({ toast, hideHeader = false }) {
       {!hideHeader && (
         <SectionHead
           title="Employee Registry"
-          subtitle="Manage restaurant staff accounts, roles and shift schedules"
+          subtitle="Manage restaurant staff accounts and roles"
         />
       )}
 
@@ -475,7 +475,7 @@ function StaffSection({ toast, hideHeader = false }) {
                   <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", verticalAlign: "middle" }}>Role</th>
                   {showSalary && <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", verticalAlign: "middle" }}>Salary</th>}
                   <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", verticalAlign: "middle" }}>Account Status</th>
-                  <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", verticalAlign: "middle" }}>Shift & Online</th>
+                  <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", verticalAlign: "middle" }}>Online Status</th>
                   <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", verticalAlign: "middle", textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
@@ -595,9 +595,6 @@ function StaffSection({ toast, hideHeader = false }) {
                             Since {new Date(emp.online_since).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         )}
-                        <div style={{ fontSize: "12px", color: "var(--text-muted, #777)", marginTop: "4px" }}>
-                          {emp.scheduled_shift_name ? `📅 ${emp.scheduled_shift_name}` : "No Shift Today"}
-                        </div>
                       </td>
                       <td style={{ padding: "16px 20px" }}>
                         <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", flexWrap: "nowrap" }}>

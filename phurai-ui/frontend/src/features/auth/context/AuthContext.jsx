@@ -32,7 +32,7 @@ function normalizeAuthUser(user) {
 function isAdminUser(user) {
   if (!user) return false;
   const roleId = Number(user.roleId ?? user.role_id);
-  if (roleId === 5) return true;
+  if (roleId === 4) return true;
   const role = String(user.roleName ?? user.role_name ?? user.role ?? "").trim().toLowerCase();
   return role === "admin";
 }
@@ -40,7 +40,7 @@ function isAdminUser(user) {
 function isManagerUser(user) {
   if (!user) return false;
   const roleId = Number(user.roleId ?? user.role_id);
-  if (roleId === 4) return true;
+  if (roleId === 3) return true;
   const role = String(user.roleName ?? user.role_name ?? user.role ?? "").trim().toLowerCase();
   return role === "manager";
 }

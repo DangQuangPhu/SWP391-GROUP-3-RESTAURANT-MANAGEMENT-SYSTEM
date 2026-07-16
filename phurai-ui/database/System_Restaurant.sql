@@ -160,8 +160,6 @@ CREATE TABLE dbo.StaffProfiles (
     job_title_id       TINYINT NULL,                   -- FK to JobTitles lookup
     hire_date          DATE NOT NULL,
     employment_status  NVARCHAR(20) NOT NULL CONSTRAINT DF_StaffProfiles_status DEFAULT N'Active',
-    base_salary        DECIMAL(12,2) NULL,             -- HR salary field (alias: salary)
-    salary             DECIMAL(18,2) NULL,             -- new HR column added by KDS plan
     department         NVARCHAR(60) NULL,              -- new HR column
     has_system_account BIT NOT NULL CONSTRAINT DF_StaffProfiles_has_sys_acct DEFAULT 0,  -- 1 when user_id is linked
     -- contact info fields for employees without a UserAccounts row
@@ -175,8 +173,6 @@ CREATE TABLE dbo.StaffProfiles (
     CONSTRAINT FK_StaffProfiles_UserAccounts FOREIGN KEY (user_id) REFERENCES dbo.UserAccounts(user_id),
     CONSTRAINT FK_StaffProfiles_JobTitles FOREIGN KEY (job_title_id) REFERENCES dbo.JobTitles(job_title_id),
     CONSTRAINT CK_StaffProfiles_status CHECK (employment_status IN (N'Active', N'On Leave', N'Resigned')),
-    CONSTRAINT CK_StaffProfiles_salary CHECK (base_salary IS NULL OR base_salary >= 0),
-    CONSTRAINT CK_StaffProfiles_salary2 CHECK (salary IS NULL OR salary >= 0),
     CONSTRAINT CK_StaffProfiles_sys_acct CHECK (
         (has_system_account = 0 AND user_id IS NULL) OR has_system_account = 1
     )
@@ -262,51 +258,7 @@ CREATE TABLE dbo.RestaurantTables (
 );
 GO
 
-CREATE TABLE dbo.Shifts (
-    shift_id       TINYINT IDENTITY(1,1) NOT NULL,
-    shift_name     NVARCHAR(50) NOT NULL,
-    start_time     TIME(0) NOT NULL,
-    end_time       TIME(0) NOT NULL,
-    is_active      BIT NOT NULL CONSTRAINT DF_Shifts_is_active DEFAULT 1,
-    CONSTRAINT PK_Shifts PRIMARY KEY (shift_id)
-);
-GO
 
-CREATE TABLE dbo.StaffSchedules (
-    schedule_id       INT IDENTITY(1,1) NOT NULL,
-    user_id           INT NOT NULL,
-    staff_id          INT NULL,                        -- canonical join to StaffProfiles (Employee Registry)
-    shift_id          TINYINT NOT NULL,
-    work_date         DATE NOT NULL,
-    attendance_status NVARCHAR(20) NOT NULL CONSTRAINT DF_StaffSchedules_status DEFAULT N'Scheduled',
-    assigned_by       INT NULL, 
-    created_at        DATETIME2(0) NOT NULL CONSTRAINT DF_StaffSchedules_created_at DEFAULT SYSDATETIME(),
-    updated_at        DATETIME2(0) NOT NULL CONSTRAINT DF_StaffSchedules_updated_at DEFAULT SYSDATETIME(),
-    CONSTRAINT PK_StaffSchedules PRIMARY KEY (schedule_id),
-    CONSTRAINT UQ_StaffSchedules_user_date_shift UNIQUE (user_id, work_date, shift_id),
-    CONSTRAINT FK_StaffSchedules_UserAccounts FOREIGN KEY (user_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE CASCADE,
-    CONSTRAINT FK_StaffSchedules_StaffProfiles FOREIGN KEY (staff_id) REFERENCES dbo.StaffProfiles(staff_id),
-    CONSTRAINT FK_StaffSchedules_Shifts FOREIGN KEY (shift_id) REFERENCES dbo.Shifts(shift_id) ON DELETE CASCADE,
-    CONSTRAINT FK_StaffSchedules_AssignedBy FOREIGN KEY (assigned_by) REFERENCES dbo.UserAccounts(user_id),
-    CONSTRAINT CK_StaffSchedules_status CHECK (attendance_status IN (N'Scheduled', N'Present', N'Absent', N'On Leave'))
-);
-GO
-
-
-CREATE TABLE dbo.ShiftLogs (
-    log_id         INT IDENTITY(1,1) NOT NULL,
-    staff_user_id  INT NOT NULL, 
-    shift_id       TINYINT NULL,      
-    check_in_time  DATETIME2(0) NOT NULL CONSTRAINT DF_ShiftLogs_checkin DEFAULT SYSDATETIME(),
-    check_out_time DATETIME2(0) NULL,
-    total_hours    DECIMAL(5,2) NULL, 
-    status         NVARCHAR(20) NOT NULL CONSTRAINT DF_ShiftLogs_status DEFAULT N'Active',
-    CONSTRAINT PK_ShiftLogs PRIMARY KEY (log_id),
-    CONSTRAINT FK_ShiftLogs_Staff FOREIGN KEY (staff_user_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE CASCADE,
-    CONSTRAINT FK_ShiftLogs_Shift FOREIGN KEY (shift_id) REFERENCES dbo.Shifts(shift_id) ON DELETE SET NULL,
-    CONSTRAINT CK_ShiftLogs_status CHECK (status IN (N'Active', N'Completed'))
-);
-GO
 
 -- ============================================================================
 -- MODULE 3: MENU & INVENTORY
@@ -976,7 +928,6 @@ CREATE INDEX IX_CustomerReviews_order ON dbo.CustomerReviews(order_id);
 CREATE INDEX IX_Notifications_user_read ON dbo.Notifications(user_id, is_read);
 CREATE INDEX IX_OtpTokens_email_purpose_created ON dbo.OtpTokens(email, purpose, created_at DESC);
 CREATE INDEX IX_OtpTokens_user_purpose_created ON dbo.OtpTokens(user_id, purpose, created_at DESC);
-CREATE INDEX IX_ShiftLogs_staff_time ON dbo.ShiftLogs(staff_user_id, check_in_time);
 CREATE INDEX IX_BillSplits_order_status ON dbo.BillSplits(order_id, payment_status);
 GO
 
@@ -1205,7 +1156,7 @@ GO
 SET IDENTITY_INSERT dbo.JobTitles ON;
 INSERT INTO dbo.JobTitles (job_title_id, title_name, requires_system_access, default_role_id) VALUES
 (1,  N'System Admin',        1, 4),
-(2,  N'Manager',  1, 3),
+(2,  N'Manager',             1, 3),
 (3,  N'Receptionist',        1, 2),
 (4,  N'Waiter',              0, NULL),
 (5,  N'Head Chef',           0, NULL),
@@ -1223,26 +1174,26 @@ GO
 -- has_system_account=1 for all rows that have a linked UserAccounts row.
 -- Kitchen staff (KIT001/KIT002) kept as Resigned since their UserAccounts are soft-deleted.
 SET IDENTITY_INSERT dbo.StaffProfiles ON;
-INSERT INTO dbo.StaffProfiles (staff_id, user_id, staff_code, job_title, job_title_id, hire_date, employment_status, base_salary, has_system_account, full_name, email, phone)
+INSERT INTO dbo.StaffProfiles (staff_id, user_id, staff_code, job_title, job_title_id, hire_date, employment_status, has_system_account, full_name, email, phone)
 VALUES
-(1, 1, 'ADM001', N'System Admin',       1,  '2025-01-01', N'Active',   25000000, 1, NULL, NULL, NULL),
-(2, 2, 'MGR001', N'Restaurant Manager', 2,  '2025-01-15', N'Active',   22000000, 1, NULL, NULL, NULL),
-(3, 3, 'STF001', N'Receptionist',       3,  '2025-02-01', N'Active',   12000000, 1, NULL, NULL, NULL),
-(4, 4, 'STF002', N'Receptionist',       3,  '2025-02-05', N'Active',   12000000, 1, NULL, NULL, NULL),
-(7, 14,'STF003', N'Receptionist',       3,  '2025-04-01', N'Active',   12000000, 1, NULL, NULL, NULL),
+(1, 1, 'ADM001', N'System Admin',       1,  '2025-01-01', N'Active',   1, NULL, NULL, NULL),
+(2, 2, 'MGR001', N'Restaurant Manager', 2,  '2025-01-15', N'Active',   1, NULL, NULL, NULL),
+(3, 3, 'STF001', N'Receptionist',       3,  '2025-02-01', N'Active',   1, NULL, NULL, NULL),
+(4, 4, 'STF002', N'Receptionist',       3,  '2025-02-05', N'Active',   1, NULL, NULL, NULL),
+(7, 14,'STF003', N'Receptionist',       3,  '2025-04-01', N'Active',   1, NULL, NULL, NULL),
 -- 10 additional staff profiles (including ones without system accounts populated with contact info)
-(8, 20, 'STF004', N'Waiter',             4,  '2025-05-01', N'Active',   11000000, 1, NULL, NULL, NULL),
-(9, 21, 'STF005', N'Receptionist',       3,  '2025-05-02', N'Active',   12000000, 1, NULL, NULL, NULL),
-(10,22, 'STF006', N'Waiter',             4,  '2025-05-03', N'Active',   11000000, 1, NULL, NULL, NULL),
-(11,NULL,'STF007', N'Bartender',           7,  '2025-05-04', N'Active',   13000000, 0, N'Nguyễn Hoàng Nam', N'namnh@phurai.vn', '0902000007'),
-(12,NULL,'STF008', N'Host/Hostess',        8,  '2025-05-05', N'Active',   12000000, 0, N'Trần Thị Hương', N'huongtt@phurai.vn', '0902000008'),
-(14,NULL,'STF010', N'Server',             13, '2025-05-07', N'Active',   11000000, 0, N'Lê Thanh Hải', N'hailt@phurai.vn', '0902000010'),
-(15,NULL,'STF011', N'Waiter',             4,  '2025-05-08', N'Active',   11000000, 0, N'Hoàng Đức Anh', N'anhhd@phurai.vn', '0902000011'),
-(16,NULL,'STF012', N'Bartender',           7,  '2025-05-09', N'Active',   13000000, 0, N'Phan Quốc Khánh', N'khanhpq@phurai.vn', '0902000012'),
-(17,NULL,'STF013', N'Receptionist',       3,  '2025-05-10', N'Active',   12000000, 0, N'Vũ Ngọc Linh', N'linhvn@phurai.vn', '0902000013'),
-(18,NULL,'STF014', N'Pastry Chef',        11, '2025-05-11', N'Active',   14000000, 0, N'Đặng Gia Bảo', N'baodg@phurai.vn', '0902000014'),
-(19,NULL,'STF015', N'Line Cook',          12, '2025-05-12', N'Active',   11500000, 0, N'Bùi Hữu Đạt', N'datbh@phurai.vn', '0902000015'),
-(20,NULL,'STF016', N'Kitchen Porter',     10, '2025-05-13', N'Active',   10000000, 0, N'Võ Văn Dũng', N'dungvv@phurai.vn', '0902000016');
+(8, 20, 'STF004', N'Waiter',             4,  '2025-05-01', N'Active',   1, NULL, NULL, NULL),
+(9, 21, 'STF005', N'Receptionist',       3,  '2025-05-02', N'Active',   1, NULL, NULL, NULL),
+(10,22, 'STF006', N'Waiter',             4,  '2025-05-03', N'Active',   1, NULL, NULL, NULL),
+(11,NULL,'STF007', N'Bartender',           7,  '2025-05-04', N'Active',   0, N'Nguyễn Hoàng Nam', N'namnh@phurai.vn', '0902000007'),
+(12,NULL,'STF008', N'Host/Hostess',        8,  '2025-05-05', N'Active',   0, N'Trần Thị Hương', N'huongtt@phurai.vn', '0902000008'),
+(14,NULL,'STF010', N'Server',             13, '2025-05-07', N'Active',   0, N'Lê Thanh Hải', N'hailt@phurai.vn', '0902000010'),
+(15,NULL,'STF011', N'Waiter',             4,  '2025-05-08', N'Active',   0, N'Hoàng Đức Anh', N'anhhd@phurai.vn', '0902000011'),
+(16,NULL,'STF012', N'Bartender',           7,  '2025-05-09', N'Active',   0, N'Phan Quốc Khánh', N'khanhpq@phurai.vn', '0902000012'),
+(17,NULL,'STF013', N'Receptionist',       3,  '2025-05-10', N'Active',   0, N'Vũ Ngọc Linh', N'linhvn@phurai.vn', '0902000013'),
+(18,NULL,'STF014', N'Pastry Chef',        11, '2025-05-11', N'Active',   0, N'Đặng Gia Bảo', N'baodg@phurai.vn', '0902000014'),
+(19,NULL,'STF015', N'Line Cook',          12, '2025-05-12', N'Active',   0, N'Bùi Hữu Đạt', N'datbh@phurai.vn', '0902000015'),
+(20,NULL,'STF016', N'Kitchen Porter',     10, '2025-05-13', N'Active',   0, N'Vũ Văn Dũng', N'dungvv@phurai.vn', '0902000016');
 SET IDENTITY_INSERT dbo.StaffProfiles OFF;
 GO
 
@@ -1266,13 +1217,7 @@ INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description, upd
 (N'no_show_grace_default_min',   N'20',                        N'Default grace period in minutes before marking No Show', 1);
 GO
 
-SET IDENTITY_INSERT dbo.Shifts ON;
-INSERT INTO dbo.Shifts (shift_id, shift_name, start_time, end_time) VALUES
-(1, N'Morning Shift',   '06:30:00', '14:30:00'), 
-(2, N'Afternoon Shift', '14:00:00', '22:00:00'), 
-(3, N'Night Shift',     '16:30:00', '00:30:00'); 
-SET IDENTITY_INSERT dbo.Shifts OFF;
-GO
+
 
 SET IDENTITY_INSERT dbo.RestaurantAreas ON;
 INSERT INTO dbo.RestaurantAreas (area_id, area_name, area_type, description) VALUES
@@ -1682,7 +1627,7 @@ SELECT customer_id, user_id, username, date_of_birth, gender, country, [language
 GO
 
 -- tiếng việt -- 5. Lấy dữ liệu bảng Hồ sơ Nhân viên (StaffProfiles)
-SELECT staff_id, user_id, staff_code, job_title, hire_date, employment_status, base_salary, created_at, updated_at FROM dbo.StaffProfiles;
+SELECT staff_id, user_id, staff_code, job_title, hire_date, employment_status, created_at, updated_at FROM dbo.StaffProfiles;
 GO
 
 -- tiếng việt -- 6. Lấy dữ liệu bảng Cài đặt Nhà hàng (RestaurantSettings)
@@ -1697,17 +1642,7 @@ GO
 SELECT table_id, area_id, table_number, capacity, table_status, static_qr_code, notes, is_counter, merged_into_table_id, created_at, updated_at FROM dbo.RestaurantTables;
 GO
 
--- tiếng việt -- 9. Lấy dữ liệu bảng Ca làm việc (Shifts)
-SELECT shift_id, shift_name, start_time, end_time, is_active FROM dbo.Shifts;
-GO
 
--- tiếng việt -- 10. Lấy dữ liệu bảng Lịch làm việc Nhân viên (StaffSchedules)
-SELECT schedule_id, user_id, shift_id, work_date, attendance_status, assigned_by, created_at, updated_at FROM dbo.StaffSchedules;
-GO
-
--- tiếng việt -- 11. Lấy dữ liệu bảng Chấm công (ShiftLogs)
-SELECT log_id, staff_user_id, shift_id, check_in_time, check_out_time, total_hours, status FROM dbo.ShiftLogs;
-GO
 
 -- tiếng việt -- 12. Lấy dữ liệu bảng Danh mục Thực đơn (MenuCategories)
 SELECT category_id, category_name, display_order, is_active, created_at, updated_at FROM dbo.MenuCategories;
