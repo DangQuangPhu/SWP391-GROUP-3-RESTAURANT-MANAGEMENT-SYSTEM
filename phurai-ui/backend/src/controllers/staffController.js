@@ -1,9 +1,5 @@
 import pool from "../db.js";
-import {
-  buildReservationShiftHourClause,
-  isPrivilegedReservationViewer,
-  resolveWorkShiftForStaff,
-} from "../config/staffWorkShifts.js";
+
 import {
   notifyCustomerStaffAction,
   notifyStaffNewCustomerAction,
@@ -191,18 +187,6 @@ export async function listTodayReservations(req, res) {
         [req.userId]
       );
 
-      const account = accountRows[0];
-      if (account && !isPrivilegedReservationViewer(account.role_id)) {
-        const shiftId = await resolveWorkShiftForStaff({
-          userId: String(account.user_id),
-        });
-        const hourClause = buildReservationShiftHourClause(shiftId);
-        if (hourClause) {
-          shiftFilterSql = ` AND (${hourClause})`;
-        } else {
-          shiftFilterSql = " AND 1 = 0";
-        }
-      }
     }
 
     const [rows] = await pool.query(
