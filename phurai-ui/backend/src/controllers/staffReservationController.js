@@ -1,7 +1,6 @@
 import pool, { getRawPool } from "../db.js";
 import sql from "mssql";
 import { getIO } from "../socket.js";
-import { resolveShift } from "../services/shiftResolver.js";
 import { sendBookingCheckedInEmail, sendBookingRejectedEmail } from "../email.js";
 import { processPreordersToKds } from "../services/kdsIntegrationService.js";
 import { RESERVATION_STATUS } from '../constants/reservationStatus.js';

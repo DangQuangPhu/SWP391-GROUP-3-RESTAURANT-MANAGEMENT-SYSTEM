@@ -14,12 +14,6 @@ import {
     resolveEditRequest,
     seedTestReservations,
     clearTestReservations,
-    getShifts,
-    getSchedules,
-    assignSchedule,
-    updateScheduleAttendance,
-    getShiftMapping,
-    updateShiftMapping
 } from '../controllers/managerController.js';
 import {
     createDish,
@@ -94,13 +88,6 @@ router.post('/reservations/:id/resolve-edit', requireManagerOrAdmin, resolveEdit
 router.post('/reservations/seed-test', requireManagerOrAdmin, seedTestReservations);
 router.delete('/reservations/clear-test', requireManagerOrAdmin, clearTestReservations);
 
-router.get('/shifts', requireManagerOrAdmin, getShifts);
-router.get('/schedules', requireManagerOrAdmin, getSchedules);
-router.post('/schedules', requireManagerOrAdmin, assignSchedule);
-router.patch('/schedules/:id/status', requireManagerOrAdmin, updateScheduleAttendance);
-
-router.get('/shift-mapping', requireManagerOrAdmin, getShiftMapping);
-router.put('/shift-mapping/:id', requireManagerOrAdmin, updateShiftMapping);
 
 router.post('/tables', requireManagerOrAdmin, createTable);
 router.post('/tables/virtual', requireManagerOrAdmin, createVirtualTable);

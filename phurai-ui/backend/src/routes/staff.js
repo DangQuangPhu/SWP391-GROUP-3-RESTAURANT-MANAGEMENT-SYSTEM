@@ -27,7 +27,7 @@ import {
   shiftCheckOut,
   getOrderTimeline,
 } from "../controllers/staffController.js";
-import { getStaffShiftMapping } from "../controllers/shiftMappingController.js";
+
 import {
   getTodayShiftReservations,
   getStaffReservationDetail,
@@ -63,8 +63,7 @@ router.patch("/qr-sessions/:id/approve", resolveUserId, requireUserId, approveQr
 router.patch("/qr-sessions/:id/reject", resolveUserId, requireUserId, rejectQrSession);
 
 router.get("/tables", listStaffTables);
-router.get("/shift-mapping", getStaffShiftMapping);
-// Shift-scoped view: only today's reservations within the staff member's scheduled shift
+// Shift-scoped view removed
 router.get("/reservations/today-shift", resolveUserId, requireUserId, getTodayShiftReservations);
 router.get("/reservations/:id", resolveUserId, getStaffReservationDetail);
 router.post(
