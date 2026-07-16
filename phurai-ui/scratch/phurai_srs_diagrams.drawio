@@ -1,0 +1,309 @@
+<mxfile host="app.diagrams.net" modified="2026-07-16T09:15:00.000Z" agent="Codex" version="24.7.17" type="device">
+  <diagram id="context" name="Figure 1 - Context Diagram">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="sys" value="ROMS System&#xa;Phurai Restaurant Management" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1"><mxGeometry x="485" y="295" width="200" height="120" as="geometry"/></mxCell>
+        <mxCell id="guest" value="Guest" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1" vertex="1" parent="1"><mxGeometry x="120" y="70" width="140" height="60" as="geometry"/></mxCell>
+        <mxCell id="customer" value="Customer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1"><mxGeometry x="900" y="70" width="140" height="60" as="geometry"/></mxCell>
+        <mxCell id="staff" value="Restaurant Staff" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1"><mxGeometry x="900" y="250" width="140" height="60" as="geometry"/></mxCell>
+        <mxCell id="kitchen" value="Kitchen Staff / KDS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1"><mxGeometry x="900" y="420" width="140" height="60" as="geometry"/></mxCell>
+        <mxCell id="manager" value="Manager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1"><mxGeometry x="900" y="610" width="140" height="60" as="geometry"/></mxCell>
+        <mxCell id="admin" value="Admin" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1" vertex="1" parent="1"><mxGeometry x="130" y="610" width="140" height="60" as="geometry"/></mxCell>
+        <mxCell id="pay" value="Payment Gateway" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1" vertex="1" parent="1"><mxGeometry x="120" y="250" width="150" height="60" as="geometry"/></mxCell>
+        <mxCell id="email" value="Email Service" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1" vertex="1" parent="1"><mxGeometry x="120" y="420" width="150" height="60" as="geometry"/></mxCell>
+        <mxCell id="e1" value="Register / Login / View Menu" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="guest" target="sys"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" value="Reserve Table / Place Order / Review" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="customer" target="sys"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" value="Manage Tables / Orders / Reservations" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="staff" target="sys"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" value="Kitchen Ticket Status" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="kitchen" target="sys"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" value="Menu / Staff / Reports / Promotions" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="manager" target="sys"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="Users / Roles / Settings / Audit Logs" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="admin" target="sys"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" value="Payment Request / Result" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="sys" target="pay"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" value="OTP / Reset / Confirmation Email" style="endArrow=block;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;" edge="1" parent="1" source="sys" target="email"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="reservation-workflow" name="Figure 2 - Online Reservation Workflow">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root><mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="c1" value="Customer" style="swimlane;html=1;horizontal=0;startSize=28;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="40" y="60" width="230" height="620" as="geometry"/></mxCell>
+        <mxCell id="s1" value="ROMS System" style="swimlane;html=1;horizontal=0;startSize=28;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="270" y="60" width="300" height="620" as="geometry"/></mxCell>
+        <mxCell id="st1" value="Restaurant Staff" style="swimlane;html=1;horizontal=0;startSize=28;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="570" y="60" width="270" height="620" as="geometry"/></mxCell>
+        <mxCell id="m1" value="Email Service" style="swimlane;html=1;horizontal=0;startSize=28;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1"><mxGeometry x="840" y="60" width="230" height="620" as="geometry"/></mxCell>
+        <mxCell id="r1" value="Login" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="95" y="105" width="120" height="45" as="geometry"/></mxCell>
+        <mxCell id="r2" value="Open Reservation Page" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="80" y="185" width="150" height="45" as="geometry"/></mxCell>
+        <mxCell id="r3" value="Select Date, Time, Guests" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="75" y="265" width="160" height="45" as="geometry"/></mxCell>
+        <mxCell id="r4" value="Submit Reservation Request" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="70" y="345" width="170" height="45" as="geometry"/></mxCell>
+        <mxCell id="r5" value="Validate Input" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="355" y="345" width="130" height="45" as="geometry"/></mxCell>
+        <mxCell id="r6" value="Check Table Availability" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="335" y="425" width="170" height="45" as="geometry"/></mxCell>
+        <mxCell id="r7" value="Available?" style="rhombus;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="372" y="505" width="95" height="70" as="geometry"/></mxCell>
+        <mxCell id="r8" value="Create Pending Reservation" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="330" y="615" width="180" height="45" as="geometry"/></mxCell>
+        <mxCell id="r9" value="Review Reservation Details" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="625" y="425" width="160" height="45" as="geometry"/></mxCell>
+        <mxCell id="r10" value="Confirm / Reject" style="rhombus;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="650" y="515" width="110" height="70" as="geometry"/></mxCell>
+        <mxCell id="r11" value="Send Confirmation / Rejection Email" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="875" y="515" width="160" height="55" as="geometry"/></mxCell>
+        <mxCell id="r12" value="View Reservation Result" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="75" y="615" width="160" height="45" as="geometry"/></mxCell>
+        <mxCell id="re1" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="r1" target="r2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re2" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="r2" target="r3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re3" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="r3" target="r4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re4" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="r4" target="r5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re5" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="r5" target="r6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re6" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="r6" target="r7"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re7" value="Yes" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="r7" target="r8"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re8" value="No" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="r7" target="r12"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re9" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="r8" target="r9"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re10" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="r9" target="r10"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re11" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="r10" target="r11"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="re12" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="r11" target="r12"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="order-workflow" name="Figure 3 - Order Processing Workflow">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root><mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="o1" value="Customer / Staff" style="swimlane;html=1;horizontal=0;startSize=28;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="60" y="70" width="250" height="590" as="geometry"/></mxCell>
+        <mxCell id="o2" value="ROMS System" style="swimlane;html=1;horizontal=0;startSize=28;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="310" y="70" width="280" height="590" as="geometry"/></mxCell>
+        <mxCell id="o3" value="Kitchen / KDS" style="swimlane;html=1;horizontal=0;startSize=28;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="590" y="70" width="250" height="590" as="geometry"/></mxCell>
+        <mxCell id="o4" value="Payment Gateway" style="swimlane;html=1;horizontal=0;startSize=28;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1"><mxGeometry x="840" y="70" width="230" height="590" as="geometry"/></mxCell>
+        <mxCell id="oa" value="Browse Menu" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="125" y="125" width="120" height="45" as="geometry"/></mxCell>
+        <mxCell id="ob" value="Add Items / Notes" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="115" y="205" width="140" height="45" as="geometry"/></mxCell>
+        <mxCell id="oc" value="Submit Order" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="125" y="285" width="120" height="45" as="geometry"/></mxCell>
+        <mxCell id="od" value="Validate Items and Price" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="365" y="285" width="170" height="45" as="geometry"/></mxCell>
+        <mxCell id="oe" value="Create Order and Kitchen Tickets" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="345" y="375" width="210" height="50" as="geometry"/></mxCell>
+        <mxCell id="of" value="Accept / Prepare Ticket" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="650" y="375" width="140" height="50" as="geometry"/></mxCell>
+        <mxCell id="og" value="Mark Ready / Served" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="650" y="475" width="140" height="50" as="geometry"/></mxCell>
+        <mxCell id="oh" value="Checkout" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="130" y="560" width="110" height="45" as="geometry"/></mxCell>
+        <mxCell id="oi" value="Process Payment" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="885" y="560" width="140" height="45" as="geometry"/></mxCell>
+        <mxCell id="oj" value="Update Paid / Completed" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="360" y="560" width="180" height="45" as="geometry"/></mxCell>
+        <mxCell id="oe1" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="oa" target="ob"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="oe2" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="ob" target="oc"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="oe3" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="oc" target="od"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="oe4" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="od" target="oe"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="oe5" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="oe" target="of"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="oe6" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="of" target="og"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="oe7" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="og" target="oh"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="oe8" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="oh" target="oi"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="oe9" value="Payment Result" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="oi" target="oj"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="qr-workflow" name="Figure 4 - Dine-in QR Table Session Workflow">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root><mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="q1" value="Staff opens table session" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="90" y="140" width="180" height="60" as="geometry"/></mxCell>
+        <mxCell id="q2" value="System generates active table QR token" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="350" y="140" width="220" height="60" as="geometry"/></mxCell>
+        <mxCell id="q3" value="Customer scans QR code" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="660" y="140" width="180" height="60" as="geometry"/></mxCell>
+        <mxCell id="q4" value="Customer browses menu and submits order/request" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="660" y="270" width="220" height="70" as="geometry"/></mxCell>
+        <mxCell id="q5" value="System validates active session and stores order/request" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="350" y="270" width="240" height="70" as="geometry"/></mxCell>
+        <mxCell id="q6" value="Staff receives live notification" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="90" y="270" width="190" height="60" as="geometry"/></mxCell>
+        <mxCell id="q7" value="Kitchen receives ticket if food item" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="350" y="420" width="220" height="60" as="geometry"/></mxCell>
+        <mxCell id="q8" value="Staff closes table session after service/payment" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="90" y="560" width="220" height="60" as="geometry"/></mxCell>
+        <mxCell id="qe1" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="q1" target="q2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="qe2" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="q2" target="q3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="qe3" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="q3" target="q4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="qe4" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="q4" target="q5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="qe5" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="q5" target="q6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="qe6" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="q5" target="q7"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="qe7" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="q6" target="q8"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="uc-auth" name="Use Case - Authentication">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root><mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="a0" value="Authentication" style="swimlane;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontStyle=1" vertex="1" parent="1"><mxGeometry x="300" y="80" width="520" height="520" as="geometry"/></mxCell>
+        <mxCell id="ag" value="Guest" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" vertex="1" parent="1"><mxGeometry x="110" y="140" width="50" height="90" as="geometry"/></mxCell>
+        <mxCell id="au" value="User&#xa;(Customer / Staff / Manager / Admin)" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" vertex="1" parent="1"><mxGeometry x="110" y="390" width="50" height="90" as="geometry"/></mxCell>
+        <mxCell id="ac1" value="Register" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="390" y="140" width="150" height="55" as="geometry"/></mxCell>
+        <mxCell id="ac2" value="Sign In" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="390" y="240" width="150" height="55" as="geometry"/></mxCell>
+        <mxCell id="ac3" value="Login via Google" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="590" y="240" width="160" height="55" as="geometry"/></mxCell>
+        <mxCell id="ac4" value="Forgot Password" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="590" y="340" width="160" height="55" as="geometry"/></mxCell>
+        <mxCell id="ac5" value="Change Password" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="390" y="430" width="160" height="55" as="geometry"/></mxCell>
+        <mxCell id="ac6" value="Sign Out" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="590" y="430" width="140" height="55" as="geometry"/></mxCell>
+        <mxCell id="ae1" value="" style="endArrow=none;html=1;rounded=0;" edge="1" parent="1" source="ag" target="ac1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae2" value="" style="endArrow=none;html=1;rounded=0;" edge="1" parent="1" source="ag" target="ac2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae3" value="" style="endArrow=none;html=1;rounded=0;" edge="1" parent="1" source="ag" target="ac4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae4" value="" style="endArrow=none;html=1;rounded=0;" edge="1" parent="1" source="au" target="ac2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae5" value="" style="endArrow=none;html=1;rounded=0;" edge="1" parent="1" source="au" target="ac5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae6" value="" style="endArrow=none;html=1;rounded=0;" edge="1" parent="1" source="au" target="ac6"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="uc-overview" name="Use Case - Overview">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root><mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="uo0" value="Phurai ROMS Use Case Overview" style="swimlane;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontStyle=1" vertex="1" parent="1"><mxGeometry x="270" y="50" width="620" height="690" as="geometry"/></mxCell>
+        <mxCell id="uog" value="Guest" style="shape=umlActor;html=1;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="80" y="90" width="50" height="90" as="geometry"/></mxCell>
+        <mxCell id="uoc" value="Customer" style="shape=umlActor;html=1;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="80" y="250" width="50" height="90" as="geometry"/></mxCell>
+        <mxCell id="uos" value="Staff" style="shape=umlActor;html=1;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="80" y="430" width="50" height="90" as="geometry"/></mxCell>
+        <mxCell id="uok" value="Kitchen Staff" style="shape=umlActor;html=1;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="1000" y="120" width="50" height="90" as="geometry"/></mxCell>
+        <mxCell id="uom" value="Manager" style="shape=umlActor;html=1;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="1000" y="300" width="50" height="90" as="geometry"/></mxCell>
+        <mxCell id="uoa" value="Admin" style="shape=umlActor;html=1;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="1000" y="500" width="50" height="90" as="geometry"/></mxCell>
+        <mxCell id="ucv1" value="Browse Menu" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="100" width="150" height="55" as="geometry"/></mxCell>
+        <mxCell id="ucv2" value="Reserve Table" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="190" width="150" height="55" as="geometry"/></mxCell>
+        <mxCell id="ucv3" value="Place Order / Pay" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="280" width="170" height="55" as="geometry"/></mxCell>
+        <mxCell id="ucv4" value="Manage Tables and Reservations" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="330" y="390" width="220" height="60" as="geometry"/></mxCell>
+        <mxCell id="ucv5" value="Manage Kitchen Tickets" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="610" y="140" width="190" height="60" as="geometry"/></mxCell>
+        <mxCell id="ucv6" value="Manage Menu / Staff / Reports" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="590" y="330" width="220" height="60" as="geometry"/></mxCell>
+        <mxCell id="ucv7" value="Manage Users / Roles / Settings" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="590" y="530" width="230" height="60" as="geometry"/></mxCell>
+        <mxCell id="uoe1" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="uog" target="ucv1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="uoe2" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="uoc" target="ucv2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="uoe3" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="uoc" target="ucv3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="uoe4" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="uos" target="ucv4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="uoe5" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="uok" target="ucv5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="uoe6" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="uom" target="ucv6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="uoe7" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="uoa" target="ucv7"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="uc-customer" name="Use Case - Guest and Customer">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root><mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="cg" value="Guest" style="shape=umlActor;html=1;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="90" y="110" width="50" height="90" as="geometry"/></mxCell>
+        <mxCell id="cc" value="Customer" style="shape=umlActor;html=1;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="90" y="430" width="50" height="90" as="geometry"/></mxCell>
+        <mxCell id="cs" value="Customer Functions" style="swimlane;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontStyle=1" vertex="1" parent="1"><mxGeometry x="280" y="60" width="690" height="650" as="geometry"/></mxCell>
+        <mxCell id="cu1" value="View Restaurant Info" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="110" width="170" height="55" as="geometry"/></mxCell>
+        <mxCell id="cu2" value="Browse / Search Menu" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="580" y="110" width="180" height="55" as="geometry"/></mxCell>
+        <mxCell id="cu3" value="Register / Login" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="790" y="110" width="150" height="55" as="geometry"/></mxCell>
+        <mxCell id="cu4" value="Reserve Table" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="260" width="160" height="55" as="geometry"/></mxCell>
+        <mxCell id="cu5" value="Place Order" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="570" y="260" width="150" height="55" as="geometry"/></mxCell>
+        <mxCell id="cu6" value="Pay Order / Deposit" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="770" y="260" width="180" height="55" as="geometry"/></mxCell>
+        <mxCell id="cu7" value="View History" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="410" width="150" height="55" as="geometry"/></mxCell>
+        <mxCell id="cu8" value="Manage Profile / Loyalty" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="550" y="410" width="200" height="55" as="geometry"/></mxCell>
+        <mxCell id="cu9" value="Gift Card / Voucher" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="790" y="410" width="170" height="55" as="geometry"/></mxCell>
+        <mxCell id="cu10" value="Submit Review" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="570" y="560" width="160" height="55" as="geometry"/></mxCell>
+        <mxCell id="ce1" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="cg" target="cu1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce2" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="cg" target="cu2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce3" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="cg" target="cu3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce4" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="cc" target="cu4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce5" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="cc" target="cu5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce6" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="cc" target="cu6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce7" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="cc" target="cu8"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce8" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="cc" target="cu10"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="uc-staff-kitchen" name="Use Case - Staff and Kitchen">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root><mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="skstaff" value="Staff" style="shape=umlActor;html=1;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="90" y="180" width="50" height="90" as="geometry"/></mxCell>
+        <mxCell id="skk" value="Kitchen Staff / KDS" style="shape=umlActor;html=1;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="90" y="500" width="50" height="90" as="geometry"/></mxCell>
+        <mxCell id="skbox" value="Staff and Kitchen Functions" style="swimlane;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontStyle=1" vertex="1" parent="1"><mxGeometry x="280" y="70" width="720" height="640" as="geometry"/></mxCell>
+        <mxCell id="sk1" value="View Reservation Queue" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="130" width="190" height="55" as="geometry"/></mxCell>
+        <mxCell id="sk2" value="Check-in Reservation" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="610" y="130" width="190" height="55" as="geometry"/></mxCell>
+        <mxCell id="sk3" value="Manage Tables" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="260" width="160" height="55" as="geometry"/></mxCell>
+        <mxCell id="sk4" value="Move / Merge Tables" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="610" y="260" width="190" height="55" as="geometry"/></mxCell>
+        <mxCell id="sk5" value="Create Walk-in Order" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="390" width="180" height="55" as="geometry"/></mxCell>
+        <mxCell id="sk6" value="Handle Customer Request" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="610" y="390" width="210" height="55" as="geometry"/></mxCell>
+        <mxCell id="sk7" value="View Kitchen Tickets" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="530" width="180" height="55" as="geometry"/></mxCell>
+        <mxCell id="sk8" value="Accept / Prepare Ticket" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="610" y="530" width="190" height="55" as="geometry"/></mxCell>
+        <mxCell id="sk9" value="Mark Ready / Served" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="480" y="630" width="190" height="55" as="geometry"/></mxCell>
+        <mxCell id="ske1" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="skstaff" target="sk1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ske2" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="skstaff" target="sk3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ske3" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="skstaff" target="sk5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ske4" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="skk" target="sk7"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ske5" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="skk" target="sk8"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ske6" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="skk" target="sk9"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="uc-manager" name="Use Case - Manager">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root><mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="mgr" value="Manager" style="shape=umlActor;html=1;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="90" y="330" width="50" height="90" as="geometry"/></mxCell>
+        <mxCell id="mbox" value="Manager Functions" style="swimlane;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontStyle=1" vertex="1" parent="1"><mxGeometry x="280" y="70" width="720" height="640" as="geometry"/></mxCell>
+        <mxCell id="muc1" value="Manage Menu and Categories" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="340" y="130" width="220" height="55" as="geometry"/></mxCell>
+        <mxCell id="muc2" value="Manage Promotions / Vouchers" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="640" y="130" width="230" height="55" as="geometry"/></mxCell>
+        <mxCell id="muc3" value="Manage Reservations" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="340" y="260" width="190" height="55" as="geometry"/></mxCell>
+        <mxCell id="muc4" value="Manage Floor Plan" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="650" y="260" width="180" height="55" as="geometry"/></mxCell>
+        <mxCell id="muc5" value="Manage Staff" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="340" y="390" width="160" height="55" as="geometry"/></mxCell>
+        <mxCell id="muc6" value="View Kitchen Metrics" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="630" y="390" width="200" height="55" as="geometry"/></mxCell>
+        <mxCell id="muc7" value="Moderate Reviews" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="340" y="520" width="180" height="55" as="geometry"/></mxCell>
+        <mxCell id="muc8" value="View Reports / Analytics" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="620" y="520" width="220" height="55" as="geometry"/></mxCell>
+        <mxCell id="me1" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="mgr" target="muc1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="me2" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="mgr" target="muc3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="me3" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="mgr" target="muc5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="me4" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="mgr" target="muc8"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="uc-admin" name="Use Case - Admin">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root><mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="adm" value="Admin" style="shape=umlActor;html=1;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="90" y="330" width="50" height="90" as="geometry"/></mxCell>
+        <mxCell id="abox" value="Admin Functions" style="swimlane;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontStyle=1" vertex="1" parent="1"><mxGeometry x="280" y="70" width="720" height="640" as="geometry"/></mxCell>
+        <mxCell id="auc1" value="Manage Accounts" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="130" width="170" height="55" as="geometry"/></mxCell>
+        <mxCell id="auc2" value="Manage Roles and Permissions" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="620" y="130" width="240" height="55" as="geometry"/></mxCell>
+        <mxCell id="auc3" value="Manage System Settings" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="350" y="270" width="210" height="55" as="geometry"/></mxCell>
+        <mxCell id="auc4" value="Manage KDS Devices" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="640" y="270" width="190" height="55" as="geometry"/></mxCell>
+        <mxCell id="auc5" value="Manage Restaurant Information" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="340" y="410" width="240" height="55" as="geometry"/></mxCell>
+        <mxCell id="auc6" value="View Audit Logs" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="660" y="410" width="170" height="55" as="geometry"/></mxCell>
+        <mxCell id="auc7" value="View Reports / Analytics" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="480" y="550" width="220" height="55" as="geometry"/></mxCell>
+        <mxCell id="ade1" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="adm" target="auc1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ade2" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="adm" target="auc3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ade3" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="adm" target="auc5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ade4" value="" style="endArrow=none;html=1;" edge="1" parent="1" source="adm" target="auc7"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="screen-flow" name="Screen Flow Overview">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root><mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="sf0" value="Landing Page" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1"><mxGeometry x="470" y="60" width="180" height="55" as="geometry"/></mxCell>
+        <mxCell id="sf1" value="Menu" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="160" y="180" width="130" height="50" as="geometry"/></mxCell>
+        <mxCell id="sf2" value="Reservation" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="340" y="180" width="150" height="50" as="geometry"/></mxCell>
+        <mxCell id="sf3" value="Checkout" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="540" y="180" width="140" height="50" as="geometry"/></mxCell>
+        <mxCell id="sf4" value="Profile / Loyalty" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="730" y="180" width="170" height="50" as="geometry"/></mxCell>
+        <mxCell id="sf5" value="Staff Dashboard" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="160" y="340" width="170" height="55" as="geometry"/></mxCell>
+        <mxCell id="sf6" value="Reservations / Tables / Orders" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="150" y="450" width="200" height="60" as="geometry"/></mxCell>
+        <mxCell id="sf7" value="Kitchen Display" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="470" y="340" width="170" height="55" as="geometry"/></mxCell>
+        <mxCell id="sf8" value="Ticket Board / Ticket Detail" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="450" y="450" width="210" height="60" as="geometry"/></mxCell>
+        <mxCell id="sf9" value="Manager Dashboard" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1"><mxGeometry x="780" y="340" width="180" height="55" as="geometry"/></mxCell>
+        <mxCell id="sf10" value="Menu / Staff / Reports / Promotions" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="760" y="450" width="230" height="60" as="geometry"/></mxCell>
+        <mxCell id="sf11" value="Admin Dashboard" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1"><mxGeometry x="470" y="600" width="180" height="55" as="geometry"/></mxCell>
+        <mxCell id="sf12" value="Accounts / Roles / Settings / Audit Logs / KDS Devices" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="420" y="700" width="280" height="60" as="geometry"/></mxCell>
+        <mxCell id="sfe1" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="sf0" target="sf1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="sfe2" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="sf0" target="sf2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="sfe3" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="sf1" target="sf3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="sfe4" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="sf0" target="sf4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="sfe5" value="Staff role" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="sf0" target="sf5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="sfe6" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="sf5" target="sf6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="sfe7" value="KDS role" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="sf0" target="sf7"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="sfe8" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="sf7" target="sf8"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="sfe9" value="Manager role" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="sf0" target="sf9"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="sfe10" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="sf9" target="sf10"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="sfe11" value="Admin role" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="sf0" target="sf11"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="sfe12" value="" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="sf11" target="sf12"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="erd-overview" name="Entity Relationship Overview">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root><mxCell id="0"/><mxCell id="1" parent="0"/>
+        <mxCell id="er1" value="UserAccount&#xa;PK user_id&#xa;role_id&#xa;email&#xa;password_hash&#xa;status" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=24;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="70" y="80" width="180" height="140" as="geometry"/></mxCell>
+        <mxCell id="er2" value="Role&#xa;PK role_id&#xa;role_name" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=24;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1"><mxGeometry x="330" y="80" width="160" height="100" as="geometry"/></mxCell>
+        <mxCell id="er3" value="CustomerProfile&#xa;PK customer_id&#xa;FK user_id&#xa;phone&#xa;loyalty_points" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=24;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="70" y="290" width="190" height="130" as="geometry"/></mxCell>
+        <mxCell id="er4" value="StaffProfile&#xa;PK staff_id&#xa;FK user_id&#xa;job_title&#xa;department" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=24;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="330" y="290" width="180" height="130" as="geometry"/></mxCell>
+        <mxCell id="er5" value="Reservation&#xa;PK reservation_id&#xa;FK customer_id&#xa;table_id&#xa;status&#xa;deposit_amount" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=24;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="620" y="90" width="200" height="150" as="geometry"/></mxCell>
+        <mxCell id="er6" value="Table / FloorArea&#xa;PK table_id&#xa;area_id&#xa;capacity&#xa;status" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=24;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="890" y="90" width="190" height="130" as="geometry"/></mxCell>
+        <mxCell id="er7" value="Order&#xa;PK order_id&#xa;customer_id&#xa;table_session_id&#xa;total_amount&#xa;status" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=24;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="620" y="330" width="200" height="150" as="geometry"/></mxCell>
+        <mxCell id="er8" value="OrderItem&#xa;PK order_item_id&#xa;FK order_id&#xa;FK menu_item_id&#xa;quantity&#xa;status" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=24;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="890" y="330" width="200" height="150" as="geometry"/></mxCell>
+        <mxCell id="er9" value="MenuItem&#xa;PK menu_item_id&#xa;category_id&#xa;name&#xa;price&#xa;availability" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=24;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1"><mxGeometry x="890" y="570" width="200" height="140" as="geometry"/></mxCell>
+        <mxCell id="er10" value="KitchenTicket&#xa;PK ticket_id&#xa;FK order_item_id&#xa;device_id&#xa;ticket_status" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=24;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="620" y="570" width="200" height="130" as="geometry"/></mxCell>
+        <mxCell id="er11" value="Payment&#xa;PK payment_id&#xa;order_id / reservation_id&#xa;amount&#xa;method&#xa;status" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=24;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1"><mxGeometry x="330" y="560" width="210" height="150" as="geometry"/></mxCell>
+        <mxCell id="er12" value="Review / Notification / AuditLog&#xa;feedback, alerts, and system activity records" style="shape=swimlane;whiteSpace=wrap;html=1;startSize=24;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1"><mxGeometry x="70" y="560" width="200" height="120" as="geometry"/></mxCell>
+        <mxCell id="ere1" value="has" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="er2" target="er1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ere2" value="profile" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="er1" target="er3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ere3" value="profile" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="er1" target="er4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ere4" value="makes" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="er3" target="er5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ere5" value="assigned" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="er5" target="er6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ere6" value="places" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="er3" target="er7"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ere7" value="contains" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="er7" target="er8"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ere8" value="uses item" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="er8" target="er9"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ere9" value="creates ticket" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="er8" target="er10"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ere10" value="paid by" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="er7" target="er11"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ere11" value="deposit" style="endArrow=block;html=1;rounded=0;" edge="1" parent="1" source="er5" target="er11"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
