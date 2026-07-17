@@ -14,7 +14,7 @@
 import pool, { getRawPool } from "../db.js";
 import sql from "mssql";
 import { getIO } from "../socket.js";
-import { resolveShift } from "../services/shiftResolver.js";
+
 import { sendBookingConfirmationEmail, sendBookingEditedEmail, sendManagerCancelledEmail, sendEditConfirmedEmail, sendEditRejectedEmail } from "../email.js";
 import { updateReservationStatus } from "../services/reservationStateService.js";
 import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
