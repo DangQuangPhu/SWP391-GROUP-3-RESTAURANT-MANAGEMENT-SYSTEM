@@ -87,7 +87,7 @@ export const ExpenditureTrendChart = ({ data }) => {
   );
 };
 
-export const OrderCategoryChart = ({ data }) => {
+export const OrderCategoryChart = ({ data, onCategoryClick }) => {
   const chartData = useMemo(() => {
     const total = data.reduce((acc, curr) => acc + curr.count, 0) || 1;
     return data.map((d, i) => ({
@@ -101,51 +101,54 @@ export const OrderCategoryChart = ({ data }) => {
     <div className="flex flex-col sm:flex-row items-center gap-6 w-full h-full">
       {/* Doughnut Chart */}
       <div className="w-full sm:w-1/2 flex-1 flex items-center justify-center relative min-h-[180px]">
-        <ResponsiveContainer width="100%" height={180} minWidth={1} minHeight={1}>
-          <PieChart>
-            <Tooltip 
-              contentStyle={{ borderRadius: '8px', border: '1px solid #f3f4f6', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}
-              itemStyle={{ color: '#111827', fontWeight: 600 }}
-            />
-            <Pie
-              data={chartData}
-              cx="50%"
-              cy="50%"
-              innerRadius={50}
-              outerRadius={75}
-              paddingAngle={4}
-              dataKey="count"
-              nameKey="category"
-              animationDuration={1200}
-              animationEasing="ease-out"
-              stroke="none"
-              cornerRadius={4}
-            >
-              {chartData.map((entry, index) => (
-                <Cell 
-                  key={`cell-${index}`} 
-                  fill={entry.fill} 
-                  style={{ outline: 'none', transition: 'transform 0.2s', transformOrigin: 'center' }}
-                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                />
-              ))}
-            </Pie>
-          </PieChart>
-        </ResponsiveContainer>
+        <PieChart width={180} height={180} style={{ outline: 'none' }}>
+          <Tooltip 
+            contentStyle={{ borderRadius: '8px', border: '1px solid #f3f4f6', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}
+            itemStyle={{ color: '#111827', fontWeight: 600 }}
+          />
+          <Pie
+            data={chartData}
+            cx="50%"
+            cy="50%"
+            innerRadius={50}
+            outerRadius={75}
+            paddingAngle={4}
+            dataKey="count"
+            nameKey="category"
+            animationDuration={1200}
+            animationEasing="ease-out"
+            stroke="none"
+            cornerRadius={4}
+          >
+            {chartData.map((entry, index) => (
+              <Cell 
+                key={`cell-${index}`} 
+                fill={entry.fill} 
+                style={{ outline: 'none', transition: 'transform 0.2s', transformOrigin: 'center', cursor: 'pointer' }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                onClick={() => onCategoryClick?.(entry.category)}
+              />
+            ))}
+          </Pie>
+        </PieChart>
       </div>
       
       {/* Progress Bars */}
       <div className="w-full sm:w-1/2 flex flex-col gap-4">
         {chartData.map((d, i) => (
-          <div key={i} className="flex flex-col gap-1.5">
+          <div 
+            key={i} 
+            className="flex flex-col gap-1.5 cursor-pointer group hover:bg-gray-50 p-1.5 rounded-lg transition-colors"
+            onClick={() => onCategoryClick?.(d.category)}
+          >
             <div className="flex justify-between items-center text-xs font-semibold text-gray-700">
-              <span className="capitalize">{d.category} ({d.percent}%)</span>
-              <span>{d.count}</span>
+              <span className="capitalize group-hover:text-[#8c764b] transition-colors">{d.category} ({d.percent}%)</span>
+              <span className="group-hover:scale-105 transition-transform">{d.count}</span>
             </div>
             <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
               <div 
-                className="h-full rounded-full transition-all duration-1000 ease-out" 
+                className="h-full rounded-full transition-all duration-1000 ease-out group-hover:brightness-95" 
                 style={{ width: `${d.percent}%`, backgroundColor: d.fill }}
               ></div>
             </div>

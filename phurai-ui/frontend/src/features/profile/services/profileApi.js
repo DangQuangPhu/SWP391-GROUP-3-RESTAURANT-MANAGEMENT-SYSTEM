@@ -57,6 +57,39 @@ export async function getCustomerRecentActivity(userId, startDate, endDate) {
   });
 }
 
+/** Fetches ALL-TIME activity (no date filter, higher limit) — used for the History overlay */
+export async function getCustomerRecentActivityAll(userId) {
+  return await request(`/customer/dashboard/recent-activity?limit=50`, {
+    headers: profileRequestHeaders(userId),
+  });
+}
+
+/** Fetches dish-level items for a specific order or reservation */
+export async function getActivityItems(userId, type, id) {
+  return await request(
+    `/customer/dashboard/activity-items?type=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}`,
+    { headers: profileRequestHeaders(userId) }
+  );
+}
+
+/** Fetches breakdown of all purchased items (Orders + Preorders combined) for the selected period */
+export async function getCustomerDetailedOrderItems(userId, startDate, endDate) {
+  let url = `/customer/dashboard/detailed-order-items`;
+  if (startDate && endDate) url += `?startDate=${startDate}&endDate=${endDate}`;
+  return await request(url, {
+    headers: profileRequestHeaders(userId),
+  });
+}
+
+/** Fetches individual purchased items (Orders + Preorders combined) filtering by category for the selected period */
+export async function getCustomerDetailedItemsByCategory(userId, category, startDate, endDate) {
+  let url = `/customer/dashboard/detailed-category-items?category=${encodeURIComponent(category)}`;
+  if (startDate && endDate) url += `&startDate=${startDate}&endDate=${endDate}`;
+  return await request(url, {
+    headers: profileRequestHeaders(userId),
+  });
+}
+
 export async function getProfilePayments(userId) {
   const data = await request(`/customer/payments/history`, {
     headers: profileRequestHeaders(userId),

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { MonitorSmartphone, CreditCard, LayoutDashboard, Gem, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { MonitorSmartphone, CreditCard, LayoutDashboard, Gem, ArrowDownLeft, ArrowUpRight, X } from "lucide-react";
 import CustomerDashboard from "../components/CustomerDashboard";
 import LoyaltyPointsPage from "@/features/loyalty/pages/LoyaltyPointsPage";
 import { useFavoritesStore } from "@/features/menu/context/MenuFavoritesContext.jsx";
@@ -578,9 +578,15 @@ function PaymentHistoryPanel({ profile }) {
         <div className="profile-dashboard__payments-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {payments.map((p) => {
             const isRefund = p.payment_status === "Refunded";
-            const amountColor = isRefund ? "var(--phurai-success, #10b981)" : "var(--phurai-text, #1d1d1f)";
+            const isSuccess = p.payment_status === "Completed" || p.payment_status === "Paid" || p.payment_status === "Successful" || p.payment_status === "Served";
+            const isFailed = !isSuccess && !isRefund;
+            const amountColor = isRefund ? "var(--phurai-success, #10b981)" : (isFailed ? "var(--phurai-danger, #ef4444)" : "var(--phurai-text, #1d1d1f)");
             const sign = isRefund ? "+" : "-";
             
+            const iconBg = isFailed
+              ? 'bg-red-50 text-red-600'
+              : (isRefund ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-50 text-gray-500');
+
             return (
               <div 
                 key={p.payment_id} 
@@ -595,8 +601,14 @@ function PaymentHistoryPanel({ profile }) {
                 onClick={() => setSelectedPaymentId(p.payment_id)}
               >
                 {/* Icon Column */}
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-none ${isRefund ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-50 text-gray-500'}`}>
-                  {isRefund ? <ArrowDownLeft size={20} strokeWidth={2.5} /> : <ArrowUpRight size={20} strokeWidth={2.5} />}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-none ${iconBg}`}>
+                  {isFailed ? (
+                    <X size={20} strokeWidth={2.5} />
+                  ) : isRefund ? (
+                    <ArrowDownLeft size={20} strokeWidth={2.5} />
+                  ) : (
+                    <ArrowUpRight size={20} strokeWidth={2.5} />
+                  )}
                 </div>
 
                 {/* Purpose & Date Column */}

@@ -115,10 +115,10 @@ export async function generateAndSeed(pool) {
   startDate.setDate(endDate.getDate() - 30);
 
   const TOTAL_DAYS       = 365;
-  let   globalOrderId    = 1000;
-  let   globalOiId       = 1000;
-  let   globalKtId       = 1000;
-  let   globalResId      = 1000;
+  let   globalOrderId    = 100000;
+  let   globalOiId       = 100000;
+  let   globalKtId       = 100000;
+  let   globalResId      = 100000;
   let   globalUserId     = 1000;
   let   globalTimelineId = 1000;
   let   globalLoyaltyId  = 1000;

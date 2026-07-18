@@ -88,20 +88,22 @@ export default function StatCard({ label, value, icon: Icon, deltaPercent, forma
       
       {deltaPercent !== null ? (
         <div className="flex items-center gap-1.5 text-xs font-semibold">
-          {deltaPercent >= 0 ? (
+          {deltaPercent > 0 ? (
             <>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M12 4L4 12L5.41 13.41L11 7.83V20H13V7.83L18.59 13.41L20 12L12 4Z" fill="#10B981" />
               </svg>
-              <span className="text-emerald-500">{animatedDelta}%</span>
+              <span className="text-emerald-500">↑ {animatedDelta}%</span>
             </>
-          ) : (
+          ) : deltaPercent < 0 ? (
             <>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M20 12L18.59 10.59L13 16.17V4H11V16.17L5.41 10.59L4 12L12 20L20 12Z" fill="#EF4444" />
               </svg>
-              <span className="text-red-500">{animatedDelta}%</span>
+              <span className="text-red-500">↓ {animatedDelta}%</span>
             </>
+          ) : (
+            <span className="text-gray-400">0%</span>
           )}
         </div>
       ) : (

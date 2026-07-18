@@ -678,6 +678,11 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                     <td style={{ fontWeight: 500, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
                         <span><EmptyVal val={r.customer_name} /></span>
+                        {(r.reservation_source === 'Walk-in' || r.source === 'Walk-in') && (
+                          <span style={{ fontSize: 10, color: '#856404', background: '#fff3cd', padding: '2px 6px', borderRadius: 4, fontWeight: 'bold' }}>
+                            Customer Walk-in
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td style={{ color: "#000", fontSize: 13, textAlign: "center", verticalAlign: "middle" }}><EmptyVal val={r.customer_phone || r.phone} /></td>
@@ -1009,6 +1014,17 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                   ) : (
                     <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{RESERVATION_STATUS_META[(active.status || active.reservation_status || "")]?.label || active.reservation_status}</strong>
                   )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Source</span>
+                  <strong style={{ fontWeight: "bold", fontSize: "14px" }}>
+                    {active.reservation_source || active.source || "Online"}
+                    {(active.reservation_source === 'Walk-in' || active.source === 'Walk-in') && (
+                      <span style={{ marginLeft: 8, fontSize: 11, color: '#856404', background: '#fff3cd', padding: '2px 6px', borderRadius: 4, fontWeight: 'bold' }}>
+                        Customer Walk-in
+                      </span>
+                    )}
+                  </strong>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
                   <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "start" }}>Notes</span>

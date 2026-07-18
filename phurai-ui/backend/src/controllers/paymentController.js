@@ -4,7 +4,7 @@ import { getIO } from '../socket.js';
 import { sendReservationInvoiceEmail, sendCheckoutReceiptEmail } from '../email.js';
 import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
 import { handlePostCheckoutSuccess } from '../services/checkoutHelper.js';
-import { notifyStaffNewCustomerAction } from '../services/notificationService.js';
+import { notifyStaffNewCustomerAction, notifyCustomerStaffAction } from '../services/notificationService.js';
 
 
 /**
@@ -230,6 +230,53 @@ export const handleSepayWebhook = async (req, res) => {
 
         await transaction.commit();
         console.log(`[SePay Webhook] Reservation ${actualOrderCode} payment successful. Ref: ${referenceCode}`);
+
+        // f. Award Loyalty Points + send notification (fire-and-forget, outside transaction)
+        if (reservation.customer_id) {
+          try {
+            const rawPoolLoyalty = await getRawPool();
+            const pointsToAward = Math.max(10, Math.floor(Number(transferAmount) / 1000));
+            await rawPoolLoyalty.request()
+              .input('customerId', sql.Int, reservation.customer_id)
+              .input('resId', sql.Int, reservation.reservation_id)
+              .input('points', sql.Int, pointsToAward)
+              .query(`
+                INSERT INTO dbo.LoyaltyTransactions
+                  (customer_id, points, transaction_type, reference_type, reference_id, description, created_at)
+                VALUES
+                  (@customerId, @points, N'Earn', N'Reservation', @resId,
+                   N'Loyalty points earned for reservation deposit payment', SYSDATETIME());
+
+                UPDATE dbo.CustomerProfiles
+                  SET loyalty_points = (SELECT ISNULL(SUM(points), 0) FROM dbo.LoyaltyTransactions WHERE customer_id = @customerId),
+                      updated_at = SYSDATETIME()
+                WHERE user_id = @customerId;
+
+                INSERT INTO dbo.AuditLogs
+                  (action_name, target_table, target_id, new_value_json, created_at)
+                VALUES (
+                  N'LOYALTY_POINTS_EARNED',
+                  N'LoyaltyTransactions',
+                  @resId,
+                  CAST(
+                    N'{"type":"Reservation","points":' + CAST(@points AS NVARCHAR) +
+                    N',"reservation_id":' + CAST(@resId AS NVARCHAR) + N'}'
+                  AS NVARCHAR(MAX)),
+                  SYSDATETIME()
+                );
+              `);
+
+            await notifyCustomerStaffAction({
+              customerId: reservation.customer_id,
+              notificationType: 'Payment Receipt',
+              title: 'Reservation Deposit Confirmed 🍽️',
+              message: `Your deposit of ${Number(transferAmount).toLocaleString('vi-VN')}₫ for Reservation #${reservation.reservation_id} was received! You earned +${pointsToAward} loyalty points.`,
+              payload: { reservationId: reservation.reservation_id }
+            });
+          } catch (loyaltyErr) {
+            console.error('[SePay Webhook] Failed to award loyalty points or send notification:', loyaltyErr);
+          }
+        }
 
         // e. Send invoice email outside transaction (fire-and-forget)
         try {

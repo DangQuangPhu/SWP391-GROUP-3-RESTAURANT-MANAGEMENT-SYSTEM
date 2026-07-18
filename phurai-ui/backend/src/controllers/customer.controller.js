@@ -649,7 +649,7 @@ export const getCustomerOrdersByCategory = async (req, res) => {
   }
 };
 
-export const getCustomerRecentActivity = async (req, res) => {
+export const getCustomerDetailedOrderItems = async (req, res) => {
   try {
     const userId = req.userId || req.user?.id || req.user?.user_id;
     if (!userId) return res.status(401).json({ success: false, message: "Unauthorized." });
@@ -660,32 +660,203 @@ export const getCustomerRecentActivity = async (req, res) => {
     if (startVal && isNaN(startVal.getTime())) startVal = null;
     if (endVal && isNaN(endVal.getTime())) endVal = null;
 
-    let dateFilter = "";
+    let orderDateFilter = "";
+    let resDateFilter = "";
     if (startVal && endVal) {
-      dateFilter = " AND created_at >= @startDate AND created_at <= @endDate ";
+      orderDateFilter = " AND o.created_at >= @startDate AND o.created_at <= @endDate ";
+      resDateFilter = " AND r.created_at >= @startDate AND r.created_at <= @endDate ";
+    }
+
+    const itemQuery = `
+      SELECT 
+        dish_name,
+        dish_id,
+        category_name,
+        SUM(quantity) as quantity,
+        AVG(unit_price) as unit_price,
+        SUM(subtotal) as subtotal,
+        MAX(image_url) as image_url
+      FROM (
+        SELECT 
+          d.dish_name,
+          d.dish_id,
+          mc.category_name,
+          oi.quantity,
+          oi.unit_price,
+          oi.line_total as subtotal,
+          (SELECT TOP 1 di.image_url FROM dbo.DishImages di WHERE di.dish_id = d.dish_id AND di.is_primary = 1) AS image_url
+        FROM dbo.OrderItems oi
+        JOIN dbo.Orders o ON oi.order_id = o.order_id
+        JOIN dbo.Dishes d ON oi.dish_id = d.dish_id
+        JOIN dbo.MenuCategories mc ON d.category_id = mc.category_id
+        WHERE o.customer_id = @userId AND oi.item_status != N'Cancelled'
+          ${orderDateFilter}
+        
+        UNION ALL
+        
+        SELECT 
+          d.dish_name,
+          d.dish_id,
+          mc.category_name,
+          pi.quantity,
+          pi.unit_price,
+          (pi.quantity * pi.unit_price) as subtotal,
+          (SELECT TOP 1 di.image_url FROM dbo.DishImages di WHERE di.dish_id = d.dish_id AND di.is_primary = 1) AS image_url
+        FROM dbo.PreorderItems pi
+        JOIN dbo.Reservations r ON pi.reservation_id = r.reservation_id
+        JOIN dbo.Dishes d ON pi.dish_id = d.dish_id
+        JOIN dbo.MenuCategories mc ON d.category_id = mc.category_id
+        WHERE r.customer_id = @userId 
+          AND r.reservation_status IN (N'Await Check-in', N'Dining', N'Completed')
+          ${resDateFilter}
+      ) AS Combined
+      GROUP BY dish_name, dish_id, category_name
+      ORDER BY subtotal DESC
+    `;
+
+    let result = [];
+    try {
+      result = await query(itemQuery, { userId, startDate: startVal, endDate: endVal });
+    } catch (err) {
+      console.error('[Dashboard] Detailed Order Items query failed:', err.message || err);
+    }
+
+    return res.json({ success: true, items: result || [] });
+  } catch (err) {
+    console.error('Error fetching detailed order items:', err);
+    res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
+};
+
+export const getCustomerDetailedItemsByCategory = async (req, res) => {
+  try {
+    const userId = req.userId || req.user?.id || req.user?.user_id;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized." });
+
+    const { category, startDate, endDate } = req.query;
+    if (!category) return res.status(400).json({ success: false, message: "Category name is required." });
+
+    let startVal = startDate ? new Date(startDate) : null;
+    let endVal = endDate ? new Date(endDate) : null;
+    if (startVal && isNaN(startVal.getTime())) startVal = null;
+    if (endVal && isNaN(endVal.getTime())) endVal = null;
+
+    let orderDateFilter = "";
+    let resDateFilter = "";
+    if (startVal && endVal) {
+      orderDateFilter = " AND o.created_at >= @startDate AND o.created_at <= @endDate ";
+      resDateFilter = " AND r.created_at >= @startDate AND r.created_at <= @endDate ";
+    }
+
+    const itemQuery = `
+      SELECT 
+        d.dish_name,
+        d.dish_id,
+        mc.category_name,
+        oi.quantity,
+        oi.unit_price,
+        oi.line_total as subtotal,
+        o.created_at
+      FROM dbo.OrderItems oi
+      JOIN dbo.Orders o ON oi.order_id = o.order_id
+      JOIN dbo.Dishes d ON oi.dish_id = d.dish_id
+      JOIN dbo.MenuCategories mc ON d.category_id = mc.category_id
+      WHERE o.customer_id = @userId 
+        AND mc.category_name = @category
+        AND oi.item_status != N'Cancelled'
+        ${orderDateFilter}
+      
+      UNION ALL
+      
+      SELECT 
+        d.dish_name,
+        d.dish_id,
+        mc.category_name,
+        pi.quantity,
+        pi.unit_price,
+        (pi.quantity * pi.unit_price) as subtotal,
+        r.created_at
+      FROM dbo.PreorderItems pi
+      JOIN dbo.Reservations r ON pi.reservation_id = r.reservation_id
+      JOIN dbo.Dishes d ON pi.dish_id = d.dish_id
+      JOIN dbo.MenuCategories mc ON d.category_id = mc.category_id
+      WHERE r.customer_id = @userId 
+        AND mc.category_name = @category
+        AND r.reservation_status IN (N'Await Check-in', N'Dining', N'Completed')
+        ${resDateFilter}
+      ORDER BY created_at DESC
+    `;
+
+    let result = [];
+    try {
+      result = await query(itemQuery, { userId, category, startDate: startVal, endDate: endVal });
+    } catch (err) {
+      console.error('[Dashboard] Detailed Category Items query failed:', err.message || err);
+    }
+
+    return res.json({ success: true, items: result || [] });
+  } catch (err) {
+    console.error('Error fetching detailed category items:', err);
+    res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
+};
+
+export const getCustomerRecentActivity = async (req, res) => {
+  try {
+    const userId = req.userId || req.user?.id || req.user?.user_id;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized." });
+
+    const { startDate, endDate } = req.query;
+    const limitParam = parseInt(req.query.limit, 10);
+    const limit = (!isNaN(limitParam) && limitParam > 0) ? Math.min(limitParam, 100) : 10;
+
+    let startVal = startDate ? new Date(startDate) : null;
+    let endVal = endDate ? new Date(endDate) : null;
+    if (startVal && isNaN(startVal.getTime())) startVal = null;
+    if (endVal && isNaN(endVal.getTime())) endVal = null;
+
+    let orderDateFilter = "";
+    let resDatFilter = "";
+    if (startVal && endVal) {
+      orderDateFilter = " AND o.created_at >= @startDate AND o.created_at <= @endDate ";
+      resDatFilter = " AND r.created_at >= @startDate AND r.created_at <= @endDate ";
     }
 
     const actQuery = `
-            SELECT TOP 10 * FROM (
+            SELECT TOP (${limit}) * FROM (
                 SELECT 
                     'order' AS type,
-                    order_id AS id,
-                    order_status AS status,
-                    total_amount AS amount,
-                    created_at
-                FROM dbo.Orders
-                WHERE customer_id = @userId ${dateFilter}
+                    o.order_id AS id,
+                    o.order_status AS status,
+                    o.total_amount AS amount,
+                    o.created_at,
+                    (SELECT COUNT(*) FROM dbo.OrderItems oi WHERE oi.order_id = o.order_id AND oi.item_status != N'Cancelled') AS item_count,
+                    t.table_number,
+                    NULL AS source
+                FROM dbo.Orders o
+                LEFT JOIN dbo.RestaurantTables t ON o.table_id = t.table_id
+                WHERE o.customer_id = @userId ${orderDateFilter}
                 
                 UNION ALL
                 
                 SELECT 
                     'reservation' AS type,
-                    reservation_id AS id,
-                    reservation_status AS status,
-                    final_total AS amount,
-                    created_at
-                FROM dbo.Reservations
-                WHERE customer_id = @userId ${dateFilter}
+                    r.reservation_id AS id,
+                    r.reservation_status AS status,
+                    ISNULL(
+                      (SELECT SUM(p.amount_paid) FROM dbo.Payments p 
+                       WHERE p.reservation_id = r.reservation_id AND p.payment_status = N'Completed'),
+                      0
+                    ) AS amount,
+                    r.created_at,
+                    (SELECT COUNT(*) FROM dbo.PreorderItems pi WHERE pi.reservation_id = r.reservation_id) AS item_count,
+                    (SELECT TOP 1 tbl.table_number FROM dbo.ReservationTables rt 
+                     JOIN dbo.RestaurantTables tbl ON rt.table_id = tbl.table_id 
+                     WHERE rt.reservation_id = r.reservation_id) AS table_number,
+                    r.reservation_source AS source
+                FROM dbo.Reservations r
+                WHERE r.customer_id = @userId ${resDatFilter}
+                    AND r.reservation_status IN (N'Await Check-in', N'Dining', N'Completed')
             ) AS Combined
             ORDER BY created_at DESC
         `;
@@ -694,11 +865,119 @@ export const getCustomerRecentActivity = async (req, res) => {
     try {
       result = await query(actQuery, { userId, startDate: startVal, endDate: endVal });
     } catch (err) {
-      // Silently fallback to avoid terminal spam
+      console.error('[RecentActivity] Query error:', err.message);
     }
     return res.json({ success: true, activity: result || [] });
   } catch (err) {
     console.error('Error fetching recent activity:', err);
+    res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
+};
+
+/**
+ * GET /api/customer/dashboard/activity-items?type=order|reservation&id=123
+ * Returns dish-level items for a specific order or reservation (preorder items).
+ * Per-account isolation: verifies customer_id ownership before returning data.
+ */
+export const getActivityOrderItems = async (req, res) => {
+  try {
+    const userId = req.userId || req.user?.id || req.user?.user_id;
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized.' });
+
+    const { type, id } = req.query;
+    if (!type || !id) return res.status(400).json({ success: false, message: 'type and id query params are required.' });
+
+    const parsedId = parseInt(id, 10);
+    if (isNaN(parsedId) || parsedId <= 0) return res.status(400).json({ success: false, message: 'id must be a positive integer.' });
+
+    let items = [];
+    let meta = {};
+
+    if (type === 'order') {
+      // Verify ownership
+      const ownerRows = await query(
+        `SELECT o.order_id, o.total_amount, o.order_status, o.order_type, t.table_number
+         FROM dbo.Orders o
+         LEFT JOIN dbo.RestaurantTables t ON o.table_id = t.table_id
+         WHERE o.order_id = @id AND o.customer_id = @userId`,
+        { id: parsedId, userId }
+      );
+      if (ownerRows.length === 0) return res.status(404).json({ success: false, message: 'Order not found.' });
+      const ord = ownerRows[0];
+      meta = {
+        total_amount: ord.total_amount,
+        order_status: ord.order_status,
+        order_type: ord.order_type,
+        table_number: ord.table_number
+      };
+
+      items = await query(
+        `SELECT 
+           oi.order_item_id, oi.quantity, oi.unit_price,
+           oi.line_total AS subtotal, oi.notes,
+           d.dish_name,
+           mc.category_name,
+           (SELECT TOP 1 di.image_url FROM dbo.DishImages di WHERE di.dish_id = d.dish_id AND di.is_primary = 1) AS image_url
+         FROM dbo.OrderItems oi
+         JOIN dbo.Dishes d ON oi.dish_id = d.dish_id
+         LEFT JOIN dbo.MenuCategories mc ON d.category_id = mc.category_id
+         WHERE oi.order_id = @id AND oi.item_status != N'Cancelled'
+         ORDER BY oi.order_item_id ASC`,
+        { id: parsedId }
+      );
+
+    } else if (type === 'reservation') {
+      // Verify ownership
+      const ownerRows = await query(
+        `SELECT r.reservation_id, r.reservation_status, r.reservation_start_at, r.guest_count,
+                r.deposit_amount, r.final_total,
+                (SELECT TOP 1 tbl.table_number FROM dbo.ReservationTables rt 
+                 JOIN dbo.RestaurantTables tbl ON rt.table_id = tbl.table_id 
+                 WHERE rt.reservation_id = r.reservation_id) AS table_number,
+                ISNULL(
+                  (SELECT SUM(p.amount_paid) FROM dbo.Payments p 
+                   WHERE p.reservation_id = r.reservation_id AND p.payment_status = N'Completed'),
+                  0
+                ) AS total_paid
+         FROM dbo.Reservations r
+         WHERE r.reservation_id = @id AND r.customer_id = @userId`,
+        { id: parsedId, userId }
+      );
+      if (ownerRows.length === 0) return res.status(404).json({ success: false, message: 'Reservation not found.' });
+      const rsv = ownerRows[0];
+      meta = {
+        reservation_status: rsv.reservation_status,
+        reservation_start_at: rsv.reservation_start_at,
+        guest_count: rsv.guest_count,
+        deposit_amount: rsv.deposit_amount,
+        final_total: rsv.final_total,
+        total_paid: rsv.total_paid,
+        table_number: rsv.table_number
+      };
+
+      items = await query(
+        `SELECT 
+           pi.preorder_item_id AS order_item_id,
+           pi.quantity, pi.unit_price,
+           (pi.quantity * pi.unit_price) AS subtotal,
+           pi.notes,
+           d.dish_name,
+           mc.category_name,
+           (SELECT TOP 1 di.image_url FROM dbo.DishImages di WHERE di.dish_id = d.dish_id AND di.is_primary = 1) AS image_url
+         FROM dbo.PreorderItems pi
+         JOIN dbo.Dishes d ON pi.dish_id = d.dish_id
+         LEFT JOIN dbo.MenuCategories mc ON d.category_id = mc.category_id
+         WHERE pi.reservation_id = @id
+         ORDER BY pi.preorder_item_id ASC`,
+        { id: parsedId }
+      );
+    } else {
+      return res.status(400).json({ success: false, message: 'type must be "order" or "reservation".' });
+    }
+
+    return res.json({ success: true, items, meta });
+  } catch (err) {
+    console.error('Error fetching activity items:', err);
     res.status(500).json({ success: false, message: 'Internal server error.' });
   }
 };

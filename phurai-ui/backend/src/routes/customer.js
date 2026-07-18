@@ -14,7 +14,10 @@ import {
   getCustomerDashboardSummary,
   getCustomerExpenditureTrend,
   getCustomerOrdersByCategory,
-  getCustomerRecentActivity
+  getCustomerRecentActivity,
+  getActivityOrderItems,
+  getCustomerDetailedOrderItems,
+  getCustomerDetailedItemsByCategory
 } from "../controllers/customer.controller.js";
 import { getRecommendations } from "../controllers/recommendationController.js";
 
@@ -118,6 +121,33 @@ router.get(
   requireUserId,
   requireCustomer,
   getCustomerRecentActivity
+);
+
+router.get(
+  "/dashboard/activity-items",
+  resolveUserId,
+  requireUserId,
+  requireCustomer,
+  getActivityOrderItems
+);
+
+router.get(
+  "/dashboard/detailed-order-items",
+  resolveUserId,
+  requireUserId,
+  requireCustomer,
+  getCustomerDetailedOrderItems
+);
+
+/**
+ * GET /api/customer/dashboard/detailed-category-items
+ */
+router.get(
+  "/dashboard/detailed-category-items",
+  resolveUserId,
+  requireUserId,
+  requireCustomer,
+  getCustomerDetailedItemsByCategory
 );
 
 /**

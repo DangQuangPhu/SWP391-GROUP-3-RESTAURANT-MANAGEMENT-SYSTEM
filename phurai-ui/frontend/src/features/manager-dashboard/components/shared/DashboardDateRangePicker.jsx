@@ -18,9 +18,41 @@ function DashboardDateRangePicker({
   onCancel,
   inline = false,
   allowFuture = false,
+  minDate = null,
 }) {
   // Always use real today for max date
   const today = new Date();
+  
+  let presets = getDateRangePresets(today);
+  if (minDate) {
+    const minD = new Date(minDate);
+    minD.setHours(0, 0, 0, 0);
+    presets = presets.map(preset => {
+      if (preset.range && preset.range.startDate) {
+        const start = new Date(preset.range.startDate);
+        if (start < minD) {
+          const clampedStart = minD < preset.range.endDate ? minD : preset.range.endDate;
+          return {
+            ...preset,
+            range: {
+              ...preset.range,
+              startDate: clampedStart
+            }
+          };
+        }
+      } else if (preset.range && preset.range.startDate === null) {
+        // "All Dates" / "All Time" preset -> clamp to minDate
+        return {
+          ...preset,
+          range: {
+            ...preset.range,
+            startDate: minD
+          }
+        };
+      }
+      return preset;
+    });
+  }
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -30,7 +62,7 @@ function DashboardDateRangePicker({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onCancel]);
 
-  const presets = getDateRangePresets(today);
+
 
   const handleApply = () => {
     // Allow null range for "All Dates" / "All time" presets
@@ -76,6 +108,7 @@ function DashboardDateRangePicker({
               ]}
               direction="horizontal"
               maxDate={allowFuture ? undefined : today}
+              minDate={minDate || undefined}
               rangeColors={["#9f8655"]}
               showDateDisplay={false}
             />

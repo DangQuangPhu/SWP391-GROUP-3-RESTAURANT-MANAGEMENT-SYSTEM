@@ -18,7 +18,6 @@
 }
 
 .notification-bell-icon.has-promotion {
-  animation: bell-shake 1.2s ease-in-out;
-  animation-delay: 0.5s;
+  animation: bell-shake 1.5s ease-in-out infinite;
   transform-origin: 50% 4px; /* pivot at bell top */
 }
