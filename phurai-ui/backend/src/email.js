@@ -952,7 +952,200 @@ export async function sendReservationReminderEmail({ toEmail, customerName, rese
   if (!isSmtpConfigured()) return { sent: false, devMode: true };
   const primaryOrigin = (process.env.APP_URL || "http://localhost:5173").split(",")[0].trim();
   const formattedId = `#${String(reservationId).padStart(6, "0")}`;
-  const safeName = customerName || "Guest";
+
+  let reservation = null;
+  let preorderItems = [];
+  try {
+    const [resRows] = await pool.query(`
+      SELECT 
+        r.reservation_id,
+        r.reservation_start_at,
+        r.guest_count,
+        r.contact_name,
+        r.contact_phone,
+        r.contact_email,
+        r.special_request,
+        r.dining_purpose,
+        r.deposit_amount,
+        r.final_total,
+        a.area_name,
+        (
+          SELECT STRING_AGG(t.table_number, ', ')
+          FROM dbo.ReservationTables rt
+          JOIN dbo.RestaurantTables t ON rt.table_id = t.table_id
+          WHERE rt.reservation_id = r.reservation_id
+        ) AS table_names
+      FROM dbo.Reservations r
+      LEFT JOIN dbo.RestaurantAreas a ON r.preferred_area_id = a.area_id
+      WHERE r.reservation_id = ?
+    `, [reservationId]);
+    if (resRows && resRows.length > 0) {
+      reservation = resRows[0];
+      const [itemRows] = await pool.query(`
+        SELECT 
+          d.dish_name,
+          pi.quantity,
+          pi.unit_price AS price
+        FROM dbo.PreorderItems pi
+        JOIN dbo.Dishes d ON pi.dish_id = d.dish_id
+        WHERE pi.reservation_id = ?
+      `, [reservationId]);
+      preorderItems = itemRows || [];
+    }
+  } catch (dbErr) {
+    console.error("[sendReservationReminderEmail] Database fetch failed, falling back to params:", dbErr.message);
+  }
+
+  const safeName = reservation?.contact_name || customerName || "Guest";
+  const safePhone = reservation?.contact_phone || "—";
+  const safeEmail = reservation?.contact_email || recipient;
+  const safeGuests = reservation?.guest_count ? `${reservation.guest_count} guests` : "—";
+  const safeArea = reservation?.area_name || "Standard area";
+  const safeTables = reservation?.table_names ? `#${reservation.table_names}` : "Assigned on arrival";
+  const safePurpose = reservation?.dining_purpose ? String(reservation.dining_purpose).trim() : "None";
+  const safeSpecialRequest = reservation?.special_request ? String(reservation.special_request).trim() : "None";
+  const depositAmount = reservation?.deposit_amount ? Number(reservation.deposit_amount) : 0;
+
+  const infoRow = (label, value) => `
+    <tr>
+      <td style="padding:8px 0;font-size:13px;color:#8a7a60;width:170px;vertical-align:top;">${label}</td>
+      <td style="padding:8px 0;font-size:14px;color:#2c1d0a;font-weight:600;">${value}</td>
+    </tr>`;
+
+  const htmlBody = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reservation Reminder — Phūrai</title>
+</head>
+<body style="margin:0;padding:0;background:#f8f5ef;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f5ef;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 40px rgba(31,26,23,0.10);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#1a1008 0%,#2c1d0a 100%);padding:36px 48px;text-align:center;">
+              <h1 style="margin:0;font-size:32px;letter-spacing:0.14em;color:#c9a96e;font-weight:300;">Phūrai</h1>
+              <p style="margin:6px 0 0;color:#8a7a60;font-size:11px;letter-spacing:0.22em;text-transform:uppercase;">Restaurant &amp; Bar</p>
+            </td>
+          </tr>
+
+          <!-- Gold divider -->
+          <tr><td style="height:3px;background:linear-gradient(90deg,transparent,#c9a96e,transparent);"></td></tr>
+
+          <!-- Status badge -->
+          <tr>
+            <td style="padding:28px 48px 0;text-align:center;">
+              <span style="display:inline-block;background:#fff9eb;color:#b08f4f;border:1px solid #f3e6cd;font-size:12px;font-weight:700;padding:6px 18px;border-radius:24px;letter-spacing:0.08em;text-transform:uppercase;">
+                🔔 Upcoming Reservation Reminder
+              </span>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:28px 48px 36px;">
+              <p style="margin:0 0 24px;font-size:15px;color:#4a3f35;line-height:1.7;">
+                Dear <strong style="color:#2c1d0a;">${safeName}</strong>,<br />
+                We look forward to welcoming you soon! This is a friendly reminder of your upcoming dining reservation at Phūrai.
+              </p>
+
+              <!-- Reservation Information Ticket -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border:1px solid #e8dcc8;border-radius:10px;margin:0 0 28px;">
+                <tr>
+                  <td style="padding:24px 28px;">
+                    <p style="margin:0 0 14px;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#a09080;font-weight:600;">
+                      Reservation Details
+                    </p>
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      ${infoRow("Reservation ID", `<strong style="color:#9f7c3a;font-size:15px;">${formattedId}</strong>`)}
+                      ${infoRow("Customer Name", safeName)}
+                      ${infoRow("Phone Number", safePhone)}
+                      ${infoRow("Email Address", safeEmail)}
+                      ${infoRow("Reservation Date", reservationDate)}
+                      ${infoRow("Arrival Time", reservationTime)}
+                      ${infoRow("Guest Count", safeGuests)}
+                      ${infoRow("Dining Area", safeArea)}
+                      ${infoRow("Assigned Table(s)", safeTables)}
+                      ${infoRow("Dining Purpose", safePurpose)}
+                      ${infoRow("Special Request", safeSpecialRequest)}
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Payment & Pre-orders Ticket -->
+              ${(preorderItems.length > 0 || depositAmount > 0) ? `
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border:1px solid #e8dcc8;border-radius:10px;margin:0 0 28px;">
+                  <tr>
+                    <td style="padding:24px 28px;">
+                      <p style="margin:0 0 14px;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#a09080;font-weight:600;">
+                        Pre-orders &amp; Deposit
+                      </p>
+                      <table width="100%" cellpadding="0" cellspacing="0" style="font-size:14px; line-height: 1.6;">
+                        ${preorderItems.length > 0 ? `
+                          <tr>
+                            <td colspan="2" style="font-weight: 600; font-size:13px; color:#a09080; padding-bottom: 6px; border-bottom: 1px dashed #e8dcc8;">Pre-ordered Items:</td>
+                          </tr>
+                          ${preorderItems.map(item => `
+                            <tr>
+                              <td style="padding: 8px 0; border-bottom: 1px solid #eee; color:#4a3f35;">${item.dish_name} x${item.quantity}</td>
+                              <td align="right" style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600; color:#2c1d0a;">${Number(item.price * item.quantity).toLocaleString('vi-VN')} đ</td>
+                            </tr>
+                          `).join('')}
+                        ` : ''}
+                        ${depositAmount > 0 ? `
+                          <tr>
+                            <td style="padding: 12px 0 0; font-weight: 600; color:#8a7a60;">Deposit Paid:</td>
+                            <td align="right" style="padding: 12px 0 0; font-weight: 700; color:#27ae60; font-size: 15px;">${depositAmount.toLocaleString('vi-VN')} đ</td>
+                          </tr>
+                        ` : ''}
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              ` : ''}
+
+              <!-- CTA Button -->
+              <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;">
+                <tr>
+                  <td style="background:linear-gradient(135deg,#9f7c3a,#c9a96e);border-radius:8px;">
+                    <a href="${primaryOrigin}/my-reservations"
+                       style="display:inline-block;padding:14px 32px;font-size:14px;font-weight:600;color:#fff;text-decoration:none;letter-spacing:0.06em;">
+                      View My Reservation &rarr;
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0;font-size:14px;color:#4a3f35;line-height:1.8;font-style:italic;">
+                Please check in at the front desk upon arrival. If you need to make any changes or cancel, please contact us at least 24 hours in advance. Thank you! 🌸
+              </p>
+            </td>
+          </tr>
+
+          <!-- Gold divider -->
+          <tr><td style="height:1px;background:linear-gradient(90deg,transparent,#e8dcc8,transparent);"></td></tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:24px 48px;text-align:center;">
+              <p style="margin:0 0 4px;font-size:12px;color:#a09080;">&copy; 2026 Phūrai Restaurant &amp; Bar. All rights reserved.</p>
+              <p style="margin:0;font-size:11px;color:#b8a898;">This is an automated email. Please do not reply directly to this message.</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
 
   try {
     await getTransporter().sendMail({
@@ -960,7 +1153,7 @@ export async function sendReservationReminderEmail({ toEmail, customerName, rese
       to: recipient,
       subject: `[Phūrai] Reminder: Your Upcoming Reservation ${formattedId}`,
       text: `Dear ${safeName},\n\nWe look forward to welcoming you soon!\n\nYour reservation ${formattedId} is scheduled for ${reservationDate} at ${reservationTime}.\n\nPlease check in at the front desk upon arrival.\n\nView your reservation: ${primaryOrigin}/my-reservations\n\n© 2026 Phūrai Restaurant & Bar`,
-      html: `<p>Dear <strong>${safeName}</strong>,</p><p>We look forward to welcoming you soon!</p><p>Your reservation <strong>${formattedId}</strong> is scheduled for <strong>${reservationDate}</strong> at <strong>${reservationTime}</strong>.</p><p>Please check in at the front desk upon arrival.</p><p><a href="${primaryOrigin}/my-reservations">View My Reservation →</a></p>`,
+      html: htmlBody,
     });
     console.log(`[sendReservationReminderEmail] Sent to ${recipient} for ${formattedId}`);
     return { sent: true };
