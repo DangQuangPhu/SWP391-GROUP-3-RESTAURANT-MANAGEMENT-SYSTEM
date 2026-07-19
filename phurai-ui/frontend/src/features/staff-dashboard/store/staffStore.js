@@ -14,9 +14,12 @@ export const useStaffStore = create((set, get) => ({
   loading: true,
   refreshing: false,
   staffRole: '',
+  selectedTableIdForModal: null,
 
   // Actions
   setStaffRole: (role) => set({ staffRole: role }),
+  openTableModal: (tableId) => set({ selectedTableIdForModal: tableId }),
+  closeTableModal: () => set({ selectedTableIdForModal: null }),
 
   refetchTables: async (showIndicator = false) => {
     if (showIndicator) set({ refreshing: true });

@@ -394,29 +394,30 @@ function StaffSection({ toast, hideHeader = false }) {
         ))}
       </div>
 
-      <div className="sfx-card sfx-card--overflow-visible" style={{ background: "#ffffff", padding: "24px", borderRadius: "14px", boxShadow: "0 6px 32px rgba(31,26,23,0.04)" }}>
-        <header className="sfx-card__head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+      <div className="sfx-card sfx-card--overflow-visible sfx-card--featured-dashboard">
+        <header className="sfx-card__head sfx-card__head--dashboard">
           <div>
-            <h3 className="sfx-card__title" style={{ color: "#1a1a1a", fontSize: 20, margin: 0 }}>Staff Registry</h3>
-            <p className="sfx-muted" style={{ fontSize: 13, margin: "4px 0 0" }}>Active employees and roles</p>
+            <h3 className="sfx-card__title sfx-card__title--dashboard">Staff Registry</h3>
+            <p className="sfx-muted sfx-card__subtitle--dashboard">Active employees and roles</p>
           </div>
-          <span className="sfx-muted" style={{ fontSize: 13 }}>{employees.length} employees</span>
+          <span className="sfx-muted sfx-card__counter--dashboard">{employees.length} employees</span>
         </header>
 
         {/* Redesigned Search & Filter Dropdown Row */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", marginBottom: "20px", width: "100%" }}>
-          <div style={{ flex: 1, maxWidth: "480px" }}>
+        <div className="sfx-staff__toolbar">
+          <div className="sfx-staff__search-wrapper">
             <SearchField
               placeholder="Search name, email, title, department…"
               value={searchQ}
               onChange={setSearchQ}
             />
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div style={{ position: "relative" }}>
+          <div className="sfx-staff__actions">
+            <div className="sfx-picker__container">
               <select
                 value={filterTab}
                 onChange={(e) => setFilterTab(e.target.value)}
+                className="sfx-staff__select"
                 style={{
                   padding: "9px 34px 9px 16px",
                   borderRadius: "10px",
@@ -438,23 +439,14 @@ function StaffSection({ toast, hideHeader = false }) {
                 <option value="with">With Account</option>
                 <option value="without">Without Account</option>
               </select>
-              <span style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#666" }}>
+              <span className="sfx-staff__select-arrow">
                 <Icon name="chevron-down" size={14} />
               </span>
             </div>
             <Button 
               variant="primary" 
               onClick={openNew} 
-              style={{ 
-                background: "linear-gradient(135deg, #111 0%, #333 100%)", 
-                border: "none", 
-                boxShadow: "0 4px 12px rgba(0,0,0,0.1)", 
-                borderRadius: "10px", 
-                padding: "9px 24px",
-                fontWeight: 600,
-                letterSpacing: "0.01em",
-                color: "#fff"
-              }}
+              className="sfx-tablemap__add-btn"
             >
               + Add Staff
             </Button>
@@ -467,16 +459,16 @@ function StaffSection({ toast, hideHeader = false }) {
           <EmptyState message="No employees match your filter." />
         ) : (
           <div className="sfx-table-wrap">
-            <table className="sfx-table sfx-table--hover" style={{ background: "#ffffff" }}>
+            <table className="sfx-table sfx-table--hover sfx-staff__table-bg">
               <thead>
-                <tr style={{ background: "#ffffff" }}>
-                  <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", verticalAlign: "middle", width: "40px", textAlign: "center" }}>#</th>
-                  <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", verticalAlign: "middle" }}>Name</th>
-                  <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", verticalAlign: "middle" }}>Role</th>
-                  {showSalary && <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", verticalAlign: "middle" }}>Salary</th>}
-                  <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", verticalAlign: "middle" }}>Account Status</th>
-                  <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", verticalAlign: "middle" }}>Online Status</th>
-                  <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", verticalAlign: "middle", textAlign: "right" }}>Actions</th>
+                <tr className="sfx-staff__tr-head-bg">
+                  <th className="sfx-staff__th sfx-staff__th--index">#</th>
+                  <th className="sfx-staff__th">Name</th>
+                  <th className="sfx-staff__th">Role</th>
+                  {showSalary && <th className="sfx-staff__th">Salary</th>}
+                  <th className="sfx-staff__th">Account Status</th>
+                  <th className="sfx-staff__th">Online Status</th>
+                  <th className="sfx-staff__th sfx-staff__th--right">Actions</th>
                 </tr>
               </thead>
               <motion.tbody variants={listContainerVariants} initial="hidden" animate="visible">
@@ -488,23 +480,22 @@ function StaffSection({ toast, hideHeader = false }) {
                     <motion.tr
                       key={emp.staff_id}
                       variants={listItemVariants}
-                      style={{ borderBottom: "1px solid var(--border-subtle, #f0f0f0)", verticalAlign: "middle", transition: "background 0.2s" }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = "var(--bg-hover, #fafafa)"}
-                      onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                      className="sfx-staff__tr"
                     >
-                      <td style={{ padding: "20px", textAlign: "center", fontWeight: "600", color: "var(--text-muted, #777)" }}>
+                      <td className="sfx-staff__td--index">
                         {index + 1}
                       </td>
-                      <td style={{ padding: "20px" }}>
-                        <div style={{ fontWeight: "600", color: "var(--text-main, #111)" }}>{fmt(emp.full_name)}</div>
-                        <div style={{ fontSize: "13px", color: "var(--text-muted, #777)", marginTop: "4px" }}>{fmt(emp.email)}</div>
-                        {emp.phone && <div style={{ fontSize: "12px", color: "var(--text-muted, #999)", marginTop: "2px" }}>{emp.phone}</div>}
+                      <td className="sfx-staff__td--main">
+                        <div className="sfx-staff__emp-name">{fmt(emp.full_name)}</div>
+                        <div className="sfx-staff__emp-email">{fmt(emp.email)}</div>
+                        {emp.phone && <div className="sfx-staff__emp-phone">{emp.phone}</div>}
                       </td>
-                      <td style={{ padding: "16px 20px" }}>
+                      <td className="sfx-staff__td">
                         <select
                           value={emp.job_title_id || ""}
                           onChange={(e) => handleQuickJobTitleChange(emp, Number(e.target.value))}
                           disabled={isSelf || isSystemAdmin || saving}
+                          className="sfx-select sfx-staff__select"
                           style={{
                             padding: "6px 10px",
                             border: "1px solid var(--border-subtle, #eaeaea)",
@@ -523,85 +514,47 @@ function StaffSection({ toast, hideHeader = false }) {
                         </select>
                       </td>
 
-                      {showSalary && <td style={{ padding: "16px 20px", fontFamily: "monospace", color: "var(--text-main, #333)" }}>{fmtSalary(emp.salary)}</td>}
-                      <td style={{ padding: "16px 20px" }}>
+                      {showSalary && <td className="sfx-staff__td sfx-staff__emp-salary">{fmtSalary(emp.salary)}</td>}
+                      <td className="sfx-staff__td">
                         {emp.has_system_account ? (
                           <button
                             onClick={() => handleQuickActiveToggle(emp, !emp.account_is_active)}
                             disabled={isSelf || isSystemAdmin}
+                            className={`sfx-staff__account-btn ${emp.account_is_active ? "sfx-staff__account-btn--active" : "sfx-staff__account-btn--suspended"}`}
                             style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              padding: "4px 12px",
-                              borderRadius: "99px",
-                              fontSize: "12px",
-                              fontWeight: "600",
-                              border: "1px solid",
                               cursor: (isSelf || isSystemAdmin) ? "not-allowed" : "pointer",
-                              outline: "none",
-                              transition: "all 0.2s ease",
-                              background: emp.account_is_active ? "#ecfdf5" : "#fff1f2",
-                              color: emp.account_is_active ? "#047857" : "#b91c1c",
-                              borderColor: emp.account_is_active ? "#a7f3d0" : "#fecdd3"
                             }}
                             title="Click to toggle status"
                           >
-                            <span style={{
-                              display: "inline-block",
-                              width: "6px",
-                              height: "6px",
-                              borderRadius: "50%",
-                              marginRight: "6px",
-                              background: emp.account_is_active ? "#10b981" : "#ef4444"
-                            }} />
+                            <span className={`sfx-staff__account-dot ${emp.account_is_active ? "sfx-staff__account-dot--active" : "sfx-staff__account-dot--suspended"}`} />
                             {emp.account_is_active ? "Active" : "Suspended"}
                           </button>
                         ) : (
-                          <span style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            padding: "4px 12px",
-                            borderRadius: "99px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            border: "1px solid #e2e8f0",
-                            background: "#f1f5f9",
-                            color: "#64748b"
-                          }}>
-                            <span style={{
-                              display: "inline-block",
-                              width: "6px",
-                              height: "6px",
-                              borderRadius: "50%",
-                              marginRight: "6px",
-                              background: "#94a3b8"
-                            }} />
+                          <span className="sfx-staff__no-account-badge">
+                            <span className="sfx-staff__no-account-dot" />
                             No Account
                           </span>
                         )}
                       </td>
-                      <td style={{ padding: "16px 20px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={{
-                            display: "inline-block", width: "8px", height: "8px", borderRadius: "50%",
-                            background: emp.is_online ? "#2f7d4f" : "#9e9e9e"
-                          }} />
-                          <span style={{ fontWeight: "600", color: emp.is_online ? "#2f7d4f" : "var(--text-muted, #999)" }}>
+                      <td className="sfx-staff__td">
+                        <div className="sfx-staff__online-status-container">
+                          <span className={`sfx-staff__online-indicator ${emp.is_online ? "sfx-staff__online-indicator--active" : "sfx-staff__online-indicator--inactive"}`} />
+                          <span className={`sfx-staff__online-text ${emp.is_online ? "sfx-staff__online-text--active" : "sfx-staff__online-text--inactive"}`}>
                             {emp.is_online ? "Online" : "Offline"}
                           </span>
                         </div>
                         {emp.is_online && emp.online_since && (
-                          <div style={{ fontSize: "11px", color: "var(--text-muted, #999)", marginTop: "2px" }}>
+                          <div className="sfx-staff__last-seen">
                             Since {new Date(emp.online_since).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         )}
                       </td>
-                      <td style={{ padding: "16px 20px" }}>
-                        <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", flexWrap: "nowrap" }}>
-                          <Button size="sm" onClick={() => openEdit(emp)} style={{ background: "#fff", color: "#111", borderRadius: "8px", fontWeight: 600, border: "1px solid #d1d5db", padding: "6px 14px", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>Edit</Button>
-                          <Button size="sm" onClick={() => openReview(emp)} style={{ background: "#fff", color: "#111", borderRadius: "8px", fontWeight: 600, border: "1px solid #d1d5db", padding: "6px 14px", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}>Review</Button>
+                      <td className="sfx-staff__td">
+                        <div className="sfx-staff__actions-container">
+                          <Button size="sm" onClick={() => openEdit(emp)} className="sfx-staff__btn-action">Edit</Button>
+                          <Button size="sm" onClick={() => openReview(emp)} className="sfx-staff__btn-action">Review</Button>
                           {!isSystemAdmin && !isSelf && (
-                            <Button size="sm" onClick={() => handleDeleteEmployee(emp)} disabled={saving} style={{ background: "#fef2f2", color: "#ef4444", borderRadius: "8px", fontWeight: 600, border: "1px solid #fecaca", padding: "6px 14px" }}>
+                            <Button size="sm" onClick={() => handleDeleteEmployee(emp)} disabled={saving} className="sfx-staff__btn-delete">
                               Delete
                             </Button>
                           )}
@@ -624,7 +577,7 @@ function StaffSection({ toast, hideHeader = false }) {
           onClose={() => setEditModal(null)}
           footer={
             <div style={{ display: "flex", gap: "12px", width: "100%", justifyContent: "flex-end" }}>
-              <Button variant="ghost" onClick={() => setEditModal(null)} style={{ borderRadius: "10px", padding: "8px 20px", fontWeight: 600, background: "#f1f5f9", border: "1px solid #e2e8f0", color: "#475569" }}>Cancel</Button>
+              <Button variant="ghost" onClick={() => setEditModal(null)} className="sfx-staff__btn-action">Cancel</Button>
               <Button 
                 onClick={handleSaveEmployee} 
                 disabled={saving}

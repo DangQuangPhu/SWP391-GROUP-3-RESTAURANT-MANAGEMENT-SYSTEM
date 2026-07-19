@@ -1,0 +1,20 @@
+/* sfx.css — Portal-Shared Design System (Phūrai)
+ * ==========================================================
+ * Re-export barrel for the sfx-* shared design system used by:
+ *   - features/manager-dashboard  (19 components)
+ *   - features/staff-dashboard    (17 components)
+ *   - features/admin-dashboard    (4 components)
+ *   - features/profile            (1 component)
+ *   - features/reservations       (1 component)
+ *
+ * Per ARCHITECTURE.md §8 — features must NOT import sibling features
+ * directly. All sfx consumers import from this file instead.
+ *
+ * Physical CSS definition lives in:
+ *   features/manager-dashboard/styles/manager-dashboard.css
+ * In Wave 1 (manager-dashboard migration), the content will be
+ * moved physically here and manager-dashboard.css will become a
+ * simple @import shim back to this file.
+ * ==========================================================
+ */
+@import '../../../features/manager-dashboard/styles/manager-dashboard.css';

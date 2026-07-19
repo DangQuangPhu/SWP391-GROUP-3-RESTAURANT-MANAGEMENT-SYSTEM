@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useOutletContext, useLocation } from "react-router-dom";
 import "../styles/manager-dashboard.css";
 import {
+  Skeleton,
   KpiSkeleton,
   TableSkeleton,
   CardGridSkeleton,
@@ -113,10 +114,35 @@ function routeSkeleton(path) {
       key="default-sk"
       variants={fadeScaleVariants}
       initial="hidden" animate="visible" exit="exit"
-      className="sfx-loading"
+      className="p-6 space-y-6"
     >
-      <span className="sfx-spinner" />
-      <p>Loading…</p>
+      {/* Header skeleton */}
+      <div className="flex justify-between items-center">
+        <Skeleton className="w-48 h-8" />
+        <Skeleton className="w-24 h-8 rounded-lg" />
+      </div>
+      
+      {/* Toolbar skeleton */}
+      <div className="flex gap-4">
+        <Skeleton className="flex-grow h-10 rounded-lg" />
+        <Skeleton className="w-32 h-10 rounded-lg" />
+      </div>
+
+      {/* Main card or table layout skeleton */}
+      <div className="border border-gray-100 rounded-2xl p-5 bg-white space-y-4">
+        <Skeleton className="w-1/3 h-5" />
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
+              <div className="space-y-2 flex-grow">
+                <Skeleton className="w-1/2 h-4" />
+                <Skeleton className="w-1/3 h-3" />
+              </div>
+              <Skeleton className="w-16 h-6 rounded-full" />
+            </div>
+          ))}
+        </div>
+      </div>
     </motion.div>
   );
 }

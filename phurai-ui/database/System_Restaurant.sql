@@ -18,6 +18,7 @@ GO
 -- ============================================================================
 -- 0. CLEANUP: DROP EXISTING TABLES (Từ Con đến Cha)
 -- ============================================================================
+DROP TABLE IF EXISTS dbo.TableOccupancySessions;
 DROP TABLE IF EXISTS dbo.RecommendationLogs;
 DROP TABLE IF EXISTS dbo.AuditLogs;
 DROP TABLE IF EXISTS dbo.ReportSnapshots;
@@ -254,7 +255,7 @@ CREATE TABLE dbo.RestaurantTables (
     CONSTRAINT CK_RestaurantTables_capacity CHECK (capacity > 0),
     CONSTRAINT CK_RestaurantTables_tier CHECK (price_tier IN (N'Standard', N'Premium', N'VIP')),
     CONSTRAINT CK_RestaurantTables_status CHECK (table_status IN
-        (N'Available', N'Reserved', N'Occupied', N'Cleaning', N'Inactive', N'Overdue'))
+        (N'Available', N'Reserved', N'Occupied', N'Cleaning', N'Inactive'))
 );
 GO
 
@@ -825,8 +826,49 @@ CREATE TABLE dbo.Notifications (
     CONSTRAINT FK_Notifications_UserAccounts FOREIGN KEY (user_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE CASCADE,
     CONSTRAINT CK_Notifications_type CHECK (notification_type IN
         (N'Booking Confirmed', N'Booking Rejected', N'Booking Cancelled', N'Booking Reminder',
-         N'Booking Changed', N'Order Ready', N'Payment Receipt', N'Promotion', N'System'))
+         N'Booking Changed', N'Order Ready', N'Payment Receipt', N'Promotion', N'System', N'Overrun Warning'))
 );
+GO
+
+CREATE TABLE dbo.TableOccupancySessions (
+    session_id            INT IDENTITY(1,1) NOT NULL,
+    table_id              SMALLINT NOT NULL,
+    reservation_id        INT NULL,
+    order_id              INT NULL,
+    guest_count           TINYINT NOT NULL CONSTRAINT DF_TOS_guest_count DEFAULT 1,
+    check_in_at           DATETIME2(0) NOT NULL CONSTRAINT DF_TOS_check_in_at DEFAULT SYSDATETIME(),
+    estimated_duration_min INT NOT NULL,
+    buffer_min            INT NOT NULL CONSTRAINT DF_TOS_buffer_min DEFAULT 15,
+    estimated_release_at  DATETIME2(0) NOT NULL,
+    released_at           DATETIME2(0) NULL,
+    release_trigger       NVARCHAR(30) NULL,
+    released_by_staff_id  INT NULL,
+    overrun_alerted       BIT NOT NULL CONSTRAINT DF_TOS_overrun_alerted DEFAULT 0,
+    created_at            DATETIME2(0) NOT NULL CONSTRAINT DF_TOS_created_at DEFAULT SYSDATETIME(),
+    updated_at            DATETIME2(0) NOT NULL CONSTRAINT DF_TOS_updated_at DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_TableOccupancySessions PRIMARY KEY (session_id),
+    CONSTRAINT FK_TOS_RestaurantTables FOREIGN KEY (table_id)
+        REFERENCES dbo.RestaurantTables(table_id) ON DELETE CASCADE,
+    CONSTRAINT FK_TOS_Reservations FOREIGN KEY (reservation_id)
+        REFERENCES dbo.Reservations(reservation_id) ON DELETE SET NULL,
+    CONSTRAINT FK_TOS_Orders FOREIGN KEY (order_id)
+        REFERENCES dbo.Orders(order_id),
+    CONSTRAINT FK_TOS_Staff FOREIGN KEY (released_by_staff_id)
+        REFERENCES dbo.UserAccounts(user_id),
+    CONSTRAINT CK_TOS_release_trigger CHECK (
+        release_trigger IN (N'OnlinePayment', N'StaffCashConfirm', N'ManualRelease') OR release_trigger IS NULL
+    ),
+    CONSTRAINT CK_TOS_duration CHECK (estimated_duration_min > 0),
+    CONSTRAINT CK_TOS_buffer CHECK (buffer_min >= 0)
+);
+GO
+
+CREATE INDEX IX_TOS_table_open ON dbo.TableOccupancySessions(table_id, released_at)
+    WHERE released_at IS NULL;
+GO
+
+CREATE INDEX IX_TOS_overrun_check ON dbo.TableOccupancySessions(estimated_release_at, released_at, overrun_alerted)
+    WHERE released_at IS NULL;
 GO
 
 CREATE TABLE dbo.CustomerReviews (
@@ -1214,7 +1256,8 @@ INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description, upd
 -- Phase 1: Deposit threshold configuration (editable via Admin Settings UI)
 (N'deposit_party_size_threshold', N'8', N'Min party size to require a deposit', 1),
 (N'deposit_min_table_tier', N'VIP', N'Min table tier (Standard/Premium/VIP) to require a deposit', 1),
-(N'no_show_grace_default_min', N'20', N'Default grace period in minutes before marking No Show', 1);
+(N'no_show_grace_default_min', N'20', N'Default grace period in minutes before marking No Show', 1),
+(N'cleaning_buffer_min', N'15', N'Buffer minutes added to EstimatedDuration to calculate EstimatedReleaseTime', 1);
 GO
 
 
@@ -2419,4 +2462,14 @@ INSERT INTO dbo.CustomerReviews (customer_id, order_id, food_rating, service_rat
 (10, NULL, 2, 4, 4, N'Decent steak, but nothing special. Ambiance was nice though.', 1, '2026-06-16 23:02:55'),
 (10, NULL, 2, 4, 2, NULL, 1, '2026-04-23 23:02:55'),
 (13, NULL, 2, 1, 2, N'Food was bland and overpriced. Will not return.', 1, '2026-05-09 23:02:55');
+GO
+
+-- Seed active sessions for Occupied tables (VIP-2 [6], S-03 [10], S-07 [14], PR-01 [24])
+INSERT INTO dbo.TableOccupancySessions
+  (table_id, reservation_id, order_id, guest_count, check_in_at, estimated_duration_min, buffer_min, estimated_release_at, released_at)
+VALUES
+  (6,  100007, NULL, 4, DATEADD(minute, -45, SYSDATETIME()), 90, 15, DATEADD(minute, 60, SYSDATETIME()), NULL),
+  (10, 100005, NULL, 2, DATEADD(minute, -30, SYSDATETIME()), 60, 15, DATEADD(minute, 45, SYSDATETIME()), NULL),
+  (14, NULL,   NULL, 3, DATEADD(minute, -75, SYSDATETIME()), 90, 15, DATEADD(minute, 30, SYSDATETIME()), NULL),
+  (24, 100004, NULL, 2, DATEADD(minute, -10, SYSDATETIME()), 60, 15, DATEADD(minute, 65, SYSDATETIME()), NULL);
 GO

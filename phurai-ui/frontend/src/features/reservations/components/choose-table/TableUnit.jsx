@@ -1,11 +1,15 @@
 import React, { useMemo } from 'react';
 import { SHAPES, getChairPositions } from '../../config/floorPlanConfig';
 
-export default function TableUnit({ tableData, status, isSelected, isDimmed, onClick }) {
+export default function TableUnit({ tableData, status, isSelected, isDimmed, onClick, onShowTooltip, onHideTooltip }) {
   const profile = SHAPES[tableData.type];
 
-  const handleTableClick = () => {
-    if (status === 'Occupied' || status === 'Reserved' || status === 'Cleaning') return;
+  const handleTableClick = (e) => {
+    if (status === 'Occupied' || status === 'Reserved' || status === 'Cleaning') {
+      onShowTooltip(e);
+      return;
+    }
+    onHideTooltip();
     onClick(tableData.id);
   };
 
@@ -61,6 +65,8 @@ export default function TableUnit({ tableData, status, isSelected, isDimmed, onC
       transform={`translate(${tableData.x},${tableData.y})`}
       style={style}
       onClick={handleTableClick}
+      onMouseEnter={onShowTooltip}
+      onMouseLeave={onHideTooltip}
     >
       {chairs.map((p, index) => (
         <rect

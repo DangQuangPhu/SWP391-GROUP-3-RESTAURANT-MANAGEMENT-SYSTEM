@@ -45,7 +45,8 @@ export default function ReservationDetails({
   tablesLoading,
   isAuthenticated,
   onUpdateForm,
-  tableHoldMin = 15
+  tableHoldMin = 15,
+  error
 }) {
   const navigate = useNavigate();
   const getTodayString = () => {
@@ -148,6 +149,13 @@ export default function ReservationDetails({
     };
   }, [selectedTableId, form.date]);
 
+  useEffect(() => {
+    if (error) {
+      setIsTransitioning(false);
+      isTransitioningRef.current = false;
+    }
+  }, [error]);
+
   const isTimeConflicting = useCallback((timeStr) => {
     if (!timeStr || tableBookings.length === 0) return false;
     const tMins = getMins(timeStr);
@@ -166,22 +174,6 @@ export default function ReservationDetails({
     });
   }, [tableBookings]);
 
-  const getMaxEndTimeMins = useCallback((startStr) => {
-    if (!startStr || tableBookings.length === 0) return 24 * 60;
-    const startMins = getMins(startStr);
-    
-    let minBlockedStart = 24 * 60;
-    tableBookings.forEach(booking => {
-      const startObj = new Date(booking.start);
-      const startMinsBooking = startObj.getHours() * 60 + startObj.getMinutes();
-      const blockedStart = startMinsBooking - 60;
-      if (blockedStart > startMins && blockedStart < minBlockedStart) {
-        minBlockedStart = blockedStart;
-      }
-    });
-    return minBlockedStart;
-  }, [tableBookings]);
-
   const generateTimeOptions = (startHour, endHour, stepMins = 15) => {
     const options = [];
     for (let h = startHour; h <= endHour; h++) {
@@ -193,43 +185,37 @@ export default function ReservationDetails({
     return options;
   };
 
-  const getEndTimeOptions = (startStr) => {
-    if (!startStr) return [];
-    const options = [];
-    const [sH, sM] = startStr.split(':').map(Number);
-    let currentMins = sH * 60 + sM + 30; // Minimum 30 mins after start time
-    const maxMins = 23 * 60 + 45;
-    const maxAllowedMins = getMaxEndTimeMins(startStr);
-    while (currentMins <= maxMins && currentMins <= maxAllowedMins) {
-      const h = Math.floor(currentMins / 60);
-      const m = currentMins % 60;
-      options.push(`${String(h % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-      currentMins += 15;
-    }
-    return options;
+  const getDiningDuration = (guestCount) => {
+    const count = Number(guestCount) || 1;
+    if (count <= 2) return 60;
+    if (count <= 4) return 90;
+    if (count <= 6) return 105;
+    return 120;
   };
+
+  useEffect(() => {
+    if (form.startTime && form.guests) {
+      const [h, m] = form.startTime.split(':').map(Number);
+      const diningDuration = getDiningDuration(form.guests);
+      let endMins = h * 60 + m + diningDuration;
+      const endH = Math.floor(endMins / 60) % 24;
+      const endM = endMins % 60;
+      const computedEndTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+      
+      setForm(prev => {
+        if (prev.endTime !== computedEndTime) {
+          if (onUpdateForm) onUpdateForm('endTime', computedEndTime);
+          return { ...prev, endTime: computedEndTime };
+        }
+        return prev;
+      });
+    }
+  }, [form.startTime, form.guests, onUpdateForm]);
 
   const handleStartTimeChange = (newStartTime) => {
-    setForm(prev => {
-      const updated = { ...prev, startTime: newStartTime };
-      if (prev.endTime) {
-        const startMins = getMins(newStartTime);
-        const endMins = getMins(prev.endTime);
-        if (endMins <= startMins) {
-          updated.endTime = '';
-        }
-      }
-      return updated;
-    });
+    setForm(prev => ({ ...prev, startTime: newStartTime }));
     if (onUpdateForm) {
       onUpdateForm('startTime', newStartTime);
-    }
-  };
-
-  const handleEndTimeChange = (newEndTime) => {
-    setForm(prev => ({ ...prev, endTime: newEndTime }));
-    if (onUpdateForm) {
-      onUpdateForm('endTime', newEndTime);
     }
   };
 
@@ -237,11 +223,6 @@ export default function ReservationDetails({
     const all = generateTimeOptions(10, 22, 15);
     return all.filter(time => !isTimeConflicting(time));
   }, [tableBookings, isTimeConflicting]);
-
-  const endHoursOptions = useMemo(() => {
-    const all = getEndTimeOptions(form.startTime);
-    return all.filter(time => !isTimeConflicting(time));
-  }, [form.startTime, tableBookings, isTimeConflicting, getMaxEndTimeMins]);
 
   const handleDurationChange = (newDurationStr) => {
     const newDuration = Number(newDurationStr);
@@ -354,23 +335,9 @@ export default function ReservationDetails({
     }
 
     if (form.startTime && form.endTime) {
-      const [sh, sm] = form.startTime.split(':').map(Number);
-      const [eh, em] = form.endTime.split(':').map(Number);
-      const startMins = sh * 60 + sm;
-      let endMins = (eh === 0 && em === 0) ? 1440 : (eh * 60 + em);
-      if (eh === 0 && em > 0) endMins = 1440 + em;
-
-      if (endMins <= startMins) {
-        newErrors.endTime = "End time must be after start time.";
-      } else if (endMins - startMins < 60) {
-        newErrors.endTime = "Dining duration must be at least 1 hour.";
-      } else if (endMins - startMins > 90) {
-        newErrors.endTime = "Dining duration cannot exceed 1.5 hours.";
-      } else if (isTimeConflicting(form.endTime)) {
-        newErrors.endTime = "This time slot is already booked, please select another time.";
+      if (isTimeConflicting(form.startTime) || isTimeConflicting(form.endTime)) {
+        newErrors.startTime = "This time slot conflicts with an existing booking on the selected table. Please choose another time.";
       }
-    } else if (!form.endTime) {
-      newErrors.endTime = "Please select an end time.";
     }
 
     // Validate Table Selection (only if guests is 1-10)
@@ -473,29 +440,6 @@ export default function ReservationDetails({
                 ))}
               </datalist>
               {errors.startTime && <p className="text-red-500 text-sm mt-1">{errors.startTime}</p>}
-            </>
-          )}
-        </div>
-        <div className="rd-field" ref={registerRef('endTime')} style={{ marginTop: '1.5rem' }}>
-          <label>END TIME</label>
-          {form.guests > 10 ? (
-            <input type="text" readOnly value="Not available" className="rd-disabled-input" />
-          ) : (
-            <>
-              <input
-                type="time"
-                value={form.endTime || ''}
-                onChange={(e) => handleEndTimeChange(e.target.value)}
-                disabled={!form.startTime}
-                list="endTimes"
-                className={`w-full px-4 py-2 mt-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white ${errors.endTime ? 'border-red-500 border-2' : 'border-gray-300'} ${!form.startTime ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-              />
-              <datalist id="endTimes">
-                {endHoursOptions.map(time => (
-                  <option key={time} value={time} />
-                ))}
-              </datalist>
-              {errors.endTime && <p className="text-red-500 text-sm mt-1">{errors.endTime}</p>}
             </>
           )}
         </div>
@@ -706,6 +650,12 @@ export default function ReservationDetails({
           {errors.phone && <p className="text-red-500 text-sm mt-1">{errors.phone}</p>}
         </div>
       </div>
+
+      {error && (
+        <div style={{ marginBottom: "16px", padding: "12px", borderRadius: "8px", background: "#fef2f2", border: "1px solid #fee2e2", color: "#b91c1c", fontSize: "14px", fontWeight: "500", textAlign: "center" }}>
+          {error}
+        </div>
+      )}
 
       <button
         type="button"

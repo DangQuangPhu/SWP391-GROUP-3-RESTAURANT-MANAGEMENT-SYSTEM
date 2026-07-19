@@ -1,5 +1,7 @@
-/* Staff portal — reuses the manager portal sfx design system for visual parity. */
-@import "../../manager-dashboard/styles/manager-dashboard.css";
+/* Staff portal — reuses the sfx portal design system for visual parity.
+ * sfx.css is the canonical shared import per ARCHITECTURE.md §8.
+ * Previously imported manager-dashboard.css directly (cross-feature violation). */
+@import '@/components/ui/styles/sfx.css';
 
 /* Staff shell uses the same gray canvas; header stays solid white */
 .sfx-shell--staff {

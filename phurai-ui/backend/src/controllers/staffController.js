@@ -96,6 +96,8 @@ function mapTableRow(row) {
     active_session_id: row.active_session_id ?? null,
     active_reservation_id: row.active_reservation_id ?? null,
     active_reservation_customer_name: row.active_reservation_customer_name ?? null,
+    // EstimatedReleaseTime from TableOccupancySessions (null when table is not Occupied)
+    estimated_release_at: row.estimated_release_at ?? null,
   };
 }
 
@@ -151,7 +153,14 @@ export async function listStaffTables(_req, res) {
              AND r.reservation_status IN (N'Await Check-in')
              AND CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
            ORDER BY r.reservation_start_at ASC
-         ) AS active_reservation_customer_name
+         ) AS active_reservation_customer_name,
+         (
+           SELECT TOP 1 tos.estimated_release_at
+           FROM dbo.TableOccupancySessions AS tos
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS estimated_release_at
        FROM dbo.RestaurantTables AS t
        INNER JOIN dbo.RestaurantAreas AS a ON a.area_id = t.area_id
        WHERE a.is_active = 1

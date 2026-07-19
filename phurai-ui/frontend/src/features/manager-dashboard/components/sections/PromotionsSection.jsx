@@ -281,10 +281,7 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
       </SectionHead>
 
       {/* ── KPI Cards ────────────────────────────────────────────────────── */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: 16, marginBottom: 8,
-      }}>
+      <div className="sfx-promotions__kpis-grid">
         {promoKpis.map((kpi, i) => (
           <motion.article
             key={kpi.label}
@@ -293,35 +290,16 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
             initial="hidden"
             animate="visible"
             whileHover={{ y: -4, boxShadow: '0 16px 48px rgba(31,26,23,0.10)' }}
-            style={{
-              background: '#fff',
-              borderRadius: 16,
-              padding: '20px 22px 18px',
-              border: '1px solid rgba(31,26,23,0.06)',
-              boxShadow: '0 2px 12px rgba(31,26,23,0.04)',
-              position: 'relative',
-              overflow: 'hidden',
-              cursor: 'default',
-              transition: 'box-shadow 0.4s cubic-bezier(0.16,1,0.3,1)',
-            }}
+            className="sfx-promotions__kpi-card"
           >
-            <div style={{
-              position: 'absolute', top: 0, right: 0,
-              width: 80, height: 80, borderRadius: '0 16px 0 40px',
-              background: kpi.gradient, opacity: 0.08,
-            }} />
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: kpi.gradient,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              marginBottom: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-            }}>
+            <div className="sfx-promotions__kpi-bg" style={{ background: kpi.gradient }} />
+            <div className="sfx-promotions__kpi-icon-container" style={{ background: kpi.gradient }}>
               <kpi.icon size={18} color="#fff" />
             </div>
-            <p style={{ fontSize: 28, fontWeight: 800, color: '#1a1a1a', margin: 0, lineHeight: 1.1 }}>
+            <p className="sfx-promotions__kpi-val">
               {kpi.value}
             </p>
-            <p style={{ fontSize: 12, fontWeight: 500, color: '#888', margin: '6px 0 0', letterSpacing: '0.02em' }}>
+            <p className="sfx-promotions__kpi-lbl">
               {kpi.label}
             </p>
           </motion.article>
@@ -332,19 +310,15 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ ease: APPLE, duration: 0.5, delay: 0.3 }}
-        style={{
-          background: '#fff', borderRadius: 16, padding: '24px',
-          border: '1px solid rgba(31,26,23,0.06)',
-          boxShadow: '0 4px 24px rgba(31,26,23,0.04)',
-        }}
+        transition={{ ease: APPLE, duration: 0.5, duration: 0.5, delay: 0.3 }}
+        className="sfx-card sfx-card--featured-dashboard"
       >
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <header className="sfx-card__head sfx-card__head--dashboard">
           <div>
-            <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1a1a1a', margin: 0 }}>
+            <h3 className="sfx-card__title sfx-card__title--dashboard">
               All Promotions
             </h3>
-            <p style={{ fontSize: 13, color: '#888', margin: '4px 0 0' }}>
+            <p className="sfx-muted sfx-card__subtitle--dashboard">
               {filtered.length} promotion{filtered.length !== 1 ? 's' : ''}
             </p>
           </div>
@@ -359,28 +333,28 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
           />
         ) : (
           <div className="sfx-table-wrap">
-            <table className="sfx-table sfx-table--hover" style={{ background: '#fff' }}>
+            <table className="sfx-table sfx-table--hover sfx-promotions__table-bg">
               <thead>
-                <tr style={{ background: '#fafafa' }}>
-                  <th style={{ color: '#555', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, padding: '12px 16px' }}>
+                <tr className="sfx-promotions__tr-head-bg">
+                  <th className="sfx-promotions__th">
                     Promotion
                   </th>
-                  <th style={{ color: '#555', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, padding: '12px 16px' }}>
+                  <th className="sfx-promotions__th">
                     Code
                   </th>
-                  <th style={{ color: '#555', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, padding: '12px 16px' }}>
+                  <th className="sfx-promotions__th">
                     Discount
                   </th>
-                  <th style={{ color: '#555', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, padding: '12px 16px' }}>
+                  <th className="sfx-promotions__th">
                     Scope
                   </th>
-                  <th style={{ color: '#555', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, padding: '12px 16px' }}>
+                  <th className="sfx-promotions__th">
                     Validity
                   </th>
-                  <th style={{ color: '#555', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, padding: '12px 16px' }}>
+                  <th className="sfx-promotions__th">
                     Status
                   </th>
-                  <th style={{ color: '#555', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, padding: '12px 16px', textAlign: 'right' }}>
+                  <th className="sfx-promotions__th sfx-promotions__th--right">
                     Actions
                   </th>
                 </tr>
@@ -396,39 +370,25 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                       animate="visible"
                       exit="exit"
                       layout
-                      style={{
-                        borderBottom: '1px solid rgba(31,26,23,0.05)',
-                        transition: 'background 0.25s cubic-bezier(0.16,1,0.3,1)',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,0.03)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      className="sfx-promotions__tr"
                     >
                       {/* Name + Description */}
-                      <td style={{ padding: '16px' }}>
-                        <div style={{ fontWeight: 650, color: '#1a1a1a', fontSize: 14 }}>
+                      <td className="sfx-promotions__td">
+                        <div className="sfx-promotions__td-title">
                           {p.promotion_name}
                         </div>
                         {p.description && (
-                          <div style={{ fontSize: 12, color: '#999', marginTop: 3, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <div className="sfx-promotions__td-sub">
                             {p.description}
                           </div>
                         )}
                       </td>
 
                       {/* Promo Code */}
-                      <td style={{ padding: '16px' }}>
+                      <td className="sfx-promotions__td">
                         <button
                           onClick={() => copyCode(p.promo_code)}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 6,
-                            background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.12)',
-                            borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
-                            fontSize: 13, fontWeight: 700, color: '#4F46E5',
-                            fontFamily: 'monospace', letterSpacing: '0.04em',
-                            transition: 'all 0.25s cubic-bezier(0.16,1,0.3,1)',
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.12)'; e.currentTarget.style.transform = 'scale(1.03)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.06)'; e.currentTarget.style.transform = 'scale(1)'; }}
+                          className="sfx-promotions__code-btn"
                           title="Click to copy"
                         >
                           <Copy size={12} /> {p.promo_code}
@@ -436,12 +396,12 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                       </td>
 
                       {/* Discount */}
-                      <td style={{ padding: '16px' }}>
-                        <span style={{ fontWeight: 700, fontSize: 15, color: '#1a1a1a' }}>
+                      <td className="sfx-promotions__td">
+                        <span className="sfx-promotions__td-price">
                           {fmtDiscount(p.discount_type, p.discount_value)}
                         </span>
                         {p.max_discount_amount > 0 && (
-                          <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+                          <div className="sfx-promotions__td-price-sub">
                             Max: {Number(p.max_discount_amount).toLocaleString('vi-VN')}₫
                           </div>
                         )}
@@ -453,36 +413,36 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                       </td>
 
                       {/* Validity */}
-                      <td style={{ padding: '16px' }}>
-                        <div style={{ fontSize: 12, color: '#555', display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <td className="sfx-promotions__td">
+                        <div className="sfx-promotions__td-flex-gap">
                           <Clock size={12} color="#999" />
                           <span>{safeFmt(p.valid_from)}</span>
                         </div>
-                        <div style={{ fontSize: 12, color: '#999', marginTop: 2, paddingLeft: 17 }}>
+                        <div className="sfx-promotions__td-sub-info">
                           → {safeFmt(p.valid_until)}
                         </div>
                         {p.usage_limit && (
-                          <div style={{ fontSize: 11, color: '#bbb', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4, paddingLeft: 17 }}>
+                          <div className="sfx-promotions__td-sub-extra">
                             <Users size={10} /> {p.times_used || 0}/{p.usage_limit} used
                           </div>
                         )}
                       </td>
 
                       {/* Status */}
-                      <td style={{ padding: '16px' }}>
+                      <td className="sfx-promotions__td">
                         <motion.button
-                          onClick={() => handleToggleStatus(p.promotion_id)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                          whileTap={{ scale: 0.92 }}
-                          title={p.is_active ? 'Click to pause' : 'Click to activate'}
+                           onClick={() => handleToggleStatus(p.promotion_id)}
+                           className="sfx-promotions__btn-plain"
+                           whileTap={{ scale: 0.92 }}
+                           title={p.is_active ? 'Click to pause' : 'Click to activate'}
                         >
                           <StatusPill isActive={p.is_active} />
                         </motion.button>
                       </td>
 
                       {/* Actions */}
-                      <td style={{ padding: '16px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                      <td className="sfx-promotions__td sfx-promotions__th--right">
+                        <div className="sfx-promotions__actions-flex">
                           {[
                             { icon: Edit2, tip: 'Edit', color: '#6366F1', onClick: () => handleEdit(p) },
                             { icon: Trash2, tip: 'Delete', color: '#EF4444', onClick: () => handleDelete(p.promotion_id) },
@@ -493,12 +453,8 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                               whileHover={{ scale: 1.12, backgroundColor: `${color}10` }}
                               whileTap={{ scale: 0.9 }}
                               title={tip}
-                              style={{
-                                width: 34, height: 34, borderRadius: 10,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                border: 'none', background: 'transparent', cursor: 'pointer',
-                                color, transition: 'background 0.25s cubic-bezier(0.16,1,0.3,1)',
-                              }}
+                              style={{ color }}
+                              className="sfx-promotions__action-btn"
                             >
                               <BtnIcon size={15} />
                             </motion.button>
@@ -664,11 +620,8 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
             </div>
 
             {/* Loyalty Exchange Panel */}
-            <div style={{ padding: '14px 18px', background: 'linear-gradient(135deg, #FFFBEB, #FEF3C7)', borderRadius: 12, border: '1px solid #FDE68A' }}>
-              <div style={{
-                fontWeight: 700, fontSize: '0.82rem', color: '#92400E', marginBottom: 12,
-                display: 'flex', alignItems: 'center', gap: 7
-              }}>
+            <div className="sfx-promotions__loyalty-panel">
+              <div className="sfx-promotions__loyalty-title">
                 <Star size={14} fill="#D97706" color="#D97706" /> Loyalty Exchange Settings
               </div>
               <div className="grid grid-cols-3 gap-3">
@@ -678,7 +631,7 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                     value={formData.points_required}
                     onChange={e => setFormData({ ...formData, points_required: e.target.value })}
                     placeholder="0 = free gift" />
-                  <p style={{ fontSize: '0.68rem', color: '#92400E', marginTop: 3 }}>0 = auto-granted (welcome gift)</p>
+                  <p className="sfx-promotions__loyalty-desc">0 = auto-granted (welcome gift)</p>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Total Quantity</label>
@@ -693,7 +646,7 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                     value={formData.validity_duration_hours}
                     onChange={e => setFormData({ ...formData, validity_duration_hours: e.target.value })}
                     placeholder="24" />
-                  <p style={{ fontSize: '0.68rem', color: '#92400E', marginTop: 3 }}>After customer redeems</p>
+                  <p className="sfx-promotions__loyalty-desc">After customer redeems</p>
                 </div>
               </div>
             </div>

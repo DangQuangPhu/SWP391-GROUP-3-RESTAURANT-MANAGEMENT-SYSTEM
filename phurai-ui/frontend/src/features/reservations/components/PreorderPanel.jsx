@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatVND } from "@/core/utils/formatCurrency";
+import { Skeleton } from "@/components/ui/Skeleton.jsx";
 import { getPreorderMenu, savePreorder } from "../services/reservationApi.js";
 
 /**
@@ -126,7 +127,25 @@ function PreorderPanel({ reservation, userId, onSaved, value, onChange }) {
       </div>
 
       {menuStatus === "loading" ? (
-        <p className="rzv-preorder__state">Loading menu…</p>
+        <div className="rzv-preorder__menu" aria-busy="true" aria-label="Loading menu">
+          <div className="rzv-preorder__group">
+            <ul className="rzv-preorder__list" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {Array.from({ length: 5 }).map((_, i) => (
+                <li key={i} className="rzv-preorder__item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px' }}>
+                  <div className="rzv-preorder__item-info" style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                    <Skeleton className="w-1/2 h-5" />
+                    <Skeleton className="w-24 h-4" />
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <Skeleton className="w-8 h-8 rounded-full" />
+                    <Skeleton className="w-6 h-4" />
+                    <Skeleton className="w-8 h-8 rounded-full" />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       ) : null}
       {menuStatus === "error" ? (
         <p className="rzv-preorder__state rzv-preorder__state--error">

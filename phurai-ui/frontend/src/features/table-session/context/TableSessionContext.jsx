@@ -12,6 +12,7 @@ import {
   loadStoredTableSession,
   persistTableSession,
 } from "../utils/sessionStorage.js";
+import { useSocket } from "@/core/socket/SocketContext.jsx";
 
 const TableSessionContext = createContext(null);
 
@@ -25,6 +26,7 @@ function normalizeSession(session) {
     area_name: session.area_name ?? null,
     token: session.token ?? null,
     session_status: session.session_status ?? "Active",
+    table_status: session.table_status ?? "Occupied",
   };
 }
 
@@ -127,6 +129,27 @@ export function TableSessionProvider({
     }, 0);
     return () => clearTimeout(timer);
   }, [userId, isCustomer, refreshActiveSession]);
+
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket || !session?.table_id) return;
+
+    const handleTableStatus = (data) => {
+      const targetTableId = Number(data.tableId || data.table_id);
+      if (targetTableId === Number(session.table_id)) {
+        const newStatus = data.status || data.table_status;
+        if (newStatus) {
+          setSession((prev) => (prev ? { ...prev, table_status: newStatus } : null));
+        }
+      }
+    };
+
+    socket.on("table:status_changed", handleTableStatus);
+    return () => {
+      socket.off("table:status_changed", handleTableStatus);
+    };
+  }, [socket, session?.table_id]);
 
   const value = useMemo(
     () => ({

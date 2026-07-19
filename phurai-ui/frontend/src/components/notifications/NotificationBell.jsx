@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Skeleton } from "@/components/ui/Skeleton.jsx";
 import toast from "react-hot-toast";
 import { useSocket } from "@/core/socket/SocketContext.jsx";
+import { useStaffStore } from "@/features/staff-dashboard/store/staffStore.js";
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -146,6 +149,7 @@ function mergeNotifications(...groups) {
 
 function NotificationBell({ user, listenForStaffEvents = false, className = "" }) {
   const { socket } = useSocket();
+  const openTableModal = useStaffStore((state) => state.openTableModal);
   const userId = Number(user?.userId ?? user?.id);
   const panelRef = useRef(null);
   const buttonRef = useRef(null);
@@ -281,15 +285,48 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
       );
     };
 
+    const handleOverrun = (payload = {}) => {
+      const message = payload.message || "Cảnh báo quá giờ sử dụng bàn!";
+      toast.error(message, {
+        duration: 8000,
+        icon: '⚠️',
+        style: {
+          background: '#1a1a2e',
+          color: '#ffffff',
+          border: '1px solid #ff6b6b'
+        }
+      });
+      const notificationId = `overrun-${payload.tableId}-${payload.sessionId}-${Date.now()}`;
+      setNotifications((prev) =>
+        mergeNotifications(
+          [
+            {
+              notification_id: notificationId,
+              title: payload.title || "Table Overrun Warning",
+              message_body: message,
+              notification_type: "Overrun Warning",
+              is_read: false,
+              sent_at: payload.timestamp || new Date().toISOString(),
+              _live: true,
+              _payload: payload,
+            },
+          ],
+          prev
+        )
+      );
+    };
+
     socket.on("NEW_CUSTOMER_ACTION", handleIncoming);
     socket.on("notification:new", handleSystemAlert);
     socket.on("NEW_QR_SESSION_PENDING", handleQrRequest);
     socket.on("payment:cash_pending", handleCashPending);
+    socket.on("table:overrun_warning", handleOverrun);
     return () => {
       socket.off("NEW_CUSTOMER_ACTION", handleIncoming);
       socket.off("notification:new", handleSystemAlert);
       socket.off("NEW_QR_SESSION_PENDING", handleQrRequest);
       socket.off("payment:cash_pending", handleCashPending);
+      socket.off("table:overrun_warning", handleOverrun);
     };
   }, [socket, listenForStaffEvents]);
 
@@ -395,132 +432,279 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
           />
         </svg>
         {unread > 0 ? (
-          <span className="notification-bell__badge" aria-label={`${unread} unread`}>
+          <motion.span 
+            key={unread}
+            initial={isReducedMotion ? {} : { scale: 0.8 }}
+            animate={isReducedMotion ? {} : { scale: [1, 1.3, 1] }}
+            transition={isReducedMotion ? { duration: 0.1 } : { type: "spring", stiffness: 380, damping: 22 }}
+            className="notification-bell__badge" 
+            aria-label={`${unread} unread`}
+          >
             {unread > 99 ? "99+" : unread}
-          </span>
+          </motion.span>
         ) : (
           <span className="sfx-header__dot notification-bell__dot" />
         )}
       </button>
 
-      {open ? (
-        <div ref={panelRef} className="notification-bell__panel" role="dialog" aria-label="Notifications">
-          <header className="notification-bell__head">
-            <div>
-              <h2>Notifications</h2>
-              <p>{unread > 0 ? `${unread} unread` : "You're all caught up"}</p>
-            </div>
-            <button
-              type="button"
-              className="notification-bell__mark-all"
-              onClick={handleMarkAllRead}
-              disabled={unread === 0}
-            >
-              Mark all read
-            </button>
-          </header>
+      <AnimatePresence>
+        {open && (
+          <motion.div 
+            ref={panelRef} 
+            initial={isReducedMotion ? { opacity: 0 } : { opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={isReducedMotion ? { opacity: 0 } : { opacity: 0, y: -12 }}
+            transition={isReducedMotion ? { duration: 0.1 } : { type: "spring", stiffness: 450, damping: 26 }}
+            className="notification-bell__panel" 
+            role="dialog" 
+            aria-label="Notifications"
+          >
+            <header className="notification-bell__head">
+              <div>
+                <h2>Notifications</h2>
+                <p>{unread > 0 ? `${unread} unread` : "You're all caught up"}</p>
+              </div>
+              <button
+                type="button"
+                className="notification-bell__mark-all"
+                onClick={handleMarkAllRead}
+                disabled={unread === 0}
+              >
+                Mark all read
+              </button>
+            </header>
 
-          <div className="notification-bell__list">
-            {loading && notifications.length === 0 ? (
-              <p className="notification-bell__empty">Loading notifications...</p>
-            ) : null}
-            {!loading && notifications.length === 0 ? (
-              <p className="notification-bell__empty">No notifications yet.</p>
-            ) : null}
-
-            {notifications.map((item) => {
-              const payload = item._payload || {};
-              const details = buildDetailLines(item, payload);
-              const expanded = expandedId === item.notification_id;
-
-              if (item.notification_type === "QR_PENDING") {
-                return (
-                  <div
-                    key={item.notification_id}
-                    className="notification-bell__item is-unread"
-                    style={{
-                      background: "#fff",
-                      borderLeft: "4px solid #16a34a",
-                      padding: "12px",
-                      cursor: "default",
-                    }}
-                  >
-                    <div className="notification-bell__item-top">
-                      <strong>{item.title}</strong>
-                      <span>{formatSentAt(item.sent_at)}</span>
+            <div className="notification-bell__list">
+              {loading && notifications.length === 0 ? (
+                <div className="space-y-2 p-2" aria-busy="true" aria-label="Loading notifications">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="notification-bell__item"
+                      style={{
+                        background: "#fff",
+                        padding: "12px",
+                        borderRadius: "8px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "8px",
+                        border: "1px solid #f0f0f0"
+                      }}
+                    >
+                      <div className="notification-bell__item-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Skeleton className="w-1/2 h-4" />
+                        <Skeleton className="w-16 h-3" />
+                      </div>
+                      <Skeleton className="w-full h-3.5" />
+                      <Skeleton className="w-3/4 h-3.5" />
                     </div>
-                    <p style={{ margin: "8px 0", color: "#333", fontWeight: "500" }}>
-                      {item.message_body}
-                    </p>
-                    <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-                      <button
-                        type="button"
-                        onClick={() => handleQrAction(item, "approve")}
-                        style={{
-                          flex: 1,
-                          padding: "6px",
-                          background: "#16a34a",
-                          color: "#fff",
-                          borderRadius: "4px",
-                          border: "none",
-                          cursor: "pointer",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleQrAction(item, "reject")}
-                        style={{
-                          flex: 1,
-                          padding: "6px",
-                          background: "#fef2f2",
-                          color: "#dc2626",
-                          borderRadius: "4px",
-                          border: "1px solid #fca5a5",
-                          cursor: "pointer",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  </div>
-                );
-              }
-
-              return (
-                <div
-                  key={item.notification_id}
-                  className={`notification-bell__item ${
-                    item.is_read ? "is-read" : "is-unread"
-                  } ${expanded ? "is-expanded" : ""}`}
-                  onClick={() => handleItemClick(item)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleItemClick(item);
-                  }}
-                >
-                  <div className="notification-bell__item-top">
-                    <strong>{item.title}</strong>
-                    <span>{formatSentAt(item.sent_at)}</span>
-                  </div>
-                  <p>{item.message_body}</p>
-                  {expanded && details.length > 0 ? (
-                    <ul className="notification-bell__details">
-                      {details.map((line) => (
-                        <li key={line}>{line}</li>
-                      ))}
-                    </ul>
-                  ) : null}
+                  ))}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
+              ) : null}
+              {!loading && notifications.length === 0 ? (
+                <p className="notification-bell__empty">No notifications yet.</p>
+              ) : null}
+
+              <AnimatePresence initial={false}>
+                {notifications.map((item) => {
+                  const payload = item._payload || {};
+                  const expanded = expandedId === item.notification_id;
+
+                  let itemContent = null;
+
+                  if (item.notification_type === "QR_PENDING") {
+                    itemContent = (
+                      <div
+                        className="notification-bell__item is-unread"
+                        style={{
+                          background: "#fff",
+                          borderLeft: "4px solid #16a34a",
+                          padding: "12px",
+                          cursor: "default",
+                        }}
+                      >
+                        <div className="notification-bell__item-top">
+                          <strong>{item.title}</strong>
+                          <span>{formatSentAt(item.sent_at)}</span>
+                        </div>
+                        <p style={{ margin: "8px 0", color: "#333", fontWeight: "500" }}>
+                          {item.message_body}
+                        </p>
+                        <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                          <button
+                            type="button"
+                            onClick={() => handleQrAction(item, "approve")}
+                            style={{
+                              flex: 1,
+                              padding: "6px",
+                              background: "#16a34a",
+                              color: "#fff",
+                              borderRadius: "4px",
+                              border: "none",
+                              cursor: "pointer",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleQrAction(item, "reject")}
+                            style={{
+                              flex: 1,
+                              padding: "6px",
+                              background: "#fef2f2",
+                              color: "#dc2626",
+                              borderRadius: "4px",
+                              border: "1px solid #fca5a5",
+                              cursor: "pointer",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  } else if (item.notification_type === "Overrun Warning") {
+                    const details = [];
+                    if (payload.estimatedReleaseAt) {
+                      const estTime = new Date(payload.estimatedReleaseAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                      details.push(`Dự kiến trống: ${estTime}`);
+                    }
+                    if (payload.nextReservationAt) {
+                      const nextTime = new Date(payload.nextReservationAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                      details.push(`Đặt tiếp theo: ${nextTime} (#${payload.nextReservationId})`);
+                    }
+
+                    itemContent = (
+                      <div
+                        className="notification-bell__item is-unread"
+                        style={{
+                          background: "#fff5f5",
+                          borderLeft: "4px solid #ef4444",
+                          padding: "12px",
+                          cursor: "default",
+                        }}
+                      >
+                        <div className="notification-bell__item-top">
+                          <strong style={{ color: "#c53030" }}>⚠️ {item.title}</strong>
+                          <span>{formatSentAt(item.sent_at)}</span>
+                        </div>
+                        <p style={{ margin: "6px 0 8px", color: "#4a5568", fontSize: "0.875rem" }}>
+                          {item.message_body}
+                        </p>
+                        {details.length > 0 && (
+                          <ul style={{ margin: "0 0 10px 0", paddingLeft: "16px", fontSize: "0.8rem", color: "#718096" }}>
+                            {details.map((d, idx) => <li key={idx}>{d}</li>)}
+                          </ul>
+                        )}
+                        <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (payload.tableId) {
+                                openTableModal(payload.tableId);
+                                setOpen(false);
+                              }
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: "6px",
+                              background: "#ef4444",
+                              color: "#fff",
+                              borderRadius: "4px",
+                              border: "none",
+                              cursor: "pointer",
+                              fontWeight: "bold",
+                              fontSize: "0.8rem",
+                            }}
+                          >
+                            Xem chi tiết bàn
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (item._live) {
+                                setNotifications((prev) =>
+                                  prev.filter((row) => row.notification_id !== item.notification_id)
+                                );
+                              } else {
+                                try {
+                                  await markNotificationRead(userId, item.notification_id);
+                                  setNotifications((prev) =>
+                                    prev.filter((row) => row.notification_id !== item.notification_id)
+                                  );
+                                } catch (err) {
+                                  toast.error("Không thể đánh dấu đã xử lý");
+                                }
+                              }
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: "6px",
+                              background: "#fff",
+                              color: "#4a5568",
+                              borderRadius: "4px",
+                              border: "1px solid #cbd5e0",
+                              cursor: "pointer",
+                              fontWeight: "bold",
+                              fontSize: "0.8rem",
+                            }}
+                          >
+                            Đánh dấu đã xử lý
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  } else {
+                    const details = buildDetailLines(item, payload);
+                    itemContent = (
+                      <div
+                        className={`notification-bell__item ${
+                          item.is_read ? "is-read" : "is-unread"
+                        } ${expanded ? "is-expanded" : ""}`}
+                        onClick={() => handleItemClick(item)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleItemClick(item);
+                        }}
+                      >
+                        <div className="notification-bell__item-top">
+                          <strong>{item.title}</strong>
+                          <span>{formatSentAt(item.sent_at)}</span>
+                        </div>
+                        <p>{item.message_body}</p>
+                        {expanded && details.length > 0 ? (
+                          <ul className="notification-bell__details">
+                            {details.map((line) => (
+                              <li key={line}>{line}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <motion.div
+                      key={item.notification_id || item.id}
+                      initial={isReducedMotion ? { opacity: 0 } : { opacity: 0, height: 0, x: -20 }}
+                      animate={{ opacity: 1, height: "auto", x: 0 }}
+                      exit={isReducedMotion ? { opacity: 0 } : { opacity: 0, height: 0, x: -100 }}
+                      transition={isReducedMotion ? { duration: 0.1 } : { type: "spring", stiffness: 450, damping: 28 }}
+                      style={{ overflow: "hidden" }}
+                    >
+                      {itemContent}
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

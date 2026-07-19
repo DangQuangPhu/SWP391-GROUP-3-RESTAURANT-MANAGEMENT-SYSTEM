@@ -107,6 +107,19 @@ for (let i = 0; i < lines.length; i++) {
       if (!isNaN(oid) && oid < 100000) {
         values[2] = String(oid + 100000);
       }
+    } else if (currentTable === 'TableOccupancySessions') {
+      if (values[1] && values[1] !== 'NULL') {
+        const rid = parseInt(values[1], 10);
+        if (!isNaN(rid) && rid < 100000) {
+          values[1] = String(rid + 100000);
+        }
+      }
+      if (values[2] && values[2] !== 'NULL') {
+        const oid = parseInt(values[2], 10);
+        if (!isNaN(oid) && oid < 100000) {
+          values[2] = String(oid + 100000);
+        }
+      }
     }
 
     let reconstructed = '(' + values.join(', ') + ')';

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Star, CheckCircle } from "lucide-react";
 import { submitReview } from "../services/reservationApi.js";
-import "@/styles/reservations/ReservationSuccessPanel.css";
+import "../styles/ReservationSuccessPanel.css";
 
 const QUICK_NOTES = [
   "The service is nice",

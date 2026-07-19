@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import CheckoutQR from '../components/CheckoutQR';
+import { Skeleton } from '@/components/ui/Skeleton.jsx';
 import CustomerReviewModal from '../../reviews/CustomerReviewModal';
 import usePaymentPolling from '../hooks/usePaymentPolling';
 import { useTableSession } from '@/features/table-session';
@@ -119,9 +120,43 @@ export default function CustomerCheckout() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-        <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-gray-500 font-medium">Fetching payment details...</p>
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center p-4 max-w-md mx-auto w-full pt-10" aria-busy="true" aria-label="Loading checkout details">
+        {/* Header skeleton */}
+        <div className="w-full flex items-center justify-between mb-6">
+          <Skeleton className="w-32 h-6" />
+          <Skeleton className="w-16 h-6 rounded-full" />
+        </div>
+        
+        {/* Invoice details skeleton */}
+        <div className="bg-white rounded-2xl p-5 mb-6 shadow-sm border border-gray-100 w-full space-y-4">
+          <Skeleton className="w-1/3 h-4" />
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <Skeleton className="w-1/2 h-4" />
+              <Skeleton className="w-16 h-4" />
+            </div>
+            <div className="flex justify-between">
+              <Skeleton className="w-2/5 h-4" />
+              <Skeleton className="w-12 h-4" />
+            </div>
+          </div>
+          <hr className="border-gray-100" />
+          <div className="flex justify-between">
+            <Skeleton className="w-1/4 h-4" />
+            <Skeleton className="w-20 h-4" />
+          </div>
+        </div>
+
+        {/* QR Code / Payment Area skeleton */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 w-full flex flex-col items-center space-y-6">
+          <Skeleton className="w-1/2 h-5" />
+          <Skeleton className="w-48 h-48 rounded-xl animate-pulse" />
+          <Skeleton className="w-3/4 h-4" />
+          <div className="w-full flex gap-3 pt-2">
+            <Skeleton className="flex-1 h-12 rounded-xl" />
+            <Skeleton className="flex-1 h-12 rounded-xl" />
+          </div>
+        </div>
       </div>
     );
   }

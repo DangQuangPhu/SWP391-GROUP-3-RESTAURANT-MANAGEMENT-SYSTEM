@@ -113,6 +113,106 @@ export const startCronJobs = () => {
         console.error('[CronService] Error during batch sweep transaction:', dbError);
       }
 
+      // ─────────────────────────────────────────────────────────────────────
+      // OVERRUN SWEEP — find Occupied tables past their EstimatedReleaseTime
+      // and alert Staff Reception (once per session, no auto table transition).
+      // ─────────────────────────────────────────────────────────────────────
+      try {
+        const overrunResult = await pool.request().query(`
+          SELECT
+            tos.session_id,
+            tos.table_id,
+            tos.reservation_id,
+            tos.estimated_release_at,
+            t.table_number,
+            -- Next incoming reservation for the same table (if any)
+            (SELECT TOP 1 r2.reservation_start_at
+               FROM dbo.Reservations r2
+               JOIN dbo.ReservationTables rt2 ON r2.reservation_id = rt2.reservation_id
+               WHERE rt2.table_id = tos.table_id
+                 AND r2.reservation_status IN (N'Await Check-in', N'Awaiting Deposit', N'Pending Request')
+                 AND r2.reservation_start_at > SYSDATETIME()
+               ORDER BY r2.reservation_start_at ASC) AS next_reservation_at
+          FROM dbo.TableOccupancySessions tos
+          JOIN dbo.RestaurantTables t ON t.table_id = tos.table_id
+          WHERE tos.released_at IS NULL
+            AND tos.overrun_alerted = 0
+            AND tos.estimated_release_at < SYSDATETIME()
+            AND t.table_status = N'Occupied'
+        `);
+
+        const overrunSessions = overrunResult.recordset;
+
+        if (overrunSessions.length > 0) {
+          console.log(`[CronService] Found ${overrunSessions.length} overrun table(s). Sending alerts...`);
+
+          // Get all staff/manager user IDs
+          const staffResult = await pool.request().query(`
+            SELECT user_id FROM dbo.UserAccounts
+            WHERE role_id IN (2, 3, 4) AND is_active = 1
+          `);
+          const staffIds = staffResult.recordset.map(r => r.user_id);
+
+          for (const session of overrunSessions) {
+            const releaseTime = new Date(session.estimated_release_at)
+              .toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+            const nextResText = session.next_reservation_at
+              ? ` — Next reservation at ${new Date(session.next_reservation_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`
+              : '';
+            const title = `⚠️ Table Overrun: ${session.table_number}`;
+            const message = `Table ${session.table_number} was estimated to be free at ${releaseTime} but is still occupied.${nextResText} Please check and take action.`;
+
+            // Insert notification for each staff member
+            for (const staffId of staffIds) {
+              try {
+                await pool.request()
+                  .input('userId',    sql.Int,          staffId)
+                  .input('notifType', sql.NVarChar(40), 'Overrun Warning')
+                  .input('title',     sql.NVarChar(200), title)
+                  .input('message',   sql.NVarChar(2000), message)
+                  .query(`
+                    INSERT INTO dbo.Notifications (user_id, notification_type, title, message_body, is_read, sent_at)
+                    VALUES (@userId, @notifType, @title, @message, 0, SYSDATETIME())
+                  `);
+              } catch (notifErr) {
+                console.warn(`[CronService] Failed to insert overrun notification for staff ${staffId}:`, notifErr.message);
+              }
+            }
+
+            // Mark session as alerted (fire once only)
+            await pool.request()
+              .input('sessionId', sql.Int, session.session_id)
+              .query(`
+                UPDATE dbo.TableOccupancySessions
+                SET overrun_alerted = 1, updated_at = SYSDATETIME()
+                WHERE session_id = @sessionId
+              `);
+
+            // Emit real-time socket alert to staff/manager rooms
+            try {
+              const { getIO } = await import('../socket.js');
+              const io = getIO();
+              if (io) {
+                io.to('room:staff').to('room:manager').emit('table:overrun_warning', {
+                  sessionId: session.session_id,
+                  tableId: session.table_id,
+                  tableNumber: session.table_number,
+                  estimatedReleaseAt: session.estimated_release_at,
+                  nextReservationAt: session.next_reservation_at,
+                  title,
+                  message,
+                  timestamp: new Date().toISOString(),
+                });
+              }
+            } catch (socketErr) {
+              console.warn('[CronService] Overrun socket emit failed:', socketErr.message);
+            }
+          }
+        }
+      } catch (overrunErr) {
+        console.error('[CronService] Overrun sweep error:', overrunErr.message);
+      }
+
     } catch (error) {
       console.error('[CronService] Interval error:', error);
     } finally {

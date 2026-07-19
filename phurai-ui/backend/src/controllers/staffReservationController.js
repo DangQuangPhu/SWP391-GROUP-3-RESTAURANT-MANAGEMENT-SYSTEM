@@ -4,6 +4,7 @@ import { getIO } from "../socket.js";
 import { sendBookingCheckedInEmail, sendBookingRejectedEmail } from "../email.js";
 import { processPreordersToKds } from "../services/kdsIntegrationService.js";
 import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
+import { openOccupancySession, openOccupancySessionDirect } from '../services/tableReleaseService.js';
 
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -94,7 +95,15 @@ export const createWalkInReservation = async (req, res) => {
     // ── Step 1: INSERT Reservation (Walk-in, Dining, no deposit, no voucher) ──
     const now = new Date();
     let startAt = now;
-    let endAt = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    
+    let diningDuration = 120;
+    const count = Number(parsedGuestCount) || 1;
+    if (count <= 2) diningDuration = 60;
+    else if (count <= 4) diningDuration = 90;
+    else if (count <= 6) diningDuration = 105;
+    else diningDuration = 120;
+    
+    let endAt = new Date(now.getTime() + diningDuration * 60 * 1000);
 
     const getLocalDateWithTime = (timeStr) => {
       if (!timeStr) return null;
@@ -165,6 +174,27 @@ export const createWalkInReservation = async (req, res) => {
       SET table_status = N'Occupied', updated_at = SYSDATETIME()
       WHERE table_id = @tableId
     `);
+
+    // ── Step 3b: Open TableOccupancySession ──────────────────────────────
+    // Walk-in: use guest_count to determine default EstimatedDuration.
+    // end_time from request body used as explicit override if provided.
+    const walkInDurationMin = req.body.end_time && start_time
+      ? Math.round((new Date(req.body.end_time) - new Date(start_time || Date.now())) / 60000)
+      : null;
+    try {
+      await openOccupancySession({
+        transaction,
+        tableId: parsedTableId,
+        reservationId: newReservationId,
+        orderId: null,
+        guestCount: parsedGuestCount,
+        inputDurationMin: walkInDurationMin,
+        checkInAt: now,
+      });
+    } catch (sessionErr) {
+      // Non-fatal — do not abort the walk-in transaction over a session open error
+      console.warn('[createWalkInReservation] openOccupancySession failed (non-fatal):', sessionErr.message);
+    }
 
     // ── Step 4: Timeline + Audit ──────────────────────────────────────────
     const req5 = new sql.Request(transaction);
@@ -1165,6 +1195,34 @@ export const staffCheckIn = async (req, res) => {
          WHERE table_id IN (${placeholders})`,
         [...tableIdList]
       );
+
+      // Open TableOccupancySession for each occupied table
+      // Use reservation_end_at minus start_at as explicit duration if set
+      const resStartAt = reservation.reservation_start_at
+        ? new Date(reservation.reservation_start_at)
+        : new Date();
+      const resEndAt = reservation.reservation_end_at
+        ? new Date(reservation.reservation_end_at)
+        : null;
+      const inputDurationMin = resEndAt && resEndAt > resStartAt
+        ? Math.round((resEndAt - resStartAt) / 60000)
+        : null;
+      const checkInNow = new Date();
+
+      for (const tId of tableIdList) {
+        try {
+          await openOccupancySessionDirect({
+            tableId: tId,
+            reservationId,
+            orderId: null,
+            guestCount: reservation.guest_count || 1,
+            inputDurationMin,
+            checkInAt: checkInNow,
+          });
+        } catch (sessErr) {
+          console.warn(`[checkIn] openOccupancySessionDirect for table ${tId} failed (non-fatal):`, sessErr.message);
+        }
+      }
 
 
       // Create QR Order Sessions for each table in tableIdList if none exists

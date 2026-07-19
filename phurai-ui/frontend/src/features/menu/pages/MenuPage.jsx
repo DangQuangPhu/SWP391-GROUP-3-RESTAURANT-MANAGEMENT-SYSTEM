@@ -289,9 +289,37 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
                 </div>
               ) : null}
               {hasActiveSession && tableSession ? (
-                <div className="menu-session-banner" role="status">
-                  <span className="menu-session-banner__table">
+                <div className="menu-session-banner" role="status" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <span className="menu-session-banner__table" style={{ display: 'flex', alignItems: 'center' }}>
                     Table {tableSession.table_number || tableSession.table_id}
+                    {tableSession.table_status && (
+                      <motion.span
+                        layoutId="customer-table-status"
+                        transition={{ type: "spring", stiffness: 300, damping: 22 }}
+                        className={`menu-session-banner__status menu-session-banner__status--${tableSession.table_status.toLowerCase()}`}
+                        style={{
+                          marginLeft: '8px',
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          fontSize: '11px',
+                          fontWeight: 'bold',
+                          letterSpacing: '0.05em',
+                          textTransform: 'uppercase',
+                          backgroundColor: tableSession.table_status.toLowerCase() === 'cleaning' ? '#faf5ff' : '#fffbeb',
+                          color: tableSession.table_status.toLowerCase() === 'cleaning' ? '#7c3aed' : '#d97706',
+                          border: tableSession.table_status.toLowerCase() === 'cleaning' ? '1px solid #d8b4fe' : '1px solid #fde68a',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${tableSession.table_status.toLowerCase() === 'cleaning' ? 'bg-purple-400' : 'bg-amber-400'}`}></span>
+                          <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${tableSession.table_status.toLowerCase() === 'cleaning' ? 'bg-purple-500' : 'bg-amber-500'}`}></span>
+                        </span>
+                        {tableSession.table_status}
+                      </motion.span>
+                    )}
                   </span>
                   <span className="menu-session-banner__session">
                     Session #{tableSession.session_id}

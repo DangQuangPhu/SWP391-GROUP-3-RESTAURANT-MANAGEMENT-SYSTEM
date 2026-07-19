@@ -18,6 +18,8 @@ import "../styles/staff-kds-tab.css";
 
 const POLL_MS = 12000;
 
+import { Bone } from "./StaffSkeleton.jsx";
+
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_META = {
   "Pending":         { label: "Pending",         color: "#888",   bg: "rgba(136,136,136,.12)", order: 0 },
@@ -372,9 +374,44 @@ function StaffKdsTab({ user, toast, onRefresh, refreshing }) {
 
       {/* Kanban Board */}
       {loading && queue.length === 0 ? (
-        <div className="sfx-loading staff-kds-tab__loading">
-          <span className="sfx-spinner" />
-          <p>Loading kitchen queue…</p>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, minmax(300px, 1fr))",
+          gap: "20px",
+          alignItems: "stretch",
+          minHeight: "500px",
+          marginTop: "20px",
+          width: "100%"
+        }} aria-busy="true" aria-label="Loading kitchen queue">
+          {["Pending", "Sent", "Preparing", "Ready"].map((statusLabel, idx) => (
+            <div key={idx} style={{
+              background: "#f3f4f6",
+              border: "1px solid #e5e7eb",
+              borderRadius: "16px",
+              padding: "16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "16px",
+              minHeight: "350px",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "12px", borderBottom: "2px solid #e5e7eb", marginBottom: "4px" }}>
+                <h3 style={{ fontSize: "16px", fontWeight: "800", margin: 0, color: "#2d2d2d" }}>{statusLabel}</h3>
+                <Bone w={24} h={18} radius={12} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                {Array.from({ length: idx === 0 ? 2 : 1 }).map((_, cIdx) => (
+                  <div key={cIdx} style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", borderRadius: "12px", padding: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <Bone w="40%" h={14} />
+                      <Bone w="20%" h={14} />
+                    </div>
+                    <Bone w="80%" h={12} />
+                    <Bone w="60%" h={12} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div style={{

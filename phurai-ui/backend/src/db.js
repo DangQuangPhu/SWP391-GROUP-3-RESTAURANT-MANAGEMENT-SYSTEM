@@ -154,6 +154,73 @@ function getPool() {
         IF OBJECT_ID('dbo.CK_Roles_role_name', 'C') IS NOT NULL
           ALTER TABLE dbo.Roles DROP CONSTRAINT CK_Roles_role_name;
 
+        -- 9. TableOccupancySessions
+        IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'TableOccupancySessions' AND schema_id = SCHEMA_ID('dbo'))
+        BEGIN
+            CREATE TABLE dbo.TableOccupancySessions (
+                session_id            INT IDENTITY(1,1) NOT NULL,
+                table_id              SMALLINT NOT NULL,
+                reservation_id        INT NULL,
+                order_id              INT NULL,
+                guest_count           TINYINT NOT NULL CONSTRAINT DF_TOS_guest_count DEFAULT 1,
+                check_in_at           DATETIME2(0) NOT NULL CONSTRAINT DF_TOS_check_in_at DEFAULT SYSDATETIME(),
+                estimated_duration_min INT NOT NULL,
+                buffer_min            INT NOT NULL CONSTRAINT DF_TOS_buffer_min DEFAULT 15,
+                estimated_release_at  DATETIME2(0) NOT NULL,
+                released_at           DATETIME2(0) NULL,
+                release_trigger       NVARCHAR(30) NULL,
+                released_by_staff_id  INT NULL,
+                overrun_alerted       BIT NOT NULL CONSTRAINT DF_TOS_overrun_alerted DEFAULT 0,
+                created_at            DATETIME2(0) NOT NULL CONSTRAINT DF_TOS_created_at DEFAULT SYSDATETIME(),
+                updated_at            DATETIME2(0) NOT NULL CONSTRAINT DF_TOS_updated_at DEFAULT SYSDATETIME(),
+                CONSTRAINT PK_TableOccupancySessions PRIMARY KEY (session_id),
+                CONSTRAINT FK_TOS_RestaurantTables FOREIGN KEY (table_id)
+                    REFERENCES dbo.RestaurantTables(table_id) ON DELETE CASCADE,
+                CONSTRAINT FK_TOS_Reservations FOREIGN KEY (reservation_id)
+                    REFERENCES dbo.Reservations(reservation_id) ON DELETE SET NULL,
+                CONSTRAINT FK_TOS_Orders FOREIGN KEY (order_id)
+                    REFERENCES dbo.Orders(order_id),
+                CONSTRAINT FK_TOS_Staff FOREIGN KEY (released_by_staff_id)
+                    REFERENCES dbo.UserAccounts(user_id),
+                CONSTRAINT CK_TOS_release_trigger CHECK (
+                    release_trigger IN (N'OnlinePayment', N'StaffCashConfirm', N'ManualRelease') OR release_trigger IS NULL
+                ),
+                CONSTRAINT CK_TOS_duration CHECK (estimated_duration_min > 0),
+                CONSTRAINT CK_TOS_buffer CHECK (buffer_min >= 0)
+            );
+
+            CREATE INDEX IX_TOS_table_open ON dbo.TableOccupancySessions(table_id, released_at)
+                WHERE released_at IS NULL;
+
+            CREATE INDEX IX_TOS_overrun_check ON dbo.TableOccupancySessions(estimated_release_at, released_at, overrun_alerted)
+                WHERE released_at IS NULL;
+        END;
+
+        -- 10. Update CK_Notifications_type
+        IF EXISTS (
+            SELECT 1 FROM sys.check_constraints
+            WHERE name = 'CK_Notifications_type'
+            AND parent_object_id = OBJECT_ID('dbo.Notifications')
+        )
+        BEGIN
+            ALTER TABLE dbo.Notifications DROP CONSTRAINT CK_Notifications_type;
+        END;
+
+        ALTER TABLE dbo.Notifications ADD CONSTRAINT CK_Notifications_type CHECK (
+            notification_type IN (
+                N'Booking Confirmed', N'Booking Rejected', N'Booking Cancelled', N'Booking Reminder',
+                N'Booking Changed', N'Order Ready', N'Payment Receipt', N'Promotion',
+                N'System', N'Overrun Warning'
+            )
+        );
+
+        -- 11. RestaurantSettings cleaning_buffer_min
+        IF NOT EXISTS (SELECT 1 FROM dbo.RestaurantSettings WHERE setting_key = N'cleaning_buffer_min')
+        BEGIN
+            INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description, updated_by)
+            VALUES (N'cleaning_buffer_min', N'15', N'Buffer minutes added to EstimatedDuration to calculate EstimatedReleaseTime', 1);
+        END;
+
       `).then(() => console.log("[DB] Schema synchronized."))
         .catch((err) => console.error("[DB] Schema sync error:", err.message));
 

@@ -36,6 +36,7 @@ export default function PaymentSuccess({ orderId, amount, historyData, onComplet
       };
     }
     if (step === 'invoice') {
+      toast.success("Cảm ơn bạn! Bàn sẽ được dọn dẹp sau ít phút.", { id: "payment-success-msg" });
       const timer = setTimeout(() => {
         setStep('rating-food');
       }, 3500); // 3.5 seconds to read receipt
@@ -177,6 +178,20 @@ export default function PaymentSuccess({ orderId, amount, historyData, onComplet
           border-top: 1px dashed #e8e3d9;
           padding-top: 10px;
           margin-top: 6px;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .chk-check-ring {
+            stroke-dashoffset: 0;
+            animation: none !important;
+          }
+          .chk-check-mark {
+            stroke-dashoffset: 0;
+            animation: none !important;
+          }
+          .invoice-card, .payment-state-screen, .checkout-success-wrapper {
+            transition: none !important;
+            animation: none !important;
+          }
         }
       `}</style>
 

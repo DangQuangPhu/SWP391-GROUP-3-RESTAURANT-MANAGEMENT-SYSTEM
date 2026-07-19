@@ -150,7 +150,7 @@ export default function RatingDashboard() {
           <article className="sfx-kpi sfx-kpi--amber">
             <div className="sfx-kpi__top">
               <span className="sfx-kpi__icon">
-                <Star size={18} className="fill-amber-500 text-amber-500" style={{ color: "#d8b97e" }} />
+                <Star size={18} className="fill-amber-500 text-amber-500 sfx-star--amber" />
               </span>
             </div>
             <p className="sfx-kpi__value">{Number(metrics.avg_overall || 0).toFixed(1)}</p>
@@ -160,7 +160,7 @@ export default function RatingDashboard() {
           <article className="sfx-kpi sfx-kpi--green">
             <div className="sfx-kpi__top">
               <span className="sfx-kpi__icon">
-                <Star size={18} style={{ color: "#2f7d4f" }} />
+                <Star size={18} className="sfx-star--green" />
               </span>
             </div>
             <p className="sfx-kpi__value">{Number(metrics.avg_food || 0).toFixed(1)}</p>
@@ -170,7 +170,7 @@ export default function RatingDashboard() {
           <article className="sfx-kpi sfx-kpi--purple">
             <div className="sfx-kpi__top">
               <span className="sfx-kpi__icon">
-                <Star size={18} style={{ color: "#7c5cbf" }} />
+                <Star size={18} className="sfx-star--purple" />
               </span>
             </div>
             <p className="sfx-kpi__value">{Number(metrics.avg_service || 0).toFixed(1)}</p>
@@ -180,7 +180,7 @@ export default function RatingDashboard() {
           <article className="sfx-kpi sfx-kpi--blue">
             <div className="sfx-kpi__top">
               <span className="sfx-kpi__icon">
-                <Star size={18} style={{ color: "#3a6ea5" }} />
+                <Star size={18} className="sfx-star--blue" />
               </span>
             </div>
             <p className="sfx-kpi__value">{Number(metrics.avg_ambiance || 0).toFixed(1)}</p>
@@ -189,44 +189,34 @@ export default function RatingDashboard() {
         </div>
       )}
 
-      <div className="sfx-card sfx-card--overflow-visible" style={{ background: "#ffffff", padding: "24px", borderRadius: "14px", boxShadow: "0 6px 32px rgba(31,26,23,0.04)" }}>
-        <header className="sfx-card__head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+      <div className="sfx-card sfx-card--overflow-visible sfx-card--featured-dashboard">
+        <header className="sfx-card__head sfx-card__head--dashboard">
           <div>
-            <h3 className="sfx-card__title" style={{ color: "#1a1a1a", fontSize: 20, margin: 0 }}>Customer Reviews</h3>
-            <p className="sfx-muted" style={{ fontSize: 13, margin: "4px 0 0" }}>
+            <h3 className="sfx-card__title sfx-card__title--dashboard">Customer Reviews</h3>
+            <p className="sfx-muted sfx-card__subtitle--dashboard">
               {`Reviews for ${selectedDateLabel}`}
             </p>
           </div>
-          <span className="sfx-muted" style={{ fontSize: 13 }}>{reviews.length} reviews</span>
+          <span className="sfx-muted sfx-card__counter--dashboard">{reviews.length} reviews</span>
         </header>
 
         <Toolbar>
           <div className="flex items-center gap-4 flex-1">
-            <div style={{ position: "relative" }}>
+            <div className="sfx-picker__container">
               <button
                 type="button"
-                className="staff-reservations-toolbar__date-trigger"
+                className="staff-reservations-toolbar__date-trigger sfx-picker__trigger"
                 onClick={openPicker}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  background: "#f8f5ef",
-                  border: "1px solid #e2dcd0",
-                  borderRadius: 8,
-                  padding: "8px 12px",
-                  cursor: "pointer"
-                }}
               >
-                <span style={{ fontSize: 13, color: "#1a1a1a", fontWeight: 500 }}>
+                <span className="sfx-picker__trigger-label">
                   {selectedDateLabel}
                 </span>
-                <span style={{ display: "inline-flex", alignItems: "center", color: "#b09460" }}>
+                <span className="sfx-picker__trigger-icon">
                   <Calendar size={16} />
                 </span>
               </button>
               {pickerOpen && (
-                <div style={{ position: "absolute", left: 0, top: "calc(100% + 8px)", zIndex: 1000 }}>
+                <div className="sfx-picker__popover">
                   <DashboardDateRangePicker
                     inline={true}
                     allowFuture={false}
@@ -255,7 +245,7 @@ export default function RatingDashboard() {
             <table className="sfx-table">
               <thead>
                 <tr>
-                  <th style={{ width: '50px' }}>#</th>
+                  <th className="sfx-th--w50">#</th>
                   <th>Customer</th>
                   <th>Date</th>
                   <th>Order Ref</th>
@@ -263,7 +253,7 @@ export default function RatingDashboard() {
                   <th>Service</th>
                   <th>Ambiance</th>
                   <th>Overall</th>
-                  <th style={{ width: '30%' }}>Comment</th>
+                  <th className="sfx-th--w30p">Comment</th>
                 </tr>
               </thead>
               <motion.tbody
@@ -275,7 +265,7 @@ export default function RatingDashboard() {
                   const stt = (currentPage - 1) * itemsPerPage + index + 1;
                   return (
                     <motion.tr key={r.review_id} variants={listItemVariants}>
-                      <td style={{ fontWeight: 600, color: "#555" }}>{stt}</td>
+                      <td className="sfx-td--grey-bold">{stt}</td>
                       <td>
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">

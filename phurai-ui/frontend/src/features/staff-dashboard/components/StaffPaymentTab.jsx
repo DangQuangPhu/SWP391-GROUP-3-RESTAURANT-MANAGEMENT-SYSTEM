@@ -82,6 +82,7 @@ function StaffPaymentTab({
   const [timeline, setTimeline] = useState([]);
   const [pendingCashTableIds, setPendingCashTableIds] = useState(new Set());
   const { socket } = useSocket();
+  const [shouldShake, setShouldShake] = useState(false);
 
   const userId = user?.userId ?? user?.user_id ?? user?.id;
   const manager = isManagerUser(user);
@@ -214,41 +215,68 @@ function StaffPaymentTab({
 
   const handleConfirmCashPayment = async () => {
     if (!selectedTableId || !bill?.order_id) return;
+
+    // Save current states for potential rollback
+    const originalTables = [...tables];
+    const originalBill = bill;
+    const originalSelectedTableId = selectedTableId;
+    const originalPendingCashTableIds = new Set(pendingCashTableIds);
+
+    // Optimistically update tables and pending cash states immediately
+    setTables((prev) =>
+      prev.map((table) =>
+        table.table_id === Number(selectedTableId)
+          ? { ...table, table_status: "Cleaning", status: "cleaning" }
+          : table
+      )
+    );
+    setPendingCashTableIds((prev) => {
+      const next = new Set(prev);
+      next.delete(Number(selectedTableId));
+      return next;
+    });
+    setBill(null);
+    setSelectedTableId("");
+    setVoucherCode("");
+
     setBusyKey("confirm_cash");
     try {
       const res = await apiPost('/payments/staff-confirm-cash', {
-        orderId: bill.order_id,
-        tableId: Number(selectedTableId)
+        orderId: originalBill.order_id,
+        tableId: Number(originalSelectedTableId)
       }, { headers: profileRequestHeaders(userId) });
 
       if (res.success) {
         setCheckoutSuccess({
-          table_number: bill.table_number,
-          total_amount: bill.total_amount,
+          table_number: originalBill.table_number,
+          total_amount: originalBill.total_amount,
           change_given: 0
         });
         toast("Cash Payment Confirmed — table moved to Cleaning", "success");
-        setPendingCashTableIds(prev => {
-          const next = new Set(prev);
-          next.delete(Number(selectedTableId));
-          return next;
-        });
-        setTables((prev) =>
-          prev.map((table) =>
-            table.table_id === Number(selectedTableId)
-              ? { ...table, table_status: "Cleaning", status: "cleaning" }
-              : table
-          )
-        );
-        setBill(null);
-        setSelectedTableId("");
-        setVoucherCode("");
         onRefresh?.();
       } else {
+        // Rollback states
+        setTables(originalTables);
+        setPendingCashTableIds(originalPendingCashTableIds);
+        setBill(originalBill);
+        setSelectedTableId(originalSelectedTableId);
         toast(res.message || "Confirmation failed", "error");
+
+        // Trigger shake effect
+        setShouldShake(true);
+        setTimeout(() => setShouldShake(false), 500);
       }
     } catch (error) {
+      // Rollback states on network/server error
+      setTables(originalTables);
+      setPendingCashTableIds(originalPendingCashTableIds);
+      setBill(originalBill);
+      setSelectedTableId(originalSelectedTableId);
       toast(error.message || "Network error", "error");
+
+      // Trigger shake effect
+      setShouldShake(true);
+      setTimeout(() => setShouldShake(false), 500);
     } finally {
       setBusyKey(null);
     }
@@ -451,7 +479,63 @@ function StaffPaymentTab({
 
                 <section className="staff-payment-panel">
                   {(bill?.order_status === 'Pending Payment' || bill?.order_status === 'Billed') && (
-                    <div className="staff-cash-pending-card">
+                    <div 
+                      className={`staff-cash-pending-card ${shouldShake ? 'sfx-shake' : ''}`}
+                      style={{ position: 'relative', overflow: 'hidden', transition: 'border-color 0.2s ease' }}
+                    >
+                      <style>{`
+                        @keyframes sfx-shake-anim {
+                          0%, 100% { transform: translateX(0); }
+                          20%, 60% { transform: translateX(-6px); }
+                          40%, 80% { transform: translateX(6px); }
+                        }
+                        .sfx-shake {
+                          animation: sfx-shake-anim 0.3s ease-in-out;
+                          border-color: #ff6b6b !important;
+                          box-shadow: 0 0 10px rgba(255, 107, 107, 0.25) !important;
+                        }
+                        @keyframes sfx-shimmer-anim {
+                          0% { background-position: -200% 0; }
+                          100% { background-position: 200% 0; }
+                        }
+                        .sfx-shimmer {
+                          animation: sfx-shimmer-anim 1.5s infinite linear;
+                        }
+                        @media (prefers-reduced-motion: reduce) {
+                          .sfx-shake {
+                            animation: none !important;
+                            border-color: #ff6b6b !important;
+                          }
+                          .sfx-shimmer {
+                            animation: none !important;
+                            background: #e2e8f0 !important;
+                          }
+                        }
+                      `}</style>
+                      
+                      {busyKey === 'confirm_cash' && (
+                        <div style={{
+                          position: 'absolute',
+                          inset: 0,
+                          backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                          backdropFilter: 'blur(1px)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          zIndex: 10,
+                        }}>
+                          <div 
+                            className="sfx-shimmer" 
+                            style={{
+                              width: '80%',
+                              height: '20px',
+                              background: 'linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%)',
+                              backgroundSize: '200% 100%',
+                              borderRadius: '4px',
+                            }} 
+                          />
+                        </div>
+                      )}
                       <div className="staff-cash-pending-content">
                         <div className="staff-cash-icon-wrapper">
                           <span className="staff-cash-icon">💵</span>

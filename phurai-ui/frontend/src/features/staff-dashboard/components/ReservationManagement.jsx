@@ -42,7 +42,7 @@ import LateArrivalBadge from "./LateArrivalBadge.jsx";
 import StaffEditReservationModal from "./StaffEditReservationModal.jsx";
 import AddWalkInModal from "./AddWalkInModal.jsx";
 import { useGracePeriod } from "../hooks/useGracePeriod.js";
-import "@/styles/staff-dashboard/ReservationManagement.css";
+import "../styles/ReservationManagement.css";
 
 
 

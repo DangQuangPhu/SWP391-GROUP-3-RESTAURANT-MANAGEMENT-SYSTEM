@@ -74,15 +74,18 @@ export const createPreSaveReservation = async (req, res) => {
     // 4. Generate Order Code (e.g. PHURAI123456)
     const order_code = `PHURAI${Math.floor(100000 + Math.random() * 900000)}`;
 
-    // Calculate end time
+    // Calculate end time based on party size default if not provided
     let computed_end_at = reservation_end_at;
-    if (!computed_end_at && durationMinutes) {
+    if (!computed_end_at) {
+      let diningDuration = 120;
+      const count = Number(guest_count) || 1;
+      if (count <= 2) diningDuration = 60;
+      else if (count <= 4) diningDuration = 90;
+      else if (count <= 6) diningDuration = 105;
+      else diningDuration = 120;
+
       const start = new Date(reservation_start_at);
-      start.setMinutes(start.getMinutes() + Number(durationMinutes));
-      computed_end_at = start;
-    } else if (!computed_end_at) {
-      const start = new Date(reservation_start_at);
-      start.setMinutes(start.getMinutes() + 120);
+      start.setMinutes(start.getMinutes() + (Number(durationMinutes) || diningDuration));
       computed_end_at = start;
     }
 

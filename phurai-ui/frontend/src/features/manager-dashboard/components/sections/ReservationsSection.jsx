@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { listContainerVariants, listItemVariants } from "@/components/ui/Skeleton";
+import { Skeleton, listContainerVariants, listItemVariants } from "@/components/ui/Skeleton";
 import { useSearchParams } from "react-router-dom";
 import { format, parseISO, isSameDay } from "date-fns";
 import { ManagerDrawer } from "../ManagerOverlay.jsx";
@@ -528,19 +528,19 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
         </article>
       </div>
 
-      <div className="sfx-card sfx-card--overflow-visible staff-reservations-card" style={{ background: "#ffffff", padding: "24px", borderRadius: "14px", boxShadow: "0 6px 32px rgba(31,26,23,0.04)" }}>
-        <header className="sfx-card__head" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+      <div className="sfx-card sfx-card--overflow-visible sfx-card--featured-dashboard staff-reservations-card">
+        <header className="sfx-card__head sfx-card__head--dashboard">
           <div>
-            <h3 className="sfx-card__title" style={{ color: "#1a1a1a", fontSize: 20, margin: 0 }}>Reservations</h3>
-            <p className="sfx-muted" style={{ fontSize: 13, margin: "4px 0 0" }}>
+            <h3 className="sfx-card__title sfx-card__title--dashboard">Reservations</h3>
+            <p className="sfx-muted sfx-card__subtitle--dashboard">
               {`Reservations for ${selectedDateLabel}`}
             </p>
           </div>
-          <span className="sfx-muted" style={{ fontSize: 13 }}>{totalCount} reservations</span>
+          <span className="sfx-muted sfx-card__counter--dashboard">{totalCount} reservations</span>
         </header>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 24, position: "relative", zIndex: 50, alignItems: "center" }}>
-          <div style={{ flex: "1 1 250px", minWidth: 200 }}>
+        <div className="sfx-tablemap-filter__container">
+          <div className="sfx-tablemap-filter__search-box">
             <SearchField
               value={search}
               onChange={setSearch}
@@ -548,27 +548,11 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
             />
           </div>
 
-          <div style={{ flex: "0 0 auto" }}>
+          <div className="sfx-tablemap-filter__area-box">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="sfx-input"
-              style={{
-                padding: "8px 32px 8px 12px",
-                borderRadius: "8px",
-                border: "1px solid #e5e7eb",
-                background: "#ffffff",
-                color: "#1a1a1a",
-                fontSize: "14px",
-                fontWeight: "500",
-                cursor: "pointer",
-                minWidth: "160px",
-                appearance: "none",
-                backgroundImage: "url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%231a1a1a%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')",
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "right 12px top 50%",
-                backgroundSize: "10px auto"
-              }}
+              className="sfx-input sfx-tablemap-filter__select"
             >
               <option value="all">All statuses</option>
               {ALL_RESERVATION_STATUSES.map((statusVal) => (
@@ -579,28 +563,27 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
             </select>
           </div>
 
-          <div style={{ flex: 1 }}></div>
+          <div className="sfx-tablemap-filter__actions"></div>
 
 
 
           <div className={`staff-reservations-toolbar__date${pickerOpen ? " is-open" : ""}`} style={{ marginLeft: "auto", position: "relative" }}>
             <button
               type="button"
-              className="staff-reservations-date-trigger"
+              className="staff-reservations-date-trigger sfx-picker__trigger"
               onClick={() => (pickerOpen ? closePicker() : openPicker())}
               aria-label="Select date"
               aria-expanded={pickerOpen}
-              style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
             >
-              <span className="staff-reservations-toolbar__date-label" style={{ fontSize: 13, color: "#1a1a1a", fontWeight: 500 }}>
+              <span className="staff-reservations-toolbar__date-label sfx-picker__trigger-label">
                 {selectedDateLabel}
               </span>
-              <span className="sfx-kpi__icon sfx-kpi__icon--trigger" style={{ position: "relative", zIndex: 20, background: "#f8f5ef", border: "1px solid #e2dcd0", borderRadius: 8, width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#b09460" }}>
+              <span className="sfx-kpi__icon sfx-kpi__icon--trigger sfx-picker__trigger-icon">
                 <Icon name="calendar" size={16} style={{ pointerEvents: "none" }} />
               </span>
             </button>
             {pickerOpen && (
-              <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", zIndex: 1000 }}>
+              <div className="sfx-picker__popover">
                 <DashboardDateRangePicker
                   inline={true}
                   allowFuture={true}
@@ -617,17 +600,17 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
         </div>
 
         <div className="sfx-table-wrap">
-          <table className="sfx-table sfx-table--hover staff-reservations-table" style={{ background: "#ffffff" }}>
+          <table className="sfx-table sfx-table--hover staff-reservations-table sfx-reservations-table sfx-reservations__table-bg">
             <thead>
-              <tr style={{ background: "#ffffff" }}>
-                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle", width: '50px' }}>#</th>
-                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Reservation ID</th>
-                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Date</th>
-                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Customer</th>
-                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Phone</th>
-                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Email</th>
-                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Status</th>
-                <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Actions</th>
+              <tr className="sfx-reservations__tr-head-bg">
+                <th className="sfx-reservations__th sfx-reservations__th--w50">#</th>
+                <th className="sfx-reservations__th">Reservation ID</th>
+                <th className="sfx-reservations__th">Date</th>
+                <th className="sfx-reservations__th">Customer</th>
+                <th className="sfx-reservations__th">Phone</th>
+                <th className="sfx-reservations__th">Email</th>
+                <th className="sfx-reservations__th">Status</th>
+                <th className="sfx-reservations__th">Actions</th>
               </tr>
             </thead>
             <motion.tbody
@@ -654,18 +637,18 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                   <motion.tr
                     key={currentId}
                     variants={listItemVariants}
-                    style={{ background: "#ffffff" }}
+                    className="sfx-reservations__tr"
                   >
                     {/* Index Sequence */}
-                    <td style={{ fontSize: 13, fontWeight: 600, color: "#555", textAlign: "center", verticalAlign: "middle" }}>
+                    <td className="sfx-reservations__td-index">
                       {(currentPage - 1) * 10 + index + 1}
                     </td>
                     {/* Reservation ID — sans-serif, black */}
-                    <td style={{ fontSize: 13, fontWeight: 600, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
+                    <td className="sfx-reservations__td-id">
                       #{String(currentId).padStart(6, "0")}
                     </td>
                     {/* Date — sans-serif, black */}
-                    <td style={{ fontSize: 13, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
+                    <td className="sfx-reservations__td-date">
                       {(() => {
                         const rawIso = r.reservation_start_at;
                         const dateRaw = r.reservation_date || (rawIso ? String(rawIso).slice(0, 10) : null);
@@ -675,20 +658,20 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                         } catch { return dateRaw; }
                       })()}
                     </td>
-                    <td style={{ fontWeight: 500, color: "#000", textAlign: "center", verticalAlign: "middle" }}>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                    <td className="sfx-reservations__td-customer">
+                      <div className="sfx-reservations__customer-container">
                         <span><EmptyVal val={r.customer_name} /></span>
                         {(r.reservation_source === 'Walk-in' || r.source === 'Walk-in') && (
-                          <span style={{ fontSize: 10, color: '#856404', background: '#fff3cd', padding: '2px 6px', borderRadius: 4, fontWeight: 'bold' }}>
+                          <span className="sfx-reservations__walk-in-tag">
                             Customer Walk-in
                           </span>
                         )}
                       </div>
                     </td>
-                    <td style={{ color: "#000", fontSize: 13, textAlign: "center", verticalAlign: "middle" }}><EmptyVal val={r.customer_phone || r.phone} /></td>
-                    <td style={{ color: "#000", fontSize: 12, wordBreak: "break-all", textAlign: "center", verticalAlign: "middle" }}><EmptyVal val={r.customer_email || r.email} /></td>
-                    <td style={{ textAlign: "center", verticalAlign: "middle" }}>
-                      <div style={{ display: "flex", justifyContent: "center" }}>
+                    <td className="sfx-reservations__td-phone"><EmptyVal val={r.customer_phone || r.phone} /></td>
+                    <td className="sfx-reservations__td-email"><EmptyVal val={r.customer_email || r.email} /></td>
+                    <td className="sfx-reservations__td-status">
+                      <div className="sfx-reservations__status-container">
                         <ReservationStatusBadge
                           status={displayStatusRaw === "Request" ? "Request" : (r.reservation_status || displayStatusRaw)}
                           size="sm"
@@ -696,8 +679,8 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                         />
                       </div>
                     </td>
-                    <td style={{ textAlign: "center", verticalAlign: "middle" }}>
-                      <div className="sfx-rowacts" style={{ justifyContent: "center" }}>
+                    <td className="sfx-reservations__td-actions">
+                      <div className="sfx-rowacts sfx-reservations__actions-container">
                         <Button size="sm" variant="ghost" icon="eye" onClick={() => handleViewDetails(r)}>
                           View
                         </Button>
@@ -793,9 +776,33 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
       >
         {active ? (
           detailsLoading ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "24px 0" }}>
-              <span className="sfx-spinner" />
-              <span style={{ color: "var(--sfx-muted)", fontSize: "13px" }}>Loading details…</span>
+            <div style={{ padding: "24px 0", display: "flex", flexDirection: "column", gap: "24px" }} aria-busy="true" aria-label="Loading reservation details">
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                <Skeleton className="w-24 h-8" />
+                <Skeleton className="w-32 h-4" />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <Skeleton className="w-16 h-3" />
+                  <Skeleton className="w-32 h-5" />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <Skeleton className="w-16 h-3" />
+                  <Skeleton className="w-28 h-5" />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <Skeleton className="w-16 h-3" />
+                  <Skeleton className="w-36 h-5" />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <Skeleton className="w-16 h-3" />
+                  <Skeleton className="w-24 h-5" />
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px" }}>
+                <Skeleton className="w-24 h-4" />
+                <Skeleton className="w-full h-12" />
+              </div>
             </div>
           ) : (
             <div className="sfx-detail">
@@ -1144,28 +1151,28 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                         }
 
                         return (
-                          <div key={idx} style={{ display: "flex", gap: 12, paddingBottom: 16, position: "relative" }}>
+                          <div key={idx} className="sfx-reservations__timeline-item">
                             {idx < history.length - 1 && (
-                              <div style={{ position: "absolute", left: 8, top: 20, bottom: 0, width: 2, background: "var(--border-color)", borderRadius: 2 }} />
+                              <div className="sfx-reservations__timeline-line" />
                             )}
-                            <div style={{ width: 18, height: 18, borderRadius: "50%", background: color, flexShrink: 0, marginTop: 2, boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 20%, transparent)` }} />
-                            <div style={{ flex: 1 }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-color)" }}>{label}:</span>
-                                <span style={{ fontSize: "13px", color: "var(--text-color)", whiteSpace: "nowrap" }}>{tsStr !== "---" ? tsStr.replace(" ", " ") : ""}</span>
+                            <div className="sfx-reservations__timeline-dot-container" style={{ background: color, boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 20%, transparent)` }} />
+                            <div className="sfx-reservations__timeline-content">
+                              <div className="sfx-reservations__timeline-header">
+                                <span className="sfx-reservations__timeline-label">{label}:</span>
+                                <span className="sfx-reservations__timeline-time">{tsStr !== "---" ? tsStr.replace(" ", " ") : ""}</span>
                               </div>
                               {actorRole !== null && (
-                                <span style={{ fontSize: "12px", color: "var(--sfx-muted)", display: "block", marginTop: 2 }}>
+                                <span className="sfx-reservations__timeline-actor">
                                   By {actorRole}{hist.action_name === "RESERVATION_CREATED" ? " : " : " "}{performerName}{destInfo}
                                 </span>
                               )}
                               {hist.notes && (
                                 typeof hist.notes === "string" ? (
-                                  <div style={{ fontSize: "12px", color: "#ef4444", marginTop: 4 }}>
+                                  <div className="sfx-reservations__timeline-reason">
                                     Reason: {hist.notes}
                                   </div>
                                 ) : (hist.notes.cancel_reason || hist.notes.reject_reason || hist.notes.reason) ? (
-                                  <div style={{ fontSize: "12px", color: "#ef4444", marginTop: 4 }}>
+                                  <div className="sfx-reservations__timeline-reason">
                                     Reason: {hist.notes.cancel_reason || hist.notes.reject_reason || hist.notes.reason}
                                   </div>
                                 ) : null
@@ -1176,7 +1183,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                       })}
                     </div>
                   ) : (
-                    <p style={{ fontSize: "13px", color: "var(--sfx-muted)" }}>No timeline events yet.</p>
+                    <p className="sfx-reservations__empty-text">No timeline events yet.</p>
                   )}
                 </div>
               )}
@@ -1192,7 +1199,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
         title={pendingAction?.type === 'confirm' ? "Confirm Reservation" : "Reject Reservation"}
       >
         <div className="sfx-form sfx-form--vert">
-          <p className="sfx-text-muted" style={{ marginBottom: "20px" }}>
+          <p className="sfx-text-muted sfx-reservations__desc-text">
             Are you sure you want to {pendingAction?.type} reservation #{String(pendingAction?.reservation?.reservation_id || pendingAction?.reservation?.id).padStart(6, "0")}? This will notify the customer.
           </p>
 
@@ -1207,7 +1214,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
             <span className="sfx-detail__value">{pendingAction?.reservation?.guest_count} people</span>
           </div>
 
-          <div className="sfx-actions" style={{ marginTop: "32px", display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+          <div className="sfx-actions sfx-reservations__actions-row">
             <Button variant="ghost" onClick={() => setPendingAction(null)}>
               Cancel
             </Button>
@@ -1232,40 +1239,31 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
       {/* Manager Edit — Double-Confirm Overlay */}
       {editConfirmPending && (
         <div
-          style={{
-            position: "fixed", inset: 0, zIndex: 1200,
-            background: "rgba(0,0,0,0.6)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
+          className="sfx-reservations__confirm-overlay"
           onClick={() => setEditConfirmPending(false)}
         >
           <div
-            style={{
-              background: "var(--bg-card)", borderRadius: "14px",
-              padding: "28px 32px", maxWidth: "440px", width: "92%",
-              boxShadow: "0 24px 64px rgba(0,0,0,0.4)",
-              animation: "sfx-drawer-in 0.22s ease",
-            }}
+            className="sfx-reservations__confirm-card"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{ margin: "0 0 8px", fontSize: "17px", fontWeight: 700, color: "var(--text-color)" }}>
+            <h3 className="sfx-reservations__confirm-title">
               Verify Changes
             </h3>
-            <p style={{ margin: "0 0 18px", fontSize: "13px", color: "var(--sfx-muted)", lineHeight: 1.6 }}>
+            <p className="sfx-reservations__confirm-desc">
               Please confirm the following changes to Booking{" "}
               <strong>#{String(active?.reservation_id || "").padStart(6, "0")}</strong>:
             </p>
-            <div style={{ background: "var(--bg-card-alt)", borderRadius: 8, padding: "14px 16px", marginBottom: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="sfx-reservations__changes-box">
               {editForm.customer_name !== active?.customer_name && (
-                <div style={{ fontSize: "13px" }}>
-                  <span style={{ color: "var(--sfx-muted)" }}>Name: </span>
-                  <span style={{ textDecoration: "line-through", color: "var(--sfx-muted)", marginRight: 6 }}>{active?.customer_name}</span>
+                <div className="sfx-reservations__change-row">
+                  <span>Name: </span>
+                  <span className="sfx-reservations__change-old">{active?.customer_name}</span>
                   <strong>{editForm.customer_name}</strong>
                 </div>
               )}
               {editForm.notes !== (active?.special_request || active?.notes || "") && (
-                <div style={{ fontSize: "13px" }}>
-                  <span style={{ color: "var(--sfx-muted)" }}>Notes: </span>
+                <div className="sfx-reservations__change-row">
+                  <span>Notes: </span>
                   <strong>{editForm.notes || "(cleared)"}</strong>
                 </div>
               )}
@@ -1276,16 +1274,16 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                 </div>
               )}
               {editForm.status && editForm.status !== (active?.status || "").toLowerCase() && (
-                <div style={{ fontSize: "13px" }}>
-                  <span style={{ color: "var(--sfx-muted)" }}>Status: </span>
+                <div className="sfx-reservations__change-row">
+                  <span>Status: </span>
                   <strong>{editForm.status}</strong>
                 </div>
               )}
               {!editForm.customer_name && !editForm.notes && !editForm.guest_count && !editForm.status && (
-                <span style={{ fontSize: "13px", color: "var(--sfx-muted)" }}>All current values will be saved.</span>
+                <span className="sfx-reservations__change-row">All current values will be saved.</span>
               )}
             </div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <div className="sfx-reservations__btn-row">
               <Button variant="ghost" onClick={() => setEditConfirmPending(false)}>Go Back</Button>
               <Button
                 variant="gold"
@@ -1304,28 +1302,19 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
       {/* ── Flow C: Resolve Request double-confirmation modal ── */}
       {resolveConfirmPending && (
         <div
-          style={{
-            position: "fixed", inset: 0, zIndex: 9999,
-            background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
+          className="sfx-reservations__confirm-overlay sfx-reservations__confirm-overlay--blur"
           onClick={() => setResolveConfirmPending(null)}
         >
           <div
-            style={{
-              background: "var(--bg-card)", borderRadius: "14px",
-              padding: "28px 32px", maxWidth: "440px", width: "92%",
-              boxShadow: "0 24px 64px rgba(0,0,0,0.4)",
-              animation: "sfx-drawer-in 0.22s ease",
-            }}
+            className="sfx-reservations__confirm-card"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{ margin: "0 0 8px", fontSize: "17px", fontWeight: 700, color: "var(--text-color)" }}>
+            <h3 className="sfx-reservations__confirm-title">
               {resolveConfirmPending.type === "cancel"
                 ? (resolveConfirmPending.decision === "process" ? "Process Refund & Cancel" : "Reject Cancellation")
                 : (resolveConfirmPending.decision === "confirm" ? "✓ Confirm Edit Request" : "✕ Reject Edit Request")}
             </h3>
-            <p style={{ margin: "0 0 18px", fontSize: "13px", color: "var(--sfx-muted)", lineHeight: 1.6 }}>
+            <p className="sfx-reservations__confirm-desc">
               {resolveConfirmPending.type === "cancel" && resolveConfirmPending.decision === "process"
                 ? `This will cancel reservation #${String(active?.reservation_id || "").padStart(6, "0")}, release the table, and send a refund confirmation email. This cannot be undone.`
                 : resolveConfirmPending.type === "cancel" && resolveConfirmPending.decision === "reject"
@@ -1336,8 +1325,8 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
             </p>
             {/* Reject reason input for edit decline */}
             {resolveConfirmPending.type !== "cancel" && resolveConfirmPending.decision === "decline" && (
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--sfx-muted)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              <div className="sfx-reservations__form-group">
+                <label className="sfx-reservations__form-label">
                   Reason (required)
                 </label>
                 <textarea
@@ -1345,11 +1334,11 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                   value={editRejectReason}
                   onChange={e => setEditRejectReason(e.target.value)}
                   placeholder="e.g. Requested date is fully booked, table not available…"
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border-color)", fontSize: 13, resize: "vertical", background: "var(--bg-input)", color: "var(--text-color)", boxSizing: "border-box" }}
+                  className="sfx-reservations__form-textarea"
                 />
               </div>
             )}
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <div className="sfx-reservations__btn-row">
               <Button variant="ghost" onClick={() => setResolveConfirmPending(null)} disabled={resolving}>
                 Go Back
               </Button>
@@ -1374,26 +1363,26 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
 
       {/* ── Flow D: Manager Cancel Modal ──────────────────────────────── */}
       {cancelModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "#1a1008", border: "1px solid #c9a96e44", borderRadius: 14, padding: "32px 36px", minWidth: 420, maxWidth: 520, boxShadow: "0 16px 64px rgba(0,0,0,0.6)" }}>
-            <h3 style={{ color: "#c9a96e", margin: "0 0 6px", fontSize: 18, fontWeight: 700 }}>Cancel Reservation</h3>
-            <p style={{ color: "#a09080", fontSize: 13, margin: "0 0 20px" }}>
-              You are cancelling <strong style={{ color: "#e8dcc8" }}>Reservation #{cancelModal.reservation.reservation_id}</strong> for{" "}
-              <strong style={{ color: "#e8dcc8" }}>{cancelModal.reservation.customer_name || "Guest"}</strong>.
+        <div className="sfx-reservations__cancel-overlay">
+          <div className="sfx-reservations__cancel-card">
+            <h3 className="sfx-reservations__cancel-title">Cancel Reservation</h3>
+            <p className="sfx-reservations__cancel-desc">
+              You are cancelling <strong>Reservation #{cancelModal.reservation.reservation_id}</strong> for{" "}
+              <strong>{cancelModal.reservation.customer_name || "Guest"}</strong>.
               <br />This action will release the table and notify the customer by email.
             </p>
-            <label style={{ display: "block", color: "#a09080", fontSize: 12, marginBottom: 8, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-              Cancellation Reason <span style={{ color: "#e74c3c" }}>*</span>
+            <label className="sfx-reservations__cancel-label">
+              Cancellation Reason <span className="sfx-reservations__cancel-asterisk">*</span>
             </label>
             <textarea
               rows={4}
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
               placeholder="e.g. Restaurant closure, customer called to cancel, overbooking…"
-              style={{ width: "100%", background: "#0d0804", border: "1px solid #c9a96e55", borderRadius: 8, padding: "12px 14px", color: "#e8dcc8", fontSize: 14, resize: "vertical", boxSizing: "border-box", outline: "none" }}
+              className="sfx-reservations__cancel-textarea"
             />
-            <p style={{ color: "#888", fontSize: 11, margin: "6px 0 20px" }}>Minimum 5 characters. This reason will be recorded in the Audit Log.</p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <p className="sfx-reservations__cancel-hint">Minimum 5 characters. This reason will be recorded in the Audit Log.</p>
+            <div className="sfx-reservations__cancel-actions">
               <Button variant="ghost" onClick={() => { setCancelModal(null); setCancelReason(""); }} disabled={cancelling}>
                 Go Back
               </Button>

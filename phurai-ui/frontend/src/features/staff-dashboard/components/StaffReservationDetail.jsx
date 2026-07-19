@@ -5,6 +5,7 @@
  * (no edit mode) and shows Staff-specific check-in / check-out records.
  */
 import { useEffect, useState } from "react";
+import { Bone } from "./StaffSkeleton.jsx";
 import { format } from "date-fns";
 import ReservationStatusBadge from "@/components/shared/ReservationStatusBadge.jsx";
 import EmptyVal from "@/components/shared/EmptyVal.jsx";
@@ -113,9 +114,16 @@ function TimelineList({ reservationId, userId, customerName }) {
 
   if (loading) {
     return (
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span className="sfx-spinner" style={{ width: 14, height: 14 }} />
-        <span style={{ fontSize: 13, color: "var(--sfx-muted, #8a8175)" }}>Loading timeline…</span>
+      <div style={{ display: "flex", flexDirection: "column", gap: "20px", position: "relative", paddingLeft: "10px" }} aria-busy="true" aria-label="Loading timeline">
+        {Array.from({ length: 3 }).map((_, idx) => (
+          <div key={idx} style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+            <Bone w={12} h={12} radius={6} />
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px", flex: 1 }}>
+              <Bone w="45%" h={14} />
+              <Bone w="30%" h={11} />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }

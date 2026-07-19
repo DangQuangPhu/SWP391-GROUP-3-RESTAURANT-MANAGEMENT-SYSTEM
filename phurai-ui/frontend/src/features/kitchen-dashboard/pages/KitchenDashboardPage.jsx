@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Clock, Play, CheckCircle2, AlertCircle, ChefHat, Keyboard, Loader2, Wifi } from "lucide-react";
 import { useSocket } from "@/core/socket/SocketContext.jsx";
+import { Skeleton } from "@/components/ui/Skeleton.jsx";
 import { toast } from "react-hot-toast";
 
 const KDS_TOKEN_KEY = "kds_device_token";
@@ -339,8 +340,42 @@ export function KitchenDashboardPage({ currentUser }) {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500" />
+      <div className="h-full flex flex-col" aria-busy="true" aria-label="Loading kitchen dashboard">
+        {/* Station bar skeleton */}
+        <div className="flex-shrink-0 px-4 py-2 bg-gray-900 flex items-center justify-between text-sm">
+          <Skeleton className="w-48 h-5 bg-gray-700" />
+          <Skeleton className="w-24 h-5 bg-gray-700" />
+        </div>
+        
+        {/* Kanban Board skeleton */}
+        <div className="flex-grow p-4 grid grid-cols-1 md:grid-cols-3 gap-6 min-h-0">
+          {["Pending", "Preparing", "Ready"].map((col, idx) => (
+            <div key={idx} className="flex flex-col h-full bg-gray-50 border border-gray-200 rounded-2xl overflow-hidden p-4">
+              <div className="flex justify-between items-center pb-3 border-b border-gray-200 mb-4">
+                <Skeleton className="w-24 h-6" />
+                <Skeleton className="w-8 h-6 rounded-full" />
+              </div>
+              <div className="flex-1 flex flex-col gap-4 overflow-y-auto">
+                {Array.from({ length: idx === 0 ? 2 : 1 }).map((_, cIdx) => (
+                  <div key={cIdx} className="p-4 rounded-xl bg-white border border-gray-150 flex flex-col gap-3 shadow-sm">
+                    <div className="flex justify-between">
+                      <div className="flex gap-2">
+                        <Skeleton className="w-10 h-6" />
+                        <Skeleton className="w-16 h-4" />
+                      </div>
+                      <Skeleton className="w-12 h-5" />
+                    </div>
+                    <Skeleton className="w-3/4 h-6" />
+                    <div className="flex justify-between items-center pt-2 border-t border-gray-100 mt-1">
+                      <Skeleton className="w-24 h-4" />
+                      <Skeleton className="w-20 h-8 rounded-lg" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

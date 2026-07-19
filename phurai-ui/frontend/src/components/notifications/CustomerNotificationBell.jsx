@@ -4,7 +4,7 @@ import { apiGet, apiPatch, request } from "@/core/api/httpClient.js";
 import { useSocket } from "@/core/socket/SocketContext.jsx";
 import { toast } from "react-toastify";
 import { motion, AnimatePresence } from "framer-motion";
-import "@/styles/notifications/CustomerNotificationBell.css";
+import "./CustomerNotificationBell.css";
 
 function timeAgo(dateStr) {
   if (!dateStr) return '';

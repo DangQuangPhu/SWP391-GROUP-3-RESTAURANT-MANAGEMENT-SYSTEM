@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { toast } from "react-toastify";
 import reservationImg from "@/assets/images/reservation/Reservation.jpg";
 import "../styles/reservation.css";
@@ -53,26 +53,35 @@ function ReservationPage({
   currentUser = null,
 }) {
   const navigate = useNavigate();
+  const shouldReduceMotion = useReducedMotion();
 
   const pageVariants = useMemo(() => ({
     initial: {
       opacity: 0,
+      scale: shouldReduceMotion ? 1 : 0.97,
+      y: shouldReduceMotion ? 0 : 8
     },
     animate: {
       opacity: 1,
+      scale: 1,
+      y: 0,
       transition: {
-        duration: 0.35,
-        ease: "easeOut",
+        type: "spring",
+        stiffness: 150,
+        damping: 22,
+        mass: 0.8
       }
     },
     exit: {
       opacity: 0,
+      scale: shouldReduceMotion ? 1 : 0.97,
+      y: shouldReduceMotion ? 0 : -8,
       transition: {
-        duration: 0.25,
-        ease: "easeIn",
+        duration: 0.2,
+        ease: "easeInOut"
       }
     }
-  }), []);
+  }), [shouldReduceMotion]);
 
   const [settings, setSettings] = useState(null);
   const [form, setForm] = useState(() => {
@@ -106,6 +115,7 @@ function ReservationPage({
   });
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [error, setError] = useState("");
   const [successReservation, setSuccessReservation] = useState(() => {
     const stored = localStorage.getItem("phurai_pending_reservation");
@@ -192,18 +202,43 @@ function ReservationPage({
   const [isExitingDetails, setIsExitingDetails] = useState(false);
   // Controls the summary background overlay fade-in (Phase 3)
   const [showSummaryBg, setShowSummaryBg] = useState(step !== 'details' && step !== 'payment' && step !== 'success');
-  // Guard flag — prevents the url-sync useEffect from interfering while the
-  // details→summary transition animation is in flight (350ms fade + setTimeout).
   const isTransitioningToSummaryRef = useRef(false);
 
+  const containerVariants = useMemo(() => ({
+    initial: {},
+    animate: {
+      transition: {
+        staggerChildren: shouldReduceMotion ? 0 : 0.08,
+      }
+    }
+  }), [shouldReduceMotion]);
+
+  const headerItemVariants = useMemo(() => ({
+    initial: { 
+      opacity: 0, 
+      y: shouldReduceMotion ? 0 : 20 
+    },
+    animate: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        type: "spring",
+        stiffness: 140,
+        damping: 20
+      }
+    }
+  }), [shouldReduceMotion]);
+
   useEffect(() => {
-    // Skip URL sync while the animated transition is in progress — the
-    // setTimeout inside transitionToSummary will call setStep/navigate itself.
-    if (isTransitioningToSummaryRef.current) return;
+    if (isTransitioningToSummaryRef.current) {
+      if (urlStep === "summary" && step === "summary") {
+        isTransitioningToSummaryRef.current = false;
+      }
+      return;
+    }
     if (urlStep && urlStep !== step) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStep(urlStep);
-    } else if (!urlStep && step !== "details") {
+    } else if (!urlStep) {
       navigate('/reservations/details', { replace: true });
     }
   }, [urlStep, step, navigate]);
@@ -264,6 +299,7 @@ function ReservationPage({
   }, []);
 
   const handleUpdateForm = useCallback((name, value) => {
+    setError("");
     if (name === 'date') setField('date', value);
     else if (name === 'startTime') setField('time', value);
     else if (name === 'endTime') setField('endTime', value);
@@ -334,8 +370,6 @@ function ReservationPage({
     setTimeout(() => {
       setStep("summary");
       navigate("/reservations/summary");
-      // Release the guard after navigation has committed
-      isTransitioningToSummaryRef.current = false;
       // Reset exit flag after step has changed
       setTimeout(() => setIsExitingDetails(false), 100);
       // Phase 3: after layout animation completes (~600ms), fade in summary bg
@@ -423,7 +457,8 @@ function ReservationPage({
   }, [transitionTo]);
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setError("");
     try {
@@ -466,6 +501,7 @@ function ReservationPage({
       setError(err.response?.data?.error || err.response?.data?.message || err.message || "An error occurred");
       toast.error(err.response?.data?.error || err.response?.data?.message || err.message || "Failed to submit reservation.");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -502,60 +538,51 @@ function ReservationPage({
         </svg>
       </button>
 
-      <div className={`rd-split ${step !== 'details' ? 'rd-split--centered' : ''}`}>
-        <AnimatePresence>
-          {step === "details" && (
-            <motion.div
-              className="rd-image-col"
-              animate={{ opacity: isExitingDetails ? 0 : 1 }}
-              exit={{ opacity: 0, width: 0 }}
-              transition={{ duration: isExitingDetails ? 0.35 : 0.6, ease: [0.16, 1, 0.3, 1] }}
-            >
+      <AnimatePresence mode="wait">
+        {step === "details" ? (
+          <motion.div
+            key="details-layout"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.35, ease: "easeInOut" }}
+            className="rd-split"
+          >
+            <div className="rd-image-col">
               <img src={reservationImg} alt="" className="rd-image" />
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
 
-         <div
-           className={`rd-content-col ${step === 'details' ? '' : (step === 'payment' || step === 'summary') ? 'rd-content-col--wide' : 'rd-content-col--centered'}`}
-         >
-          <p className="rd-eyebrow">RESERVE A TABLE</p>
-          <h1 className="rd-title">CHOOSE YOUR MOMENT</h1>
-          <AnimatePresence>
-            {step === "details" && (
-              <motion.p
-                key="rd-subtitle"
-                className="rd-subtitle"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: isExitingDetails ? 0 : 1, transition: { duration: isExitingDetails ? 0.25 : 0.6 } }}
-                exit={{ opacity: 0, transition: { duration: 0.2 } }}
-              >
+            <motion.div
+              className="rd-content-col"
+              variants={containerVariants}
+              initial="initial"
+              animate="animate"
+            >
+              <motion.p variants={headerItemVariants} className="rd-eyebrow">RESERVE A TABLE</motion.p>
+              <motion.h1 variants={headerItemVariants} className="rd-title">CHOOSE YOUR MOMENT</motion.h1>
+              
+              <motion.p variants={headerItemVariants} className="rd-subtitle">
                 Complete your details, choose your table on our interactive floor plan,
                 then review and confirm. Availability updates live.
               </motion.p>
-            )}
-          </AnimatePresence>
- 
-          <div className="rd-stepper">
-            {STEPS.map((stepObj, i) => {
-              const label = stepObj.label;
-              const isActive = i <= activeStepIndex;
-              return (
-                <div className="rd-step" key={label}>
-                  <div className={`rd-step-circle ${isActive ? 'rd-step-circle-active' : ''}`}>
-                    {i + 1}
-                  </div>
-                  <span className={isActive ? 'rd-step-label-active' : 'rd-step-label'}>{label}</span>
-                  {i < STEPS.length - 1 && <div className="rd-step-line" />}
-                </div>
-              );
-            })}
-          </div>
 
-          <AnimatePresence mode="wait">
-            {step === "details" && (
+              <motion.div variants={headerItemVariants} className="rd-stepper">
+                {STEPS.map((stepObj, i) => {
+                  const label = stepObj.label;
+                  const isActive = i <= activeStepIndex;
+                  return (
+                    <div className="rd-step" key={label}>
+                      <div className={`rd-step-circle ${isActive ? 'rd-step-circle-active' : ''}`}>
+                        {i + 1}
+                      </div>
+                      <span className={isActive ? 'rd-step-label-active' : 'rd-step-label'}>{label}</span>
+                      {i < STEPS.length - 1 && <div className="rd-step-line" />}
+                    </div>
+                  );
+                })}
+              </motion.div>
+
               <motion.div
-                key="details"
                 variants={pageVariants}
                 initial="initial"
                 animate={isExitingDetails ? { opacity: 0, transition: { duration: 0.35, ease: [0.4, 0, 1, 1] } } : "animate"}
@@ -582,6 +609,7 @@ function ReservationPage({
                   onSelectTable={handleSelectTable}
                   tablesLoading={loadingAvailability}
                   isAuthenticated={isAuthenticated}
+                  error={error}
                   onUpdateForm={handleUpdateForm}
                   onGoHome={() => navigate("/")}
                   onContinue={(localForm) => {
@@ -589,98 +617,135 @@ function ReservationPage({
                   }}
                 />
               </motion.div>
-            )}
+            </motion.div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="centered-layout"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.35, ease: "easeInOut" }}
+            className="rd-split rd-split--centered"
+          >
+            <motion.div
+              className={`rd-content-col ${(step === 'payment' || step === 'summary') ? 'rd-content-col--wide' : 'rd-content-col--centered'}`}
+              variants={containerVariants}
+              initial="initial"
+              animate="animate"
+            >
+              <motion.p variants={headerItemVariants} className="rd-eyebrow">RESERVE A TABLE</motion.p>
+              <motion.h1 variants={headerItemVariants} className="rd-title">CHOOSE YOUR MOMENT</motion.h1>
 
-            {step === "summary" && (
-              <motion.div
-                key="summary"
-                variants={pageVariants}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                className="rzv-step"
-              >
-                <div className="rzv-tablestep">
-                  <div className="rzv-tablestep__bar">
-                    <button type="button" className="rzv-backlink" onClick={handleEditDetails}>
-                      ← Back to details
-                    </button>
-                    <span className="rzv-tablestep__recap">
-                      {form.guestCount} guests ·{" "}
-                      {form.date ? new Date(`${form.date}T00:00:00`).toLocaleDateString(undefined, {
-                        day: "numeric",
-                        month: "short",
-                      }) : "—"}{" "}
-                      · {form.time || "—"}
-                    </span>
-                  </div>
-                  <div className="rzv-reveal">
-                    <ReservationSummary
-                      form={form}
-                      setField={setField}
-                      selectedTables={selectedTables}
-                      isKitchenView={isKitchenView}
-                      error={error}
-                      submitting={submitting}
-                      canSubmit={canSubmit}
-                      onSubmit={handleSubmit}
-                      onEditDetails={handleEditDetails}
-                      preorderItems={preorderItems}
-                      setPreorderItems={setPreorderItems}
-                      preorderTotal={preorderTotal}
-                      setPreorderTotal={setPreorderTotal}
-                      promoCode={promoCode}
-                      setPromoCode={setPromoCode}
-                      promoDiscount={promoDiscount}
-                      setPromoDiscount={setPromoDiscount}
-                      currentUser={currentUser}
+              <motion.div variants={headerItemVariants} className="rd-stepper">
+                {STEPS.map((stepObj, i) => {
+                  const label = stepObj.label;
+                  const isActive = i <= activeStepIndex;
+                  return (
+                    <div className="rd-step" key={label}>
+                      <div className={`rd-step-circle ${isActive ? 'rd-step-circle-active' : ''}`}>
+                        {i + 1}
+                      </div>
+                      <span className={isActive ? 'rd-step-label-active' : 'rd-step-label'}>{label}</span>
+                      {i < STEPS.length - 1 && <div className="rd-step-line" />}
+                    </div>
+                  );
+                })}
+              </motion.div>
+
+              <AnimatePresence mode="wait">
+                {step === "summary" && (
+                  <motion.div
+                    key="summary"
+                    variants={pageVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    className="rzv-step w-full"
+                  >
+                    <div className="rzv-tablestep">
+                      <div className="rzv-tablestep__bar">
+                        <button type="button" className="rzv-backlink" onClick={handleEditDetails}>
+                          ← Back to details
+                        </button>
+                        <span className="rzv-tablestep__recap">
+                          {form.guestCount} guests ·{" "}
+                          {form.date ? new Date(`${form.date}T00:00:00`).toLocaleDateString(undefined, {
+                            day: "numeric",
+                            month: "short",
+                          }) : "—"}{" "}
+                          · {form.time || "—"}
+                        </span>
+                      </div>
+                      <div className="rzv-reveal">
+                        <ReservationSummary
+                          form={form}
+                          setField={setField}
+                          selectedTables={selectedTables}
+                          isKitchenView={isKitchenView}
+                          error={error}
+                          submitting={submitting}
+                          canSubmit={canSubmit}
+                          onSubmit={handleSubmit}
+                          onEditDetails={handleEditDetails}
+                          preorderItems={preorderItems}
+                          setPreorderItems={setPreorderItems}
+                          preorderTotal={preorderTotal}
+                          setPreorderTotal={setPreorderTotal}
+                          promoCode={promoCode}
+                          setPromoCode={setPromoCode}
+                          promoDiscount={promoDiscount}
+                          setPromoDiscount={setPromoDiscount}
+                          currentUser={currentUser}
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {step === "payment" && successReservation && (
+                  <motion.div
+                    key="payment"
+                    variants={pageVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    className="rzv-step w-full"
+                  >
+                    <div className={`w-full transition-all duration-500 ease-in-out ${isPaymentSuccess ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
+                      <ReservationPaymentPanel
+                        reservation={successReservation}
+                        amount={successReservation.deposit_amount}
+                        orderCode={successReservation.order_code}
+                        qrUrl={successReservation.vietqr_url}
+                        onSuccess={handlePaymentSuccess}
+                        onCancel={() => navigate("/")}
+                      />
+                    </div>
+                  </motion.div>
+                )}
+
+                {step === "success" && successReservation && (
+                  <motion.div
+                    key="success"
+                    variants={pageVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    className="rzv-step w-full"
+                  >
+                    <ReservationSuccessPanel
+                      reservation={successReservation}
+                      onReturnHome={handleReturnHome}
+                      onViewReservation={handleViewReservation}
                     />
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {step === "payment" && successReservation && (
-              <motion.div
-                key="payment"
-                variants={pageVariants}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                className="rzv-step"
-              >
-                <div className={`w-full transition-all duration-500 ease-in-out ${isPaymentSuccess ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
-                  <ReservationPaymentPanel
-                    reservation={successReservation}
-                    amount={successReservation.deposit_amount}
-                    orderCode={successReservation.order_code}
-                    qrUrl={successReservation.vietqr_url}
-                    onSuccess={handlePaymentSuccess}
-                    onCancel={() => navigate("/")}
-                  />
-                </div>
-              </motion.div>
-            )}
-
-            {step === "success" && successReservation && (
-              <motion.div
-                key="success"
-                variants={pageVariants}
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                className="rzv-step w-full"
-              >
-                <ReservationSuccessPanel
-                  reservation={successReservation}
-                  onReturnHome={handleReturnHome}
-                  onViewReservation={handleViewReservation}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

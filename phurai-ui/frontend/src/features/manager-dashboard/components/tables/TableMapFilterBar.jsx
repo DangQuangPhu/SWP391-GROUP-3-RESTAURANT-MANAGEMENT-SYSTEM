@@ -16,10 +16,10 @@ function TableMapFilterBar({
   actions,
 }) {
   return (
-    <div className="sfx-filterbar sfx-filterbar--horizontal" style={{ display: "flex", alignItems: "flex-end", gap: "12px 16px", flexWrap: "wrap" }}>
+    <div className="sfx-filterbar sfx-filterbar--horizontal sfx-tablemap-filter__container">
       
-      <div style={{ flex: "1 1 220px", minWidth: "200px" }}>
-        <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--sfx-muted)", display: "block", marginBottom: "6px" }}>Search Table</span>
+      <div className="sfx-tablemap-filter__search-box">
+        <span className="sfx-tablemap-filter__label">Search Table</span>
         <SearchField
           value={search}
           onChange={onSearchChange}
@@ -27,14 +27,13 @@ function TableMapFilterBar({
         />
       </div>
 
-      <div style={{ flex: "0 1 180px", minWidth: "140px" }}>
-        <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--sfx-muted)", display: "block", marginBottom: "6px" }}>Area</span>
+      <div className="sfx-tablemap-filter__area-box">
+        <span className="sfx-tablemap-filter__label">Area</span>
         <select
-          className="sfx-select"
+          className="sfx-select sfx-tablemap-filter__select"
           value={areaId}
           onChange={(e) => onAreaChange(e.target.value)}
           disabled={areasLoading}
-          style={{ width: "100%", height: "40px" }}
         >
           <option value="">All Areas</option>
           {areas.map((area) => (
@@ -45,9 +44,9 @@ function TableMapFilterBar({
         </select>
       </div>
 
-      <div className="sfx-filterbar__statuses" style={{ flex: "1 1 320px", minWidth: "280px", margin: 0 }}>
-        <span className="sfx-filterbar__label" style={{ fontSize: "12px", fontWeight: 600, color: "var(--sfx-muted)", display: "block", marginBottom: "6px" }}>Status</span>
-        <div className="sfx-chips" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+      <div className="sfx-filterbar__statuses sfx-tablemap-filter__status-box">
+        <span className="sfx-filterbar__label sfx-tablemap-filter__label">Status</span>
+        <div className="sfx-chips sfx-tablemap-filter__chips">
           {FILTER_STATUS_SLUGS.map((slug) => {
             const active = selectedStatuses.includes(slug);
             const meta = TABLE_STATUS_META[slug];
@@ -55,7 +54,7 @@ function TableMapFilterBar({
               <button
                 key={slug}
                 type="button"
-                className={`sfx-chip ${active ? "is-active" : "sfx-chip--outline"}`}
+                className={`sfx-chip ${active ? "is-active" : "sfx-chip--outline"} sfx-tablemap-filter__chip-btn`}
                 aria-pressed={active}
                 onClick={() => {
                   if (active) {
@@ -64,7 +63,6 @@ function TableMapFilterBar({
                     onToggleStatus(slug);
                   }
                 }}
-                style={{ height: "40px", display: "inline-flex", alignItems: "center" }}
               >
                 <i className={`sfx-dot sfx-dot--${meta.tone}`} />
                 {meta.label}
@@ -75,7 +73,7 @@ function TableMapFilterBar({
       </div>
 
       {actions ? (
-        <div style={{ marginLeft: "auto", height: "40px", display: "flex", alignItems: "center" }}>
+        <div className="sfx-tablemap-filter__actions">
           {actions}
         </div>
       ) : null}

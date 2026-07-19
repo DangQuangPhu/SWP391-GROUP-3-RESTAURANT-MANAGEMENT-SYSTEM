@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import "../styles/reservation.css";
+import { Skeleton } from "@/components/ui/Skeleton.jsx";
 import { useTableSession, ViewQrTableModal } from "@/features/table-session";
 import {
   getMyReservations,
@@ -306,7 +307,24 @@ function MyReservationsPage({
         ) : null}
 
         {isAuthenticated && status === "loading" ? (
-          <p className="rzv-myres__state">Loading your reservations…</p>
+          <div className="rzv-myres__list" aria-busy="true" aria-label="Loading reservations" style={{ width: "100%", display: "flex", flexDirection: "column", gap: "12px" }}>
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <div
+                key={`sk-${idx}`}
+                className="rzv-res-card"
+                style={{ display: "flex", flexDirection: "row", width: "100%", minHeight: "80px", alignItems: "center", justifyContent: "space-between", padding: "16px 24px" }}
+              >
+                <div style={{ display: "flex", gap: "24px", alignItems: "center", flex: 1 }}>
+                  <Skeleton className="w-28 h-4" />
+                  <Skeleton className="w-48 h-6" />
+                </div>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <Skeleton className="w-24 h-8" />
+                  <Skeleton className="w-16 h-8" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : null}
 
         {isAuthenticated && status === "error" ? (

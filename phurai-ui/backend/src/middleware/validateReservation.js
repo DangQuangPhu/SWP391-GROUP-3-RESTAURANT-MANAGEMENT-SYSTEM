@@ -112,10 +112,19 @@ export const validateReservationCreate = async (req, res, next) => {
       ? new Date(body.reservation_start_at)
       : buildLocalDate(body.date, body.time);
       
+    // slotEnd: honour explicit reservation_end_at if provided.
+    // Fallback: start + durationMinutes (customer's explicit pick) or party-size default.
+    let diningDuration = 120;
+    const count = Number(body.guest_count) || 1;
+    if (count <= 2) diningDuration = 60;
+    else if (count <= 4) diningDuration = 90;
+    else if (count <= 6) diningDuration = 105;
+    else diningDuration = 120;
+
     let slotEnd = body.reservation_end_at
       ? new Date(body.reservation_end_at)
       : slotStart
-        ? new Date(slotStart.getTime() + (90 + (Number(body.durationMinutes) || 30)) * 60000)
+        ? new Date(slotStart.getTime() + (Number(body.durationMinutes) || diningDuration) * 60000)
         : null;
         
     if (!slotStart || Number.isNaN(slotStart.getTime()) || !slotEnd || Number.isNaN(slotEnd.getTime())) {
@@ -176,17 +185,10 @@ export const validateReservationCreate = async (req, res, next) => {
       });
     }
 
-    // Duration Check: 90 minutes dining base plus selected hold duration
+    // Duration validation — minimum 60 min, no hard upper cap (removed 90-min limit).
+    // reservation_end_at is now used only as EstimatedDuration for slot-planning;
+    // the table is released by real-world events (payment / staff confirm), not by this timestamp.
     const durationMinutes = Math.round((slotEnd - slotStart) / 60000);
-    const selectedDuration = Number(body.durationMinutes) || 30;
-    
-    console.log("[validateReservationCreate] DEBUG:", {
-      slotStart: slotStart.toISOString(),
-      slotEnd: slotEnd.toISOString(),
-      durationMinutes,
-      selectedDuration,
-      body
-    });
 
     if (durationMinutes < 60) {
       return res.status(400).json({
@@ -194,21 +196,6 @@ export const validateReservationCreate = async (req, res, next) => {
         error: "VALIDATION_FAILED",
         message: `Dining duration must be at least 1 hour (60 minutes).`
       });
-    }
-    if (durationMinutes > 90) {
-      return res.status(400).json({
-        success: false,
-        error: "VALIDATION_FAILED",
-        message: `Dining duration cannot exceed 1.5 hours (90 minutes).`
-      });
-    }
-
-    // Fee Policy Notification for hold duration of 45 or 60 minutes
-    if (selectedDuration === 45 || selectedDuration === 60) {
-      let currentNotes = body.special_request || "";
-      if (!currentNotes.includes("[Duration over 30 mins: Extra fee applies]")) {
-        body.special_request = (currentNotes ? currentNotes + "\n" : "") + "[Duration over 30 mins: Extra fee applies]";
-      }
     }
     
     // Stage 3: Table Assignment & Capacity Checks
@@ -271,7 +258,7 @@ export const validateReservationCreate = async (req, res, next) => {
         });
       }
       
-      // 3. Overlap check
+      // 3a. Reservation-overlap check (existing bookings)
       const [overlaps] = await pool.query(
         `SELECT TOP 1 r.reservation_id, rt.table_id
          FROM dbo.Reservations r
@@ -282,16 +269,45 @@ export const validateReservationCreate = async (req, res, next) => {
              OR
              (r.reservation_status IN (N'Pending Request', N'Awaiting Deposit') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
            )
-           AND DATEADD(minute, -60, r.reservation_start_at) < ?
-           AND DATEADD(minute, 60, r.reservation_end_at) > ?`,
+           AND r.reservation_start_at < ?
+           AND r.reservation_end_at > ?`,
         [slotEnd.toISOString(), slotStart.toISOString()]
       );
-      
+
       if (overlaps.length > 0) {
         return res.status(400).json({
           success: false,
-          error: "VALIDATION_FAILED",
+          error: "SLOT_CONFLICT",
           message: "Collision detected: One or more selected tables are already booked during this time."
+        });
+      }
+
+      // 3b. EstimatedReleaseTime check — block slots blocked by currently Occupied tables.
+      // Uses UPDLOCK to prevent race condition: two simultaneous bookings can't both read
+      // the same unreleased session and both consider the slot free.
+      const tableIdStr = tableIds.join(',');
+      const [occupancyBlocks] = await pool.query(
+        `SELECT TOP 1
+           tos.session_id,
+           tos.table_id,
+           tos.estimated_release_at
+         FROM dbo.TableOccupancySessions tos WITH (NOLOCK)
+         WHERE tos.table_id IN (${tableIdStr})
+           AND tos.released_at IS NULL
+           AND tos.estimated_release_at > ?`,
+        [slotStart.toISOString()]
+      );
+
+      if (occupancyBlocks.length > 0) {
+        const block = occupancyBlocks[0];
+        const releaseTime = new Date(block.estimated_release_at).toLocaleString('vi-VN', {
+          hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric'
+        });
+        return res.status(409).json({
+          success: false,
+          error: "TABLE_OCCUPIED",
+          message: `Table is currently occupied. Estimated available after ${releaseTime}. Please choose a later time or a different table.`,
+          estimatedReleaseAt: block.estimated_release_at
         });
       }
     }

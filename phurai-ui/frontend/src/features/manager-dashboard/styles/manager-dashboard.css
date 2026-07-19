@@ -2721,6 +2721,895 @@ button.sfx-kpi__icon--trigger:focus-visible {
   }
 }
 
+/* ---------- TableMapPage styles ---------- */
+.sfx-tablemap__add-btn {
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+}
+.sfx-tablemap__edit-row {
+  display: flex;
+  gap: 24px;
+}
+.sfx-tablemap__edit-col-main {
+  flex: 1;
+}
+.sfx-tablemap__qr-col {
+  width: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.sfx-tablemap__qr-label {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sfx-tablemap__qr-wrapper {
+  background: #fff;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--sfx-border-soft);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.sfx-tablemap__detail-block {
+  margin-top: 16px;
+}
+.sfx-tablemap__timeline-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+
+/* ---------- TableMapFilterBar styles ---------- */
+.sfx-tablemap-filter__container {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+}
+.sfx-tablemap-filter__search-box {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+.sfx-tablemap-filter__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sfx-muted);
+  display: block;
+  margin-bottom: 6px;
+}
+.sfx-tablemap-filter__area-box {
+  flex: 0 1 180px;
+  min-width: 140px;
+}
+.sfx-tablemap-filter__select {
+  width: 100%;
+  height: 40px;
+}
+.sfx-tablemap-filter__status-box {
+  flex: 1 1 320px;
+  min-width: 280px;
+  margin: 0;
+}
+.sfx-tablemap-filter__chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sfx-tablemap-filter__chip-btn {
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+}
+.sfx-tablemap-filter__actions {
+  margin-left: auto;
+  height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+/* ---------- RatingDashboard / Shared Dashboard Styles ---------- */
+.sfx-star--amber {
+  color: #d8b97e !important;
+}
+.sfx-star--green {
+  color: #2f7d4f !important;
+}
+.sfx-star--purple {
+  color: #7c5cbf !important;
+}
+.sfx-star--blue {
+  color: #3a6ea5 !important;
+}
+
+/* Featured Dashboard Panel Card & Head overrides */
+.sfx-card--featured-dashboard {
+  background: #ffffff !important;
+  padding: 24px !important;
+  border-radius: 14px !important;
+  box-shadow: 0 6px 32px rgba(31,26,23,0.04) !important;
+}
+.sfx-card__head--dashboard {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  margin-bottom: 20px !important;
+}
+.sfx-card__title--dashboard {
+  color: #1a1a1a !important;
+  font-size: 20px !important;
+  margin: 0 !important;
+}
+.sfx-card__subtitle--dashboard {
+  font-size: 13px !important;
+  margin: 4px 0 0 !important;
+}
+.sfx-card__counter--dashboard {
+  font-size: 13px !important;
+}
+
+/* Date picker wrapper & positioning */
+.sfx-picker__container {
+  position: relative !important;
+}
+.sfx-picker__trigger {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  background: #f8f5ef !important;
+  border: 1px solid #e2dcd0 !important;
+  border-radius: 8px !important;
+  padding: 8px 12px !important;
+  cursor: pointer !important;
+}
+.sfx-picker__trigger-label {
+  font-size: 13px !important;
+  color: #1a1a1a !important;
+  font-weight: 500 !important;
+}
+.sfx-picker__trigger-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  color: #b09460 !important;
+}
+.sfx-picker__popover {
+  position: absolute !important;
+  left: 0 !important;
+  top: calc(100% + 8px) !important;
+  z-index: 1000 !important;
+}
+
+/* Table columns */
+.sfx-th--w50 {
+  width: 50px !important;
+}
+.sfx-th--w30p {
+  width: 30% !important;
+}
+.sfx-td--grey-bold {
+  font-weight: 600 !important;
+  color: #555 !important;
+}
+
+
+/* ---------- PromotionsSection styles ---------- */
+.sfx-promotions__kpis-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+  gap: 16px !important;
+  margin-bottom: 8px !important;
+}
+.sfx-promotions__kpi-card {
+  background: #fff !important;
+  border-radius: 16px !important;
+  padding: 20px 22px 18px !important;
+  border: 1px solid rgba(31,26,23,0.06) !important;
+  box-shadow: 0 2px 12px rgba(31,26,23,0.04) !important;
+  position: relative !important;
+  overflow: hidden !important;
+  cursor: default !important;
+  transition: box-shadow 0.4s cubic-bezier(0.16,1,0.3,1) !important;
+}
+.sfx-promotions__kpi-bg {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  width: 80px !important;
+  height: 80px !important;
+  border-radius: 0 16px 0 40px !important;
+  opacity: 0.08 !important;
+}
+.sfx-promotions__kpi-icon-container {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 10px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-bottom: 12px !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
+}
+.sfx-promotions__kpi-val {
+  font-size: 28px !important;
+  font-weight: 800 !important;
+  color: #1a1a1a !important;
+  margin: 0 !important;
+  line-height: 1.1 !important;
+}
+.sfx-promotions__kpi-lbl {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: #888 !important;
+  margin: 6px 0 0 !important;
+  letter-spacing: 0.02em !important;
+}
+.sfx-promotions__th {
+  color: #555 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  font-weight: 700 !important;
+  padding: 12px 16px !important;
+}
+.sfx-promotions__th--right {
+  text-align: right !important;
+}
+.sfx-promotions__td {
+  padding: 16px !important;
+}
+.sfx-promotions__table-bg {
+  background: #fff !important;
+}
+.sfx-promotions__tr-head-bg {
+  background: #fafafa !important;
+}
+.sfx-promotions__td-title {
+  font-weight: 650 !important;
+  color: #1a1a1a !important;
+  font-size: 14px !important;
+}
+.sfx-promotions__td-sub {
+  font-size: 12px !important;
+  color: #999 !important;
+  margin-top: 3px !important;
+  max-width: 220px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+.sfx-promotions__td-price {
+  font-weight: 700 !important;
+  font-size: 15px !important;
+  color: #1a1a1a !important;
+}
+.sfx-promotions__td-price-sub {
+  font-size: 11px !important;
+  color: #999 !important;
+  margin-top: 2px !important;
+}
+.sfx-promotions__td-flex-gap {
+  font-size: 12px !important;
+  color: #555 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+}
+.sfx-promotions__td-sub-info {
+  font-size: 12px !important;
+  color: #999 !important;
+  margin-top: 2px !important;
+  padding-left: 17px !important;
+}
+.sfx-promotions__td-sub-extra {
+  font-size: 11px !important;
+  color: #bbb !important;
+  margin-top: 3px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding-left: 17px !important;
+}
+.sfx-promotions__btn-plain {
+  background: none !important;
+  border: none !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+}
+.sfx-promotions__actions-flex {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+}
+.sfx-promotions__tr {
+  border-bottom: 1px solid rgba(31,26,23,0.05) !important;
+  transition: background 0.25s cubic-bezier(0.16,1,0.3,1) !important;
+}
+.sfx-promotions__tr:hover {
+  background: rgba(99,102,241,0.03) !important;
+}
+.sfx-promotions__code-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  background: rgba(99,102,241,0.06) !important;
+  border: 1px solid rgba(99,102,241,0.12) !important;
+  border-radius: 8px !important;
+  padding: 5px 12px !important;
+  cursor: pointer !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #4F46E5 !important;
+  font-family: monospace !important;
+  letter-spacing: 0.04em !important;
+  transition: all 0.25s cubic-bezier(0.16,1,0.3,1) !important;
+}
+.sfx-promotions__code-btn:hover {
+  background: rgba(99,102,241,0.12) !important;
+  transform: scale(1.03) !important;
+}
+.sfx-promotions__action-btn {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 10px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: none !important;
+  background: transparent !important;
+  cursor: pointer !important;
+  transition: background 0.25s cubic-bezier(0.16,1,0.3,1) !important;
+}
+
+/* ---------- PromotionsSection - Loyalty Exchange Panel ---------- */
+.sfx-promotions__loyalty-panel {
+  padding: 14px 18px !important;
+  background: linear-gradient(135deg, #FFFBEB, #FEF3C7) !important;
+  border-radius: 12px !important;
+  border: 1px solid #FDE68A !important;
+}
+.sfx-promotions__loyalty-title {
+  font-weight: 700 !important;
+  font-size: 0.82rem !important;
+  color: #92400E !important;
+  margin-bottom: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+.sfx-promotions__loyalty-desc {
+  font-size: 0.68rem !important;
+  color: #92400E !important;
+  margin-top: 3px !important;
+}
+
+/* ---------- StaffSection styles ---------- */
+.sfx-staff__toolbar {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 16px !important;
+  margin-bottom: 20px !important;
+  width: 100% !important;
+}
+.sfx-staff__search-wrapper {
+  flex: 1 !important;
+  max-width: 480px !important;
+}
+.sfx-staff__actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+.sfx-staff__select-arrow {
+  position: absolute !important;
+  right: 12px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  pointer-events: none !important;
+  color: #666 !important;
+}
+.sfx-staff__select {
+  padding-right: 32px !important;
+  cursor: pointer !important;
+}
+.sfx-staff__table-bg {
+  background: #ffffff !important;
+}
+.sfx-staff__tr-head-bg {
+  background: #ffffff !important;
+}
+.sfx-staff__th {
+  color: #000 !important;
+  font-size: 13px !important;
+  text-transform: uppercase !important;
+  vertical-align: middle !important;
+  padding: 12px 20px !important;
+}
+.sfx-staff__th--index {
+  width: 40px !important;
+  text-align: center !important;
+}
+.sfx-staff__th--right {
+  text-align: right !important;
+}
+.sfx-staff__tr {
+  border-bottom: 1px solid var(--border-subtle, #f0f0f0) !important;
+  vertical-align: middle !important;
+  transition: background 0.2s !important;
+}
+.sfx-staff__td {
+  padding: 16px 20px !important;
+}
+.sfx-staff__td--index {
+  padding: 20px !important;
+  text-align: center !important;
+  font-weight: 600 !important;
+  color: var(--text-muted, #777) !important;
+}
+.sfx-staff__td--main {
+  padding: 20px !important;
+}
+.sfx-staff__emp-name {
+  font-weight: 600 !important;
+  color: var(--text-main, #111) !important;
+}
+.sfx-staff__emp-email {
+  font-size: 13px !important;
+  color: var(--text-muted, #777) !important;
+  margin-top: 4px !important;
+}
+.sfx-staff__emp-phone {
+  font-size: 12px !important;
+  color: var(--text-muted, #999) !important;
+  margin-top: 2px !important;
+}
+.sfx-staff__emp-salary {
+  font-family: monospace !important;
+  color: var(--text-main, #333) !important;
+}
+.sfx-staff__online-status-container {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+.sfx-staff__online-indicator {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  display: inline-block !important;
+}
+.sfx-staff__online-indicator--active {
+  background-color: #2f7d4f !important;
+  box-shadow: 0 0 0 2px rgba(47, 125, 79, 0.2) !important;
+}
+.sfx-staff__online-indicator--inactive {
+  background-color: #9ca3af !important;
+}
+.sfx-staff__online-text {
+  font-weight: 600 !important;
+}
+.sfx-staff__online-text--active {
+  color: #2f7d4f !important;
+}
+.sfx-staff__online-text--inactive {
+  color: var(--text-muted, #999) !important;
+}
+.sfx-staff__last-seen {
+  font-size: 11px !important;
+  color: var(--text-muted, #999) !important;
+  margin-top: 2px !important;
+}
+.sfx-staff__actions-container {
+  display: flex !important;
+  gap: 8px !important;
+  justify-content: flex-end !important;
+  flex-wrap: nowrap !important;
+}
+.sfx-staff__btn-action {
+  background: #fff !important;
+  color: #111 !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  border: 1px solid #d1d5db !important;
+  padding: 6px 14px !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+}
+.sfx-staff__btn-action:hover {
+  background: #f9fafb !important;
+  border-color: #9ca3af !important;
+}
+.sfx-staff__account-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 4px 12px !important;
+  border-radius: 99px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border: 1px solid !important;
+  outline: none !important;
+  transition: all 0.2s ease !important;
+}
+.sfx-staff__account-btn--active {
+  background: #ecfdf5 !important;
+  color: #047857 !important;
+  border-color: #a7f3d0 !important;
+}
+.sfx-staff__account-btn--suspended {
+  background: #fff1f2 !important;
+  color: #b91c1c !important;
+  border-color: #fecdd3 !important;
+}
+.sfx-staff__account-dot {
+  display: inline-block !important;
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  margin-right: 6px !important;
+}
+.sfx-staff__account-dot--active {
+  background: #10b981 !important;
+}
+.sfx-staff__account-dot--suspended {
+  background: #ef4444 !important;
+}
+.sfx-staff__no-account-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 4px 12px !important;
+  border-radius: 99px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #f1f5f9 !important;
+  color: #64748b !important;
+}
+.sfx-staff__no-account-dot {
+  display: inline-block !important;
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  margin-right: 6px !important;
+  background: #94a3b8 !important;
+}
+.sfx-staff__btn-delete {
+  background: #fef2f2 !important;
+  color: #ef4444 !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  border: 1px solid #fecaca !important;
+  padding: 6px 14px !important;
+}
+.sfx-staff__btn-delete:hover {
+  background: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+}
+
+/* ---------- ReservationsSection styles ---------- */
+.sfx-reservations__timeline-item {
+  display: flex !important;
+  gap: 12px !important;
+  padding-bottom: 16px !important;
+  position: relative !important;
+}
+.sfx-reservations__timeline-line {
+  position: absolute !important;
+  left: 8px !important;
+  top: 20px !important;
+  bottom: 0 !important;
+  width: 2px !important;
+  background: var(--border-color) !important;
+  border-radius: 2px !important;
+}
+.sfx-reservations__timeline-dot-container {
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 50% !important;
+  flex-shrink: 0 !important;
+  margin-top: 2px !important;
+}
+.sfx-reservations__timeline-content {
+  flex: 1 !important;
+}
+.sfx-reservations__timeline-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  gap: 8px !important;
+}
+.sfx-reservations__timeline-label {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--text-color) !important;
+}
+.sfx-reservations__timeline-time {
+  font-size: 13px !important;
+  color: var(--text-color) !important;
+  white-space: nowrap !important;
+}
+.sfx-reservations__timeline-actor {
+  font-size: 12px !important;
+  color: var(--sfx-muted) !important;
+  display: block !important;
+  margin-top: 2px !important;
+}
+.sfx-reservations__timeline-reason {
+  font-size: 12px !important;
+  color: #ef4444 !important;
+  margin-top: 4px !important;
+}
+.sfx-reservations__empty-text {
+  font-size: 13px !important;
+  color: var(--sfx-muted) !important;
+}
+.sfx-reservations__desc-text {
+  margin-bottom: 20px !important;
+}
+.sfx-reservations__actions-row {
+  margin-top: 32px !important;
+  display: flex !important;
+  gap: 12px !important;
+  justify-content: flex-end !important;
+}
+
+/* Modals & Dialogs cancel reservation */
+.sfx-reservations__cancel-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(0,0,0,0.55) !important;
+  z-index: 9999 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.sfx-reservations__cancel-card {
+  background: #1a1008 !important;
+  border: 1px solid #c9a96e44 !important;
+  border-radius: 14px !important;
+  padding: 32px 36px !important;
+  min-width: 420px !important;
+  max-width: 520px !important;
+  box-shadow: 0 16px 64px rgba(0,0,0,0.6) !important;
+}
+.sfx-reservations__cancel-title {
+  color: #c9a96e !important;
+  margin: 0 0 6px !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+}
+.sfx-reservations__cancel-desc {
+  color: #a09080 !important;
+  font-size: 13px !important;
+  margin: 0 0 20px !important;
+}
+.sfx-reservations__cancel-desc strong {
+  color: #e8dcc8 !important;
+}
+.sfx-reservations__cancel-label {
+  display: block !important;
+  color: #a09080 !important;
+  font-size: 12px !important;
+  margin-bottom: 8px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+}
+.sfx-reservations__cancel-asterisk {
+  color: #e74c3c !important;
+}
+.sfx-reservations__cancel-textarea {
+  width: 100% !important;
+  background: #0d0804 !important;
+  border: 1px solid #c9a96e55 !important;
+  border-radius: 8px !important;
+  padding: 12px 14px !important;
+  color: #e8dcc8 !important;
+  font-size: 14px !important;
+  resize: vertical !important;
+  box-sizing: border-box !important;
+  outline: none !important;
+}
+.sfx-reservations__cancel-hint {
+  color: #888 !important;
+  font-size: 11px !important;
+  margin: 6px 0 20px !important;
+}
+.sfx-reservations__cancel-actions {
+  display: flex !important;
+  gap: 10px !important;
+  justify-content: flex-end !important;
+}
+
+.sfx-reservations__th {
+  color: #000 !important;
+  font-size: 13px !important;
+  text-transform: uppercase !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+.sfx-reservations__th--w50 {
+  width: 50px !important;
+}
+.sfx-reservations__tr-head-bg {
+  background: #ffffff !important;
+}
+.sfx-reservations__table-bg {
+  background: #ffffff !important;
+}
+
+/* ---------- ReservationsSection - Table Cells ---------- */
+.sfx-reservations__tr {
+  background: #ffffff !important;
+}
+.sfx-reservations__td-index {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #555 !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  padding: 12px 16px !important;
+}
+.sfx-reservations__td-id {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #000 !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  padding: 12px 16px !important;
+}
+.sfx-reservations__td-date {
+  font-size: 13px !important;
+  color: #000 !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  padding: 12px 16px !important;
+}
+.sfx-reservations__td-customer {
+  font-weight: 500 !important;
+  color: #000 !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  padding: 12px 16px !important;
+}
+.sfx-reservations__customer-container {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 2px !important;
+}
+.sfx-reservations__walk-in-tag {
+  font-size: 10px !important;
+  color: #856404 !important;
+  background: #fff3cd !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-weight: bold !important;
+}
+.sfx-reservations__td-phone {
+  color: #000 !important;
+  font-size: 13px !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  padding: 12px 16px !important;
+}
+.sfx-reservations__td-email {
+  color: #000 !important;
+  font-size: 12px !important;
+  word-break: break-all !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  padding: 12px 16px !important;
+}
+.sfx-reservations__td-status {
+  text-align: center !important;
+  vertical-align: middle !important;
+  padding: 12px 16px !important;
+}
+.sfx-reservations__status-container {
+  display: flex !important;
+  justify-content: center !important;
+}
+.sfx-reservations__td-actions {
+  text-align: center !important;
+  vertical-align: middle !important;
+  padding: 12px 16px !important;
+}
+.sfx-reservations__actions-container {
+  justify-content: center !important;
+}
+
+/* Modals generic styles */
+.sfx-reservations__confirm-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1200 !important;
+  background: rgba(0,0,0,0.6) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.sfx-reservations__confirm-overlay--blur {
+  z-index: 9999 !important;
+  background: rgba(0,0,0,0.55) !important;
+  backdrop-filter: blur(6px) !important;
+}
+.sfx-reservations__confirm-card {
+  background: var(--bg-card) !important;
+  border-radius: 14px !important;
+  padding: 28px 32px !important;
+  max-width: 440px !important;
+  width: 92% !important;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.4) !important;
+  animation: sfx-drawer-in 0.22s ease !important;
+}
+.sfx-reservations__confirm-title {
+  margin: 0 0 8px !important;
+  font-size: 17px !important;
+  font-weight: 700 !important;
+  color: var(--text-color) !important;
+}
+.sfx-reservations__confirm-desc {
+  margin: 0 0 18px !important;
+  font-size: 13px !important;
+  color: var(--sfx-muted) !important;
+  line-height: 1.6 !important;
+}
+.sfx-reservations__changes-box {
+  background: var(--bg-card-alt) !important;
+  border-radius: 8px !important;
+  padding: 14px 16px !important;
+  margin-bottom: 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+.sfx-reservations__change-row {
+  font-size: 13px !important;
+}
+.sfx-reservations__change-row span {
+  color: var(--sfx-muted) !important;
+}
+.sfx-reservations__change-row strong {
+  color: var(--text-color) !important;
+}
+.sfx-reservations__change-old {
+  text-decoration: line-through !important;
+  color: var(--sfx-muted) !important;
+  margin-right: 6px !important;
+}
+.sfx-reservations__btn-row {
+  display: flex !important;
+  gap: 10px !important;
+  justify-content: flex-end !important;
+}
+.sfx-reservations__form-group {
+  margin-bottom: 16px !important;
+}
+.sfx-reservations__form-label {
+  display: block !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--sfx-muted) !important;
+  margin-bottom: 6px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+}
+.sfx-reservations__form-textarea {
+  width: 100% !important;
+  padding: 10px 12px !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--border-color) !important;
+  font-size: 13px !important;
+  resize: vertical !important;
+  background: var(--bg-input) !important;
+  color: var(--text-color) !important;
+  box-sizing: border-box !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
 
   .sfx-shell *,

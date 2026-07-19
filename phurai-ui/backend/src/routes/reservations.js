@@ -355,29 +355,43 @@ router.get("/availability", async (req, res) => {
          a.area_id,
          a.area_name,
          a.area_type,
+         (
+           SELECT TOP 1 tos.estimated_release_at
+           FROM dbo.TableOccupancySessions tos
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS estimated_release_at,
          CASE
             WHEN t.table_status = N'Inactive'
               THEN N'Inactive'
-           WHEN EXISTS (
-             SELECT 1
-             FROM dbo.ReservationTables rt
-             JOIN dbo.Reservations r ON rt.reservation_id = r.reservation_id
-             WHERE rt.table_id = t.table_id
-               AND (
-                  r.reservation_status IN (N'Await Check-in', N'Dining')
-                  OR
-                  (r.reservation_status IN (N'Pending Request', N'Awaiting Deposit') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
-               )
-               AND DATEADD(minute, -60, r.reservation_start_at) < ?
-               AND DATEADD(minute, 60, r.reservation_end_at) > ?
-           ) THEN N'Booked'
-           ELSE N'Available'
-         END AS availability_at_slot
-       FROM dbo.RestaurantTables t
-       JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id
-       WHERE a.is_active = 1
-       ORDER BY a.area_type, t.table_number;`,
-      [slotEnd, slotStart]
+            WHEN EXISTS (
+              SELECT 1
+              FROM dbo.TableOccupancySessions tos
+              WHERE tos.table_id = t.table_id
+                AND tos.released_at IS NULL
+                AND tos.estimated_release_at > ?
+            ) THEN N'Occupied'
+            WHEN EXISTS (
+              SELECT 1
+              FROM dbo.ReservationTables rt
+              JOIN dbo.Reservations r ON rt.reservation_id = r.reservation_id
+              WHERE rt.table_id = t.table_id
+                AND (
+                   r.reservation_status IN (N'Await Check-in', N'Dining')
+                   OR
+                   (r.reservation_status IN (N'Pending Request', N'Awaiting Deposit') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
+                )
+                AND DATEADD(minute, -60, r.reservation_start_at) < ?
+                AND DATEADD(minute, 60, r.reservation_end_at) > ?
+            ) THEN N'Booked'
+            ELSE N'Available'
+          END AS availability_at_slot
+        FROM dbo.RestaurantTables t
+        JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id
+        WHERE a.is_active = 1
+        ORDER BY a.area_type, t.table_number;`,
+      [slotStart, slotEnd, slotStart]
     );
 
     let tables = rows.map((row) => {
@@ -404,6 +418,7 @@ router.get("/availability", async (req, res) => {
         is_bookable: isBookable,
         is_too_small: isTooSmall,
         is_suggested: false,
+        estimated_release_at: row.estimated_release_at || null,
         reason: isBookable
           ? null
           : UNAVAILABLE_REASON[availability] || "Unavailable",

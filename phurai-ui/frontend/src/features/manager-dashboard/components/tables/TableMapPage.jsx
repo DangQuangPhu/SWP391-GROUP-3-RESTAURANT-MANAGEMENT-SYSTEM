@@ -335,7 +335,7 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
         onToggleStatus={toggleStatusFilter}
         actions={
           isManager ? (
-            <Button variant="gold" icon="plus" onClick={() => setAddModalOpen(true)} style={{ height: "40px", display: "inline-flex", alignItems: "center" }}>
+            <Button variant="gold" icon="plus" onClick={() => setAddModalOpen(true)} className="sfx-tablemap__add-btn">
               Add Table
             </Button>
           ) : null
@@ -440,8 +440,8 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
       >
         {editing ? (
           <div className="sfx-form">
-            <div style={{ display: "flex", gap: "24px" }}>
-              <div style={{ flex: 1 }}>
+            <div className="sfx-tablemap__edit-row">
+              <div className="sfx-tablemap__edit-col-main">
                 <label className="sfx-field">
                   <span>Table number</span>
                   <input
@@ -479,9 +479,9 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
               </div>
               
               {editing.static_qr_code && (
-                <div style={{ width: "150px", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
-                  <span className="sfx-muted" style={{ fontSize: "12px", fontWeight: "600", whiteSpace: "nowrap" }}>Static QR - Scan to Order</span>
-                  <div id={`qr-wrapper-${editing.table_id}`} style={{ background: "#fff", padding: "8px", borderRadius: "8px", border: "1px solid var(--sfx-border-soft)", display: "flex", justifyContent: "center", alignItems: "center" }}>
+                <div className="sfx-tablemap__qr-col">
+                  <span className="sfx-muted sfx-tablemap__qr-label">Static QR - Scan to Order</span>
+                  <div id={`qr-wrapper-${editing.table_id}`} className="sfx-tablemap__qr-wrapper">
                     <QRCode
                       value={`${window.location.origin}/scan/${editing.static_qr_code}`} 
                       size={150} 
@@ -536,7 +536,7 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
 
             {/* Timeline Section */}
             {timeline.length > 0 && (
-              <div className="sfx-detail__block" style={{ marginTop: "16px" }}>
+              <div className="sfx-detail__block sfx-tablemap__detail-block">
                 <span>Timeline</span>
                 <ul className="sfx-detail__list">
                   {timeline.map((log) => {
@@ -548,7 +548,7 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
                       log.action_name === 'STAFF_UNMERGE_TABLES' ? 'SEPARATE TABLES' :
                         log.action_name === 'SYSTEM_AUTO_UNMERGE_ON_CLEAR' ? 'AUTO UNMERGE' : log.action_name;
                     return (
-                      <li key={log.audit_id} style={{ flexDirection: "column", alignItems: "flex-start", gap: "4px" }}>
+                      <li key={log.audit_id} className="sfx-tablemap__timeline-item">
                         <strong>{actionName}</strong>
                         <small className="sfx-muted">
                           Created: By {log.full_name || log.username || "System"} [{dateStr}]

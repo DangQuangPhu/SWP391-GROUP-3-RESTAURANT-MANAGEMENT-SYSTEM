@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, useMemo, useState, useRef } from "react";
+import { createContext, useContext, useCallback, useMemo, useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { QRCodeSVG as QRCode } from "qrcode.react";
@@ -31,6 +31,7 @@ import {
 } from "../services/staffApi.js";
 import { formatBookingId } from "@/features/reservations/utils/formatBookingId.js";
 import { TABLE_STATUS_META } from "@/shared/constants.js";
+import { useStaffStore } from "../store/staffStore.js";
 import "../styles/staff-table-tab.css";
 
 const FILTER_STATUS_SLUGS = ["available", "reserved", "occupied", "cleaning"];
@@ -361,6 +362,32 @@ function TableManagementFloorMap() {
                     <span className="sfx-mtile__no">{displayNum}</span>
                     <span className="sfx-mtile__cap">{table.combined_capacity} seats</span>
                     <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
+
+                    {/* EstimatedReleaseTime badge — only for Occupied tables */}
+                    {slug === 'occupied' && table.estimated_release_at ? (() => {
+                      const releaseAt = new Date(table.estimated_release_at);
+                      const isOverdue = releaseAt < new Date();
+                      const timeStr = releaseAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+                      return (
+                        <div
+                          title={isOverdue ? `⚠️ Overdue since ${timeStr}` : `Estimated release: ${timeStr}`}
+                          style={{
+                            marginTop: '4px',
+                            fontSize: '10px',
+                            fontWeight: 600,
+                            letterSpacing: '0.03em',
+                            color: isOverdue ? '#ff6b6b' : '#a0aec0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {isOverdue ? '⚠️' : '🕐'} {timeStr}
+                        </div>
+                      );
+                    })() : null}
+
                     <div
                       className="sfx-tabletile__actions"
                       style={{
@@ -390,6 +417,7 @@ function TableManagementFloorMap() {
                       ) : null}
                     </div>
                   </article>
+
                 );
               })}
             </div>
@@ -908,6 +936,19 @@ function StaffTableTab({
 
   const [isJiggling, setIsJiggling] = useState(false);
   const pressTimer = useRef(null);
+
+  const selectedTableIdForModal = useStaffStore((state) => state.selectedTableIdForModal);
+  const closeTableModal = useStaffStore((state) => state.closeTableModal);
+
+  useEffect(() => {
+    if (selectedTableIdForModal) {
+      const match = tables.find(t => t.table_id === Number(selectedTableIdForModal));
+      if (match) {
+        setSelectedTable(match);
+      }
+      closeTableModal();
+    }
+  }, [selectedTableIdForModal, tables, closeTableModal]);
 
   const handleRefreshAll = useCallback(() => {
     onRefresh?.();

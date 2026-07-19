@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatVND } from "@/core/utils/formatCurrency";
 import { menuImages, MenuImagePreview } from "@/features/menu";
+import { Skeleton } from "@/components/ui/Skeleton.jsx";
 import "../styles/PreorderModal.css";
 
 function resolveImage(url) {
@@ -197,7 +198,28 @@ function PreorderModal({ open, initialItems = [], onClose, onApply }) {
           ) : null}
 
           {status === "loading" ? (
-            <p className="rzv-preorder__state">Loading menu…</p>
+            <div className="rzv-premenu" aria-busy="true" aria-label="Loading dishes">
+              <section className="rzv-preorder-group">
+                <div className="rzv-preorder-grid">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <article key={i} className="rzv-preorder-card">
+                      <div className="rzv-preorder-img-wrap">
+                        <Skeleton className="w-full h-full rounded-none" />
+                      </div>
+                      <div className="rzv-preorder-card-body" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '16px' }}>
+                        <Skeleton className="w-3/4 h-5" />
+                        <Skeleton className="w-full h-3.5" />
+                        <Skeleton className="w-1/2 h-3.5" />
+                        <div className="rzv-preorder-price-row" style={{ marginTop: 'auto', paddingTop: '8px' }}>
+                          <Skeleton className="w-20 h-5" />
+                          <Skeleton className="w-24 h-8 rounded-full" />
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </div>
           ) : null}
           {status === "error" ? (
             <p className="rzv-preorder__state rzv-preorder__state--error">

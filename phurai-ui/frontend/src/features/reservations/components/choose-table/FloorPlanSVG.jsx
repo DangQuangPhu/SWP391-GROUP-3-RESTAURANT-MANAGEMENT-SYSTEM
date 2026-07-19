@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Eye } from 'lucide-react';
 import TableUnit from './TableUnit';
 import { TABLES } from '../../config/floorPlanConfig';
@@ -51,18 +52,69 @@ export default function FloorPlanSVG({
   activeFilter = null,
   onViewZone
 }) {
+  const [activeTooltip, setActiveTooltip] = useState(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (!e.target.closest('.table-unit')) {
+        setActiveTooltip(null);
+      }
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, []);
+
   // We need to map config Table ID (e.g. "S-03") to API Table object
   const apiTableMap = useMemo(() => {
     const map = new Map();
     tables.forEach(t => {
-      // Map table_number (e.g. S-03) to the full API object
       map.set(t.table_number, t);
     });
     return map;
   }, [tables]);
 
+  const handleShowTooltip = (e, tableConfig, apiTable, status) => {
+    let text = "";
+    if (status === 'Occupied' && apiTable?.estimated_release_at) {
+      const releaseTime = new Date(apiTable.estimated_release_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      text = `Bàn đang có khách, dự kiến trống lúc ${releaseTime}`;
+    } else if (status === 'Occupied') {
+      text = "Bàn đang có khách";
+    } else if (status === 'Reserved') {
+      text = "Bàn đã được đặt trước";
+    } else if (status === 'Cleaning') {
+      text = "Bàn đang được dọn dẹp";
+    } else {
+      const cap = apiTable?.capacity || tableConfig.capacity || 2;
+      text = `Bàn ${tableConfig.id} (${cap} chỗ)`;
+    }
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const svgEl = e.currentTarget.ownerSVGElement || document.getElementById('floorplan-svg');
+    if (!svgEl) return;
+    const parentRect = svgEl.getBoundingClientRect();
+
+    const x = rect.left - parentRect.left + rect.width / 2;
+    const y = rect.top - parentRect.top - 6;
+
+    setActiveTooltip({
+      tableId: tableConfig.id,
+      x,
+      y,
+      text
+    });
+  };
+
+  const handleHideTooltip = () => {
+    setActiveTooltip(null);
+  };
+
+  const isReducedMotion = typeof window !== 'undefined' 
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches 
+    : false;
+
   return (
-    <div className="floorplan-box w-full flex items-center justify-center">
+    <div className="floorplan-box w-full flex items-center justify-center relative">
       <svg id="floorplan-svg" className="w-full" viewBox="18 18 1294 884" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
         <rect x="18" y="18" width="1294" height="884" fill="#fffdf9" stroke="var(--line)" strokeWidth="3" rx="8" />
 
@@ -163,11 +215,58 @@ export default function FloorPlanSVG({
                 isSelected={isSelected}
                 isDimmed={isDimmed}
                 onClick={onTableClick}
+                onShowTooltip={(e) => handleShowTooltip(e, tableConfig, apiTable, status)}
+                onHideTooltip={handleHideTooltip}
               />
             );
           })}
         </g>
       </svg>
+
+      <AnimatePresence>
+        {activeTooltip && (
+          <motion.div
+            initial={isReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95, y: 5 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={isReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95, y: 5 }}
+            transition={isReducedMotion ? { duration: 0.1 } : { type: "spring", stiffness: 350, damping: 22 }}
+            style={{
+              position: 'absolute',
+              left: activeTooltip.x,
+              top: activeTooltip.y,
+              transform: 'translate(-50%, -100%)',
+              zIndex: 100,
+              pointerEvents: 'none',
+            }}
+          >
+            <div style={{
+              backgroundColor: '#111827',
+              color: '#ffffff',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              fontSize: '12px',
+              fontWeight: '500',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              whiteSpace: 'nowrap',
+              position: 'relative',
+            }}>
+              {activeTooltip.text}
+              <div style={{
+                position: 'absolute',
+                bottom: '-4px',
+                left: '50%',
+                transform: 'translateX(-50%) rotate(45deg)',
+                width: '8px',
+                height: '8px',
+                backgroundColor: '#111827',
+                borderRight: '1px solid rgba(255, 255, 255, 0.12)',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+              }} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

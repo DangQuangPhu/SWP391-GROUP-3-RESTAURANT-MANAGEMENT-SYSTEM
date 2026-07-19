@@ -58,6 +58,45 @@ export default function StaffNotificationListener({ user, isAuthenticated }) {
       navigate("/", { replace: true });
     };
 
+    // ── Table Overrun Warning ─────────────────────────────────────────────────
+    // Fired by cronService.js every 60 seconds when a table is still Occupied
+    // past its EstimatedReleaseTime. The notification is sent once per session
+    // (overrun_alerted flag prevents duplicate toasts for the same stay).
+    const handleTableOverrun = (data) => {
+      const {
+        tableNumber,
+        estimatedReleaseAt,
+        nextReservationAt,
+        message,
+      } = data;
+
+      const releaseTime = estimatedReleaseAt
+        ? new Date(estimatedReleaseAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+        : '--:--';
+
+      let toastMsg = `⚠️ Table ${tableNumber} overdue since ${releaseTime}.`;
+      if (nextReservationAt) {
+        const nextTime = new Date(nextReservationAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        toastMsg += ` Next guest at ${nextTime}.`;
+      }
+      toastMsg += ' Please check and take action.';
+
+      toast.error(toastMsg, {
+        id: `overrun-${data.tableId}-${data.sessionId}`,
+        duration: 15000, // Persistent enough for staff to notice
+        position: 'top-right',
+        style: {
+          background: '#1a1a2e',
+          color: '#ff6b6b',
+          border: '1px solid #ff6b6b',
+          fontWeight: 500,
+          maxWidth: '360px',
+        },
+      });
+    };
+
+    socket.on("table:overrun_warning", handleTableOverrun);
+
     socket.on("STAFF_ROLE_CHANGED", handleRoleChanged);
     socket.on("STAFF_DEACTIVATED", handleDeactivated);
     socket.on("auth:force_logout", handleForceLogout);
@@ -69,8 +108,10 @@ export default function StaffNotificationListener({ user, isAuthenticated }) {
       socket.off("STAFF_DEACTIVATED", handleDeactivated);
       socket.off("auth:force_logout", handleForceLogout);
       socket.off("auth:session_revoked", handleSessionRevoked);
+      socket.off("table:overrun_warning", handleTableOverrun);
     };
   }, [socket, isStaffOrManager, handleSignOut, navigate]);
 
   return null;
 }
+

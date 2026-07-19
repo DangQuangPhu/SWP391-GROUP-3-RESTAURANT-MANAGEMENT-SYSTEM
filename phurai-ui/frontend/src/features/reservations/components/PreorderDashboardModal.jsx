@@ -3,7 +3,9 @@ import { createPortal } from "react-dom";
 import { formatVND } from "@/core/utils/formatCurrency.js";
 import { imagePathMap } from "@/features/menu/data/menuAssets.js";
 import { Search, Filter, ArrowUpDown } from "lucide-react";
+import { Skeleton } from "@/components/ui/Skeleton.jsx";
 import { useFavoritesStore } from "@/features/menu/context/MenuFavoritesContext.jsx";
+import "@/components/ui/styles/sfx.css";
 
 function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave, currentUser }) {
   const [dishes, setDishes] = useState([]);
@@ -156,7 +158,22 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave, curren
         {/* Content Area */}
         <div className="sfx-modal__body" style={{ flex: 1, overflowY: 'auto', padding: '20px', background: 'var(--color-background)' }}>
           {loading ? (
-            <div style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>Loading menu...</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px' }} aria-busy="true" aria-label="Loading dishes">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
+                  <Skeleton className="w-full h-[180px] rounded-none" />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '16px' }}>
+                    <Skeleton className="w-3/4 h-5" />
+                    <Skeleton className="w-full h-3.5" />
+                    <Skeleton className="w-1/2 h-3.5" />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+                      <Skeleton className="w-16 h-5" />
+                      <Skeleton className="w-20 h-8 rounded-lg" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : filteredDishes.length === 0 ? (
             <div style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>No pre-order items available matching your criteria.</div>
           ) : (

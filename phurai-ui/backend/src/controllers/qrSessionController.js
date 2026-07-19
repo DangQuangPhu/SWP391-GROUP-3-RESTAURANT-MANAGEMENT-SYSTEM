@@ -10,6 +10,7 @@ const SESSION_SELECT = `
     qs.expires_at,
     qs.customer_id,
     t.table_number,
+    t.table_status,
     t.static_qr_code,
     a.area_name
   FROM dbo.QROrderSessions AS qs
@@ -28,6 +29,7 @@ function mapSessionRow(row) {
     expires_at: row.expires_at,
     customer_id: row.customer_id,
     table_number: row.table_number,
+    table_status: row.table_status,
     static_qr_code: row.static_qr_code,
     area_name: row.area_name ?? null,
   };

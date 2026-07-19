@@ -1,15 +1,14 @@
 /**
  * Admin Console — layout and overrides.
- * Base sfx-* design tokens come from manager-dashboard.css (imported via main.css or App.jsx).
- * This file only adds Admin-specific overrides and the --admin modifier.
+ * sfx-* design tokens imported explicitly from the canonical shared location.
+ * Per ARCHITECTURE.md §8 — features must not rely on implicit CSS side-effects
+ * from sibling feature imports (previously relied on ManagerPortalPage being loaded).
  *
- * TODO (tech debt): Remove al-* classes below once all Admin subpages are migrated to sfx-*.
+ * TODO (tech debt): Remove al-* classes below once all Admin subpages are migrated to sfx-*
  */
+@import '@/components/ui/styles/sfx.css';
 
 /* ── Admin-specific shell modifier ──────────────────────────── */
-.sfx-shell--admin {
-  /* Sidebar brand accent for Admin Console (same warm dark bg, gold accent) */
-}
 
 .sfx-shell--admin .sfx-brand--portal small {
   color: #e8b85f; /* Admin gold — slightly warmer than manager blue-tinted version */
