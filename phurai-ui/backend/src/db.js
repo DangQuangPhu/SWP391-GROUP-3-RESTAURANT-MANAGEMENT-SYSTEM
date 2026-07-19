@@ -18,6 +18,19 @@ let poolPromise;
 function getPool() {
   if (!poolPromise) {
     poolPromise = sql.connect(config).then(async (pool) => {
+      // Automatic pool reset on connection loss or socket hang up
+      pool.on("error", (err) => {
+        console.error("[DB] Connection pool error:", err.message);
+        if (
+          err.code === "ECONNRESET" ||
+          err.message.includes("Connection lost") ||
+          err.message.includes("socket hang up")
+        ) {
+          console.log("[DB] Resetting poolPromise to allow reconnection on next query.");
+          poolPromise = null;
+        }
+      });
+
       const isInitScript = process.argv.some(arg =>
         arg.includes("run_master_schema") ||
         arg.includes("seed") ||
@@ -215,39 +228,81 @@ async function runQuery(executor, statement, params = []) {
 
 const pool = {
   async query(statement, params = []) {
-    const connection = await getPool();
-    return runQuery(connection, statement, params);
+    try {
+      const connection = await getPool();
+      return await runQuery(connection, statement, params);
+    } catch (err) {
+      if (
+        err.code === "ECONNRESET" ||
+        (err.message && (err.message.includes("Connection lost") || err.message.includes("socket hang up")))
+      ) {
+        console.log("[DB] Connection loss detected on query. Resetting poolPromise.");
+        poolPromise = null;
+      }
+      throw err;
+    }
   },
 
   async getConnection() {
-    const connection = await getPool();
-    const transaction = new sql.Transaction(connection);
+    try {
+      const connection = await getPool();
+      const transaction = new sql.Transaction(connection);
 
-    return {
-      async beginTransaction() {
-        await transaction.begin();
-      },
-      async query(statement, params = []) {
-        return runQuery(transaction, statement, params);
-      },
-      async commit() {
-        await transaction.commit();
-      },
-      async rollback() {
-        await transaction.rollback();
-      },
-      release() { },
-    };
+      return {
+        async beginTransaction() {
+          await transaction.begin();
+        },
+        async query(statement, params = []) {
+          return runQuery(transaction, statement, params);
+        },
+        async commit() {
+          await transaction.commit();
+        },
+        async rollback() {
+          await transaction.rollback();
+        },
+        release() { },
+      };
+    } catch (err) {
+      if (
+        err.code === "ECONNRESET" ||
+        (err.message && (err.message.includes("Connection lost") || err.message.includes("socket hang up")))
+      ) {
+        console.log("[DB] Connection loss detected on getConnection. Resetting poolPromise.");
+        poolPromise = null;
+      }
+      throw err;
+    }
   },
 };
 
 export async function createDbRequest() {
-  const connection = await getPool();
-  return connection.request();
+  try {
+    const connection = await getPool();
+    return connection.request();
+  } catch (err) {
+    if (
+      err.code === "ECONNRESET" ||
+      (err.message && (err.message.includes("Connection lost") || err.message.includes("socket hang up")))
+    ) {
+      poolPromise = null;
+    }
+    throw err;
+  }
 }
 
 export async function getRawPool() {
-  return await getPool();
+  try {
+    return await getPool();
+  } catch (err) {
+    if (
+      err.code === "ECONNRESET" ||
+      (err.message && (err.message.includes("Connection lost") || err.message.includes("socket hang up")))
+    ) {
+      poolPromise = null;
+    }
+    throw err;
+  }
 }
 
 export default pool;

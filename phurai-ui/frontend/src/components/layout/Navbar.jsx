@@ -13,7 +13,6 @@ const navLinks = [
   "CATERING",
   "MENUS",
   "PRIVATE EVENTS",
-  "CAREERS",
   "CONTRACT & HOURS",
 ];
 
@@ -23,7 +22,6 @@ const pageClassMap = {
   catering: "catering",
   menus: "menus",
   privateEvents: "private-events",
-  careers: "careers",
   contactHours: "contact-hours",
   reservations: "reservations",
   myReservations: "my-reservations",
@@ -35,7 +33,6 @@ const darkTopPages = [
   "giftCards",
   "takeout",
   "privateEvents",
-  "careers",
   "contactHours",
   "reservations",
   "notFound",
@@ -112,7 +109,6 @@ function Navbar({
     if (link === "CATERING") return "/catering";
     if (link === "MENUS") return "/menus";
     if (link === "PRIVATE EVENTS") return "/private-events";
-    if (link === "CAREERS") return "/careers";
     if (link === "CONTRACT & HOURS") return "/contact-hours";
     return "#";
   };
@@ -142,12 +138,6 @@ function Navbar({
       return;
     }
 
-    if (link === "CAREERS") {
-      event.preventDefault();
-      onNavigate?.("careers");
-      return;
-    }
-
     if (link === "CONTRACT & HOURS") {
       event.preventDefault();
       onNavigate?.("contactHours");
@@ -159,7 +149,6 @@ function Navbar({
     if (link === "CATERING") return activePage === "catering";
     if (link === "MENUS") return activePage === "menus";
     if (link === "PRIVATE EVENTS") return activePage === "privateEvents";
-    if (link === "CAREERS") return activePage === "careers";
     if (link === "CONTRACT & HOURS") return activePage === "contactHours";
     return false;
   };

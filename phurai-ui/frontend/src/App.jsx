@@ -28,7 +28,6 @@ import {
   useUserProfile,
 } from "@/features/profile";
 import { ManagerPortalPage } from "@/features/manager-dashboard";
-import { GiftCardPage } from "@/features/gift-cards";
 import ScrollToTop from "@/components/common/ScrollToTop.jsx";
 import { StaffDashboardPage as StaffDashboard } from "@/features/staff-dashboard";
 import { KitchenLayout, KitchenDashboardPage } from "@/features/kitchen-dashboard";
@@ -62,7 +61,6 @@ const PAGE_PATHS = {
   reservations: "/reservations",
   myReservations: "/my-reservations",
   privateEvents: "/private-events",
-  careers: "/careers",
   contactHours: "/contact-hours",
   giftCards: "/gift-cards",
   register: "/register",
@@ -93,7 +91,6 @@ function getPageFromPath(path) {
   if (normalized === "/reservations" || normalized.startsWith("/reservations/")) return "reservations";
   if (normalized === "/my-reservations") return "myReservations";
   if (normalized === "/private-events") return "privateEvents";
-  if (normalized === "/careers") return "careers";
   if (normalized === "/contact-hours") return "contactHours";
   if (normalized === "/gift-cards") return "giftCards";
   if (normalized === "/register") return "register";
@@ -228,7 +225,7 @@ function App() {
     pathname.startsWith("/profile") || pathname.startsWith("/settings") || pathname.startsWith("/dashboard");
   const isReservationPage = pathname === "/reservations" || pathname.startsWith("/reservations/");
   const isKdsPage = pathname === "/kds" || pathname.startsWith("/kds/");
-  const isQrPage = pathname.startsWith("/scan") || pathname.startsWith("/checkout") || pathname.startsWith("/menus");
+  const isQrPage = pathname.startsWith("/scan") || pathname.startsWith("/checkout");
   const isPortalPage = isAccountPage || isManagerPage || isStaffPage || isAdminPage || isReservationPage || isKdsPage || isQrPage;
 
   if (!authReady) {
@@ -301,16 +298,7 @@ function App() {
           />
           <Route path="/private-events" element={<PrivateEvents onNavigate={handleNavigate} />} />
           <Route path="/contact-hours" element={<ContactHours />} />
-          <Route
-            path="/gift-cards"
-            element={
-              <GiftCardPage
-                isAuthenticated={isAuthenticated}
-                currentUser={currentUser}
-                onRequireAuth={() => openAuthModal("login")}
-              />
-            }
-          />
+          <Route path="/gift-cards" element={<Navigate to="/" replace />} />
           <Route path="/register" element={<Register />} />
           <Route path="/verify" element={<VerifyEmail />} />
           <Route
