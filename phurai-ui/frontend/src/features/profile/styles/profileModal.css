@@ -368,6 +368,13 @@
   color: #6a5e33;
 }
 
+.profile-edit__avatar-option--google {
+  background: #faf8f4 !important;
+  color: black !important;
+  border: none !important;
+  margin-bottom: 0.5rem !important;
+}
+
 .profile-edit__avatar-option--upload {
   width: 100%;
   padding: 0.625rem 1rem;

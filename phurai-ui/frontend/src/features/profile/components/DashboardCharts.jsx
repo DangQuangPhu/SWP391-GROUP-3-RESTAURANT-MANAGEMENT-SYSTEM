@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
+import '@/features/profile/styles/profile.css';
 
 const CATEGORY_COLORS = {
   'food': '#8c764b',        // Gold
@@ -101,7 +102,7 @@ export const OrderCategoryChart = ({ data, onCategoryClick }) => {
     <div className="flex flex-col sm:flex-row items-center gap-6 w-full h-full">
       {/* Doughnut Chart */}
       <div className="w-full sm:w-1/2 flex-1 flex items-center justify-center relative min-h-[180px]">
-        <PieChart width={180} height={180} style={{ outline: 'none' }}>
+        <PieChart width={180} height={180} className="dashboard-charts__pie-chart">
           <Tooltip 
             contentStyle={{ borderRadius: '8px', border: '1px solid #f3f4f6', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}
             itemStyle={{ color: '#111827', fontWeight: 600 }}
@@ -124,9 +125,7 @@ export const OrderCategoryChart = ({ data, onCategoryClick }) => {
               <Cell 
                 key={`cell-${index}`} 
                 fill={entry.fill} 
-                style={{ outline: 'none', transition: 'transform 0.2s', transformOrigin: 'center', cursor: 'pointer' }}
-                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                className="dashboard-charts__cell"
                 onClick={() => onCategoryClick?.(entry.category)}
               />
             ))}

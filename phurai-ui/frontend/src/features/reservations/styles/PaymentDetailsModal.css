@@ -173,3 +173,12 @@
   padding-top: 4px;
 }
 
+.payment-modal__amount--refund {
+  color: var(--phurai-success, #34c759) !important;
+}
+
+.payment-modal__discount {
+  color: var(--phurai-success, #34c759) !important;
+}
+
+

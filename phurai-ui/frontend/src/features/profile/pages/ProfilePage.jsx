@@ -575,7 +575,7 @@ function PaymentHistoryPanel({ profile }) {
           <p className="profile-dashboard__session-meta">Your payment history will appear here.</p>
         </div>
       ) : (
-        <div className="profile-dashboard__payments-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="profile-dashboard__payments-list">
           {payments.map((p) => {
             const isRefund = p.payment_status === "Refunded";
             const isSuccess = p.payment_status === "Completed" || p.payment_status === "Paid" || p.payment_status === "Successful" || p.payment_status === "Served";
@@ -591,13 +591,6 @@ function PaymentHistoryPanel({ profile }) {
               <div 
                 key={p.payment_id} 
                 className="profile-dashboard__payment-card" 
-                style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: 'auto 1fr auto auto', 
-                  alignItems: 'center', 
-                  gap: '16px', 
-                  cursor: 'pointer'
-                }}
                 onClick={() => setSelectedPaymentId(p.payment_id)}
               >
                 {/* Icon Column */}
@@ -658,54 +651,39 @@ function FavoritesProfilePanel({ currentUser }) {
 
   if (favorites.length === 0) {
     return (
-      <div style={{ padding: '48px 24px', textAlign: 'center', color: '#9b8a7a' }}>
-        <svg viewBox="0 0 24 24" fill="none" style={{ width: 48, height: 48, margin: '0 auto 16px', opacity: 0.3 }}>
+      <div className="profile-favorites__empty-container">
+        <svg viewBox="0 0 24 24" fill="none" className="profile-favorites__empty-svg">
           <path d="M5 4.5C5 3.67 5.67 3 6.5 3h11C18.33 3 19 3.67 19 4.5v15.75l-7-3.89L5 20.25V4.5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
         </svg>
-        <p style={{ fontSize: 16, fontWeight: 600, color: '#4d463d', marginBottom: 8 }}>No favorites yet</p>
-        <p style={{ fontSize: 14 }}>Browse the menu and tap the bookmark icon to save your favorite dishes here.</p>
+        <p className="profile-favorites__empty-title">No favorites yet</p>
+        <p className="profile-favorites__empty-subtitle">Browse the menu and tap the bookmark icon to save your favorite dishes here.</p>
       </div>
     );
   }
 
   return (
     <div>
-      <div className="profile-dashboard__section-header" style={{ marginBottom: 20 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: '#342716', margin: 0 }}>My Favorites</h2>
-        <p style={{ fontSize: 13, color: '#9b8a7a', margin: '4px 0 0' }}>{favorites.length} saved {favorites.length === 1 ? 'dish' : 'dishes'}</p>
+      <div className="profile-dashboard__section-header">
+        <h2 className="profile-favorites__title">My Favorites</h2>
+        <p className="profile-favorites__subtitle">{favorites.length} saved {favorites.length === 1 ? 'dish' : 'dishes'}</p>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
+      <div className="profile-favorites__grid">
         {favorites.map((dish) => (
           <div
             key={dish.id ?? dish.dish_id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 14,
-              padding: '12px 14px',
-              background: '#faf9f6',
-              borderRadius: 14,
-              border: '1px solid #e8e2da',
-              position: 'relative',
-            }}
+            className="profile-favorites__card"
           >
             <img
               src={dish.image || FALLBACK}
               alt={dish.name}
               onError={(e) => { e.currentTarget.src = FALLBACK; }}
-              style={{
-                width: 60,
-                height: 60,
-                objectFit: 'cover',
-                borderRadius: 10,
-                flexShrink: 0,
-              }}
+              className="profile-favorites__img"
             />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontWeight: 700, fontSize: 14, color: '#342716', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div className="profile-favorites__info">
+              <p className="profile-favorites__name">
                 {dish.name}
               </p>
-              <p style={{ fontSize: 13, color: '#9b845e', fontWeight: 600, margin: '3px 0 0' }}>
+              <p className="profile-favorites__price">
                 {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(dish.price)}
               </p>
             </div>
@@ -713,21 +691,9 @@ function FavoritesProfilePanel({ currentUser }) {
               type="button"
               onClick={() => removeFavorite(dish.id ?? dish.dish_id)}
               aria-label={`Remove ${dish.name} from favorites`}
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: '50%',
-                border: 'none',
-                background: '#fee2e2',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                color: '#dc2626',
-                flexShrink: 0,
-              }}
+              className="profile-favorites__btn-delete"
             >
-              <svg viewBox="0 0 16 16" fill="none" style={{ width: 14, height: 14 }}>
+              <svg viewBox="0 0 16 16" fill="none" className="profile-favorites__btn-delete-svg">
                 <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M10 7v5M6 7v5M3 4l.8 8a1 1 0 0 0 1 .9h6.4a1 1 0 0 0 1-.9L13 4H3z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
@@ -1135,7 +1101,7 @@ function ProfilePage({
               </span>
               <p className="profile-dashboard__email-text">
                 {phoneDisplay || (
-                  <span style={{ color: "var(--rzv-error, #f87171)" }}>
+                  <span className="profile-dashboard__missing-alert">
                     Missing. Please update to enable table booking.
                   </span>
                 )}

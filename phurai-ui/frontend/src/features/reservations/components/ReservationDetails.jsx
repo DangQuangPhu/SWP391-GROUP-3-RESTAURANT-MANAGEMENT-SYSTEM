@@ -35,6 +35,585 @@ const getMinutesBetweenTimes = (startStr, endStr) => {
   return endMins - startMins;
 };
 
+// ─── Custom select dropdown (Apple style) ──────────────────────
+function CustomSelect({ value, onChange, options, className }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  const resolvedOptions = useMemo(() => {
+    return options.map(opt => typeof opt === 'string' ? { value: opt, label: opt } : opt);
+  }, [options]);
+
+  const activeOption = useMemo(() => {
+    return resolvedOptions.find(o => String(o.value) === String(value)) || resolvedOptions[0];
+  }, [resolvedOptions, value]);
+
+  return (
+    <div className={`rd-custom-select-container ${isOpen ? 'rd-custom-select-container--open' : ''} ${className || ''}`} ref={containerRef}>
+      <button
+        type="button"
+        className={`rd-custom-select-trigger ${isOpen ? 'rd-custom-select-trigger--open' : ''}`}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span>{activeOption?.label || value}</span>
+        <span className={`rd-custom-select-arrow ${isOpen ? 'rd-custom-select-arrow--open' : ''}`} />
+      </button>
+      
+      {isOpen && (
+        <div className="rd-custom-select-dropdown">
+          {resolvedOptions.map((opt) => {
+            const isSelected = String(value) === String(opt.value);
+            return (
+              <div
+                key={opt.value}
+                className={`rd-custom-select-option ${isSelected ? 'rd-custom-select-option--selected' : ''}`}
+                onClick={() => {
+                  onChange(opt.value);
+                  setIsOpen(false);
+                }}
+              >
+                <span className="rd-custom-select-tick">{isSelected ? '✓' : ''}</span>
+                <span className="rd-custom-select-label-text">{opt.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
+
+// ─── Custom Date Picker (Apple style) ─────────────────────────────────────────
+function CustomDatePicker({ value, onChange, minDate, maxDate, className }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  const initialDate = useMemo(() => {
+    if (value) {
+      const [y, m, d] = value.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+    return new Date();
+  }, [value]);
+
+  const [currentYear, setCurrentYear] = useState(initialDate.getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(initialDate.getMonth());
+
+  const getFormattedValue = useCallback((dateStr) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const [y, m, d] = parts;
+      return `${d}/${m}/${y}`;
+    }
+    return dateStr;
+  }, []);
+
+  const [inputValue, setInputValue] = useState(getFormattedValue(value));
+
+  useEffect(() => {
+    setInputValue(getFormattedValue(value));
+  }, [value, getFormattedValue]);
+
+  useEffect(() => {
+    if (value) {
+      const [y, m] = value.split('-').map(Number);
+      setCurrentYear(y);
+      setCurrentMonth(m - 1);
+    }
+  }, [value]);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  const daysInMonth = getDaysInMonth(currentYear, currentMonth);
+  const firstDayIndex = getFirstDayOfMonth(currentYear, currentMonth);
+  const prevMonthDays = getDaysInMonth(currentYear, currentMonth - 1);
+
+  const handlePrevMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear(prev => prev - 1);
+    } else {
+      setCurrentMonth(prev => prev - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear(prev => prev + 1);
+    } else {
+      setCurrentMonth(prev => prev + 1);
+    }
+  };
+
+  const selectDay = (day) => {
+    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    onChange(dateStr);
+    setIsOpen(false);
+  };
+
+  const setToday = () => {
+    const d = new Date();
+    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    onChange(todayStr);
+    setIsOpen(false);
+  };
+
+  const clearDate = () => {
+    onChange('');
+    setIsOpen(false);
+  };
+
+  const handleInputChange = (e) => {
+    let val = e.target.value;
+    // Allow only numbers and /
+    val = val.replace(/[^0-9/]/g, '');
+
+    const parts = val.split('/');
+    let dayStr = parts[0] || '';
+    let monthStr = parts[1] || '';
+    let yearStr = parts[2] || '';
+
+    // Validate day: 1 to 31
+    if (dayStr.length > 0) {
+      const dNum = parseInt(dayStr, 10);
+      if (dNum > 31) dayStr = '31';
+    }
+
+    // Validate month: 1 to 12
+    if (monthStr.length > 0) {
+      const mNum = parseInt(monthStr, 10);
+      if (mNum > 12) monthStr = '12';
+    }
+
+    // Validate year: limit to 4 digits
+    if (yearStr.length > 4) {
+      yearStr = yearStr.substring(0, 4);
+    }
+
+    dayStr = dayStr.substring(0, 2);
+    monthStr = monthStr.substring(0, 2);
+
+    let finalVal = dayStr;
+    if (val.includes('/')) {
+      finalVal += '/' + monthStr;
+      if (parts.length > 2 || monthStr.length === 2) {
+        finalVal += '/' + yearStr;
+      }
+    } else if (dayStr.length === 2 && e.nativeEvent && e.nativeEvent.inputType !== 'deleteContentBackward') {
+      finalVal += '/' + monthStr;
+    }
+
+    setInputValue(finalVal);
+
+    // If full date is typed (DD/MM/YYYY), parse and notify parent
+    if (finalVal.length === 10) {
+      const [d, m, y] = finalVal.split('/').map(Number);
+      const currentYearVal = new Date().getFullYear();
+      const parsedYear = y || currentYearVal;
+      if (!isNaN(d) && d >= 1 && d <= 31 && !isNaN(m) && m >= 1 && m <= 12 && !isNaN(parsedYear)) {
+        const dateStr = `${parsedYear}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        onChange(dateStr);
+      }
+    }
+  };
+
+  const handleInputBlur = () => {
+    let val = inputValue;
+    if (!val) {
+      onChange('');
+      return;
+    }
+
+    const parts = val.split('/');
+    let dayStr = parts[0] || '';
+    let monthStr = parts[1] || '';
+    let yearStr = parts[2] || '';
+
+    const currentYearVal = new Date().getFullYear();
+
+    // If year is empty or not 4 digits, default to current year
+    if (!yearStr || yearStr.length < 4) {
+      yearStr = String(currentYearVal);
+    }
+
+    const d = parseInt(dayStr, 10);
+    const m = parseInt(monthStr, 10);
+    const y = parseInt(yearStr, 10);
+
+    if (!isNaN(d) && d >= 1 && d <= 31 && !isNaN(m) && m >= 1 && m <= 12) {
+      const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      onChange(dateStr);
+      setInputValue(`${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`);
+    } else {
+      if (value) {
+        const [valY, valM, valD] = value.split('-');
+        setInputValue(`${valD}/${valM}/${valY}`);
+      } else {
+        setInputValue('');
+      }
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleInputBlur();
+      setIsOpen(false);
+    }
+  };
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  const daysOfWeek = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+  return (
+    <div className={`rd-custom-select-container ${isOpen ? 'rd-custom-select-container--open' : ''} ${className || ''}`} ref={containerRef}>
+      <div
+        className={`rd-custom-select-trigger ${isOpen ? 'rd-custom-select-trigger--open' : ''}`}
+        onClick={(e) => {
+          const inputEl = e.currentTarget.querySelector('input');
+          if (inputEl) inputEl.focus();
+        }}
+        style={{ cursor: 'text' }}
+      >
+        <input
+          type="text"
+          value={inputValue}
+          onChange={handleInputChange}
+          onBlur={handleInputBlur}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder="DD/MM/YYYY"
+          className="rd-datepicker-input"
+        />
+        <span
+          className={`rd-custom-select-arrow ${isOpen ? 'rd-custom-select-arrow--open' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsOpen(!isOpen);
+          }}
+          style={{ cursor: 'pointer' }}
+        />
+      </div>
+
+      {isOpen && (
+        <div className="rd-custom-select-dropdown rd-datepicker-dropdown">
+          <div className="rd-datepicker-header">
+            <button type="button" className="rd-datepicker-nav-btn" onClick={handlePrevMonth}>&lt;</button>
+            <span className="rd-datepicker-title">{monthNames[currentMonth]} {currentYear}</span>
+            <button type="button" className="rd-datepicker-nav-btn" onClick={handleNextMonth}>&gt;</button>
+          </div>
+
+          <div className="rd-datepicker-weekdays">
+            {daysOfWeek.map(d => (
+              <div key={d} className="rd-datepicker-weekday">{d}</div>
+            ))}
+          </div>
+
+          <div className="rd-datepicker-days">
+            {Array.from({ length: firstDayIndex }).map((_, idx) => {
+              const dayNum = prevMonthDays - firstDayIndex + idx + 1;
+              return (
+                <div key={`prev-${idx}`} className="rd-datepicker-day rd-datepicker-day--outside">
+                  {dayNum}
+                </div>
+              );
+            })}
+
+            {Array.from({ length: daysInMonth }).map((_, idx) => {
+              const dayNum = idx + 1;
+              const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+              const isDisabled = dateStr < minDate || dateStr > maxDate;
+              const isSelected = value === dateStr;
+
+              return (
+                <button
+                  key={`day-${dayNum}`}
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => selectDay(dayNum)}
+                  className={`rd-datepicker-day ${isSelected ? 'rd-datepicker-day--selected' : ''} ${isDisabled ? 'rd-datepicker-day--disabled' : ''}`}
+                >
+                  {dayNum}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="rd-datepicker-footer">
+            <button type="button" className="rd-btn-outline rd-datepicker-footer-btn" onClick={setToday}>Today</button>
+            <button type="button" className="rd-btn-outline rd-datepicker-footer-btn" onClick={clearDate}>Clear</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Custom Time Picker (Apple iOS 26 Wheel style) ────────────────────────────
+function CustomTimePicker({ value, onChange, availableTimes, className }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  const initialTime = useMemo(() => {
+    if (value && value.includes(':')) {
+      const [h, m] = value.split(':').map(Number);
+      return { hour: h, minute: m };
+    }
+    return { hour: 10, minute: 0 };
+  }, [value]);
+
+  const [selectedHour, setSelectedHour] = useState(initialTime.hour);
+  const [selectedMinute, setSelectedMinute] = useState(initialTime.minute);
+  const [inputValue, setInputValue] = useState(value || '');
+
+  useEffect(() => {
+    setInputValue(value || '');
+  }, [value]);
+
+  useEffect(() => {
+    if (value && value.includes(':')) {
+      const [h, m] = value.split(':').map(Number);
+      setSelectedHour(h);
+      setSelectedMinute(m);
+    }
+  }, [value]);
+
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  const hours = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+  const minutes = [0, 15, 30, 45];
+
+  const currentSelectionStr = useMemo(() => {
+    return `${String(selectedHour).padStart(2, '0')}:${String(selectedMinute).padStart(2, '0')}`;
+  }, [selectedHour, selectedMinute]);
+
+  const isSelectionAvailable = useMemo(() => {
+    return availableTimes.includes(currentSelectionStr);
+  }, [availableTimes, currentSelectionStr]);
+
+  const handleDone = () => {
+    if (isSelectionAvailable) {
+      onChange(currentSelectionStr);
+      setIsOpen(false);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    let val = e.target.value;
+
+    // Filter characters: only numbers and colon
+    val = val.replace(/[^0-9:]/g, '');
+
+    // Parse parts to validate
+    const parts = val.split(':');
+    let hoursStr = parts[0] || '';
+    let minsStr = parts[1] || '';
+
+    // Validate hour part: cannot exceed 23 (24h format limit)
+    if (hoursStr.length > 0) {
+      const hNum = parseInt(hoursStr, 10);
+      if (hNum > 23) {
+        hoursStr = '23';
+      }
+    }
+
+    // Validate minute part: cannot exceed 59
+    if (minsStr.length > 0) {
+      const mNum = parseInt(minsStr, 10);
+      if (mNum > 59) {
+        minsStr = '59';
+      }
+    }
+
+    // Truncate to maximum lengths
+    hoursStr = hoursStr.substring(0, 2);
+    minsStr = minsStr.substring(0, 2);
+
+    // Reconstruct value
+    let finalVal = hoursStr;
+    if (val.includes(':')) {
+      finalVal += ':' + minsStr;
+    } else if (hoursStr.length === 2 && e.nativeEvent && e.nativeEvent.inputType !== 'deleteContentBackward') {
+      // Auto-insert colon only when typing forwards and hours is 2 digits
+      finalVal += ':' + minsStr;
+    }
+
+    setInputValue(finalVal);
+
+    // Auto-update wheel state if we have a full valid time (length 5)
+    if (finalVal.length === 5) {
+      const [h, m] = finalVal.split(':').map(Number);
+      if (!isNaN(h) && h >= 0 && h <= 23 && !isNaN(m) && m >= 0 && m <= 59) {
+        setSelectedHour(h);
+        setSelectedMinute(m);
+      }
+    }
+  };
+
+  const handleInputBlur = () => {
+    if (inputValue.length === 5) {
+      const [h, m] = inputValue.split(':').map(Number);
+      if (!isNaN(h) && h >= 0 && h <= 23 && !isNaN(m) && m >= 0 && m <= 59) {
+        const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        onChange(timeStr);
+      }
+    } else {
+      setInputValue(value || '');
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (inputValue.length === 5) {
+        const [h, m] = inputValue.split(':').map(Number);
+        if (!isNaN(h) && h >= 0 && h <= 23 && !isNaN(m) && m >= 0 && m <= 59) {
+          const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+          onChange(timeStr);
+          setIsOpen(false);
+        }
+      }
+    }
+  };
+
+  return (
+    <div className={`rd-custom-select-container ${isOpen ? 'rd-custom-select-container--open' : ''} ${className || ''}`} ref={containerRef}>
+      <div
+        className={`rd-custom-select-trigger ${isOpen ? 'rd-custom-select-trigger--open' : ''}`}
+        onClick={(e) => {
+          const inputEl = e.currentTarget.querySelector('input');
+          if (inputEl) inputEl.focus();
+        }}
+        style={{ cursor: 'text' }}
+      >
+        <input
+          type="text"
+          value={inputValue}
+          onChange={handleInputChange}
+          onBlur={handleInputBlur}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder="HH:MM"
+          className="rd-timepicker-input"
+        />
+        <span
+          className={`rd-custom-select-arrow ${isOpen ? 'rd-custom-select-arrow--open' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsOpen(!isOpen);
+          }}
+          style={{ cursor: 'pointer' }}
+        />
+      </div>
+
+      {isOpen && (
+        <div className="rd-custom-select-dropdown rd-timepicker-dropdown">
+          <div className="rd-timepicker-columns">
+            <div className="rd-timepicker-column">
+              <div className="rd-timepicker-col-label">Hour</div>
+              <div className="rd-timepicker-col-list">
+                {hours.map(h => {
+                  const label = String(h).padStart(2, '0');
+                  const isHourSelected = selectedHour === h;
+                  return (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => {
+                        setSelectedHour(h);
+                        const newTimeStr = `${String(h).padStart(2, '0')}:${String(selectedMinute).padStart(2, '0')}`;
+                        setInputValue(newTimeStr);
+                      }}
+                      className={`rd-timepicker-item ${isHourSelected ? 'rd-timepicker-item--selected' : ''}`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rd-timepicker-column">
+              <div className="rd-timepicker-col-label">Minute</div>
+              <div className="rd-timepicker-col-list">
+                {minutes.map(m => {
+                  const label = String(m).padStart(2, '0');
+                  const isMinSelected = selectedMinute === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => {
+                        setSelectedMinute(m);
+                        const newTimeStr = `${String(selectedHour).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                        setInputValue(newTimeStr);
+                      }}
+                      className={`rd-timepicker-item ${isMinSelected ? 'rd-timepicker-item--selected' : ''}`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="rd-timepicker-footer">
+            {!isSelectionAvailable && (
+              <span className="rd-timepicker-warning">
+                Time slot is unavailable
+              </span>
+            )}
+            <button
+              type="button"
+              disabled={!isSelectionAvailable}
+              onClick={handleDone}
+              className="rd-btn-primary rd-timepicker-done-btn"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ReservationDetails({
   onContinue,
   onGoHome,
@@ -285,7 +864,6 @@ export default function ReservationDetails({
     // inside a setForm updater (that runs during render phase and causes React errors)
     setForm(prev => ({ ...prev, guests: newVal }));
     if (onUpdateForm) onUpdateForm('guests', newVal);
-    scrollFieldIntoView('guests');
   };
 
   const handleConfirmSummary = async (e) => {
@@ -358,7 +936,9 @@ export default function ReservationDetails({
       newErrors.phone = "Invalid phone number (must be 7 to 15 digits).";
     }
 
-    if (form.email && form.email.trim()) {
+    if (!form.email || !form.email.trim()) {
+      newErrors.email = "Please enter your email address.";
+    } else {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(form.email.trim())) {
         newErrors.email = "Invalid email address.";
@@ -372,7 +952,7 @@ export default function ReservationDetails({
     console.log("handleConfirmSummary invoked. newErrors:", newErrors, "isCase3Invalid:", isCase3Invalid, "selectedTableId:", selectedTableId);
     setErrors(newErrors);
 
-    if (Object.keys(newErrors).length === 0 && !isCase3Invalid) {
+    if (Object.keys(newErrors).length === 0 && !isCase3Invalid && !error) {
       console.log("Validation passed. Calling onContinue with form payload...");
       isTransitioningRef.current = true;
       setIsTransitioning(true);
@@ -408,44 +988,37 @@ export default function ReservationDetails({
       <div className="rd-row-2">
         <div className="rd-field" ref={registerRef('date')}>
           <label>DATE</label>
-          <input
-            type="date"
-            min={getTodayString()}
-            max={getMaxDateString()}
+          <CustomDatePicker
             value={form.date}
-            onChange={(e) => updateField('date', e.target.value)}
-            className={errors.date ? 'border-red-500 border-2' : ''}
+            onChange={(val) => updateField('date', val)}
+            minDate={getTodayString()}
+            maxDate={getMaxDateString()}
+            className={errors.date ? 'rd-select--error' : ''}
           />
           {errors.date && <p className="text-red-500 text-sm mt-1">{errors.date}</p>}
         </div>
       </div>
 
       <div className="rd-row-2">
-        <div className="rd-field" ref={registerRef('startTime')} style={{ marginTop: '1.5rem' }}>
+        <div className="rd-field" ref={registerRef('startTime')} style={{ marginTop: '1rem' }}>
           <label>START TIME</label>
           {form.guests > 10 ? (
             <input type="text" readOnly value="Not available for large groups" className="rd-disabled-input" />
           ) : (
             <>
-              <input
-                type="time"
+              <CustomTimePicker
                 value={form.startTime}
-                onChange={(e) => handleStartTimeChange(e.target.value)}
-                list="startTimes"
-                className={`w-full px-4 py-2 mt-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white ${errors.startTime ? 'border-red-500 border-2' : 'border-gray-300'}`}
+                onChange={handleStartTimeChange}
+                availableTimes={startHoursOptions}
+                className={errors.startTime ? 'rd-select--error' : ''}
               />
-              <datalist id="startTimes">
-                {startHoursOptions.map(time => (
-                  <option key={time} value={time} />
-                ))}
-              </datalist>
               {errors.startTime && <p className="text-red-500 text-sm mt-1">{errors.startTime}</p>}
             </>
           )}
         </div>
       </div>
 
-      <div className="rd-row-3" ref={registerRef('guests')} style={{ marginTop: '1.5rem' }}>
+      <div className="rd-row-3" ref={registerRef('guests')} style={{ marginTop: '1rem' }}>
         <div className="rd-field">
           <label>GUESTS</label>
           <div className={`rd-guest-stepper ${errors.guests ? 'border-red-500 border-2' : ''}`}>
@@ -568,18 +1141,19 @@ export default function ReservationDetails({
       )}
 
       {form.guests !== '' && form.guests <= 10 && (
-        <div className="rd-field" ref={registerRef('duration')} style={{ marginTop: '1.5rem' }}>
+        <div className="rd-field" ref={registerRef('duration')} style={{ marginTop: '1rem' }}>
           <label>DURATION</label>
-          <select
+          <CustomSelect
             value={form.duration}
-            onChange={(e) => handleDurationChange(e.target.value)}
-            className={`w-full px-4 py-2 mt-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 ${errors.duration ? 'border-red-500 border-2' : 'border-gray-300'}`}
-          >
-            <option value="15">15 Mins</option>
-            <option value="30">30 Mins</option>
-            <option value="45">45 Mins</option>
-            <option value="60">60 Mins</option>
-          </select>
+            onChange={handleDurationChange}
+            options={[
+              { value: 15, label: "15 Mins" },
+              { value: 30, label: "30 Mins" },
+              { value: 45, label: "45 Mins" },
+              { value: 60, label: "60 Mins" }
+            ]}
+            className={errors.duration ? 'rd-select--error' : ''}
+          />
           {errors.duration && <p className="text-red-500 text-sm mt-1">{errors.duration}</p>}
           <BookingAlerts duration={form.duration} />
         </div>
@@ -587,20 +1161,21 @@ export default function ReservationDetails({
 
       <div className="rd-field" ref={registerRef('diningPurpose')}>
         <label>DINING PURPOSE</label>
-        <select
+        <CustomSelect
           value={form.diningPurpose}
-          onChange={(e) => updateField('diningPurpose', e.target.value)}
-        >
-          <option>Casual Dinner</option>
-          <option>Casual Date</option>
-          <option>Date Night</option>
-          <option>Birthday</option>
-          <option>Anniversary</option>
-          <option>Business Meeting</option>
-          <option>Family Gathering</option>
-          <option>Special Occasion</option>
-          <option>Other</option>
-        </select>
+          onChange={(val) => updateField('diningPurpose', val)}
+          options={[
+            'Casual Dinner',
+            'Casual Date',
+            'Date Night',
+            'Birthday',
+            'Anniversary',
+            'Business Meeting',
+            'Family Gathering',
+            'Special Occasion',
+            'Other'
+          ]}
+        />
         {form.diningPurpose === 'Other' && (
           <input
             type="text"

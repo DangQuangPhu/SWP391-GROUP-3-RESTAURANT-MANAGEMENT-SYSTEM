@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import "../styles/auth.css";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "/api";
@@ -44,13 +45,13 @@ function VerifyEmail() {
   }, []);
 
   return (
-    <section className="verify-email-page" style={{ padding: "2rem" }}>
+    <section className="verify-email-page">
       <h2>Xac thuc tai khoan</h2>
 
       {status === "checking" ? <p>Dang kiem tra lien ket...</p> : null}
 
       {status === "success" ? (
-        <div className="success" style={{ color: "green" }}>
+        <div className="success verify-email-page__success">
           <p>{message}</p>
           <a href="/" className="phurai-button">
             Ve trang chu
@@ -59,7 +60,7 @@ function VerifyEmail() {
       ) : null}
 
       {status === "error" ? (
-        <div className="error" style={{ color: "red" }}>
+        <div className="error verify-email-page__error">
           <p>{message}</p>
           <a href="/register" className="phurai-button">
             Dang ky lai

@@ -68,7 +68,7 @@ function ReservationSuccessPanel({ reservation, onReturnHome, onViewReservation 
   if (!reservation) return null;
 
   return (
-    <div className="rzv-success" style={{ maxWidth: "680px", margin: "0 auto", width: "100%", textAlign: "center" }}>
+    <div className="rd-card" style={{ textAlign: "center" }}>
       {/* Animated check icon */}
       <div className="rzv-success__check" aria-hidden style={{ margin: "0 auto" }}>
         <svg viewBox="0 0 80 80">
@@ -77,17 +77,17 @@ function ReservationSuccessPanel({ reservation, onReturnHome, onViewReservation 
         </svg>
       </div>
 
-      <h1 className="rzv-success__title rzv-serif" style={{ fontSize: "1.4rem", marginTop: "1rem" }}>
+      <h1 className="rzv-success__title rzv-serif" style={{ fontSize: "1.4rem", marginTop: "1rem", color: "#fff" }}>
         Reservation Confirmed!
       </h1>
-      <p className="rzv-success__msg" style={{ fontSize: "0.875rem", marginBottom: "16px", color: "#64748b" }}>
+      <p className="rzv-success__msg" style={{ fontSize: "0.875rem", marginBottom: "16px", color: "rgba(255, 255, 255, 0.6)" }}>
         Thank you for choosing Phūrai. Your table is reserved — a confirmation email will be sent to you shortly.
       </p>
 
       {/* RATING SECTION */}
       {!hasRated && !showThankYouAnim && (
-        <div className="rating-card" style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "16px", padding: "24px", marginTop: "32px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
-          <h3 style={{ fontSize: "1.1rem", fontWeight: "600", marginBottom: "16px", color: "#1e293b" }}>How was your booking experience?</h3>
+        <div className="rating-card" style={{ background: "rgba(255, 255, 255, 0.04)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "16px", padding: "24px", marginTop: "32px" }}>
+          <h3 style={{ fontSize: "1.1rem", fontWeight: "600", marginBottom: "16px", color: "#fff" }}>How was your booking experience?</h3>
           
           <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginBottom: "20px" }}>
             {[1, 2, 3, 4, 5].map(star => (
@@ -102,8 +102,8 @@ function ReservationSuccessPanel({ reservation, onReturnHome, onViewReservation 
               >
                 <Star
                   size={36}
-                  fill={(hoverRating || rating) >= star ? "#eab308" : "transparent"}
-                  color={(hoverRating || rating) >= star ? "#eab308" : "#cbd5e1"}
+                  fill={(hoverRating || rating) >= star ? "#ffd064" : "transparent"}
+                  color={(hoverRating || rating) >= star ? "#ffd064" : "rgba(255, 255, 255, 0.2)"}
                 />
               </button>
             ))}
@@ -119,9 +119,9 @@ function ReservationSuccessPanel({ reservation, onReturnHome, onViewReservation 
                   padding: "6px 14px",
                   borderRadius: "999px",
                   fontSize: "0.8rem",
-                  background: notes.includes(note) ? "#fef3c7" : "#f1f5f9",
-                  color: notes.includes(note) ? "#b45309" : "#475569",
-                  border: `1px solid ${notes.includes(note) ? "#fde68a" : "#e2e8f0"}`,
+                  background: notes.includes(note) ? "rgba(255, 208, 100, 0.15)" : "rgba(255, 255, 255, 0.08)",
+                  color: notes.includes(note) ? "#ffd064" : "rgba(255, 255, 255, 0.7)",
+                  border: `1px solid ${notes.includes(note) ? "#ffd064" : "rgba(255, 255, 255, 0.16)"}`,
                   cursor: "pointer",
                   transition: "all 0.2s"
                 }}
@@ -135,14 +135,15 @@ function ReservationSuccessPanel({ reservation, onReturnHome, onViewReservation 
             placeholder="Tell us more about your experience... (optional)"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            style={{ width: "100%", height: "80px", padding: "12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.875rem", resize: "none", marginBottom: "16px" }}
+            className="rd-datepicker-input"
+            style={{ width: "100%", height: "80px", padding: "12px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.16)", background: "rgba(0, 0, 0, 0.2)", fontSize: "0.875rem", color: "#fff", resize: "none", marginBottom: "16px" }}
           />
 
           <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
             <button 
               type="button" 
               onClick={handleSkip}
-              style={{ padding: "10px 24px", borderRadius: "8px", fontSize: "0.9rem", fontWeight: "500", color: "#64748b", background: "transparent", border: "1px solid #e2e8f0", cursor: "pointer" }}
+              style={{ padding: "10px 24px", borderRadius: "8px", fontSize: "0.9rem", fontWeight: "500", color: "rgba(255, 255, 255, 0.6)", background: "transparent", border: "1px solid rgba(255, 255, 255, 0.16)", cursor: "pointer" }}
             >
               Skip
             </button>
@@ -150,7 +151,7 @@ function ReservationSuccessPanel({ reservation, onReturnHome, onViewReservation 
               type="button" 
               disabled={rating === 0 || isSubmitting}
               onClick={handleRatingSubmit}
-              style={{ padding: "10px 24px", borderRadius: "8px", fontSize: "0.9rem", fontWeight: "600", color: "#fff", background: rating > 0 ? "var(--rzv-gold, #b89467)" : "#cbd5e1", border: "none", cursor: rating > 0 ? "pointer" : "not-allowed", transition: "all 0.2s" }}
+              style={{ padding: "10px 24px", borderRadius: "8px", fontSize: "0.9rem", fontWeight: "600", color: "#16120f", background: rating > 0 ? "var(--rzv-gold, #ffd064)" : "rgba(255, 255, 255, 0.2)", border: "none", cursor: rating > 0 ? "pointer" : "not-allowed", transition: "all 0.2s" }}
             >
               {isSubmitting ? "Submitting..." : "Submit Feedback"}
             </button>
@@ -162,26 +163,25 @@ function ReservationSuccessPanel({ reservation, onReturnHome, onViewReservation 
       {showThankYouAnim && !hasRated && (
         <div style={{ marginTop: "32px", padding: "32px", animation: "fade-in-up 0.5s ease-out forwards" }}>
           <CheckCircle size={64} color="#10b981" style={{ margin: "0 auto", marginBottom: "16px", animation: "scale-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards" }} />
-          <h3 style={{ fontSize: "1.25rem", fontWeight: "600", color: "#0f172a" }}>Thank you for your feedback!</h3>
+          <h3 style={{ fontSize: "1.25rem", fontWeight: "600", color: "#fff" }}>Thank you for your feedback!</h3>
         </div>
       )}
 
       {/* Elegant auto-redirect countdown badge (ONLY shows after rating or skipping) */}
       {hasRated && (
-        <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "#f8fafc", padding: "6px 14px", borderRadius: "999px", border: "1px solid #e2e8f0", marginBottom: "20px", marginTop: "24px" }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: "rgba(255, 255, 255, 0.04)", padding: "6px 14px", borderRadius: "999px", border: "1px solid rgba(255, 255, 255, 0.08)", marginBottom: "20px", marginTop: "24px" }}>
           <span className="pulse-dot" style={{ 
             width: "8px", 
             height: "8px", 
             borderRadius: "50%", 
-            background: "var(--rzv-gold, #b89467)", 
+            background: "var(--rzv-gold, #ffd064)", 
             display: "inline-block"
           }} />
-          <span style={{ fontSize: "0.8rem", fontWeight: 500, color: "#64748b" }}>
-            Redirecting to home page in <strong style={{ color: "#111" }}>{countdown}s</strong>
+          <span style={{ fontSize: "0.8rem", fontWeight: 500, color: "rgba(255, 255, 255, 0.5)" }}>
+            Redirecting to home page in <strong style={{ color: "#fff" }}>{countdown}s</strong>
           </span>
         </div>
       )}
-
 
       {hasRated && (
         <div className="rzv-success-btn-container">

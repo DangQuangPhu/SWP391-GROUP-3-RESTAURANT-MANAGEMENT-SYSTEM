@@ -419,9 +419,10 @@
 
 /* ---- SVG Floor Plan Zones ---- */
 .zone-rect {
-  fill: #faf9f6;
-  stroke: #e6e3dd;
+  fill: rgba(250, 249, 246, 0.45);
+  stroke: #cdb27e;
   stroke-width: 1.5;
+  stroke-dasharray: 6 3;
 }
 
 .zone-rect.alt {

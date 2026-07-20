@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "../styles/auth.css";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "/api";
@@ -47,12 +48,11 @@ function Register() {
   };
 
   return (
-    <section className="register-page" style={{ padding: "2rem" }}>
+    <section className="register-page">
       <h2>Dang ky tai khoan</h2>
       <form
         onSubmit={handleSubmit}
         className="register-form"
-        style={{ maxWidth: "400px" }}
       >
         <label>
           Ten dang nhap
@@ -107,7 +107,7 @@ function Register() {
         </button>
       </form>
       {message ? (
-        <p className="message" style={{ marginTop: "1rem" }}>
+        <p className="message register-page__message">
           {message}
         </p>
       ) : null}

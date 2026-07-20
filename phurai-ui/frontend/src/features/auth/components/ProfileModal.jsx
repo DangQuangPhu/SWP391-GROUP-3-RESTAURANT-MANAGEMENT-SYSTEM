@@ -146,9 +146,12 @@ function ProfileModal({
   useEffect(() => {
     if (!isOpen) {
       wasOpenRef.current = false;
-      setProfileMode(PROFILE_MODES.VIEW);
-      resetSubState();
-      setDraft(null);
+      const timer = setTimeout(() => {
+        setProfileMode(PROFILE_MODES.VIEW);
+        resetSubState();
+        setDraft(null);
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
@@ -485,7 +488,6 @@ function ProfileModal({
                 <button
                   type="button"
                   className="profile-edit__avatar-option profile-edit__avatar-option--google"
-                  style={{ background: "#faf8f4", color: "black", border: "none", marginBottom: "0.5rem" }}
                   onClick={async () => {
                     setAvatarPreview(draft.googleAvatarUrl);
                     setAlert(null);

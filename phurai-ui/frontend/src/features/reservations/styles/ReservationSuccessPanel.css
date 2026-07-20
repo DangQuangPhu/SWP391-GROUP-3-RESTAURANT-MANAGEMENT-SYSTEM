@@ -23,26 +23,26 @@
 }
 .rzv-btn-premium-outline {
   background: transparent;
-  border: 2px solid #111;
-  color: #111;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  color: #fff;
 }
 .rzv-btn-premium-outline:hover {
-  background: #111;
-  color: #fff;
+  background: #fff;
+  color: #16120f;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
 }
 .rzv-btn-premium-solid {
-  background: var(--rzv-gold, #b89467);
-  border: 2px solid var(--rzv-gold, #b89467);
-  color: #fff;
-  box-shadow: 0 4px 14px rgba(184, 148, 103, 0.3);
+  background: var(--rzv-gold, #ffd064);
+  border: 2px solid var(--rzv-gold, #ffd064);
+  color: #16120f;
+  box-shadow: 0 4px 14px rgba(255, 208, 100, 0.3);
 }
 .rzv-btn-premium-solid:hover {
-  background: #a38056;
-  border-color: #a38056;
+  background: #d9a736;
+  border-color: #d9a736;
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(184, 148, 103, 0.4);
+  box-shadow: 0 6px 20px rgba(255, 208, 100, 0.5);
 }
 .pulse-dot {
   animation: pulse-ring 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;

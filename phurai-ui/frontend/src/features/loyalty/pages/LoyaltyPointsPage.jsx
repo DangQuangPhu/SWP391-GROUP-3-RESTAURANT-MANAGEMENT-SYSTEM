@@ -4,6 +4,7 @@ import { Gem, Clock, Ticket, TrendingUp, CheckCircle2, AlertTriangle, Loader2, S
 import { getLoyaltyBalance, getLoyaltyCatalog, redeemVoucher, getMyVouchers } from '../services/loyaltyApi.js';
 import { format } from 'date-fns';
 import { useAuth } from '@/features/auth/context/AuthContext';
+import '../styles/loyalty.css';
 
 // ─── Design tokens (matching profile.css) ─────────────────────────────────────
 const T = {
@@ -70,23 +71,23 @@ function VoucherCountdown({ expiryDate, onExpired }) {
     return () => clearInterval(id);
   }, [expiryDate]);
 
-  if (!timeLeft) return <span style={{ color: T.danger, fontWeight: 600, fontSize: '0.8rem' }}>Expired</span>;
+  if (!timeLeft) return <span className="voucher-countdown__expired">Expired</span>;
   const { hours, minutes, seconds, diff } = timeLeft;
   const pct = Math.min((diff / (24 * 3600000)) * 100, 100);
   const barColor = pct < 20 ? T.danger : pct < 50 ? '#D97706' : T.success;
 
   return (
-    <div style={{ width: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: T.textMuted, marginBottom: 4 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+    <div className="voucher-countdown__wrapper">
+      <div className="voucher-countdown__header">
+        <span className="voucher-countdown__label-wrap">
           <Clock size={11} /> Expires in:
         </span>
-        <span style={{ fontWeight: 700, color: barColor, fontVariantNumeric: 'tabular-nums' }}>
+        <span className="voucher-countdown__timer" style={{ color: barColor }}>
           {String(hours).padStart(2, '0')}:{String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
         </span>
       </div>
-      <div style={{ width: '100%', height: 4, background: T.border, borderRadius: 99, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 99, transition: 'width 1s linear' }} />
+      <div className="voucher-countdown__track">
+        <div className="voucher-countdown__bar" style={{ width: `${pct}%`, backgroundColor: barColor }} />
       </div>
     </div>
   );
@@ -95,9 +96,9 @@ function VoucherCountdown({ expiryDate, onExpired }) {
 // ─── Section header ────────────────────────────────────────────────────────────
 function SectionHeader({ icon: Icon, title }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 12, borderBottom: `1px solid ${T.border}`, marginBottom: 20 }}>
-      <Icon size={18} style={{ color: T.gold }} />
-      <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: T.textMain }}>{title}</h3>
+    <div className="loyalty-section-header">
+      <Icon size={18} className="loyalty-section-header__icon" />
+      <h3 className="loyalty-section-header__title">{title}</h3>
     </div>
   );
 }
@@ -166,91 +167,79 @@ export default function LoyaltyPointsPage() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 0', color: T.textMuted, gap: 12 }}>
-        <Loader2 size={36} style={{ color: T.gold, animation: 'spin 1s linear infinite' }} />
-        <p style={{ margin: 0, fontSize: '0.9rem' }}>Loading loyalty points and rewards…</p>
+      <div className="loyalty-page__loading">
+        <Loader2 size={36} className="loyalty-page__loader" />
+        <p>Loading loyalty points and rewards…</p>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 32, padding: '28px 0 16px 0' }}>
+    <div className="loyalty-page">
 
       {/* ── Toast messages ── */}
       {actionSuccess && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#F0FDF4', border: `1px solid #BBF7D0`, color: '#166534', padding: '12px 16px', borderRadius: T.radiusSm }}>
-          <CheckCircle2 size={18} style={{ color: T.success, flexShrink: 0 }} />
-          <div style={{ flex: 1 }}>
-            <p style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem' }}>Redemption Successful</p>
-            <p style={{ margin: 0, fontSize: '0.8rem' }}>{actionSuccess}</p>
+        <div className="loyalty-toast loyalty-toast--success">
+          <CheckCircle2 size={18} className="loyalty-toast__icon--success" />
+          <div className="loyalty-toast__body">
+            <p className="loyalty-toast__title">Redemption Successful</p>
+            <p className="loyalty-toast__msg">{actionSuccess}</p>
           </div>
-          <button onClick={() => setActionSuccess('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: T.success, lineHeight: 1 }}>×</button>
+          <button onClick={() => setActionSuccess('')} className="loyalty-toast__close loyalty-toast__close--success">×</button>
         </div>
       )}
       {actionError && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#FFF5F5', border: `1px solid #FECACA`, color: '#991B1B', padding: '12px 16px', borderRadius: T.radiusSm }}>
-          <AlertTriangle size={18} style={{ color: T.danger, flexShrink: 0 }} />
-          <div style={{ flex: 1 }}>
-            <p style={{ margin: 0, fontWeight: 700, fontSize: '0.875rem' }}>Redemption Failed</p>
-            <p style={{ margin: 0, fontSize: '0.8rem' }}>{actionError}</p>
+        <div className="loyalty-toast loyalty-toast--error">
+          <AlertTriangle size={18} className="loyalty-toast__icon--error" />
+          <div className="loyalty-toast__body">
+            <p className="loyalty-toast__title">Redemption Failed</p>
+            <p className="loyalty-toast__msg">{actionError}</p>
           </div>
-          <button onClick={() => setActionError('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: T.danger, lineHeight: 1 }}>×</button>
+          <button onClick={() => setActionError('')} className="loyalty-toast__close loyalty-toast__close--error">×</button>
         </div>
       )}
 
       {/* ── Balance + Stats ── */}
-      <section style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
+      <section className="loyalty-balance">
         {/* Balance card */}
-        <div style={{
-          position: 'relative',
-          overflow: 'hidden',
-          borderRadius: T.radius,
-          background: `linear-gradient(135deg, #92400E 0%, ${T.gold} 60%, #D97706 100%)`,
-          padding: '28px 28px 24px',
-          color: '#fff',
-          boxShadow: '0 8px 32px rgba(201,162,39,0.25)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          minHeight: 180,
-        }}>
+        <div className="loyalty-balance__card">
           {/* Decorative circles */}
-          <div style={{ position: 'absolute', top: -32, right: -32, width: 160, height: 160, background: 'rgba(255,255,255,0.08)', borderRadius: '50%', pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', bottom: -48, right: 60, width: 100, height: 100, background: 'rgba(255,255,255,0.05)', borderRadius: '50%', pointerEvents: 'none' }} />
+          <div className="loyalty-balance__deco-1" />
+          <div className="loyalty-balance__deco-2" />
 
           <div>
-            <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.85, fontWeight: 600 }}>Point Balance</span>
-            <h2 style={{ margin: '6px 0 0', fontSize: '3rem', fontWeight: 800, display: 'flex', alignItems: 'baseline', gap: 8, lineHeight: 1 }}>
+            <span className="loyalty-balance__label">Point Balance</span>
+            <h2 className="loyalty-balance__value">
               <AnimatedCounter value={balanceData.balance} />
-              <span style={{ fontSize: '1.1rem', fontWeight: 500, opacity: 0.9 }}>pts</span>
+              <span className="loyalty-balance__unit">pts</span>
             </h2>
           </div>
 
-          <div style={{ fontSize: '0.78rem', opacity: 0.8, marginTop: 16 }}>
-            <Star size={11} style={{ display: 'inline', marginRight: 4 }} />
+          <div className="loyalty-balance__desc">
+            <Star size={11} className="loyalty-balance__desc-icon" />
             1 Loyalty Point earned for every 10,000 VND paid at Phūrai checkout
           </div>
         </div>
 
         {/* Stats card */}
-        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.radius, padding: '20px 20px 16px', boxShadow: T.shadow, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 12 }}>
-          <p style={{ margin: 0, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, color: T.textMuted }}>Point Statistics</p>
+        <div className="loyalty-stats">
+          <p className="loyalty-stats__title">Point Statistics</p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: `1px solid ${T.border}` }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <TrendingUp size={14} style={{ color: T.success }} />
-                <span style={{ fontSize: '0.82rem', color: T.textMuted }}>Total earned</span>
+          <div className="loyalty-stats__list">
+            <div className="loyalty-stats__row loyalty-stats__row--border">
+              <div className="loyalty-stats__label-wrap">
+                <TrendingUp size={14} className="loyalty-stats__label-icon--success" />
+                <span className="loyalty-stats__label">Total earned</span>
               </div>
-              <span style={{ fontWeight: 700, fontSize: '0.9rem', color: T.textMain }}>+{(balanceData.totalEarned || 0).toLocaleString()}</span>
+              <span className="loyalty-stats__value">+{(balanceData.totalEarned || 0).toLocaleString()}</span>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Gem size={14} style={{ color: T.danger }} />
-                <span style={{ fontSize: '0.82rem', color: T.textMuted }}>Total redeemed</span>
+            <div className="loyalty-stats__row">
+              <div className="loyalty-stats__label-wrap">
+                <Gem size={14} className="loyalty-stats__label-icon--danger" />
+                <span className="loyalty-stats__label">Total redeemed</span>
               </div>
-              <span style={{ fontWeight: 700, fontSize: '0.9rem', color: T.textMain }}>-{(balanceData.totalRedeemed || 0).toLocaleString()}</span>
+              <span className="loyalty-stats__value">-{(balanceData.totalRedeemed || 0).toLocaleString()}</span>
             </div>
           </div>
         </div>
@@ -261,48 +250,33 @@ export default function LoyaltyPointsPage() {
         <SectionHeader icon={Ticket} title="Exchange Rewards Catalog" />
 
         {catalog.length === 0 ? (
-          <p style={{ color: T.textMuted, fontSize: '0.875rem', margin: '12px 0' }}>No rewards available at the moment. Check back soon!</p>
+          <p className="loyalty-catalog__empty">No rewards available at the moment. Check back soon!</p>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+          <div className="loyalty-catalog__grid">
             {catalog.map((promo) => {
               const userPoints = balanceData.balance || 0;
               const canRedeem = userPoints >= promo.points_required;
               const outOfStock = promo.remaining_quantity !== null && promo.remaining_quantity <= 0;
 
               return (
-                <div key={promo.promotion_id} style={{
-                  background: T.surface,
-                  border: `1px solid ${T.border}`,
-                  borderRadius: T.radius,
-                  padding: 20,
-                  boxShadow: T.shadow,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  gap: 14,
-                  position: 'relative',
-                  transition: 'box-shadow 0.2s, transform 0.2s',
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.boxShadow = T.shadowHover; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.boxShadow = T.shadow; e.currentTarget.style.transform = 'none'; }}
-                >
+                <div key={promo.promotion_id} className="loyalty-catalog__card">
                   {outOfStock && (
-                    <span style={{ position: 'absolute', top: 12, right: 12, background: '#FEE2E2', color: T.danger, fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '2px 8px', borderRadius: 99 }}>
+                    <span className="loyalty-catalog__soldout">
                       Sold out
                     </span>
                   )}
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <span style={{ display: 'inline-block', background: T.goldLight, color: '#92400E', fontSize: '0.72rem', fontWeight: 700, padding: '3px 10px', borderRadius: 99 }}>
+                  <div className="loyalty-catalog__info">
+                    <span className="loyalty-catalog__tag">
                       {promo.points_required} Points
                     </span>
-                    <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: T.textMain }}>{promo.promotion_name}</h4>
-                    <p style={{ margin: 0, fontSize: '0.8rem', color: T.textMuted, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    <h4 className="loyalty-catalog__name">{promo.promotion_name}</h4>
+                    <p className="loyalty-catalog__desc">
                       {promo.description || 'Redeem points for exclusive restaurant benefits.'}
                     </p>
                   </div>
 
-                  <div style={{ paddingTop: 10, borderTop: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: T.textMuted }}>
+                  <div className="loyalty-catalog__meta">
                     <span>Target: {promo.applicable_to === 'Both' ? 'All checkouts' : `${promo.applicable_to} only`}</span>
                     {promo.remaining_quantity !== null && <span>Stock: {promo.remaining_quantity} left</span>}
                   </div>
@@ -310,22 +284,7 @@ export default function LoyaltyPointsPage() {
                   <button
                     onClick={() => setSelectedVoucher(promo)}
                     disabled={!canRedeem || outOfStock}
-                    style={{
-                      width: '100%',
-                      padding: '10px 0',
-                      border: 'none',
-                      borderRadius: T.radiusSm,
-                      fontSize: '0.82rem',
-                      fontWeight: 700,
-                      cursor: canRedeem && !outOfStock ? 'pointer' : 'not-allowed',
-                      background: canRedeem && !outOfStock
-                        ? `linear-gradient(135deg, #92400E, ${T.gold})`
-                        : T.border,
-                      color: canRedeem && !outOfStock ? '#fff' : T.textMuted,
-                      transition: 'opacity 0.2s',
-                    }}
-                    onMouseEnter={e => { if (canRedeem && !outOfStock) e.currentTarget.style.opacity = '0.88'; }}
-                    onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+                    className="loyalty-catalog__btn"
                   >
                     {!canRedeem ? 'Insufficient Points' : outOfStock ? 'Sold Out' : 'Redeem Now'}
                   </button>
@@ -338,31 +297,19 @@ export default function LoyaltyPointsPage() {
 
       {/* ── My Vouchers ── */}
       <section>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, borderBottom: `1px solid ${T.border}`, marginBottom: 20, flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Ticket size={18} style={{ color: T.gold }} />
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: T.textMain }}>My Vouchers</h3>
+        <div className="loyalty-section-header loyalty-section-header--vouchers">
+          <div className="loyalty-section-header__title-wrap">
+            <Ticket size={18} className="loyalty-section-header__icon" />
+            <h3 className="loyalty-section-header__title">My Vouchers</h3>
           </div>
 
           {/* Tab switcher */}
-          <div style={{ display: 'flex', background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 3, gap: 2 }}>
+          <div className="loyalty-tabs">
             {['active', 'used', 'expired'].map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                style={{
-                  padding: '5px 14px',
-                  border: 'none',
-                  borderRadius: 7,
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textTransform: 'capitalize',
-                  transition: 'all 0.15s',
-                  background: activeTab === tab ? T.surface : 'transparent',
-                  color: activeTab === tab ? T.textMain : T.textMuted,
-                  boxShadow: activeTab === tab ? T.shadow : 'none',
-                }}
+                className={`loyalty-tabs__btn ${activeTab === tab ? 'loyalty-tabs__btn--active' : ''}`}
               >
                 {tab}
               </button>
@@ -371,45 +318,34 @@ export default function LoyaltyPointsPage() {
         </div>
 
         {filteredVouchers.length === 0 ? (
-          <p style={{ color: T.textMuted, fontSize: '0.875rem', margin: '8px 0' }}>No {activeTab} vouchers found.</p>
+          <p className="loyalty-vouchers__empty">No {activeTab} vouchers found.</p>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+          <div className="loyalty-vouchers__grid">
             {filteredVouchers.map(voucher => (
-              <div key={voucher.customer_voucher_id} style={{
-                background: T.surface,
-                border: `1px solid ${T.border}`,
-                borderRadius: T.radius,
-                padding: 20,
-                boxShadow: T.shadow,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 14,
-                position: 'relative',
-                overflow: 'hidden',
-              }}>
+              <div key={voucher.customer_voucher_id} className="loyalty-vouchers__card">
                 {/* Decorative circle */}
-                <div style={{ position: 'absolute', top: -20, right: -20, width: 80, height: 80, background: `${T.gold}0A`, borderRadius: '50%', pointerEvents: 'none' }} />
+                <div className="loyalty-vouchers__deco" />
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    <h5 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: T.textMain }}>{voucher.promotion_name}</h5>
-                    <p style={{ margin: 0, fontSize: '0.78rem', color: T.textMuted }}>{voucher.description}</p>
+                <div className="loyalty-vouchers__header">
+                  <div className="loyalty-vouchers__title-wrap">
+                    <h5 className="loyalty-vouchers__name">{voucher.promotion_name}</h5>
+                    <p className="loyalty-vouchers__desc">{voucher.description}</p>
                   </div>
-                  <span style={{ fontFamily: 'monospace', background: T.goldLight, color: '#92400E', padding: '4px 10px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 700, border: `1px solid #FDE68A`, flexShrink: 0 }}>
+                  <span className="loyalty-vouchers__code">
                     {voucher.voucher_code}
                   </span>
                 </div>
 
-                <div style={{ paddingTop: 12, borderTop: `1px solid ${T.border}` }}>
+                <div className="loyalty-vouchers__footer">
                   {voucher.status === 'active' ? (
                     <VoucherCountdown expiryDate={voucher.expires_at} onExpired={() => loadLoyaltyData()} />
                   ) : voucher.status === 'used' ? (
-                    <span style={{ fontSize: '0.78rem', color: T.textMuted, display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <CheckCircle2 size={12} style={{ color: T.success }} />
+                    <span className="loyalty-vouchers__status-used">
+                      <CheckCircle2 size={12} className="loyalty-vouchers__status-used-icon" />
                       Used on {voucher.used_at ? format(new Date(voucher.used_at), 'MMM d, yyyy') : 'checkout'}
                     </span>
                   ) : (
-                    <span style={{ fontSize: '0.78rem', color: T.danger, fontWeight: 500 }}>
+                    <span className="loyalty-vouchers__status-expired">
                       Expired {format(new Date(voucher.expires_at), 'MMM d, yyyy')}
                     </span>
                   )}
@@ -422,74 +358,46 @@ export default function LoyaltyPointsPage() {
 
       {/* ── Confirmation Modal ── */}
       {selectedVoucher && createPortal(
-        <div style={{
-          position: 'fixed', inset: 0,
-          background: 'rgba(43,33,24,0.55)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          zIndex: 9999,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
-        }}>
-          <div style={{
-            background: T.surface,
-            border: `1px solid ${T.border}`,
-            borderRadius: 20,
-            maxWidth: 400,
-            width: '100%',
-            padding: 28,
-            boxShadow: '0 20px 60px rgba(43,33,24,0.18)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 20,
-          }}>
+        <div className="loyalty-confirm-overlay">
+          <div className="loyalty-confirm-card">
             {/* Header */}
-            <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 52, height: 52, background: T.goldLight, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Gem size={24} style={{ color: T.gold }} />
+            <div className="loyalty-confirm-card__header">
+              <div className="loyalty-confirm-card__icon-wrapper">
+                <Gem size={24} className="loyalty-confirm-card__icon" />
               </div>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: T.textMain }}>Confirm Points Exchange</h3>
-              <p style={{ margin: 0, fontSize: '0.82rem', color: T.textMuted }}>This action cannot be undone. Your points will be deducted immediately.</p>
+              <h3 className="loyalty-confirm-card__title">Confirm Points Exchange</h3>
+              <p className="loyalty-confirm-card__desc">This action cannot be undone. Your points will be deducted immediately.</p>
             </div>
 
             {/* Summary */}
-            <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: T.textMuted }}>
+            <div className="loyalty-confirm-card__summary">
+              <div className="loyalty-confirm-card__row">
                 <span>Current balance</span>
-                <span style={{ fontWeight: 600, color: T.textMain }}>{(balanceData.balance || 0).toLocaleString()} pts</span>
+                <span className="loyalty-confirm-card__row--bold">{(balanceData.balance || 0).toLocaleString()} pts</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: T.danger }}>
+              <div className="loyalty-confirm-card__row loyalty-confirm-card__row--danger">
                 <span>Points to deduct</span>
-                <span style={{ fontWeight: 600 }}>−{selectedVoucher.points_required} pts</span>
+                <span>−{selectedVoucher.points_required} pts</span>
               </div>
-              <div style={{ paddingTop: 10, borderTop: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: 700, color: T.textMain }}>
+              <div className="loyalty-confirm-card__row loyalty-confirm-card__row--total">
                 <span>Remaining balance</span>
-                <span style={{ color: T.success }}><AnimatedCounter value={(balanceData.balance || 0) - selectedVoucher.points_required} /> pts</span>
+                <span className="loyalty-confirm-card__row--success"><AnimatedCounter value={(balanceData.balance || 0) - selectedVoucher.points_required} /> pts</span>
               </div>
             </div>
 
             {/* Actions */}
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div className="loyalty-confirm-card__actions">
               <button
                 onClick={() => setSelectedVoucher(null)}
                 disabled={exchanging}
-                style={{ flex: 1, padding: '11px 0', border: `1px solid ${T.border}`, borderRadius: T.radiusSm, background: T.surface, color: T.textMuted, fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', transition: 'background 0.15s' }}
-                onMouseEnter={e => { e.currentTarget.style.background = T.bg; }}
-                onMouseLeave={e => { e.currentTarget.style.background = T.surface; }}
+                className="loyalty-confirm-card__btn-cancel"
               >
                 Cancel
               </button>
               <button
                 onClick={handleRedeem}
                 disabled={exchanging}
-                style={{
-                  flex: 1, padding: '11px 0', border: 'none', borderRadius: T.radiusSm,
-                  background: `linear-gradient(135deg, #92400E, ${T.gold})`,
-                  color: '#fff', fontSize: '0.85rem', fontWeight: 700,
-                  cursor: exchanging ? 'not-allowed' : 'pointer',
-                  opacity: exchanging ? 0.7 : 1,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  transition: 'opacity 0.15s',
-                }}
+                className="loyalty-confirm-card__btn-confirm"
               >
                 {exchanging ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Exchanging…</> : 'Confirm Exchange'}
               </button>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { toast } from "react-toastify";
-import reservationImg from "@/assets/images/reservation/Reservation.jpg";
+import reservationImg from "@/assets/images/reservation/6.jpeg";
 import "../styles/reservation.css";
 import ReservationSummary from "../components/ReservationSummary.jsx";
 import ReservationSuccessPanel from "../components/ReservationSuccessPanel.jsx";
@@ -661,45 +661,27 @@ function ReservationPage({
                     initial="initial"
                     animate="animate"
                     exit="exit"
-                    className="rzv-step w-full"
                   >
-                    <div className="rzv-tablestep">
-                      <div className="rzv-tablestep__bar">
-                        <button type="button" className="rzv-backlink" onClick={handleEditDetails}>
-                          ← Back to details
-                        </button>
-                        <span className="rzv-tablestep__recap">
-                          {form.guestCount} guests ·{" "}
-                          {form.date ? new Date(`${form.date}T00:00:00`).toLocaleDateString(undefined, {
-                            day: "numeric",
-                            month: "short",
-                          }) : "—"}{" "}
-                          · {form.time || "—"}
-                        </span>
-                      </div>
-                      <div className="rzv-reveal">
-                        <ReservationSummary
-                          form={form}
-                          setField={setField}
-                          selectedTables={selectedTables}
-                          isKitchenView={isKitchenView}
-                          error={error}
-                          submitting={submitting}
-                          canSubmit={canSubmit}
-                          onSubmit={handleSubmit}
-                          onEditDetails={handleEditDetails}
-                          preorderItems={preorderItems}
-                          setPreorderItems={setPreorderItems}
-                          preorderTotal={preorderTotal}
-                          setPreorderTotal={setPreorderTotal}
-                          promoCode={promoCode}
-                          setPromoCode={setPromoCode}
-                          promoDiscount={promoDiscount}
-                          setPromoDiscount={setPromoDiscount}
-                          currentUser={currentUser}
-                        />
-                      </div>
-                    </div>
+                    <ReservationSummary
+                      form={form}
+                      setField={setField}
+                      selectedTables={selectedTables}
+                      isKitchenView={isKitchenView}
+                      error={error}
+                      submitting={submitting}
+                      canSubmit={canSubmit}
+                      onSubmit={handleSubmit}
+                      onEditDetails={handleEditDetails}
+                      preorderItems={preorderItems}
+                      setPreorderItems={setPreorderItems}
+                      preorderTotal={preorderTotal}
+                      setPreorderTotal={setPreorderTotal}
+                      promoCode={promoCode}
+                      setPromoCode={setPromoCode}
+                      promoDiscount={promoDiscount}
+                      setPromoDiscount={setPromoDiscount}
+                      currentUser={currentUser}
+                    />
                   </motion.div>
                 )}
 
@@ -710,7 +692,7 @@ function ReservationPage({
                     initial="initial"
                     animate="animate"
                     exit="exit"
-                    className="rzv-step w-full"
+                    className="w-full"
                   >
                     <div className={`w-full transition-all duration-500 ease-in-out ${isPaymentSuccess ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
                       <ReservationPaymentPanel
@@ -732,7 +714,7 @@ function ReservationPage({
                     initial="initial"
                     animate="animate"
                     exit="exit"
-                    className="rzv-step w-full"
+                    className="w-full"
                   >
                     <ReservationSuccessPanel
                       reservation={successReservation}

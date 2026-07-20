@@ -116,7 +116,16 @@ export default function FloorPlanSVG({
   return (
     <div className="floorplan-box w-full flex items-center justify-center relative">
       <svg id="floorplan-svg" className="w-full" viewBox="18 18 1294 884" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
-        <rect x="18" y="18" width="1294" height="884" fill="#fffdf9" stroke="var(--line)" strokeWidth="3" rx="8" />
+        <defs>
+          {/* Graph paper grid pattern */}
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(142, 128, 106, 0.08)" strokeWidth="1" />
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(142, 128, 106, 0.03)" strokeWidth="0.5" />
+          </pattern>
+        </defs>
+
+        <rect x="18" y="18" width="1294" height="884" fill="#fffdf9" rx="8" />
+        <rect x="18" y="18" width="1294" height="884" fill="url(#grid)" stroke="rgba(142, 128, 106, 0.25)" strokeWidth="3" rx="8" />
 
         <rect className="zone-rect" x="20" y="20" width="240" height="170" rx="6" />
         <text className="zone-label" x="140" y="45">WINDOW ZONE A</text>
@@ -138,15 +147,15 @@ export default function FloorPlanSVG({
         <text className="zone-label" x="1165" y="45">WINDOW ZONE D</text>
         <ZoneViewButton x={1019} y={48} label="Window Zone D" img={IMAGES.window} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="20" y="210" width="240" height="150" rx="6" fill="#fdf4f4" />
+        <rect className="zone-rect" x="20" y="210" width="240" height="150" rx="6" fill="rgba(253, 244, 244, 0.45)" />
         <text className="zone-label" x="140" y="225">VIP ROOM 1</text>
         <ZoneViewButton x={26} y={216} label="VIP Room 1" img={IMAGES.vip} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="20" y="380" width="240" height="150" rx="6" fill="#fdf4f4" />
+        <rect className="zone-rect" x="20" y="380" width="240" height="150" rx="6" fill="rgba(253, 244, 244, 0.45)" />
         <text className="zone-label" x="140" y="395">VIP ROOM 2</text>
         <ZoneViewButton x={26} y={386} label="VIP Room 2" img={IMAGES.vip} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="20" y="550" width="240" height="150" rx="6" fill="#fdf4f4" />
+        <rect className="zone-rect" x="20" y="550" width="240" height="150" rx="6" fill="rgba(253, 244, 244, 0.45)" />
         <text className="zone-label" x="140" y="565">VIP ROOM 3</text>
         <ZoneViewButton x={26} y={556} label="VIP Room 3" img={IMAGES.vip} onViewZone={onViewZone} />
 
@@ -159,23 +168,23 @@ export default function FloorPlanSVG({
         <text className="zone-label" x="560" y="235">STANDARD DINING AREA</text>
         <ZoneViewButton x={286} y={216} label="Standard Dining Area" img={IMAGES.standard} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="860" y="210" width="140" height="490" rx="6" fill="#fdf8f0" />
+        <rect className="zone-rect" x="860" y="210" width="140" height="490" rx="6" fill="rgba(253, 248, 240, 0.45)" />
         <text className="zone-label" x="930" y="235">PREMIUM</text>
         <ZoneViewButton x={816} y={216} label="Premium Dining Area" img={IMAGES.premium} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="1020" y="210" width="290" height="155" rx="6" fill="#f9f5fa" />
+        <rect className="zone-rect" x="1020" y="210" width="290" height="155" rx="6" fill="rgba(249, 245, 250, 0.45)" />
         <text className="zone-label" x="1165" y="235">PRIVATE ROOM 1</text>
         <ZoneViewButton x={1026} y={216} label="Private Room 1" img={IMAGES.private} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="1020" y="380" width="290" height="155" rx="6" fill="#f9f5fa" />
+        <rect className="zone-rect" x="1020" y="380" width="290" height="155" rx="6" fill="rgba(249, 245, 250, 0.45)" />
         <text className="zone-label" x="1165" y="405">PRIVATE ROOM 2</text>
         <ZoneViewButton x={1026} y={386} label="Private Room 2" img={IMAGES.private} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="1020" y="550" width="290" height="155" rx="6" fill="#f9f5fa" />
+        <rect className="zone-rect" x="1020" y="550" width="290" height="155" rx="6" fill="rgba(249, 245, 250, 0.45)" />
         <text className="zone-label" x="1165" y="575">PRIVATE ROOM 3</text>
         <ZoneViewButton x={1026} y={556} label="Private Room 3" img={IMAGES.private} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="1020" y="720" width="290" height="180" rx="6" fill="#f9f5fa" />
+        <rect className="zone-rect" x="1020" y="720" width="290" height="180" rx="6" fill="rgba(249, 245, 250, 0.45)" />
         <text className="zone-label" x="1165" y="745">PRIVATE ROOM 4</text>
         <ZoneViewButton x={1026} y={726} label="Private Room 4" img={IMAGES.private} onViewZone={onViewZone} />
 

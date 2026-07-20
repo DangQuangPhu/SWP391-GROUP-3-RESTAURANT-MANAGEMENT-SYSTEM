@@ -1049,3 +1049,25 @@
   background: linear-gradient(145deg, #342716 0%, #5c4a2e 45%, #8c764b 100%);
   color: #fffaf2;
 }
+
+/* ---------- Register Page styles ---------- */
+.register-page {
+  padding: 2rem !important;
+}
+.register-form {
+  max-width: 400px !important;
+}
+.register-page__message {
+  margin-top: 1rem !important;
+}
+
+/* ---------- Verify Email Page styles ---------- */
+.verify-email-page {
+  padding: 2rem !important;
+}
+.verify-email-page__success {
+  color: var(--sfx-success, #2f7d4f) !important;
+}
+.verify-email-page__error {
+  color: var(--sfx-danger, #ef4444) !important;
+}

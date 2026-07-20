@@ -89,7 +89,7 @@ function PaymentDetailsModal({ isOpen, onClose, userId, paymentId }) {
     return (
       <div className="payment-modal__details">
         <div className="payment-modal__header-info">
-          <h3 className="payment-modal__amount" style={{ color: isRefund ? "var(--phurai-success, #34c759)" : "inherit" }}>
+          <h3 className={`payment-modal__amount ${isRefund ? 'payment-modal__amount--refund' : ''}`}>
             {isRefund ? "+" : "-"}{formatVND(payment.amount_paid)}
           </h3>
           <p className="payment-modal__status">{payment.payment_status}</p>
@@ -143,7 +143,7 @@ function PaymentDetailsModal({ isOpen, onClose, userId, paymentId }) {
               {payment.discount_amount > 0 && (
                 <div className="payment-modal__row">
                   <span>Discount</span>
-                  <span style={{ color: "var(--phurai-success, #34c759)" }}>-{formatVND(payment.discount_amount)}</span>
+                  <span className="payment-modal__discount">-{formatVND(payment.discount_amount)}</span>
                 </div>
               )}
               <div className="payment-modal__row payment-modal__row--bold">

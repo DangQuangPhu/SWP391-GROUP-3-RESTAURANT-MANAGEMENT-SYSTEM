@@ -747,7 +747,7 @@ const CustomerDashboard = () => {
   const { summary, trend, categories, activity } = data || {};
 
   return (
-    <div className={`h-full flex flex-col overflow-hidden p-4 gap-4 bg-[#f3f4f6] ${isRefetching ? 'opacity-85 pointer-events-none' : ''}`} style={{ transition: 'opacity 0.2s ease' }}>
+    <div className={`h-full flex flex-col overflow-hidden p-4 gap-4 bg-[#f3f4f6] customer-dashboard ${isRefetching ? 'opacity-85 pointer-events-none' : ''}`}>
 
       {/* History Overlay */}
       <AnimatePresence>
@@ -783,7 +783,7 @@ const CustomerDashboard = () => {
                 <Calendar size={18} strokeWidth={2.2} />
               </button>
               {pickerOpen && (
-                <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", zIndex: 1000 }}>
+                <div className="customer-dashboard__picker-wrapper">
                   <DashboardDateRangePicker
                     inline={true}
                     allowFuture={false}

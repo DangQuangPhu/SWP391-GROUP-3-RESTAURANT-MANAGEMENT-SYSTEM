@@ -2730,3 +2730,153 @@ body.profile-page-open {
 .animate-flash-icon-down {
   animation: flash-icon-down 1.4s cubic-bezier(0.25, 1, 0.5, 1);
 }
+
+/* ---------- ProfilePage and Favorites BEM styles ---------- */
+.profile-dashboard__payments-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+}
+
+.profile-dashboard__payment-card {
+  display: grid !important;
+  grid-template-columns: auto 1fr auto auto !important;
+  align-items: center !important;
+  gap: 16px !important;
+  cursor: pointer !important;
+}
+
+.profile-favorites__empty-container {
+  padding: 48px 24px !important;
+  text-align: center !important;
+  color: #9b8a7a !important;
+}
+
+.profile-favorites__empty-svg {
+  width: 48px !important;
+  height: 48px !important;
+  margin: 0 auto 16px !important;
+  opacity: 0.3 !important;
+}
+
+.profile-favorites__empty-title {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: #4d463d !important;
+  margin-bottom: 8px !important;
+}
+
+.profile-favorites__empty-subtitle {
+  font-size: 14px !important;
+}
+
+.profile-favorites__title {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: #342716 !important;
+  margin: 0 !important;
+}
+
+.profile-favorites__subtitle {
+  font-size: 13px !important;
+  color: #9b8a7a !important;
+  margin: 4px 0 0 !important;
+}
+
+.profile-favorites__grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important;
+  gap: 16px !important;
+}
+
+.profile-favorites__card {
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+  padding: 12px 14px !important;
+  background: #faf9f6 !important;
+  border-radius: 14px !important;
+  border: 1px solid #e8e2da !important;
+  position: relative !important;
+}
+
+.profile-favorites__img {
+  width: 60px !important;
+  height: 60px !important;
+  object-fit: cover !important;
+  border-radius: 10px !important;
+  flex-shrink: 0 !important;
+}
+
+.profile-favorites__info {
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+.profile-favorites__name {
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  color: #342716 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.profile-favorites__price {
+  font-size: 13px !important;
+  color: #9b845e !important;
+  font-weight: 600 !important;
+  margin: 3px 0 0 !important;
+}
+
+.profile-favorites__btn-delete {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 50% !important;
+  border: none !important;
+  background: #fee2e2 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  color: #dc2626 !important;
+  flex-shrink: 0 !important;
+}
+
+.profile-favorites__btn-delete-svg {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+.profile-dashboard__missing-alert {
+  color: var(--rzv-error, #f87171) !important;
+}
+
+/* ---------- DashboardCharts BEM styles ---------- */
+.dashboard-charts__pie-chart {
+  outline: none !important;
+}
+
+.dashboard-charts__cell {
+  outline: none !important;
+  transition: transform 0.2s !important;
+  transform-origin: center !important;
+  cursor: pointer !important;
+}
+
+.dashboard-charts__cell:hover {
+  transform: scale(1.05) !important;
+}
+
+/* ---------- CustomerDashboard BEM styles ---------- */
+.customer-dashboard {
+  transition: opacity 0.2s ease !important;
+}
+
+.customer-dashboard__picker-wrapper {
+  position: absolute !important;
+  right: 0 !important;
+  top: calc(100% + 8px) !important;
+  z-index: 1000 !important;
+}

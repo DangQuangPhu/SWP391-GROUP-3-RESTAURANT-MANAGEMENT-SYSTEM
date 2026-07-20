@@ -1,25 +1,37 @@
 .rd-page {
-  --rd-brand: #8a7445;
-  --rd-brand-dark: #2b2620;
-  --rd-bg: #f8f8f8;
+  --rd-brand: #ffd064;
+  /* Radiant Gold for dark background contrast */
+  --rd-brand-dark: #ffffff;
+  --rd-bg: #16120f;
 
   /* Provide variables for rzv components (like PromotionModal) rendered inside rd-page */
-  --rzv-bg: #f8f5ef;
-  --rzv-panel: rgba(255, 255, 255, 0.86);
-  --rzv-text: #1f1a17;
-  --rzv-muted: #8a8175;
-  --rzv-gold: #9f8655;
-  --rzv-gold-soft: rgba(159, 134, 85, 0.16);
-  --rzv-dark: #111111;
-  --rzv-line: rgba(31, 26, 23, 0.1);
-  --rzv-shadow: 0 4px 20px rgba(31, 26, 23, 0.08);
+  --rzv-bg: rgba(26, 23, 20, 0.85);
+  --rzv-panel: rgba(255, 255, 255, 0.12);
+  --rzv-text: #ffffff;
+  --rzv-muted: #c3b9ad;
+  --rzv-gold: #ffd064;
+  --rzv-gold-soft: rgba(255, 208, 100, 0.15);
+  --rzv-dark: #000000;
+  --rzv-line: rgba(255, 255, 255, 0.12);
+  --rzv-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
 
-  background: var(--rd-bg);
+  background-image: url('../../../assets/images/reservation/6.jpeg') !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
   min-height: 100vh;
 }
 
+@media (min-width: 901px) {
+  .rd-page {
+    height: 100vh !important;
+    overflow: hidden !important;
+  }
+}
+
 .rd-page--bg-summary {
-  background-image: url('../../../assets/images/reservation/Reservation1.jpg');
+  background-image: url('../../../assets/images/reservation/6.jpeg') !important;
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
@@ -31,7 +43,7 @@
   position: fixed;
   inset: 0;
   z-index: 0;
-  background-image: url('../../../assets/images/reservation/Reservation1.jpg');
+  background-image: url('../../../assets/images/reservation/6.jpeg') !important;
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
@@ -98,58 +110,56 @@
 }
 
 .rd-split {
-  display: grid;
-  grid-template-columns: 6fr 4fr;
-  min-height: 100vh;
+  display: flex !important;
+  min-height: 100vh !important;
+  width: 100% !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  /* Left aligned on desktop */
+  padding-left: 8vw !important;
+  /* Spacing from left border */
+  padding-right: 2rem !important;
 }
 
 .rd-split--centered {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  padding-left: 0 !important;
 }
 
 .rd-image-col {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 60vw;
-  height: 100vh;
-  overflow: hidden;
-  z-index: 0;
+  display: none !important;
 }
 
 .rd-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  opacity: 0;
-  animation: appleImageReveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  display: none !important;
 }
 
 .rd-content-col {
-  grid-column: 2;
-  padding: 2.5rem 2rem;
-  max-width: 740px;
-  width: 100%;
-  margin: 0 auto;
+  grid-column: unset !important;
+  padding: 1.5rem 0 !important;
+  max-width: 620px !important;
+  width: 100% !important;
+  margin: 0 !important;
+  /* Left aligned on desktop */
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  /* Centered vertically */
   position: relative;
   z-index: 1;
 }
 
 .rd-content-col--centered {
-  padding: 4rem 1rem;
-  max-width: 700px;
+  padding: 2rem 1rem !important;
+  max-width: 700px !important;
 }
 
 .rd-content-col--wide {
-  padding: 4rem 1rem;
-  max-width: 1100px;
+  padding: 3.5rem 1rem !important;
+  max-width: 980px !important;
 }
 
 .rd-eyebrow {
@@ -158,32 +168,41 @@
   text-transform: uppercase;
   color: var(--rd-brand);
   margin: 0 0 8px;
-  text-align: center;
+  text-align: center !important;
+  /* Centered relative to the card */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
 .rd-title {
-  text-align: center;
+  text-align: center !important;
+  /* Centered relative to the card */
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 40px;
   font-weight: 500;
   margin: 0 0 12px;
-  color: var(--rd-brand-dark);
+  color: #ffffff !important;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .rd-subtitle {
-  text-align: center;
-  font-size: 16px;
-  color: #777;
+  text-align: center !important;
+  /* Centered relative to the card */
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.85) !important;
   line-height: 1.6;
-  margin: 0 0 14px;
+  margin: 0 auto 14px !important;
+  /* Centered relative to the card */
+  max-width: 540px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
 .rd-stepper {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: center !important;
+  /* Centered relative to the card */
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
 }
 
@@ -197,45 +216,79 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 1px solid #ddd;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  color: #999;
+  color: rgba(255, 255, 255, 0.7) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .rd-step-circle-active {
-  background: var(--rd-brand-dark);
-  color: #fff;
-  border: none;
+  background: #ffd064 !important;
+  color: #16120f !important;
+  border: none !important;
+  box-shadow: 0 0 12px rgba(255, 208, 100, 0.4) !important;
 }
 
 .rd-step-label {
   font-size: 13px;
-  color: #999;
+  color: rgba(255, 255, 255, 0.5) !important;
 }
 
 .rd-step-label-active {
   font-size: 13px;
-  color: var(--rd-brand-dark);
+  color: #ffd064 !important;
+  font-weight: 600 !important;
 }
 
 .rd-step-line {
   width: 24px;
   height: 1px;
-  background: #ddd;
+  background: rgba(255, 255, 255, 0.2) !important;
   margin: 0 4px;
 }
 
 .rd-card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 1.25rem 1.5rem 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.09) !important;
+  backdrop-filter: blur(28px) saturate(220%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(220%) !important;
+  border-radius: 28px !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  padding: 1.5rem !important;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -1px 20px rgba(255, 255, 255, 0.05) !important;
   opacity: 0;
   animation: appleFadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   animation-delay: 0.5s;
+  position: relative !important;
+  color: #ffffff !important;
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), filter 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.rd-card--blur {
+  opacity: 2.12 !important;
+  filter: blur(16px) !important;
+  transform: scale(0.965) !important;
+  pointer-events: none !important;
+}
+
+.rd-card::before {
+  content: "" !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 55% !important;
+  border-radius: 28px 28px 0 0 !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 100%) !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
 }
 
 .rd-card-title {
@@ -246,7 +299,7 @@
 
 .rd-card-subtitle {
   font-size: 14px;
-  color: #777;
+  color: rgba(255, 255, 255, 0.7) !important;
   margin: 0 0 16px;
 }
 
@@ -280,7 +333,7 @@
 .rd-field label {
   font-size: 12px;
   letter-spacing: 0.6px;
-  color: #777;
+  color: rgba(255, 255, 255, 0.7) !important;
   text-transform: uppercase;
 }
 
@@ -289,16 +342,26 @@
   height: 48px;
   padding: 0 14px;
   border-radius: 12px;
-  border: 1px solid #ddd;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
   font-size: 15px;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  transition: all 0.25s ease !important;
+}
+
+.rd-field select option {
+  background: #1c1815 !important;
+  color: #ffffff !important;
 }
 
 .rd-field input:focus,
 .rd-field select:focus {
-  outline: none;
-  border-color: var(--rd-brand);
-  box-shadow: 0 0 0 2px rgba(138, 116, 69, 0.15);
+  outline: none !important;
+  border-color: #ffd064 !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 0 0 3px rgba(255, 208, 100, 0.2) !important;
 }
 
 .rd-guest-stepper {
@@ -311,10 +374,16 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  border: 1px solid #ddd;
-  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
   font-size: 18px;
   cursor: pointer;
+  transition: all 0.2s ease !important;
+}
+
+.rd-guest-stepper button:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
 }
 
 .rd-guest-stepper input {
@@ -322,13 +391,15 @@
   height: 40px;
   text-align: center;
   border-radius: 10px;
-  border: 1px solid #ddd;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
   font-size: 15px;
 }
 
 .rd-helper-text {
   font-size: 12px;
-  color: #999;
+  color: rgba(255, 255, 255, 0.6) !important;
   margin: 0 0 20px;
   line-height: 1.5;
 }
@@ -343,8 +414,9 @@
   display: inline-block;
   padding: 8px 16px;
   border-radius: 999px;
-  border: 1px solid #ccc;
-  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
   font-size: 12px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -354,8 +426,8 @@
 }
 
 .rd-btn-outline:hover {
-  border-color: var(--rd-brand-dark);
-  background: #f8f8f8;
+  border-color: #ffd064 !important;
+  background: rgba(255, 255, 255, 0.15) !important;
   transform: scale(1.02);
 }
 
@@ -366,20 +438,21 @@
   padding: 14px;
   border-radius: 999px;
   border: none;
-  background: var(--rd-brand-dark);
-  color: #fff;
+  background: linear-gradient(135deg, #ffd064, #d9a736) !important;
+  color: #16120f !important;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 14px rgba(255, 208, 100, 0.3) !important;
 }
 
 .rd-btn-primary:hover:not(:disabled) {
-  background: #1a1714;
   transform: scale(1.02);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 6px 20px rgba(255, 208, 100, 0.5) !important;
+  opacity: 0.95;
 }
 
 .rd-btn-primary:active:not(:disabled) {
@@ -389,18 +462,106 @@
 .rd-btn-primary:disabled {
   opacity: 0.5;
   cursor: default;
+  box-shadow: none !important;
 }
+
+/* Payment panel action buttons */
+.pay-btn-check {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #ffd064, #d9a736);
+  color: #16120f;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(255, 208, 100, 0.3);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.25s ease,
+              background 0.25s ease,
+              opacity 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.pay-btn-check::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0);
+  transition: background 0.25s ease;
+}
+
+.pay-btn-check:hover {
+  transform: scale(1.04) translateY(-2px);
+  box-shadow: 0 8px 24px rgba(255, 208, 100, 0.55), 0 2px 8px rgba(255, 208, 100, 0.2);
+}
+
+.pay-btn-check:hover::after {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.pay-btn-check:active {
+  transform: scale(0.97) translateY(0);
+  box-shadow: 0 3px 10px rgba(255, 208, 100, 0.3);
+}
+
+.pay-btn-cancel {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.25s ease,
+              background 0.25s ease,
+              border-color 0.25s ease;
+}
+
+.pay-btn-cancel:hover {
+  transform: scale(1.04) translateY(-2px);
+  background: rgba(239, 68, 68, 0.9);
+  border-color: rgba(239, 68, 68, 0.9);
+  color: #ffffff;
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+}
+
+.pay-btn-cancel:active {
+  transform: scale(0.97) translateY(0);
+  box-shadow: none;
+}
+
 
 .rd-missing-text {
   font-size: 12px;
-  color: #999;
+  color: rgba(255, 255, 255, 0.5) !important;
   text-align: right;
   margin: 4px 0 0;
 }
 
 @media (max-width: 900px) {
   .rd-split {
-    grid-template-columns: 1fr;
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+    justify-content: center !important;
   }
 
   .rd-image-col {
@@ -408,13 +569,427 @@
   }
 
   .rd-content-col {
-    grid-column: 1;
-    padding: 2rem 1.25rem 3rem;
-    max-width: none;
+    padding: 2rem 0 !important;
+    max-width: 100% !important;
     min-height: auto;
   }
 
   .rd-row-3 {
     grid-template-columns: 1fr;
   }
+
+  .rd-eyebrow,
+  .rd-title,
+  .rd-subtitle {
+    text-align: center !important;
+  }
+
+  .rd-subtitle {
+    margin: 0 auto 14px !important;
+  }
+
+  .rd-stepper {
+    justify-content: center !important;
+  }
+}
+
+/* ── Custom Select (Apple style) ── */
+.rd-custom-select-container {
+  position: relative !important;
+  width: 100% !important;
+  margin-top: 8px !important;
+  z-index: 1 !important;
+}
+
+.rd-custom-select-container:has(.rd-custom-select-trigger--open),
+.rd-custom-select-container--open,
+.rd-custom-select-container:focus-within {
+  z-index: 9999 !important;
+}
+
+/* Elevate all parent layouts containing an open select/picker */
+.rd-row-2:has(.rd-custom-select-container--open),
+.rd-row-3:has(.rd-custom-select-container--open),
+.rd-field:has(.rd-custom-select-container--open),
+div:has(> .rd-custom-select-container--open) {
+  z-index: 9999 !important;
+  position: relative !important;
+}
+
+.rd-custom-select-trigger {
+  width: 100% !important;
+  height: 48px !important;
+  padding: 0 16px !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  background: rgba(255, 255, 255, 0.09) !important;
+  color: #ffffff !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  font-size: 15px !important;
+  cursor: pointer !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  text-align: left !important;
+  backdrop-filter: blur(20px) saturate(200%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(200%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+.rd-custom-select-trigger:focus,
+.rd-custom-select-trigger--open {
+  outline: none !important;
+  border-color: #ffd064 !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+  box-shadow:
+    0 0 0 3px rgba(255, 208, 100, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+}
+
+.rd-custom-select-arrow {
+  width: 10px !important;
+  height: 6px !important;
+  background-color: rgba(255, 255, 255, 0.7) !important;
+  clip-path: polygon(0 0, 100% 0, 50% 100%) !important;
+  /* Chevron down */
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), background-color 0.3s ease !important;
+  /* Apple fluid cubic-bezier */
+}
+
+.rd-custom-select-arrow--open {
+  transform: rotate(180deg) !important;
+  background-color: #ffd064 !important;
+}
+
+@keyframes appleSelectOpen {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.rd-custom-select-dropdown {
+  position: absolute !important;
+  top: calc(100% + 6px) !important;
+  left: 0 !important;
+  right: 0 !important;
+  background: rgba(30, 26, 23, 0.92) !important;
+  /* Apple style dark translucent popover to prevent background overlap */
+  backdrop-filter: blur(35px) saturate(220%) !important;
+  -webkit-backdrop-filter: blur(35px) saturate(220%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border-radius: 16px !important;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+  padding: 6px !important;
+  z-index: 1000 !important;
+  animation: appleSelectOpen 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  transform-origin: top center !important;
+  max-height: 260px !important;
+  overflow-y: auto !important;
+}
+
+.rd-custom-select-option {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 10px 12px !important;
+  border-radius: 10px !important;
+  cursor: pointer !important;
+  font-size: 14px !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  transition: all 0.2s ease !important;
+}
+
+.rd-custom-select-option:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+}
+
+.rd-custom-select-option--selected {
+  color: #ffd064 !important;
+  font-weight: 700 !important;
+  background: rgba(255, 208, 100, 0.2) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+.rd-custom-select-tick {
+  width: 14px !important;
+  display: inline-block !important;
+  font-size: 14px !important;
+  color: #ffd064 !important;
+  text-align: center !important;
+}
+
+.rd-select--error .rd-custom-select-trigger {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
+}
+
+/* ── Custom Date Picker (Apple style) ── */
+.rd-datepicker-dropdown {
+  width: 320px !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding: 16px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rd-datepicker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+}
+
+.rd-datepicker-nav-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #ffffff !important;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rd-datepicker-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-color: #ffd064 !important;
+  transform: scale(1.05);
+}
+
+.rd-datepicker-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+}
+
+.rd-datepicker-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+}
+
+.rd-datepicker-weekday {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.rd-datepicker-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.rd-datepicker-day {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #ffffff;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  margin: 0 auto;
+}
+
+.rd-datepicker-day:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15) !important;
+  transform: scale(1.08);
+}
+
+.rd-datepicker-day--outside {
+  color: rgba(255, 255, 255, 0.2) !important;
+  pointer-events: none;
+}
+
+.rd-datepicker-day--disabled {
+  color: rgba(255, 255, 255, 0.15) !important;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+.rd-datepicker-day--selected {
+  background: linear-gradient(135deg, #ffd064, #d9a736) !important;
+  color: #16120f !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 12px rgba(255, 208, 100, 0.5) !important;
+}
+
+.rd-datepicker-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 12px;
+  gap: 8px;
+}
+
+.rd-datepicker-footer-btn {
+  flex: 1;
+  margin-bottom: 0 !important;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Custom Time Picker (Apple style) ── */
+.rd-timepicker-dropdown {
+  width: 280px !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding: 16px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rd-timepicker-columns {
+  display: flex;
+  gap: 12px;
+}
+
+.rd-timepicker-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rd-timepicker-col-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 4px;
+}
+
+.rd-timepicker-col-list {
+  height: 160px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 4px;
+}
+
+/* Scrollbar styling for time list */
+.rd-timepicker-col-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.rd-timepicker-col-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rd-timepicker-col-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 99px;
+}
+
+.rd-timepicker-item {
+  width: 100%;
+  min-height: 36px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.rd-timepicker-item:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+.rd-timepicker-item--selected {
+  background: rgba(255, 208, 100, 0.15) !important;
+  color: #ffd064 !important;
+  font-weight: 700 !important;
+  border: 1px solid rgba(255, 208, 100, 0.3) !important;
+}
+
+.rd-timepicker-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 12px;
+}
+
+.rd-timepicker-warning {
+  font-size: 12px;
+  color: #f87171;
+  text-align: center;
+  display: block;
+}
+
+.rd-timepicker-done-btn {
+  width: 100%;
+  margin-top: 4px !important;
+}
+
+/* Styled Input inside Time Picker & Date Picker */
+.rd-field .rd-timepicker-input,
+.rd-field .rd-datepicker-input {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-radius: 0 !important;
+  height: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: #ffffff !important;
+  font-family: inherit !important;
+  font-size: 15px !important;
+  width: 100% !important;
+}
+
+.rd-field .rd-timepicker-input:focus,
+.rd-field .rd-datepicker-input:focus {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.rd-timepicker-input::placeholder,
+.rd-datepicker-input::placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
 }
