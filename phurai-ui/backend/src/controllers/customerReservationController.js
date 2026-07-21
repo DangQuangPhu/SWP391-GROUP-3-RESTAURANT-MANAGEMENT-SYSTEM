@@ -54,9 +54,9 @@ export const createPreSaveReservation = async (req, res) => {
     const BASE_TABLE_DEPOSIT = 20000;
 
     if (promo_code) {
-       const { checkVoucherValidity } = await import("./vouchersController.js");
+       const { checkPromoCodeValidity } = await import("./promoCodesController.js");
        // Validate against items_total (the preorder items total only)
-       const result = await checkVoucherValidity(promo_code, items_total);
+       const result = await checkPromoCodeValidity(promo_code, items_total);
        
        if (!result.isValid) {
          return res.status(400).json({ success: false, message: result.message });
@@ -280,7 +280,7 @@ export const applyPromoCodeToReservation = async (req, res) => {
       return res.status(400).json({ success: false, message: "A promo code has already been applied" });
     }
 
-    const { checkVoucherValidity } = await import("./vouchersController.js");
+    const { checkPromoCodeValidity } = await import("./promoCodesController.js");
     
     // Calculate the preorder items total from PreorderItems in the DB
     const itemsTotalResult = await pool.request()
@@ -289,65 +289,65 @@ export const applyPromoCodeToReservation = async (req, res) => {
     const preorderItemsTotal = parseFloat(itemsTotalResult.recordset[0].items_total);
 
     if (preorderItemsTotal <= 0) {
-      return res.status(400).json({ success: false, message: "Voucher can only be applied to reservations with food preorder." });
+      return res.status(400).json({ success: false, message: "Promotion can only be applied to reservations with food preorder." });
     }
 
-    // Check if it's a customer-redeemed loyalty voucher
-    const userVoucherResult = await pool.request()
+    // Check if it's a customer-redeemed loyalty promotion
+    const userPromoResult = await pool.request()
       .input('code', sql.NVarChar(50), promo_code)
       .input('userId', sql.Int, req.userId || 0)
       .query(`
-        SELECT cv.customer_voucher_id, cv.status, cv.expires_at, p.applicable_to, p.discount_type, p.discount_value, p.min_order_value, p.promotion_name
-        FROM dbo.CustomerVouchers cv
+        SELECT cv.customer_promotion_id, cv.status, cv.expires_at, p.applicable_to, p.discount_type, p.discount_value, p.min_order_value, p.promotion_name
+        FROM dbo.CustomerPromotions cv
         JOIN dbo.Promotions p ON cv.promotion_id = p.promotion_id
-        WHERE cv.voucher_code = @code AND cv.customer_id = @userId
+        WHERE cv.promo_code = @code AND cv.customer_id = @userId
       `);
 
     let discount_amount = 0;
-    let customerVoucherId = null;
+    let customerPromotionId = null;
     let promoName = '';
 
-    if (userVoucherResult.recordset.length > 0) {
-      const voucher = userVoucherResult.recordset[0];
+    if (userPromoResult.recordset.length > 0) {
+      const promotion = userPromoResult.recordset[0];
       
       // Check status
-      if (voucher.status !== 'active') {
-        return res.status(400).json({ success: false, message: `Voucher is already ${voucher.status}` });
+      if (promotion.status !== 'active') {
+        return res.status(400).json({ success: false, message: `Promotion is already ${promotion.status}` });
       }
 
       // Check expiry
-      if (new Date(voucher.expires_at) <= new Date()) {
+      if (new Date(promotion.expires_at) <= new Date()) {
         await pool.request()
-          .input('voucherId', sql.Int, voucher.customer_voucher_id)
-          .query("UPDATE dbo.CustomerVouchers SET status = N'expired' WHERE customer_voucher_id = @voucherId");
-        return res.status(400).json({ success: false, message: "Voucher has expired" });
+          .input('promoId', sql.Int, promotion.customer_promotion_id)
+          .query("UPDATE dbo.CustomerPromotions SET status = N'expired' WHERE customer_promotion_id = @promoId");
+        return res.status(400).json({ success: false, message: "Promotion has expired" });
       }
 
       // Check applicability
-      if (voucher.applicable_to !== 'Both' && voucher.applicable_to !== 'Reservation') {
-        return res.status(400).json({ success: false, message: "Voucher is only applicable to Orders" });
+      if (promotion.applicable_to !== 'Both' && promotion.applicable_to !== 'Reservation') {
+        return res.status(400).json({ success: false, message: "Promotion is only applicable to Orders" });
       }
 
       // Check minimum order value
-      if (preorderItemsTotal < parseFloat(voucher.min_order_value)) {
+      if (preorderItemsTotal < parseFloat(promotion.min_order_value)) {
         return res.status(400).json({ 
           success: false, 
-          message: `Minimum order value of ${parseFloat(voucher.min_order_value).toLocaleString()} VND required to apply this voucher.` 
+          message: `Minimum order value of ${parseFloat(promotion.min_order_value).toLocaleString()} VND required to apply this promotion.` 
         });
       }
 
       // Calculate discount
-      if (voucher.discount_type === 'Fixed') {
-        discount_amount = parseFloat(voucher.discount_value);
-      } else if (voucher.discount_type === 'Percent') {
-        discount_amount = preorderItemsTotal * (parseFloat(voucher.discount_value) / 100);
+      if (promotion.discount_type === 'Fixed') {
+        discount_amount = parseFloat(promotion.discount_value);
+      } else if (promotion.discount_type === 'Percent') {
+        discount_amount = preorderItemsTotal * (parseFloat(promotion.discount_value) / 100);
       }
       discount_amount = Math.min(discount_amount, preorderItemsTotal);
-      customerVoucherId = voucher.customer_voucher_id;
-      promoName = voucher.promotion_name;
+      customerPromotionId = promotion.customer_promotion_id;
+      promoName = promotion.promotion_name;
     } else {
       // Fallback to traditional promo code check
-      const result = await checkVoucherValidity(promo_code, preorderItemsTotal, 'Reservation');
+      const result = await checkPromoCodeValidity(promo_code, preorderItemsTotal, 'Reservation');
       if (!result.isValid) {
         return res.status(400).json({ success: false, message: result.message });
       }
@@ -367,29 +367,29 @@ export const applyPromoCodeToReservation = async (req, res) => {
       await transaction.request()
         .input('resId', sql.Int, reservationId)
         .input('promo', sql.VarChar(50), promo_code)
-        .input('voucherId', sql.Int, customerVoucherId)
+        .input('promoId', sql.Int, customerPromotionId)
         .input('newDeposit', sql.Decimal(12,2), new_deposit_amount)
         .input('newFinalTotal', sql.Decimal(12,2), new_final_total)
         .query(`
           UPDATE dbo.Reservations 
           SET applied_promo_code = @promo, 
-              applied_voucher_id = @voucherId,
+              applied_promotion_id = @promoId,
               deposit_amount = @newDeposit, 
               final_total = @newFinalTotal
           WHERE reservation_id = @resId
         `);
 
-      // If it's a customer-redeemed voucher, mark it used
-      if (customerVoucherId) {
+      // If it's a customer-redeemed promotion, mark it used
+      if (customerPromotionId) {
         await transaction.request()
-          .input('voucherId', sql.Int, customerVoucherId)
+          .input('promoId', sql.Int, customerPromotionId)
           .input('resId', sql.Int, reservationId)
           .query(`
-            UPDATE dbo.CustomerVouchers
+            UPDATE dbo.CustomerPromotions
             SET status = N'used',
                 used_at = SYSDATETIME(),
                 used_in_reservation_id = @resId
-            WHERE customer_voucher_id = @voucherId
+            WHERE customer_promotion_id = @promoId
           `);
       }
 

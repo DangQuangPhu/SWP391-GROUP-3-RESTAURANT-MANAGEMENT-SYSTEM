@@ -280,8 +280,8 @@ router.post("/register", async (req, res) => {
       userId,
     });
 
-    // Grant Welcome Voucher to new users (non-fatal if it fails)
-    await grantWelcomeVoucher(userId);
+    // Grant Welcome Promotion to new users (non-fatal if it fails)
+    await grantWelcomePromotion(userId);
 
     return res.status(201).json({
       message: "Registration successful. Please verify your email.",
@@ -411,12 +411,12 @@ router.post("/auth/verify-otp", async (req, res) => {
 });
 
 /**
- * Grants a "Welcome" voucher to a newly registered customer.
+ * Grants a "Welcome" promotion to a newly registered customer.
  * Finds the first active promotion with points_required = 0 and promotion_name LIKE 'Welcome%'.
- * Inserts into CustomerVouchers and creates a Promotion notification.
+ * Inserts into CustomerPromotions and creates a Promotion notification.
  * Non-fatal: errors are logged but not rethrown.
  */
-async function grantWelcomeVoucher(userId) {
+async function grantWelcomePromotion(userId) {
   try {
     // Find active welcome promotion
     const [promoRows] = await pool.query(`
@@ -433,28 +433,28 @@ async function grantWelcomeVoucher(userId) {
     const promo = promoRows[0];
     if (!promo) return; // No welcome promotion configured yet
 
-    // Generate unique voucher code
+    // Generate unique promo code
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let voucherCode = 'WELCOME-';
-    for (let i = 0; i < 6; i++) voucherCode += chars[Math.floor(Math.random() * chars.length)];
+    let promoCode = 'WELCOME-';
+    for (let i = 0; i < 6; i++) promoCode += chars[Math.floor(Math.random() * chars.length)];
 
     const hoursValid = promo.validity_duration_hours || 720; // 30 days default
     const expiresAt = new Date(Date.now() + hoursValid * 60 * 60 * 1000);
 
     await pool.query(`
-      IF NOT EXISTS (SELECT 1 FROM dbo.CustomerVouchers WHERE customer_id = ? AND promotion_id = ?)
+      IF NOT EXISTS (SELECT 1 FROM dbo.CustomerPromotions WHERE customer_id = ? AND promotion_id = ?)
       BEGIN
-        INSERT INTO dbo.CustomerVouchers
-          (customer_id, promotion_id, points_spent, voucher_code, status, redeemed_at, expires_at)
+        INSERT INTO dbo.CustomerPromotions
+          (customer_id, promotion_id, points_spent, promo_code, status, redeemed_at, expires_at)
         VALUES (?, ?, 0, ?, N'active', SYSDATETIME(), ?)
       END
-    `, [userId, promo.promotion_id, userId, promo.promotion_id, voucherCode, expiresAt]);
+    `, [userId, promo.promotion_id, userId, promo.promotion_id, promoCode, expiresAt]);
 
     // Send a notification (type must be 'Promotion' per DB CHECK constraint)
     await pool.query(`
       INSERT INTO dbo.Notifications (user_id, notification_type, title, message_body, is_read, sent_at)
       VALUES (?, N'Promotion', N'🎉 Welcome Gift Received!',
-        N'You have received a welcome voucher (${voucherCode}). Use it on your first order or reservation!',
+        N'You have received a welcome promotion code (${promoCode}). Use it on your first order or reservation!',
         0, SYSDATETIME())
     `, [userId]);
 
@@ -465,17 +465,17 @@ async function grantWelcomeVoucher(userId) {
       if (io) {
         io.to(`user_${userId}`).emit("STAFF_ACTION_UPDATE", {
           title: "🎉 Welcome Gift Received!",
-          message: `You have received a welcome voucher (${voucherCode}). Use it on your first order or reservation!`,
+          message: `You have received a welcome promo code (${promoCode}). Use it on your first order or reservation!`,
           type: "Promotion"
         });
       }
     } catch (socketErr) {
-      console.warn('[Auth] Socket emit failed for welcome voucher:', socketErr.message);
+      console.warn('[Auth] Socket emit failed for welcome promo:', socketErr.message);
     }
 
   } catch (err) {
     // Non-fatal — log and continue
-    console.warn('[Auth] grantWelcomeVoucher failed (non-fatal):', err.message);
+    console.warn('[Auth] grantWelcomePromotion failed (non-fatal):', err.message);
   }
 }
 
@@ -533,8 +533,8 @@ async function upsertGoogleUser(googleProfile, { requireOtp = false } = {}) {
     [userId, getEmailPrefix(googleProfile.email), serializePreferences([])]
   );
 
-  // Grant Welcome Voucher to new users (non-fatal if it fails)
-  await grantWelcomeVoucher(userId);
+  // Grant Welcome Promotion to new users (non-fatal if it fails)
+  await grantWelcomePromotion(userId);
 
   return fetchProfileByEmail(googleProfile.email);
 }

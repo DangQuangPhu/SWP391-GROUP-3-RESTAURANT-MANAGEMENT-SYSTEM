@@ -5,7 +5,16 @@ import { Skeleton } from "@/components/ui/Skeleton.jsx";
 import "../styles/PreorderModal.css";
 
 function resolveImage(url) {
-  if (!url) return menuImages.hero;
+  if (!url || String(url).trim() === "null" || String(url).trim() === "undefined") {
+    return menuImages.hero;
+  }
+  
+  // If it's a dynamic upload path or absolute URL (from backend / internet)
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/uploads') || url.startsWith('/api')) {
+    return url;
+  }
+
+  // Parse filename from path to map to static local assets (like '/menu/yellowtail-jalapeno.jpg')
   const filename = url.split('/').pop().replace(/\.\w+$/, '');
   const camel = filename.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
   return menuImages[camel] || menuImages.hero;

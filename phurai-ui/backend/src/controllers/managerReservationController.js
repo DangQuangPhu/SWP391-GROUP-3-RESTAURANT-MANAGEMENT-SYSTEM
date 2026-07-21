@@ -1725,7 +1725,7 @@ export const clearTestReservations = async (req, res) => {
         if (paymentRows.length > 0) {
           const paymentIds = paymentRows.map(p => p.payment_id);
           const paymentPlaceholders = paymentIds.map(() => '?').join(',');
-          await connection.query(`DELETE FROM dbo.VoucherRedemptions WHERE payment_id IN (${paymentPlaceholders})`, paymentIds);
+          await connection.query(`DELETE FROM dbo.PromotionRedemptions WHERE payment_id IN (${paymentPlaceholders})`, paymentIds);
         }
 
         await connection.query(`DELETE FROM dbo.CustomerReviews WHERE order_id IN (${orderPlaceholders})`, orderIds);

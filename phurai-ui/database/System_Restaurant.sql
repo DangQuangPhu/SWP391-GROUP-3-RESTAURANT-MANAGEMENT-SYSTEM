@@ -16,45 +16,35 @@ USE [System_Restaurant];
 GO
 
 -- ============================================================================
--- 0. CLEANUP: DROP EXISTING TABLES (Từ Con đến Cha)
+-- 0. CLEANUP: DYNAMICALLY WIPE ALL FOREIGN KEYS, TABLES AND FUNCTIONS
 -- ============================================================================
-DROP TABLE IF EXISTS dbo.TableOccupancySessions;
-DROP TABLE IF EXISTS dbo.RecommendationLogs;
-DROP TABLE IF EXISTS dbo.AuditLogs;
-DROP TABLE IF EXISTS dbo.ReportSnapshots;
-DROP TABLE IF EXISTS dbo.CustomerReviews;
-DROP TABLE IF EXISTS dbo.Notifications;
-DROP TABLE IF EXISTS dbo.VoucherRedemptions;
-DROP TABLE IF EXISTS dbo.Vouchers;
-DROP TABLE IF EXISTS dbo.Promotions;
-DROP TABLE IF EXISTS dbo.Payments;
-DROP TABLE IF EXISTS dbo.PaymentMethods;
-DROP TABLE IF EXISTS dbo.BillSplits;
-DROP TABLE IF EXISTS dbo.KitchenTickets;
-DROP TABLE IF EXISTS dbo.KitchenDevices;   -- KDS Device Auth
-DROP TABLE IF EXISTS dbo.OrderItems;
-DROP TABLE IF EXISTS dbo.Orders;
-DROP TABLE IF EXISTS dbo.QROrderSessions;
-DROP TABLE IF EXISTS dbo.PreorderItems;
-DROP TABLE IF EXISTS dbo.ReservationTimelines;
-DROP TABLE IF EXISTS dbo.ReservationTables;
-DROP TABLE IF EXISTS dbo.Reservations;
-DROP TABLE IF EXISTS dbo.DishImages;
-DROP TABLE IF EXISTS dbo.Dishes;
-DROP TABLE IF EXISTS dbo.MenuCategories;
-DROP TABLE IF EXISTS dbo.ShiftLogs;
-DROP TABLE IF EXISTS dbo.StaffSchedules;
-DROP TABLE IF EXISTS dbo.Shifts;
-DROP TABLE IF EXISTS dbo.RestaurantTables;
-DROP TABLE IF EXISTS dbo.RestaurantAreas;
-DROP TABLE IF EXISTS dbo.RestaurantSettings;
-DROP TABLE IF EXISTS dbo.PerformanceReviews; -- Employee Registry
-DROP TABLE IF EXISTS dbo.StaffProfiles;
-DROP TABLE IF EXISTS dbo.CustomerProfiles;
-DROP TABLE IF EXISTS dbo.OtpTokens;
-DROP TABLE IF EXISTS dbo.UserAccounts;
-DROP TABLE IF EXISTS dbo.JobTitles;          -- Employee Registry lookup
-DROP TABLE IF EXISTS dbo.Roles;
+-- 0.1. Drop all Foreign Key Constraints first
+DECLARE @drop_fks NVARCHAR(MAX) = N'';
+SELECT @drop_fks += N'ALTER TABLE ' + QUOTENAME(tc.TABLE_SCHEMA) + N'.' + QUOTENAME(tc.TABLE_NAME) 
+                  + N' DROP CONSTRAINT ' + QUOTENAME(rc.CONSTRAINT_NAME) + N';' + CHAR(13)
+FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
+JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc ON rc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME;
+
+IF @drop_fks <> N'' EXEC sp_executesql @drop_fks;
+GO
+
+-- 0.2. Drop all Tables dynamically (avoids listing them manually and missing new ones)
+DECLARE @drop_tables NVARCHAR(MAX) = N'';
+SELECT @drop_tables += N'DROP TABLE ' + QUOTENAME(TABLE_SCHEMA) + N'.' + QUOTENAME(TABLE_NAME) + N';' + CHAR(13)
+FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_TYPE = 'BASE TABLE';
+
+IF @drop_tables <> N'' EXEC sp_executesql @drop_tables;
+GO
+
+-- 0.3. Drop the fn_HasPendingRequest function dynamically if it still exists
+IF OBJECT_ID('dbo.fn_HasPendingRequest', 'FN') IS NOT NULL
+    DROP FUNCTION dbo.fn_HasPendingRequest;
+GO
+IF OBJECT_ID('dbo.fn_HasPendingRequest', 'TF') IS NOT NULL
+    DROP FUNCTION dbo.fn_HasPendingRequest;
+GO
+
 
 GO
 
@@ -302,16 +292,7 @@ CREATE TABLE dbo.Dishes (
 );
 GO
 
-CREATE TABLE dbo.DishImages (
-    image_id      INT IDENTITY(1,1) NOT NULL,
-    dish_id       INT NOT NULL,
-    image_url     NVARCHAR(500) NOT NULL,
-    is_primary    BIT NOT NULL CONSTRAINT DF_DishImages_is_primary DEFAULT 0,
-    created_at    DATETIME2(0) NOT NULL CONSTRAINT DF_DishImages_created_at DEFAULT SYSDATETIME(),
-    CONSTRAINT PK_DishImages PRIMARY KEY (image_id),
-    CONSTRAINT FK_DishImages_Dishes FOREIGN KEY (dish_id) REFERENCES dbo.Dishes(dish_id) ON DELETE CASCADE
-);
-GO
+
 
 -- ============================================================================
 -- MODULE 4: RESERVATION SYSTEM
@@ -361,7 +342,7 @@ CREATE TABLE dbo.Reservations (
     resolved_by           INT NULL,
     created_at            DATETIME2(0) NOT NULL CONSTRAINT DF_Reservations_created_at DEFAULT SYSDATETIME(),
     updated_at            DATETIME2(0) NOT NULL CONSTRAINT DF_Reservations_updated_at DEFAULT SYSDATETIME(),
-    applied_voucher_id    INT NULL,
+    applied_promotion_id  INT NULL,
     CONSTRAINT PK_Reservations PRIMARY KEY (reservation_id),
     CONSTRAINT FK_Reservations_Customer FOREIGN KEY (customer_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE SET NULL,
     CONSTRAINT FK_Reservations_CreatedByStaff FOREIGN KEY (created_by_staff_id) REFERENCES dbo.UserAccounts(user_id),
@@ -538,7 +519,7 @@ CREATE TABLE dbo.Orders (
     applied_promo_code  NVARCHAR(40) NULL,
     created_at          DATETIME2(0) NOT NULL CONSTRAINT DF_Orders_created_at DEFAULT SYSDATETIME(),
     updated_at          DATETIME2(0) NOT NULL CONSTRAINT DF_Orders_updated_at DEFAULT SYSDATETIME(),
-    applied_voucher_id  INT NULL,
+    applied_promotion_id INT NULL,
     CONSTRAINT PK_Orders PRIMARY KEY (order_id),
     CONSTRAINT FK_Orders_Reservations FOREIGN KEY (reservation_id) REFERENCES dbo.Reservations(reservation_id) ON DELETE SET NULL,
     CONSTRAINT FK_Orders_RestaurantTables FOREIGN KEY (table_id) REFERENCES dbo.RestaurantTables(table_id) ON DELETE CASCADE,
@@ -710,61 +691,61 @@ CREATE TABLE dbo.Promotions (
 );
 GO
 
-CREATE TABLE dbo.Vouchers (
-    voucher_id    INT IDENTITY(1,1) NOT NULL,
+CREATE TABLE dbo.PromoCodes (
+    promo_code_id INT IDENTITY(1,1) NOT NULL,
     promotion_id  INT NOT NULL,
-    voucher_code  NVARCHAR(40) NOT NULL,
-    usage_limit   INT NOT NULL CONSTRAINT DF_Vouchers_usage_limit DEFAULT 1,
-    times_used    INT NOT NULL CONSTRAINT DF_Vouchers_times_used DEFAULT 0,
-    is_active     BIT NOT NULL CONSTRAINT DF_Vouchers_is_active DEFAULT 1,
-    created_at    DATETIME2(0) NOT NULL CONSTRAINT DF_Vouchers_created_at DEFAULT SYSDATETIME(),
-    updated_at    DATETIME2(0) NOT NULL CONSTRAINT DF_Vouchers_updated_at DEFAULT SYSDATETIME(),
-    CONSTRAINT PK_Vouchers PRIMARY KEY (voucher_id),
-    CONSTRAINT UQ_Vouchers_code UNIQUE (voucher_code),
-    CONSTRAINT FK_Vouchers_Promotions FOREIGN KEY (promotion_id) REFERENCES dbo.Promotions(promotion_id) ON DELETE CASCADE,
-    CONSTRAINT CK_Vouchers_usage CHECK (usage_limit > 0 AND times_used >= 0 AND times_used <= usage_limit)
+    promo_code    NVARCHAR(40) NOT NULL,
+    usage_limit   INT NOT NULL CONSTRAINT DF_PromoCodes_usage_limit DEFAULT 1,
+    times_used    INT NOT NULL CONSTRAINT DF_PromoCodes_times_used DEFAULT 0,
+    is_active     BIT NOT NULL CONSTRAINT DF_PromoCodes_is_active DEFAULT 1,
+    created_at    DATETIME2(0) NOT NULL CONSTRAINT DF_PromoCodes_created_at DEFAULT SYSDATETIME(),
+    updated_at    DATETIME2(0) NOT NULL CONSTRAINT DF_PromoCodes_updated_at DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_PromoCodes PRIMARY KEY (promo_code_id),
+    CONSTRAINT UQ_PromoCodes_code UNIQUE (promo_code),
+    CONSTRAINT FK_PromoCodes_Promotions FOREIGN KEY (promotion_id) REFERENCES dbo.Promotions(promotion_id) ON DELETE CASCADE,
+    CONSTRAINT CK_PromoCodes_usage CHECK (usage_limit > 0 AND times_used >= 0 AND times_used <= usage_limit)
 );
 GO
 
-CREATE TABLE dbo.VoucherRedemptions (
+CREATE TABLE dbo.PromotionRedemptions (
     redemption_id    INT IDENTITY(1,1) NOT NULL,
-    voucher_id       INT NOT NULL,
+    promo_code_id    INT NOT NULL,
     payment_id       INT NOT NULL,
     customer_id      INT NULL,
     discount_amount  DECIMAL(12,2) NOT NULL,
-    redeemed_at      DATETIME2(0) NOT NULL CONSTRAINT DF_VoucherRedemptions_redeemed_at DEFAULT SYSDATETIME(),
-    CONSTRAINT PK_VoucherRedemptions PRIMARY KEY (redemption_id),
-    CONSTRAINT UQ_VoucherRedemptions_payment UNIQUE (payment_id),
-    CONSTRAINT FK_VoucherRedemptions_Vouchers FOREIGN KEY (voucher_id) REFERENCES dbo.Vouchers(voucher_id) ON DELETE CASCADE,
-    CONSTRAINT FK_VoucherRedemptions_Payments FOREIGN KEY (payment_id) REFERENCES dbo.Payments(payment_id) ON DELETE CASCADE,
-    CONSTRAINT FK_VoucherRedemptions_Customer FOREIGN KEY (customer_id) REFERENCES dbo.UserAccounts(user_id),
-    CONSTRAINT CK_VoucherRedemptions_discount CHECK (discount_amount >= 0)
+    redeemed_at      DATETIME2(0) NOT NULL CONSTRAINT DF_PromotionRedemptions_redeemed_at DEFAULT SYSDATETIME(),
+    CONSTRAINT PK_PromotionRedemptions PRIMARY KEY (redemption_id),
+    CONSTRAINT UQ_PromotionRedemptions_payment UNIQUE (payment_id),
+    CONSTRAINT FK_PromotionRedemptions_PromoCodes FOREIGN KEY (promo_code_id) REFERENCES dbo.PromoCodes(promo_code_id) ON DELETE CASCADE,
+    CONSTRAINT FK_PromotionRedemptions_Payments FOREIGN KEY (payment_id) REFERENCES dbo.Payments(payment_id) ON DELETE CASCADE,
+    CONSTRAINT FK_PromotionRedemptions_Customer FOREIGN KEY (customer_id) REFERENCES dbo.UserAccounts(user_id),
+    CONSTRAINT CK_PromotionRedemptions_discount CHECK (discount_amount >= 0)
 );
 GO
 
-CREATE TABLE dbo.CustomerVouchers (
-    customer_voucher_id INT IDENTITY(1,1) NOT NULL,
-    customer_id         INT NOT NULL,
-    promotion_id        INT NOT NULL,
-    points_spent        INT NOT NULL,
-    voucher_code        NVARCHAR(50) NOT NULL,
-    status              NVARCHAR(20) NOT NULL CONSTRAINT DF_CustomerVouchers_status DEFAULT N'active', -- 'active', 'used', 'expired'
-    redeemed_at         DATETIME2(0) NOT NULL CONSTRAINT DF_CustomerVouchers_redeemed DEFAULT SYSDATETIME(),
-    expires_at          DATETIME2(0) NOT NULL,
-    used_at             DATETIME2(0) NULL,
-    used_in_order_id    INT NULL,
+CREATE TABLE dbo.CustomerPromotions (
+    customer_promotion_id INT IDENTITY(1,1) NOT NULL,
+    customer_id           INT NOT NULL,
+    promotion_id          INT NOT NULL,
+    points_spent          INT NOT NULL,
+    promo_code            NVARCHAR(50) NOT NULL,
+    status                NVARCHAR(20) NOT NULL CONSTRAINT DF_CustomerPromotions_status DEFAULT N'active', -- 'active', 'used', 'expired'
+    redeemed_at           DATETIME2(0) NOT NULL CONSTRAINT DF_CustomerPromotions_redeemed DEFAULT SYSDATETIME(),
+    expires_at            DATETIME2(0) NOT NULL,
+    used_at               DATETIME2(0) NULL,
+    used_in_order_id      INT NULL,
     used_in_reservation_id INT NULL,
-    CONSTRAINT PK_CustomerVouchers PRIMARY KEY (customer_voucher_id),
-    CONSTRAINT UQ_CustomerVouchers_code UNIQUE (voucher_code),
-    CONSTRAINT FK_CustomerVouchers_Customer FOREIGN KEY (customer_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE CASCADE,
-    CONSTRAINT FK_CustomerVouchers_Promotions FOREIGN KEY (promotion_id) REFERENCES dbo.Promotions(promotion_id) ON DELETE CASCADE,
-    CONSTRAINT FK_CustomerVouchers_Orders FOREIGN KEY (used_in_order_id) REFERENCES dbo.Orders(order_id) ON DELETE SET NULL,
-    CONSTRAINT FK_CustomerVouchers_Reservations FOREIGN KEY (used_in_reservation_id) REFERENCES dbo.Reservations(reservation_id) ON DELETE SET NULL,
-    CONSTRAINT CK_CustomerVouchers_status CHECK (status IN (N'active', N'used', N'expired'))
+    CONSTRAINT PK_CustomerPromotions PRIMARY KEY (customer_promotion_id),
+    CONSTRAINT UQ_CustomerPromotions_code UNIQUE (promo_code),
+    CONSTRAINT FK_CustomerPromotions_Customer FOREIGN KEY (customer_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE CASCADE,
+    CONSTRAINT FK_CustomerPromotions_Promotions FOREIGN KEY (promotion_id) REFERENCES dbo.Promotions(promotion_id) ON DELETE CASCADE,
+    CONSTRAINT FK_CustomerPromotions_Orders FOREIGN KEY (used_in_order_id) REFERENCES dbo.Orders(order_id) ON DELETE SET NULL,
+    CONSTRAINT FK_CustomerPromotions_Reservations FOREIGN KEY (used_in_reservation_id) REFERENCES dbo.Reservations(reservation_id) ON DELETE SET NULL,
+    CONSTRAINT CK_CustomerPromotions_status CHECK (status IN (N'active', N'used', N'expired'))
 );
 GO
 
-CREATE INDEX IX_CustomerVouchers_StatusExpiry ON dbo.CustomerVouchers (status, expires_at);
+CREATE INDEX IX_CustomerPromotions_StatusExpiry ON dbo.CustomerPromotions (status, expires_at);
 GO
 
 CREATE TABLE dbo.LoyaltyTransactions (
@@ -779,20 +760,20 @@ CREATE TABLE dbo.LoyaltyTransactions (
     CONSTRAINT PK_LoyaltyTransactions PRIMARY KEY (transaction_id),
     CONSTRAINT FK_LoyaltyTransactions_Customer FOREIGN KEY (customer_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE CASCADE,
     CONSTRAINT CK_LoyaltyTransactions_type CHECK (transaction_type IN (N'Earn', N'Redeem')),
-    CONSTRAINT CK_LoyaltyTransactions_refType CHECK (reference_type IN (N'Order', N'Reservation', N'Payment', N'VoucherRedeem'))
+    CONSTRAINT CK_LoyaltyTransactions_refType CHECK (reference_type IN (N'Order', N'Reservation', N'Payment', N'PromotionRedeem'))
 );
 GO
 
 CREATE INDEX IX_LoyaltyTransactions_Customer ON dbo.LoyaltyTransactions (customer_id);
 GO
 
--- Add constraints for applied_voucher_id
+-- Add constraints for applied_promotion_id
 ALTER TABLE dbo.Orders
-ADD CONSTRAINT FK_Orders_AppliedVoucher FOREIGN KEY (applied_voucher_id) REFERENCES dbo.CustomerVouchers(customer_voucher_id);
+ADD CONSTRAINT FK_Orders_AppliedPromotion FOREIGN KEY (applied_promotion_id) REFERENCES dbo.CustomerPromotions(customer_promotion_id);
 GO
 
 ALTER TABLE dbo.Reservations
-ADD CONSTRAINT FK_Reservations_AppliedVoucher FOREIGN KEY (applied_voucher_id) REFERENCES dbo.CustomerVouchers(customer_voucher_id);
+ADD CONSTRAINT FK_Reservations_AppliedPromotion FOREIGN KEY (applied_promotion_id) REFERENCES dbo.CustomerPromotions(customer_promotion_id);
 GO
 
 CREATE TABLE dbo.BillSplits (
@@ -963,7 +944,7 @@ CREATE INDEX IX_OrderItems_dish ON dbo.OrderItems(dish_id);
 CREATE INDEX IX_KitchenTickets_status_sent ON dbo.KitchenTickets(kitchen_status, sent_at);
 CREATE INDEX IX_Payments_paid_at ON dbo.Payments(paid_at);
 CREATE INDEX IX_Payments_order ON dbo.Payments(order_id);
-CREATE INDEX IX_Vouchers_promotion ON dbo.Vouchers(promotion_id);
+CREATE INDEX IX_PromoCodes_promotion ON dbo.PromoCodes(promotion_id);
 CREATE UNIQUE INDEX UQ_CustomerReviews_order ON dbo.CustomerReviews(order_id) WHERE order_id IS NOT NULL;
 CREATE UNIQUE INDEX UQ_CustomerReviews_reservation ON dbo.CustomerReviews(reservation_id) WHERE reservation_id IS NOT NULL;
 CREATE INDEX IX_CustomerReviews_order ON dbo.CustomerReviews(order_id);
@@ -1163,7 +1144,7 @@ SET IDENTITY_INSERT dbo.CustomerProfiles OFF;
 GO
 
 UPDATE dbo.UserAccounts
-SET avatar_url = N'/avatars/avatar-2.svg', created_at = '2025-07-13T00:00:00', updated_at = '2025-07-13T00:00:00'
+SET avatar_url = NULL, created_at = '2025-07-13T00:00:00', updated_at = '2025-07-13T00:00:00'
 WHERE user_id = 12;
 GO
 
@@ -1368,30 +1349,6 @@ VALUES
 SET IDENTITY_INSERT dbo.Dishes OFF;
 GO
 
-SET IDENTITY_INSERT dbo.DishImages ON;
-INSERT INTO dbo.DishImages (image_id, dish_id, image_url, is_primary) VALUES
-(1, 1, N'/menu/yellowtail-jalapeno.jpg', 1),
-(2, 2, N'/menu/toro-tartare.jpg', 1),
-(3, 3, N'/menu/fluke-sashimi.jpg', 1),
-(4, 4, N'/menu/new-style-sashimi.jpg', 1),
-(5, 5, N'/menu/salmon-new-style.jpg', 1),
-(6, 6, N'/menu/seafood-udon.jpg', 1),
-(7, 7, N'/menu/wagyu-fried-rice.jpg', 1),
-(8, 8, N'/menu/lobster-fried-rice.jpg', 1),
-(9, 9, N'/menu/black-cod-miso.jpg', 1),
-(10, 10, N'/menu/rock-shrimp-tempura.jpg', 1),
-(11, 11, N'/menu/lobster-wasabi-pepper.jpg', 1),
-(12, 12, N'/menu/grilled-salmon.jpg', 1),
-(13, 13, N'/menu/japanese-a5-wagyu.jpg', 1),
-(14, 14, N'/menu/grilled-lamb-chops.jpg', 1),
-(15, 15, N'/menu/bento-chocolate-cake.jpg', 1),
-(16, 16, N'/menu/miso-cappuccino.jpg', 1),
-(17, 17, N'/menu/hokusetsu-junmai.jpg', 1),
-(18, 18, N'/menu/lychee-martini.jpg', 1),
-(19, 19, N'/menu/omakase-experience.jpg', 1),
-(20, 20, N'/menu/signature-tasting.jpg', 1);
-SET IDENTITY_INSERT dbo.DishImages OFF;
-GO
 
 -- ── Seed: KitchenDevices ────────────────────────────────────────────────────
 -- PIN hashes below = bcrypt of '1234' (test only — regenerate in production).
@@ -1576,20 +1533,20 @@ VALUES
 SET IDENTITY_INSERT dbo.Promotions OFF;
 GO
 
-SET IDENTITY_INSERT dbo.Vouchers ON;
-INSERT INTO dbo.Vouchers (voucher_id, promotion_id, voucher_code, usage_limit, times_used, is_active) VALUES
+SET IDENTITY_INSERT dbo.PromoCodes ON;
+INSERT INTO dbo.PromoCodes (promo_code_id, promotion_id, promo_code, usage_limit, times_used, is_active) VALUES
 (1, 1, N'WEEKEND10', 100, 12, 1),
 (2, 2, N'NEWMEM50', 200, 5, 1),
 (3, 2, N'WELCOME50', 200, 3, 1),
 (4, 3, N'VIPSUMMER', 50, 1, 1);
-SET IDENTITY_INSERT dbo.Vouchers OFF;
+SET IDENTITY_INSERT dbo.PromoCodes OFF;
 GO
 
-SET IDENTITY_INSERT dbo.VoucherRedemptions ON;
-INSERT INTO dbo.VoucherRedemptions (redemption_id, voucher_id, payment_id, customer_id, discount_amount, redeemed_at) VALUES
+SET IDENTITY_INSERT dbo.PromotionRedemptions ON;
+INSERT INTO dbo.PromotionRedemptions (redemption_id, promo_code_id, payment_id, customer_id, discount_amount, redeemed_at) VALUES
 (1, 2, 100002, 7, 50000, '2026-04-10T21:00:00'),
 (2, 1, 100003, 8, 50000, '2026-04-15T21:30:00');
-SET IDENTITY_INSERT dbo.VoucherRedemptions OFF;
+SET IDENTITY_INSERT dbo.PromotionRedemptions OFF;
 GO
 
 SET IDENTITY_INSERT dbo.Notifications ON;
@@ -1683,9 +1640,6 @@ GO
 SELECT dish_id, category_id, dish_name, description, price, cost_price, is_available, is_recommended, allow_preorder, preorder_sort, spicy_level, prep_time_min, is_preorderable, created_at, updated_at FROM dbo.Dishes;
 GO
 
--- tiếng việt -- 14. Lấy dữ liệu bảng Hình ảnh Món ăn (DishImages)
-SELECT image_id, dish_id, image_url, is_primary, created_at FROM dbo.DishImages;
-GO
 
 -- tiếng việt -- 15. Lấy dữ liệu bảng Đặt bàn (Reservations)
 SELECT reservation_id, customer_id, contact_name, contact_phone, contact_email, created_by_staff_id, preferred_area_id, reservation_start_at, reservation_end_at, guest_count, special_request, reservation_status, reservation_source, confirmed_by_staff_id, confirmed_at, checked_in_at, cancelled_at, checked_out_at, cancel_reason, reminder_sent, has_pending_request, pending_changes_json, edit_used_count, request_type, rejected_at, rejected_by, resolved_at, resolved_by, created_at, updated_at FROM dbo.Reservations;
@@ -1726,12 +1680,12 @@ GO
 SELECT promotion_id, promotion_name, description, discount_type, discount_value, min_order_value, max_discount, start_at, end_at, is_active, created_by_staff_id, created_at, updated_at FROM dbo.Promotions;
 GO
 
--- tiếng việt -- 25. Lấy dữ liệu bảng Mã Giảm giá (Vouchers)
-SELECT voucher_id, promotion_id, voucher_code, usage_limit, times_used, is_active, created_at, updated_at FROM dbo.Vouchers;
+-- tiếng việt -- 25. Lấy dữ liệu bảng Mã Giảm giá (PromoCodes)
+SELECT promo_code_id, promotion_id, promo_code, usage_limit, times_used, is_active, created_at, updated_at FROM dbo.PromoCodes;
 GO
 
--- tiếng việt -- 26. Lấy dữ liệu bảng Lịch sử Dùng Mã Giảm giá (VoucherRedemptions)
-SELECT redemption_id, voucher_id, payment_id, customer_id, discount_amount, redeemed_at FROM dbo.VoucherRedemptions;
+-- tiếng việt -- 26. Lấy dữ liệu bảng Lịch sử Dùng Mã Giảm giá (PromotionRedemptions)
+SELECT redemption_id, promo_code_id, payment_id, customer_id, discount_amount, redeemed_at FROM dbo.PromotionRedemptions;
 GO
 
 -- tiếng việt -- 27. Lấy dữ liệu bảng Chia tiền hóa đơn (BillSplits)
@@ -1984,7 +1938,7 @@ DELETE FROM dbo.OrderItems WHERE order_id IN (SELECT order_id FROM dbo.Orders WH
 DELETE FROM dbo.Payments WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE customer_id IN (SELECT user_id FROM @PhuUsers));
 DELETE FROM dbo.Orders WHERE customer_id IN (SELECT user_id FROM @PhuUsers);
 DELETE FROM dbo.Reservations WHERE customer_id IN (SELECT user_id FROM @PhuUsers);
-DELETE FROM dbo.CustomerVouchers WHERE customer_id IN (SELECT user_id FROM @PhuUsers);
+DELETE FROM dbo.CustomerPromotions WHERE customer_id IN (SELECT user_id FROM @PhuUsers);
 DELETE FROM dbo.LoyaltyTransactions WHERE customer_id IN (SELECT user_id FROM @PhuUsers);
 
 -- 1. Ensure a CustomerProfile exists for the customer account
@@ -2017,11 +1971,11 @@ SELECT source.user_id, 760, N'Earn', N'Payment', N'Points earned from premium di
 FROM @PhuUsers source;
 
 INSERT INTO dbo.LoyaltyTransactions (customer_id, points, transaction_type, reference_type, description, created_at)
-SELECT source.user_id, -100, N'Redeem', N'VoucherRedeem', N'Redeemed 50K Voucher', DATEADD(day, -2, GETDATE())
+SELECT source.user_id, -100, N'Redeem', N'PromotionRedeem', N'Redeemed 50K Voucher', DATEADD(day, -2, GETDATE())
 FROM @PhuUsers source;
 
--- 3. Insert Vouchers into CustomerVouchers (so the user has active and used vouchers)
-INSERT INTO dbo.CustomerVouchers (customer_id, promotion_id, points_spent, voucher_code, status, redeemed_at, expires_at)
+-- 3. Insert Vouchers into CustomerPromotions (so the user has active and used promotions)
+INSERT INTO dbo.CustomerPromotions (customer_id, promotion_id, points_spent, promo_code, status, redeemed_at, expires_at)
 SELECT source.user_id, 4, 100, N'PHU50K_' + CAST(source.user_id AS NVARCHAR(10)), N'active', DATEADD(day, -2, GETDATE()), DATEADD(day, 28, GETDATE())
 FROM @PhuUsers source;
 

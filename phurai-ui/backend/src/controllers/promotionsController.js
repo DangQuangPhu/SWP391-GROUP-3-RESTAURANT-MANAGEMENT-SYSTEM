@@ -9,8 +9,8 @@ export const getAllPromotions = async (req, res) => {
         p.promotion_id, 
         p.promotion_name,
         p.description,
-        v.voucher_code AS promo_code, 
-        v.voucher_id,
+        v.promo_code AS promo_code, 
+        v.promo_code_id AS promo_code_id,
         UPPER(p.discount_type) AS discount_type, 
         p.discount_value, 
         p.max_discount AS max_discount_amount, 
@@ -24,7 +24,7 @@ export const getAllPromotions = async (req, res) => {
         p.created_at, 
         p.updated_at
       FROM dbo.Promotions p
-      LEFT JOIN dbo.Vouchers v ON p.promotion_id = v.promotion_id
+      LEFT JOIN dbo.PromoCodes v ON p.promotion_id = v.promotion_id
       ORDER BY p.created_at DESC
     `);
 
@@ -83,12 +83,12 @@ export const createPromotion = async (req, res) => {
 
     const pool = await getRawPool();
 
-    // Check uniqueness of promo_code in Vouchers
+    // Check uniqueness of promo_code in PromoCodes
     let checkResult;
     try {
       checkResult = await pool.request()
         .input('promo_code', sql.NVarChar(40), promo_code)
-        .query(`SELECT voucher_id FROM dbo.Vouchers WHERE voucher_code = @promo_code`);
+        .query(`SELECT promo_code_id FROM dbo.PromoCodes WHERE promo_code = @promo_code`);
     } catch (err) {
       console.error("DEBUG ERR in Check:", err.message);
       throw err;
@@ -142,28 +142,28 @@ export const createPromotion = async (req, res) => {
 
     const promotionId = promoResult.recordset[0].promotion_id;
 
-    // 2. Insert into Vouchers
-    let voucherResult;
+    // 2. Insert into PromoCodes
+    let promoCodeResult;
     try {
-      voucherResult = await transaction.request()
+      promoCodeResult = await transaction.request()
         .input('promotion_id', sql.Int, promotionId)
-        .input('voucher_code', sql.NVarChar(40), promo_code)
+        .input('promo_code', sql.NVarChar(40), promo_code)
         .input('usage_limit', sql.Int, parsedUsageLimit || 999999)
         .input('times_used', sql.Int, 0)
         .input('is_active', sql.Bit, 1)
         .query(`
-          INSERT INTO dbo.Vouchers (
-            promotion_id, voucher_code, usage_limit, times_used, is_active, 
+          INSERT INTO dbo.PromoCodes (
+            promotion_id, promo_code, usage_limit, times_used, is_active, 
             created_at, updated_at
           )
           OUTPUT inserted.*
           VALUES (
-            @promotion_id, @voucher_code, @usage_limit, @times_used, @is_active,
+            @promotion_id, @promo_code, @usage_limit, @times_used, @is_active,
             SYSDATETIME(), SYSDATETIME()
           )
         `);
     } catch (err) {
-      console.error("DEBUG ERR in Insert Vouchers:", err.message);
+      console.error("DEBUG ERR in Insert PromoCodes:", err.message);
       throw err;
     }
 
@@ -178,7 +178,7 @@ export const createPromotion = async (req, res) => {
       min_order_value: min_order_value || 0,
       start_at: valid_from,
       end_at: valid_until,
-      voucher_code: promo_code,
+      promo_code: promo_code,
       usage_limit: parsedUsageLimit || 999999,
       applicable_to: normalizedApplicableTo,
       points_required: parsedPointsRequired,
@@ -189,8 +189,8 @@ export const createPromotion = async (req, res) => {
     try {
       await transaction.request()
         .input('user_id', sql.Int, managerId)
-        .input('action_name', sql.VarChar(100), 'CREATE_PROMOTION_VOUCHER')
-        .input('target_table', sql.VarChar(100), 'Promotions/Vouchers')
+        .input('action_name', sql.VarChar(100), 'CREATE_PROMOTION_CODE')
+        .input('target_table', sql.VarChar(100), 'Promotions/PromoCodes')
         .input('target_id', sql.Int, promotionId)
         .input('new_value_json', sql.NVarChar(sql.MAX), JSON.stringify(auditPayload))
         .input('ip_address', sql.VarChar(50), req.ip || 'unknown')
@@ -211,14 +211,14 @@ export const createPromotion = async (req, res) => {
 
     await transaction.commit();
 
-    const newVoucher = voucherResult.recordset[0];
+    const newPromoCode = promoCodeResult.recordset[0];
 
     res.status(201).json({
       success: true,
       message: "Promotion created successfully",
       data: {
-        promotion_id: newVoucher.voucher_id,
-        promo_code: newVoucher.voucher_code,
+        promotion_id: newPromoCode.promo_code_id,
+        promo_code: newPromoCode.promo_code,
         discount_type,
         discount_value,
         max_discount_amount,
@@ -246,7 +246,7 @@ export const createPromotion = async (req, res) => {
 export const updatePromotion = async (req, res) => {
   let transaction;
   try {
-    const { id } = req.params; // voucher_id
+    const { id } = req.params; // promo_code_id
     const {
       promo_code, discount_type, discount_value, max_discount_amount,
       min_order_value, valid_from, valid_until, usage_limit, applicable_to
@@ -267,22 +267,22 @@ export const updatePromotion = async (req, res) => {
 
     const pool = await getRawPool();
 
-    // Find the voucher and promotion
-    const voucherRes = await pool.request()
-      .input('voucher_id', sql.Int, id)
-      .query('SELECT promotion_id, voucher_code FROM dbo.Vouchers WHERE voucher_id = @voucher_id');
+    // Find the promo code and promotion
+    const promoCodeRes = await pool.request()
+      .input('promo_code_id', sql.Int, id)
+      .query('SELECT promotion_id, promo_code FROM dbo.PromoCodes WHERE promo_code_id = @promo_code_id');
 
-    if (voucherRes.recordset.length === 0) {
-      return res.status(404).json({ success: false, message: "Promotion/Voucher not found" });
+    if (promoCodeRes.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: "Promotion/PromoCode not found" });
     }
-    const promotionId = voucherRes.recordset[0].promotion_id;
-    const currentCode = voucherRes.recordset[0].voucher_code;
+    const promotionId = promoCodeRes.recordset[0].promotion_id;
+    const currentCode = promoCodeRes.recordset[0].promo_code;
 
     // Check code uniqueness if changed
     if (currentCode !== promo_code) {
       const checkResult = await pool.request()
         .input('promo_code', sql.NVarChar(40), promo_code)
-        .query(`SELECT voucher_id FROM dbo.Vouchers WHERE voucher_code = @promo_code`);
+        .query(`SELECT promo_code_id FROM dbo.PromoCodes WHERE promo_code = @promo_code`);
       if (checkResult.recordset.length > 0) {
         return res.status(409).json({ success: false, message: "Promotion code already exists" });
       }
@@ -323,15 +323,15 @@ export const updatePromotion = async (req, res) => {
       `);
 
     await transaction.request()
-      .input('voucher_id', sql.Int, id)
-      .input('voucher_code', sql.NVarChar(40), promo_code)
+      .input('promo_code_id', sql.Int, id)
+      .input('promo_code', sql.NVarChar(40), promo_code)
       .input('usage_limit', sql.Int, usage_limit || 999999)
       .query(`
-        UPDATE dbo.Vouchers SET
-          voucher_code = @voucher_code,
+        UPDATE dbo.PromoCodes SET
+          promo_code = @promo_code,
           usage_limit = @usage_limit,
           updated_at = SYSDATETIME()
-        WHERE voucher_id = @voucher_id
+        WHERE promo_code_id = @promo_code_id
       `);
 
     await transaction.commit();
@@ -351,20 +351,20 @@ export const updatePromotion = async (req, res) => {
 
 export const togglePromotionStatus = async (req, res) => {
   try {
-    const { id } = req.params; // this is voucher_id from the UI
+    const { id } = req.params; // promo_code_id
     const pool = await getRawPool();
 
     const result = await pool.request()
       .input('id', sql.Int, id)
       .query(`
-        UPDATE dbo.Vouchers 
+        UPDATE dbo.PromoCodes 
         SET is_active = is_active ^ 1, updated_at = SYSDATETIME()
         OUTPUT inserted.is_active
-        WHERE voucher_id = @id
+        WHERE promo_code_id = @id
       `);
 
     if (result.rowsAffected[0] === 0) {
-      return res.status(404).json({ success: false, message: "Promotion/Voucher not found" });
+      return res.status(404).json({ success: false, message: "Promotion/PromoCode not found" });
     }
 
     res.json({
@@ -380,19 +380,18 @@ export const togglePromotionStatus = async (req, res) => {
 
 export const deletePromotion = async (req, res) => {
   try {
-    const { id } = req.params; // this is voucher_id
+    const { id } = req.params; // promo_code_id
     const pool = await getRawPool();
 
-    // Deleting the voucher. The promotion will remain, which is fine since promotions can have multiple vouchers.
     const result = await pool.request()
       .input('id', sql.Int, id)
       .query(`
-        DELETE FROM dbo.Vouchers
-        WHERE voucher_id = @id
+        DELETE FROM dbo.PromoCodes
+        WHERE promo_code_id = @id
       `);
 
     if (result.rowsAffected[0] === 0) {
-      return res.status(404).json({ success: false, message: "Promotion/Voucher not found" });
+      return res.status(404).json({ success: false, message: "Promotion/PromoCode not found" });
     }
 
     res.json({
@@ -445,16 +444,16 @@ export const checkPromoValidity = async (code, orderValue, context = 'All') => {
 
   const pool = await getRawPool();
   const result = await pool.request()
-    .input('voucher_code', sql.NVarChar(40), code)
+    .input('promo_code', sql.NVarChar(40), code)
     .query(`
       SELECT 
-        p.promotion_id, v.voucher_id, v.voucher_code AS promo_code, 
+        p.promotion_id, v.promo_code_id AS promo_code_id, v.promo_code, 
         p.discount_type, p.discount_value, p.max_discount AS max_discount_amount, 
         p.min_order_value, v.usage_limit, v.times_used AS used_count,
         p.applicable_to
-      FROM dbo.Vouchers v
+      FROM dbo.PromoCodes v
       JOIN dbo.Promotions p ON v.promotion_id = p.promotion_id
-      WHERE v.voucher_code = @voucher_code 
+      WHERE v.promo_code = @promo_code 
         AND v.is_active = 1 
         AND p.is_active = 1
         AND p.start_at <= SYSDATETIME() 

@@ -19,7 +19,7 @@ export async function submitReservation(req, res, next) {
       dining_purpose,
       hold_time,
       preorder_items = [],
-      voucher_code,
+      promo_code,
       // Guest contact fields — always stored directly in dbo.Reservations
       // so data is never lost regardless of whether the user is authenticated.
       guest_name,
@@ -46,24 +46,24 @@ export async function submitReservation(req, res, next) {
       return res.status(400).json({ error: 'guest_count must be between 1 and 12.' });
     }
 
-    let resolvedVoucher = null;
-    if (voucher_code && String(voucher_code).trim() !== '') {
+    let resolvedPromo = null;
+    if (promo_code && String(promo_code).trim() !== '') {
       const vRows = await query(
-        `SELECT v.voucher_id, p.promotion_name, p.discount_type, p.discount_value
-         FROM dbo.Vouchers v
+        `SELECT v.promo_code_id, p.promotion_name, p.discount_type, p.discount_value
+         FROM dbo.PromoCodes v
          JOIN dbo.Promotions p ON v.promotion_id = p.promotion_id
-         WHERE v.voucher_code  = @Code
+         WHERE v.promo_code  = @Code
            AND v.is_active     = 1
            AND p.is_active     = 1
            AND v.times_used    < v.usage_limit
            AND p.start_at     <= SYSDATETIME()
            AND p.end_at       >= SYSDATETIME()`,
-        { Code: voucher_code.trim() }
+        { Code: promo_code.trim() }
       );
       if (vRows.length === 0) {
-        return res.status(400).json({ error: `Voucher "${voucher_code}" is invalid, expired, or fully used.` });
+        return res.status(400).json({ error: `Promo code "${promo_code}" is invalid, expired, or fully used.` });
       }
-      resolvedVoucher = vRows[0];
+      resolvedPromo = vRows[0];
     }
 
     const enrichedPreorders = [];
@@ -214,7 +214,7 @@ export async function submitReservation(req, res, next) {
             `Reservation #${reservationId} from Customer ID ${customerId} is created and awaiting payment. ` +
             `${guestNum} guests · ${startAt.toLocaleString('en-GB')}` +
             (enrichedPreorders.length > 0 ? ` · ${enrichedPreorders.length} pre-order item(s)` : '') +
-            (resolvedVoucher ? ` · Voucher: ${voucher_code}` : '') +
+            (resolvedPromo ? ` · Promo Code: ${promo_code}` : '') +
             `. Pending 15m timeout.`,
         });
       }
@@ -233,7 +233,7 @@ export async function submitReservation(req, res, next) {
           guest_count: guestNum,
           table_id: table_id || null,
           preorder_count: enrichedPreorders.length,
-          voucher_code: voucher_code || null,
+          promo_code: promo_code || null,
           auto_confirmed: true,
         },
         ip: req.ip,
@@ -254,7 +254,7 @@ export async function submitReservation(req, res, next) {
         preferred_area_id: preferred_area_id || null,
         table_id: table_id || null,
         has_preorder: enrichedPreorders.length > 0,
-        has_voucher: !!resolvedVoucher,
+        has_promo: !!resolvedPromo,
         dining_purpose: dining_purpose || null,
       });
     }
@@ -390,7 +390,7 @@ export const getCustomerPaymentDetails = async (req, res) => {
                 SELECT 
                     oi.order_item_id, oi.quantity, oi.unit_price, oi.line_total AS subtotal, oi.notes AS note,
                     d.dish_name AS item_name,
-                    (SELECT TOP 1 image_url FROM dbo.DishImages di WHERE di.dish_id = d.dish_id AND di.is_primary = 1) AS image_url
+                    CONCAT('/api/dishes/', d.dish_id, '/image') AS image_url
                 FROM dbo.OrderItems oi
                 JOIN dbo.Dishes d ON oi.dish_id = d.dish_id
                 WHERE oi.order_id = @orderId
@@ -684,7 +684,7 @@ export const getCustomerDetailedOrderItems = async (req, res) => {
           oi.quantity,
           oi.unit_price,
           oi.line_total as subtotal,
-          (SELECT TOP 1 di.image_url FROM dbo.DishImages di WHERE di.dish_id = d.dish_id AND di.is_primary = 1) AS image_url
+          CONCAT('/api/dishes/', d.dish_id, '/image') AS image_url
         FROM dbo.OrderItems oi
         JOIN dbo.Orders o ON oi.order_id = o.order_id
         JOIN dbo.Dishes d ON oi.dish_id = d.dish_id
@@ -701,7 +701,7 @@ export const getCustomerDetailedOrderItems = async (req, res) => {
           pi.quantity,
           pi.unit_price,
           (pi.quantity * pi.unit_price) as subtotal,
-          (SELECT TOP 1 di.image_url FROM dbo.DishImages di WHERE di.dish_id = d.dish_id AND di.is_primary = 1) AS image_url
+          CONCAT('/api/dishes/', d.dish_id, '/image') AS image_url
         FROM dbo.PreorderItems pi
         JOIN dbo.Reservations r ON pi.reservation_id = r.reservation_id
         JOIN dbo.Dishes d ON pi.dish_id = d.dish_id
@@ -917,7 +917,7 @@ export const getActivityOrderItems = async (req, res) => {
            oi.line_total AS subtotal, oi.notes,
            d.dish_name,
            mc.category_name,
-           (SELECT TOP 1 di.image_url FROM dbo.DishImages di WHERE di.dish_id = d.dish_id AND di.is_primary = 1) AS image_url
+           CONCAT('/api/dishes/', d.dish_id, '/image') AS image_url
          FROM dbo.OrderItems oi
          JOIN dbo.Dishes d ON oi.dish_id = d.dish_id
          LEFT JOIN dbo.MenuCategories mc ON d.category_id = mc.category_id
@@ -963,7 +963,7 @@ export const getActivityOrderItems = async (req, res) => {
            pi.notes,
            d.dish_name,
            mc.category_name,
-           (SELECT TOP 1 di.image_url FROM dbo.DishImages di WHERE di.dish_id = d.dish_id AND di.is_primary = 1) AS image_url
+           CONCAT('/api/dishes/', d.dish_id, '/image') AS image_url
          FROM dbo.PreorderItems pi
          JOIN dbo.Dishes d ON pi.dish_id = d.dish_id
          LEFT JOIN dbo.MenuCategories mc ON d.category_id = mc.category_id

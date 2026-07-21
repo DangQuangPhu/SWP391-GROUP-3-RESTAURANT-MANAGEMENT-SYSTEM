@@ -433,17 +433,17 @@ export async function generateAndSeed(pool) {
   const loyalPromoId   = promoRows.find(r => r.promotion_name.startsWith('Loyal'))?.promotion_id;
   const resPromoId     = promoRows.find(r => r.promotion_name.startsWith('Reservation'))?.promotion_id;
 
-  if (welcomePromoId && loyalPromoId && resPromoId) {
-    // Seed global Vouchers pool entries for each promotion
+    if (welcomePromoId && loyalPromoId && resPromoId) {
+    // Seed global PromoCodes pool entries for each promotion
     const globalVouchers = [
       `(${welcomePromoId}, N'WELCOME-PROMO', 9999, 9, 1, SYSDATETIME(), SYSDATETIME())`,
       `(${loyalPromoId},   N'LOYAL10-PROMO', 200,  15, 1, SYSDATETIME(), SYSDATETIME())`,
       `(${resPromoId},     N'RES30K-PROMO',  150,  7,  1, SYSDATETIME(), SYSDATETIME())`,
     ];
-    await executeInserts(pool, 'Vouchers', 'promotion_id, voucher_code, usage_limit, times_used, is_active, created_at, updated_at', globalVouchers, false);
+    await executeInserts(pool, 'PromoCodes', 'promotion_id, promo_code, usage_limit, times_used, is_active, created_at, updated_at', globalVouchers, false);
 
-    // ── CustomerVouchers for Demo User (user_id=15) ─────────────────────────
-    console.log('  Inserting customer vouchers for demo user...');
+    // ── CustomerPromotions for Demo User (user_id=15) ─────────────────────────
+    console.log('  Inserting customer promotions for demo user...');
     const in30Days  = new Date(); in30Days.setDate(in30Days.getDate() + 30);
     const in2Days   = new Date(); in2Days.setDate(in2Days.getDate() + 2);
     const pastExp   = new Date(); pastExp.setDate(pastExp.getDate() - 5);
@@ -458,17 +458,17 @@ export async function generateAndSeed(pool) {
       // Expired: Old welcome voucher
       `(15, ${welcomePromoId}, 0,   N'WELCOME-U15-EXP', N'expired', '${pastExp.toISOString()}', '${pastExp.toISOString()}', NULL, NULL, NULL)`,
     ];
-    await executeInserts(pool, 'CustomerVouchers',
-      'customer_id, promotion_id, points_spent, voucher_code, status, redeemed_at, expires_at, used_at, used_in_order_id, used_in_reservation_id',
+    await executeInserts(pool, 'CustomerPromotions',
+      'customer_id, promotion_id, points_spent, promo_code, status, redeemed_at, expires_at, used_at, used_in_order_id, used_in_reservation_id',
       customerVouchers, false
     );
 
     // ── Notifications for Demo User ─────────────────────────────────────────
     console.log('  Inserting notifications for demo user...');
     const notifications = [
-      `(15, N'Promotion', N'🎉 Welcome Gift Received!', N'You have received a welcome voucher (WELCOME-U15-A1). Use it on your first order or reservation!', 0, SYSDATETIME())`,
-      `(15, N'Promotion', N'⭐ Voucher Redeemed: Loyal Diner 10%', N'Voucher LOYAL10-U15-A2 is now active. Expires in 48 hours — apply it at checkout!', 0, SYSDATETIME())`,
-      `(15, N'Promotion', N'✅ Voucher Used: Reservation Discount 30K', N'Voucher RES30K-U15-USED was applied and saved you 30.000đ on your reservation.', 1, SYSDATETIME())`,
+      `(15, N'Promotion', N'🎉 Welcome Gift Received!', N'You have received a welcome promo code (WELCOME-U15-A1). Use it on your first order or reservation!', 0, SYSDATETIME())`,
+      `(15, N'Promotion', N'⭐ Promo Code Redeemed: Loyal Diner 10%', N'Promo Code LOYAL10-U15-A2 is now active. Expires in 48 hours — apply it at checkout!', 0, SYSDATETIME())`,
+      `(15, N'Promotion', N'✅ Promo Code Used: Reservation Discount 30K', N'Promo Code RES30K-U15-USED was applied and saved you 30.000đ on your reservation.', 1, SYSDATETIME())`,
     ];
     await executeInserts(pool, 'Notifications',
       'user_id, notification_type, title, message_body, is_read, sent_at',

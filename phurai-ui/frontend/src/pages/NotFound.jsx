@@ -91,7 +91,7 @@ function getErrorContent({ pathname = "", currentUser, isAuthenticated }) {
       type: "admin-permission-required",
       title: "Admin Permission Required",
       subtitle: "This page is only available to system administrators.",
-      description: "Managers can manage restaurant operations, reports, staff scheduling, reservations, menu items, vouchers, and inventory, but cannot access system-level admin controls.",
+      description: "Managers can manage restaurant operations, reports, staff scheduling, reservations, menu items, promotions, and inventory, but cannot access system-level admin controls.",
       primaryAction: { label: "Go to Manager Dashboard", target: "manager" },
       secondaryAction: { label: "Back to Home", target: "home" },
     };

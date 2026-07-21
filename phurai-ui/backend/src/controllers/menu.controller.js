@@ -81,17 +81,17 @@ export async function getAvailableTables(req, res, next) {
   } catch (err) { next(err); }
 }
 
-export async function getActiveVouchers(req, res, next) {
+export async function getActivePromoCodes(req, res, next) {
   try {
-    const vouchers = await query(
+    const promoCodes = await query(
       `SELECT
-         v.voucher_id, v.voucher_code,
+         v.promo_code_id, v.promo_code,
          v.usage_limit, v.times_used,
          p.promotion_name, p.description,
          p.discount_type, p.discount_value,
          p.min_order_value, p.max_discount,
          p.end_at
-       FROM dbo.Vouchers v
+       FROM dbo.PromoCodes v
        JOIN dbo.Promotions p ON v.promotion_id = p.promotion_id
        WHERE v.is_active = 1
          AND p.is_active = 1
@@ -100,6 +100,6 @@ export async function getActiveVouchers(req, res, next) {
          AND p.end_at    >= SYSDATETIME()
        ORDER BY p.discount_type, p.discount_value DESC`
     );
-    return res.json({ vouchers });
+    return res.json({ promoCodes: promoCodes });
   } catch (err) { next(err); }
 }

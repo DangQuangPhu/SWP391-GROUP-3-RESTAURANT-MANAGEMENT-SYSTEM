@@ -6,7 +6,7 @@ import {
   NotConnectedNote,
 } from "./StaffUI.jsx";
 import {
-  applyStaffVoucher,
+  applyStaffPromoCode,
   checkoutStaffPayment,
   fetchStaffBill,
   voidStaffBill,
@@ -73,7 +73,7 @@ function StaffPaymentTab({
   const [selectedTableId, setSelectedTableId] = useState("");
   const [bill, setBill] = useState(null);
   const [billLoading, setBillLoading] = useState(false);
-  const [voucherCode, setVoucherCode] = useState("");
+  const [promoCode, setPromoCode] = useState("");
   const [paymentMethodId, setPaymentMethodId] = useState(1);
   const [amountPaid, setAmountPaid] = useState("");
   const [busyKey, setBusyKey] = useState(null);
@@ -162,22 +162,22 @@ function StaffPaymentTab({
     return paid - total;
   }, [amountPaid, bill?.total_amount]);
 
-  const handleApplyVoucher = async () => {
-    if (!manager || !selectedTableId || !voucherCode.trim()) return;
+  const handleApplyPromoCode = async () => {
+    if (!manager || !selectedTableId || !promoCode.trim()) return;
     setBusyKey("voucher");
     try {
-      const res = await applyStaffVoucher(
+      const res = await applyStaffPromoCode(
         Number(selectedTableId),
         userId,
-        voucherCode.trim()
+        promoCode.trim()
       );
       if (res?.data) {
         setBill(res.data);
         setAmountPaid(String(res.data.total_amount ?? ""));
-        toast(`Voucher applied: ${res.data.applied_voucher?.voucher_code || ""}`, "success");
+        toast(`Promo code applied: ${res.data.applied_promo?.promo_code || ""}`, "success");
       }
     } catch (error) {
-      toast(error.message || "Could not apply voucher", "error");
+      toast(error.message || "Could not apply promo code", "error");
     } finally {
       setBusyKey(null);
     }
@@ -190,7 +190,7 @@ function StaffPaymentTab({
       const res = await checkoutStaffPayment(Number(selectedTableId), userId, {
         payment_method_id: paymentMethodId,
         amount_paid: Number(amountPaid),
-        voucher_id: bill.applied_voucher?.voucher_id ?? null,
+        promo_code_id: bill.applied_promo?.promo_code_id ?? null,
       });
       const payload = res?.data;
       setCheckoutSuccess(payload);
@@ -204,7 +204,7 @@ function StaffPaymentTab({
       );
       setBill(null);
       setSelectedTableId("");
-      setVoucherCode("");
+      setPromoCode("");
       onRefresh?.();
     } catch (error) {
       toast(error.message || "Payment failed", "error");
@@ -237,7 +237,7 @@ function StaffPaymentTab({
     });
     setBill(null);
     setSelectedTableId("");
-    setVoucherCode("");
+    setPromoCode("");
 
     setBusyKey("confirm_cash");
     try {
@@ -556,7 +556,7 @@ function StaffPaymentTab({
                     </div>
                   )}
 
-                  <h3>Apply voucher</h3>
+                  <h3>Apply promo code</h3>
                   <p className="staff-payment-panel__hint">
                     Manual discounts are available to managers only.
                   </p>
@@ -564,31 +564,31 @@ function StaffPaymentTab({
                   <div className="staff-voucher-field">
                     <input
                       type="text"
-                      value={voucherCode}
-                      onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
                       placeholder="WEEKEND10, NEWMEM50…"
-                      disabled={!manager || busyKey === "voucher"}
+                      disabled={!manager || busyKey === "promo"}
                     />
                     <Button
                       variant="ghost"
-                      onClick={handleApplyVoucher}
-                      disabled={!manager || !voucherCode.trim() || busyKey === "voucher"}
+                      onClick={handleApplyPromoCode}
+                      disabled={!manager || !promoCode.trim() || busyKey === "promo"}
                     >
                       Apply
                     </Button>
                   </div>
 
-                  {!manager ? (
+                  {!manager && (
                     <span className="staff-voucher-lock">
                       <LockIcon />
-                      Only managers can apply vouchers
+                      Only managers can apply promo codes
                     </span>
-                  ) : null}
+                  )}
 
-                  {bill.applied_voucher ? (
+                  {bill.applied_promo ? (
                     <p className="staff-voucher-applied">
-                      Applied: {bill.applied_voucher.voucher_code} (
-                      {bill.applied_voucher.promotion_name})
+                      Applied: {bill.applied_promo.promo_code} (
+                      {bill.applied_promo.promotion_name})
                     </p>
                   ) : null}
 

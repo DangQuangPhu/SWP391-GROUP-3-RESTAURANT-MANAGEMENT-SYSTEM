@@ -21,28 +21,28 @@ export async function getLoyaltyCatalog(userId) {
 }
 
 /**
- * Redeems loyalty points for a voucher template.
+ * Redeems loyalty points for a promotion template.
  * @param {string|number} userId 
- * @param {number} voucherTemplateId 
+ * @param {number} promotionTemplateId 
  */
-export async function redeemVoucher(userId, voucherTemplateId) {
+export async function redeemPromotion(userId, promotionTemplateId) {
   return await request('/loyalty/redeem', {
     method: 'POST',
     headers: {
       ...profileRequestHeaders(userId),
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ voucherTemplateId }),
+    body: JSON.stringify({ promotionTemplateId }),
   });
 }
 
 /**
- * Retrieves the list of vouchers owned by the customer.
+ * Retrieves the list of promotions owned by the customer.
  * @param {string|number} userId 
  * @param {string} [status] - 'active' | 'used' | 'expired'
  */
-export async function getMyVouchers(userId, status) {
-  let url = '/loyalty/my-vouchers';
+export async function getMyPromotions(userId, status) {
+  let url = '/loyalty/my-promotions';
   if (status) {
     url += `?status=${encodeURIComponent(status)}`;
   }
@@ -52,12 +52,12 @@ export async function getMyVouchers(userId, status) {
 }
 
 /**
- * Applies a customer voucher to an order or reservation.
+ * Applies a customer promotion to an order or reservation.
  * @param {string|number} userId 
- * @param {object} payload - { customerVoucherId, orderId, reservationId }
+ * @param {object} payload - { customerPromotionId, orderId, reservationId }
  */
-export async function applyVoucher(userId, payload) {
-  return await request('/loyalty/apply-voucher', {
+export async function applyPromotion(userId, payload) {
+  return await request('/loyalty/apply-promotion', {
     method: 'POST',
     headers: {
       ...profileRequestHeaders(userId),

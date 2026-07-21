@@ -46,7 +46,7 @@ export const VIEW_SUBTITLE = {
   menu: "Menu items and best-sellers",
   orders: "Active orders and kitchen queue",
   staff: "Staff roster, shifts and working status",
-  promotions: "Campaigns, vouchers and discounts",
+  promotions: "Campaigns, promo codes and discounts",
   reports: "Revenue, statistics and exports",
   ratings: "Customer feedback and ratings",
 };

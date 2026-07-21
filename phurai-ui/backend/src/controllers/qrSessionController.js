@@ -656,10 +656,9 @@ export async function getQrSessionHistory(req, res) {
         .query(`
           SELECT 
             oi.order_item_id, oi.order_id, oi.quantity, oi.unit_price, oi.item_status, oi.notes, oi.line_total,
-            d.dish_name, di.image_url, o.order_type
+            d.dish_name, CONCAT('/api/dishes/', d.dish_id, '/image') AS image_url, o.order_type
           FROM dbo.OrderItems oi
           JOIN dbo.Dishes d ON oi.dish_id = d.dish_id
-          LEFT JOIN dbo.DishImages di ON d.dish_id = di.dish_id AND di.is_primary = 1
           JOIN dbo.Orders o ON oi.order_id = o.order_id
           WHERE oi.order_id = @orderId AND oi.item_status != N'Cancelled'
         `);
@@ -851,11 +850,11 @@ export async function updateOrderItemQuantity(req, res) {
   }
 }
 
-export async function applyVoucherToQrSession(req, res) {
+export async function applyPromoCodeToQrSession(req, res) {
   const { token } = req.params;
-  const { voucher_code } = req.body;
-  if (!token || !voucher_code) {
-    return res.status(400).json({ success: false, message: "Token and voucher_code are required." });
+  const { promo_code } = req.body;
+  if (!token || !promo_code) {
+    return res.status(400).json({ success: false, message: "Token and promo_code are required." });
   }
 
   const conn = await pool.getConnection();
@@ -889,38 +888,38 @@ export async function applyVoucherToQrSession(req, res) {
     const order = orders[0];
     if (order.discount_amount > 0) {
       await conn.rollback();
-      return res.status(400).json({ success: false, message: "A voucher has already been applied to this order." });
+      return res.status(400).json({ success: false, message: "A promo code has already been applied to this order." });
     }
 
-    // 3. Validate Voucher & Promotion
-    const [vouchers] = await conn.query(
-      `SELECT v.voucher_id, v.voucher_code, v.usage_limit, v.times_used, 
+    // 3. Validate PromoCode & Promotion
+    const [promoCodes] = await conn.query(
+      `SELECT v.promo_code_id, v.promo_code, v.usage_limit, v.times_used, 
               p.promotion_id, p.discount_type, p.discount_value, p.max_discount, 
               p.min_order_value, p.start_at, p.end_at, p.applicable_to
-       FROM dbo.Vouchers v
+       FROM dbo.PromoCodes v
        JOIN dbo.Promotions p ON v.promotion_id = p.promotion_id
-       WHERE v.voucher_code = ? AND v.is_active = 1 AND p.is_active = 1`,
-      [voucher_code]
+       WHERE v.promo_code = ? AND v.is_active = 1 AND p.is_active = 1`,
+      [promo_code]
     );
 
-    if (vouchers.length === 0) {
+    if (promoCodes.length === 0) {
       await conn.rollback();
-      return res.status(400).json({ success: false, message: "Invalid or inactive voucher." });
+      return res.status(400).json({ success: false, message: "Invalid or inactive promo code." });
     }
 
-    const promo = vouchers[0];
+    const promo = promoCodes[0];
     const now = new Date();
     if (now < new Date(promo.start_at) || now > new Date(promo.end_at)) {
       await conn.rollback();
-      return res.status(400).json({ success: false, message: "Voucher is expired or not yet active." });
+      return res.status(400).json({ success: false, message: "Promo code is expired or not yet active." });
     }
     if (promo.usage_limit && promo.times_used >= promo.usage_limit) {
       await conn.rollback();
-      return res.status(400).json({ success: false, message: "Voucher usage limit reached." });
+      return res.status(400).json({ success: false, message: "Promo code usage limit reached." });
     }
     if (promo.applicable_to === 'Reservation') {
       await conn.rollback();
-      return res.status(400).json({ success: false, message: "This voucher is only applicable to reservations." });
+      return res.status(400).json({ success: false, message: "This promo code is only applicable to reservations." });
     }
     if (order.subtotal < promo.min_order_value) {
       await conn.rollback();
@@ -950,13 +949,13 @@ export async function applyVoucherToQrSession(req, res) {
         total_amount = subtotal - ? + ISNULL(service_charge, 0),
         applied_promo_code = ?
           WHERE order_id = ? `,
-      [discountAmount, discountAmount, voucher_code, order.order_id]
+      [discountAmount, discountAmount, promo_code, order.order_id]
     );
 
     // 6. [CRITICAL FIX] Deduct Quota (times_used) atomically
     await conn.query(
-      `UPDATE dbo.Vouchers SET times_used = times_used + 1 WHERE voucher_code = ? `,
-      [voucher_code]
+      `UPDATE dbo.PromoCodes SET times_used = times_used + 1 WHERE promo_code = ? `,
+      [promo_code]
     );
 
     // Also update order details to return
@@ -969,15 +968,15 @@ export async function applyVoucherToQrSession(req, res) {
 
     return res.json({ 
       success: true, 
-      message: "Voucher applied successfully.", 
+      message: "Promo code applied successfully.", 
       discount_amount: discountAmount,
       new_total: updatedOrders[0].total_amount
     });
 
   } catch (error) {
     await conn.rollback();
-    console.error("applyVoucherToQrSession error:", error);
-    return res.status(500).json({ success: false, message: "Server error applying voucher." });
+    console.error("applyPromoCodeToQrSession error:", error);
+    return res.status(500).json({ success: false, message: "Server error applying promo code." });
   } finally {
     conn.release();
   }

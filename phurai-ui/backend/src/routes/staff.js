@@ -14,7 +14,7 @@ import {
   voidOrderItem,
   listStaffMenuDishes,
   getTableBill,
-  applyTableVoucher,
+  applyTablePromoCode,
   checkoutTablePayment,
   voidTableBill,
   splitOrderBill,
@@ -172,7 +172,7 @@ router.post("/shifts/check-out", resolveUserId, requireUserId, shiftCheckOut);
 router.patch("/payments/split/:splitId/pay", resolveUserId, requireUserId, payBillSplit);
 router.post("/payments/:orderId/split", resolveUserId, requireUserId, splitOrderBill);
 router.get("/payments/:tableId", getTableBill);
-router.post("/payments/:tableId/voucher", resolveUserId, applyTableVoucher);
+router.post("/payments/:tableId/voucher", resolveUserId, applyTablePromoCode);
 router.post("/payments/:tableId/checkout", resolveUserId, checkoutTablePayment);
 router.post("/payments/:tableId/void", resolveUserId, voidTableBill);
 
@@ -664,24 +664,18 @@ router.get("/dishes", async (_req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT
-         d.dish_id,
-         d.dish_name,
-         d.price,
-         d.is_available,
-         d.is_recommended,
-         d.spicy_level,
-         d.prep_time_min,
-         c.category_name,
-         img.image_url
-       FROM dbo.Dishes d
-       JOIN dbo.MenuCategories c ON d.category_id = c.category_id
-       OUTER APPLY (
-         SELECT TOP 1 di.image_url
-         FROM dbo.DishImages di
-         WHERE di.dish_id = d.dish_id
-         ORDER BY di.is_primary DESC, di.image_id ASC
-       ) img
-       ORDER BY c.display_order, d.dish_name;`
+          d.dish_id,
+          d.dish_name,
+          d.price,
+          d.is_available,
+          d.is_recommended,
+          d.spicy_level,
+          d.prep_time_min,
+          c.category_name,
+          CONCAT('/api/dishes/', d.dish_id, '/image') AS image_url
+        FROM dbo.Dishes d
+        JOIN dbo.MenuCategories c ON d.category_id = c.category_id
+        ORDER BY c.display_order, d.dish_name;`
     );
 
     const dishes = rows.map((row) => ({
@@ -753,14 +747,14 @@ router.get("/promotions", async (_req, res) => {
          p.start_at,
          p.end_at,
          p.is_active,
-         v.voucher_code,
+         v.promo_code AS promo_code,
          v.times_used
        FROM dbo.Promotions p
        OUTER APPLY (
-         SELECT TOP 1 v2.voucher_code, v2.times_used
-         FROM dbo.Vouchers v2
+         SELECT TOP 1 v2.promo_code, v2.times_used
+         FROM dbo.PromoCodes v2
          WHERE v2.promotion_id = p.promotion_id
-         ORDER BY v2.voucher_id ASC
+         ORDER BY v2.promo_code_id ASC
        ) v
        ORDER BY p.start_at DESC;`
     );
@@ -771,7 +765,7 @@ router.get("/promotions", async (_req, res) => {
       return {
         promo_id: row.promotion_id,
         name: row.promotion_name,
-        code: row.voucher_code || "",
+        code: row.promo_code || "",
         discount_type: mapDiscountType(row.discount_type),
         discount_value: toNumber(row.discount_value),
         min_order: toNumber(row.min_order_value),

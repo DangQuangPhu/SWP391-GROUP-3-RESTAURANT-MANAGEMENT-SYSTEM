@@ -103,10 +103,9 @@ export async function getReservationDetail(req, res, next) {
 
     const preorders = await query(
       `SELECT pi.preorder_item_id, pi.dish_id, pi.quantity, pi.unit_price, pi.notes,
-              d.dish_name, d.description, d.price AS current_price, img.image_url
+              d.dish_name, d.description, d.price AS current_price, CONCAT('/api/dishes/', d.dish_id, '/image') AS image_url
        FROM dbo.PreorderItems pi
        JOIN dbo.Dishes d ON pi.dish_id = d.dish_id
-       LEFT JOIN dbo.DishImages img ON d.dish_id = img.dish_id AND img.is_primary = 1
        WHERE pi.reservation_id = @ResId`,
       { ResId: id }
     );

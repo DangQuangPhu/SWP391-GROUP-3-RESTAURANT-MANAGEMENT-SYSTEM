@@ -40,19 +40,18 @@ export const getRecommendations = async (req, res) => {
                     d.spicy_level,
                     d.is_available,
                     d.is_recommended,
-                    img.image_url,
+                    MAX(CONCAT('/api/dishes/', d.dish_id, '/image')) AS image_url,
                     SUM(oi.quantity) AS order_count,
                     N'personal_history' AS source
                 FROM dbo.OrderItems oi
                 JOIN dbo.Orders o ON oi.order_id = o.order_id
                 JOIN dbo.Dishes d ON oi.dish_id = d.dish_id
                 JOIN dbo.MenuCategories mc ON d.category_id = mc.category_id
-                LEFT JOIN dbo.DishImages img ON d.dish_id = img.dish_id AND img.is_primary = 1
                 WHERE o.customer_id = @customerId
                   AND o.order_status NOT IN (N'Cancelled')
                   AND d.is_available = 1
                 GROUP BY d.dish_id, d.dish_name, mc.category_name, d.price, d.description,
-                         d.spicy_level, d.is_available, d.is_recommended, img.image_url
+                         d.spicy_level, d.is_available, d.is_recommended
                 ORDER BY order_count DESC
             `);
 
@@ -80,18 +79,17 @@ export const getRecommendations = async (req, res) => {
                         d.spicy_level,
                         d.is_available,
                         d.is_recommended,
-                        img.image_url,
+                        MAX(CONCAT('/api/dishes/', d.dish_id, '/image')) AS image_url,
                         ISNULL(SUM(oi.quantity), 0) AS order_count,
                         N'global_bestseller' AS source
                     FROM dbo.Dishes d
                     JOIN dbo.MenuCategories mc ON d.category_id = mc.category_id
-                    LEFT JOIN dbo.DishImages img ON d.dish_id = img.dish_id AND img.is_primary = 1
                     LEFT JOIN dbo.OrderItems oi ON d.dish_id = oi.dish_id
                     LEFT JOIN dbo.Orders o ON oi.order_id = o.order_id AND o.order_status NOT IN (N'Cancelled')
                     WHERE d.is_available = 1
                       ${excludeClause}
                     GROUP BY d.dish_id, d.dish_name, mc.category_name, d.price, d.description,
-                             d.spicy_level, d.is_available, d.is_recommended, img.image_url
+                             d.spicy_level, d.is_available, d.is_recommended
                     ORDER BY order_count DESC, d.is_recommended DESC
                 `);
 

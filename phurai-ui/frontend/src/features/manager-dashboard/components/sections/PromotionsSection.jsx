@@ -272,7 +272,7 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
     <div className="sfx-stack">
       {/* ── Section Header ───────────────────────────────────────────────── */}
       <SectionHead
-        title="Promotions & Vouchers"
+        title="Promotions & Promo Codes"
         subtitle="Create, manage and track promotional campaigns"
       >
         <Button variant="primary" onClick={() => { resetForm(); setShowAddModal(true); }}>
@@ -503,7 +503,7 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Voucher Code *</label>
+              <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Promo Code *</label>
               <input
                 type="text"
                 required
@@ -641,7 +641,7 @@ export default function PromotionsSection({ promotions, setPromotions, toast }) 
                     placeholder="Empty = unlimited" />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Voucher Valid (hours)</label>
+                  <label className="block text-sm font-semibold text-[var(--sfx-text)] mb-1.5">Promo Code Valid (hours)</label>
                   <input type="number" min="1" step="1" className="sfx-input"
                     value={formData.validity_duration_hours}
                     onChange={e => setFormData({ ...formData, validity_duration_hours: e.target.value })}

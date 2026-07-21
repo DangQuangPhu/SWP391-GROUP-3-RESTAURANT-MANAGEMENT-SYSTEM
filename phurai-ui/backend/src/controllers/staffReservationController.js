@@ -141,7 +141,7 @@ export const createWalkInReservation = async (req, res) => {
       INSERT INTO dbo.Reservations
         (customer_id, contact_name, contact_phone, contact_email,
          guest_count, reservation_status, reservation_source,
-         deposit_amount, applied_promo_code, applied_voucher_id,
+         deposit_amount, applied_promo_code, applied_promotion_id,
          created_by_staff_id, confirmed_by_staff_id,
          reservation_start_at, reservation_end_at,
          checked_in_at, created_at, updated_at)

@@ -379,9 +379,9 @@ export async function fetchStaffBill(tableId) {
   return { source: res.source, data: res.data };
 }
 
-export async function applyStaffVoucher(tableId, userId, voucherCode) {
+export async function applyStaffPromoCode(tableId, userId, promoCode) {
   return staffPost(`/staff/payments/${tableId}/voucher`, userId, {
-    voucher_code: voucherCode,
+    promo_code: promoCode,
   });
 }
 

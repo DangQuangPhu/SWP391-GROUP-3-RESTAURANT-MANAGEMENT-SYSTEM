@@ -323,11 +323,11 @@ export const deleteCustomer = async (req, res) => {
             await transaction.request().input('userId', sql.Int, id).query('UPDATE dbo.Orders SET customer_id = NULL WHERE customer_id = @userId');
             await transaction.request().input('userId', sql.Int, id).query('UPDATE dbo.Reservations SET customer_id = NULL WHERE customer_id = @userId');
             await transaction.request().input('userId', sql.Int, id).query('UPDATE dbo.CustomerReviews SET customer_id = NULL WHERE customer_id = @userId');
-            await transaction.request().input('userId', sql.Int, id).query('UPDATE dbo.VoucherRedemptions SET customer_id = NULL WHERE customer_id = @userId');
+            await transaction.request().input('userId', sql.Int, id).query('UPDATE dbo.PromotionRedemptions SET customer_id = NULL WHERE customer_id = @userId');
             await transaction.request().input('userId', sql.Int, id).query('UPDATE dbo.LoyaltyTransactions SET customer_id = NULL WHERE customer_id = @userId');
             
             await transaction.request().input('userId', sql.Int, id).query('DELETE FROM dbo.CustomerProfiles WHERE user_id = @userId');
-            await transaction.request().input('userId', sql.Int, id).query('DELETE FROM dbo.CustomerVouchers WHERE customer_id = @userId');
+            await transaction.request().input('userId', sql.Int, id).query('DELETE FROM dbo.CustomerPromotions WHERE customer_id = @userId');
             await transaction.request().input('userId', sql.Int, id).query('DELETE FROM dbo.RecommendationLogs WHERE customer_id = @userId');
 
             await transaction.request().input('userId', sql.Int, id).query('DELETE FROM dbo.UserAccounts WHERE user_id = @userId');

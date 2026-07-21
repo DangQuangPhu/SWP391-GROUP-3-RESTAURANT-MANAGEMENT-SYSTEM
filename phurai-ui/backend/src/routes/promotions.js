@@ -1,13 +1,12 @@
 import express from "express";
+import { applyPromoCode } from "../controllers/promoCodesController.js";
 
 const router = express.Router();
 
-
-import { validatePromoCode } from "../controllers/promotionsController.js";
-
 /**
- * GET /api/promotions/validate/:code
+ * POST /api/promotions/apply
+ * Validates and applies a promotion promo code.
  */
-router.get("/validate/:code", validatePromoCode);
+router.post("/apply", applyPromoCode);
 
 export default router;

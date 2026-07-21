@@ -1712,7 +1712,7 @@ export async function getTableBill(req, res) {
         order_id: null,
         order_status: null,
         items: [],
-        applied_voucher: null,
+        applied_promo: null,
         reservation_id: reservation ? reservation.reservation_id : null,
         reservation_order_code: reservation ? reservation.order_code : null,
         reservation_remaining_balance,
@@ -1739,7 +1739,7 @@ export async function getTableBill(req, res) {
       order_id: order.order_id,
       order_status: order.order_status,
       items,
-      applied_voucher: null,
+      applied_promo: null,
       reservation_id: reservation ? reservation.reservation_id : null,
       reservation_order_code: reservation ? reservation.order_code : null,
       reservation_deposit_amount: reservation ? Number(reservation.deposit_amount) : 0,
@@ -1763,24 +1763,24 @@ export async function getTableBill(req, res) {
 
 /**
  * POST /api/staff/payments/:tableId/voucher
- * Manager-only voucher application.
+ * Manager-only promo code application.
  */
-export async function applyTableVoucher(req, res) {
+export async function applyTablePromoCode(req, res) {
   const tableId = Number(req.params.tableId);
-  const voucherCode = String(req.body?.voucher_code ?? req.body?.code ?? "")
+  const promoCode = String(req.body?.promo_code ?? req.body?.code ?? "")
     .trim()
     .toUpperCase();
 
   const roleId = await fetchUserRoleId(req.userId);
   if (roleId !== 4) {
-    return jsonError(res, "Only managers can apply voucher discounts.", 403);
+    return jsonError(res, "Only managers can apply promo code discounts.", 403);
   }
 
   if (!Number.isFinite(tableId) || tableId <= 0) {
     return jsonError(res, "Invalid table id.", 400);
   }
-  if (!voucherCode) {
-    return jsonError(res, "voucher_code is required.", 400);
+  if (!promoCode) {
+    return jsonError(res, "promo_code is required.", 400);
   }
 
   const connection = await pool.getConnection();
@@ -1794,10 +1794,10 @@ export async function applyTableVoucher(req, res) {
       return jsonError(res, "No active order found for this table.", 404);
     }
 
-    const [voucherRows] = await connection.query(
+    const [promoCodeRows] = await connection.query(
       `SELECT TOP 1
-         v.voucher_id,
-         v.voucher_code,
+         v.promo_code_id,
+         v.promo_code,
          v.usage_limit,
          v.times_used,
          v.is_active,
@@ -1810,36 +1810,36 @@ export async function applyTableVoucher(req, res) {
          p.start_at,
          p.end_at,
          p.is_active AS promotion_active
-       FROM dbo.Vouchers AS v
+       FROM dbo.PromoCodes AS v
        INNER JOIN dbo.Promotions AS p ON p.promotion_id = v.promotion_id
-       WHERE v.voucher_code = ?;`,
-      [voucherCode]
+       WHERE v.promo_code = ?;`,
+      [promoCode]
     );
 
-    const voucher = voucherRows[0];
-    if (!voucher) {
+    const activePromo = promoCodeRows[0];
+    if (!activePromo) {
       await connection.rollback();
-      return jsonError(res, "Voucher code not found.", 404);
+      return jsonError(res, "Promo code not found.", 404);
     }
-    if (!voucher.is_active || !voucher.promotion_active) {
+    if (!activePromo.is_active || !activePromo.promotion_active) {
       await connection.rollback();
-      return jsonError(res, "This voucher is no longer active.", 409);
+      return jsonError(res, "This promo code is no longer active.", 409);
     }
-    if (voucher.times_used >= voucher.usage_limit) {
+    if (activePromo.times_used >= activePromo.usage_limit) {
       await connection.rollback();
-      return jsonError(res, "Voucher usage limit reached.", 409);
+      return jsonError(res, "Promo code usage limit reached.", 409);
     }
 
     const now = new Date();
-    const startAt = voucher.start_at ? new Date(voucher.start_at) : null;
-    const endAt = voucher.end_at ? new Date(voucher.end_at) : null;
+    const startAt = activePromo.start_at ? new Date(activePromo.start_at) : null;
+    const endAt = activePromo.end_at ? new Date(activePromo.end_at) : null;
     if (startAt && now < startAt) {
       await connection.rollback();
-      return jsonError(res, "Voucher is not valid yet.", 409);
+      return jsonError(res, "Promo code is not valid yet.", 409);
     }
     if (endAt && now > endAt) {
       await connection.rollback();
-      return jsonError(res, "Voucher has expired.", 409);
+      return jsonError(res, "Promo code has expired.", 409);
     }
 
     const items = await loadBillableItems(connection, order.order_id);
@@ -1848,13 +1848,13 @@ export async function applyTableVoucher(req, res) {
 
     let discountAmount = 0;
     try {
-      discountAmount = calculatePromotionDiscount(voucher, subtotal);
+      discountAmount = calculatePromotionDiscount(activePromo, subtotal);
     } catch (err) {
       await connection.rollback();
       if (err.code === "MIN_ORDER_NOT_MET") {
         return jsonError(
           res,
-          `Minimum order value is ${err.min_order_value} VND for this voucher.`,
+          `Minimum order value is ${err.min_order_value} VND for this promo code.`,
           409
         );
       }
@@ -1871,10 +1871,10 @@ export async function applyTableVoucher(req, res) {
       table_number: table.table_number,
       order_id: order.order_id,
       items,
-      applied_voucher: {
-        voucher_id: voucher.voucher_id,
-        voucher_code: voucher.voucher_code,
-        promotion_name: voucher.promotion_name,
+      applied_promo: {
+        promo_code_id: activePromo.promo_code_id,
+        promo_code: activePromo.promo_code,
+        promotion_name: activePromo.promotion_name,
       },
       ...totals,
     });
@@ -1884,10 +1884,10 @@ export async function applyTableVoucher(req, res) {
       return jsonError(res, "Table not found.", 404);
     }
     if (error.code === "TABLE_NOT_OCCUPIED") {
-      return jsonError(res, "Voucher can only be applied to occupied tables.", 409);
+      return jsonError(res, "Promo code can only be applied to occupied tables.", 409);
     }
     console.error("POST /api/staff/payments/:tableId/voucher failed:", error);
-    return jsonError(res, "Could not apply voucher.");
+    return jsonError(res, "Could not apply promo code.");
   } finally {
     connection.release();
   }
@@ -1902,7 +1902,7 @@ export async function checkoutTablePayment(req, res) {
   const staffId = req.userId ?? null;
   const paymentMethodId = Number(req.body?.payment_method_id);
   const amountPaid = Number(req.body?.amount_paid);
-  const voucherId = req.body?.voucher_id ? Number(req.body.voucher_id) : null;
+  const promoCodeId = req.body?.promo_code_id ? Number(req.body.promo_code_id) : null;
   const transactionRef = String(req.body?.transaction_ref ?? "").trim() || null;
 
   if (!Number.isFinite(tableId) || tableId <= 0) {
@@ -2004,29 +2004,29 @@ export async function checkoutTablePayment(req, res) {
 
     const paymentId = paymentRows[0].payment_id;
 
-    if (voucherId && order) {
-      const [voucherRows] = await connection.query(
-        `SELECT TOP 1 voucher_id, usage_limit, times_used, is_active
-         FROM dbo.Vouchers
-         WHERE voucher_id = ?;`,
-        [voucherId]
+    if (promoCodeId && order) {
+      const [promoCodeRows] = await connection.query(
+        `SELECT TOP 1 promo_code_id, usage_limit, times_used, is_active
+         FROM dbo.PromoCodes
+         WHERE promo_code_id = ?;`,
+        [promoCodeId]
       );
-      const voucher = voucherRows[0];
-      if (voucher && voucher.is_active && voucher.times_used < voucher.usage_limit) {
+      const promoCode = promoCodeRows[0];
+      if (promoCode && promoCode.is_active && promoCode.times_used < promoCode.usage_limit) {
         await connection.query(
-          `UPDATE dbo.Vouchers
+          `UPDATE dbo.PromoCodes
            SET times_used = times_used + 1,
                updated_at = SYSDATETIME()
-           WHERE voucher_id = ?;`,
-          [voucherId]
+           WHERE promo_code_id = ?;`,
+          [promoCodeId]
         );
 
         await connection.query(
-          `INSERT INTO dbo.VoucherRedemptions
-             (voucher_id, payment_id, customer_id, discount_amount, redeemed_at)
+          `INSERT INTO dbo.PromotionRedemptions
+             (promo_code_id, payment_id, customer_id, discount_amount, redeemed_at)
            VALUES
              (?, ?, NULL, ?, SYSDATETIME());`,
-          [voucherId, paymentId, totals.discount_amount]
+          [promoCodeId, paymentId, totals.discount_amount]
         );
       }
     }

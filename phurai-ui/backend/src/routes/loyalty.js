@@ -4,9 +4,9 @@ import { requireCustomer } from '../middleware/customerMiddleware.js';
 import {
   getBalance,
   getCatalog,
-  redeemVoucher,
-  getMyVouchers,
-  applyVoucher
+  redeemPromotion,
+  getMyPromotions,
+  applyPromotion
 } from '../controllers/loyaltyController.js';
 
 const router = express.Router();
@@ -22,26 +22,26 @@ router.get('/balance', getBalance);
 
 /**
  * GET /api/loyalty/catalog
- * Securely retrieves active redeemable voucher catalog.
+ * Securely retrieves active redeemable promotion catalog.
  */
 router.get('/catalog', getCatalog);
 
 /**
  * POST /api/loyalty/redeem
- * Securely exchanges points for an active voucher template.
+ * Securely exchanges points for an active promotion template.
  */
-router.post('/redeem', redeemVoucher);
+router.post('/redeem', redeemPromotion);
 
 /**
- * GET /api/loyalty/my-vouchers
- * Securely retrieves owned customer vouchers.
+ * GET /api/loyalty/my-promotions
+ * Securely retrieves owned customer promotions.
  */
-router.get('/my-vouchers', getMyVouchers);
+router.get('/my-promotions', getMyPromotions);
 
 /**
- * POST /api/loyalty/apply-voucher
- * Securely applies a voucher discount to an order or reservation.
+ * POST /api/loyalty/apply-promotion
+ * Securely applies a customer promotion discount to an order or reservation.
  */
-router.post('/apply-voucher', applyVoucher);
+router.post('/apply-promotion', applyPromotion);
 
 export default router;

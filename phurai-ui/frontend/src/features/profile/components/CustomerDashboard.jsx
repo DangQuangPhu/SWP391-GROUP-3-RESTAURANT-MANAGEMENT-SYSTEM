@@ -364,7 +364,11 @@ function ActivityItemRow({ item, userId }) {
               {!loading && dishes && dishes.length > 0 && (
                 <div className="divide-y divide-gray-50">
                   {dishes.map((d, idx) => {
-                    const resolvedImg = (d.image_url && imagePathMap[d.image_url]) ? imagePathMap[d.image_url] : null;
+                    const resolvedImg = (d.image_url && imagePathMap[d.image_url]) 
+                      ? imagePathMap[d.image_url] 
+                      : (d.image_url && (d.image_url.startsWith('http://') || d.image_url.startsWith('https://') || d.image_url.startsWith('/api') || d.image_url.startsWith('/uploads'))) 
+                        ? d.image_url 
+                        : null;
                     return (
                       <motion.div
                         key={d.order_item_id}

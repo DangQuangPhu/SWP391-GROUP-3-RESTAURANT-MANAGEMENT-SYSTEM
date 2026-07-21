@@ -7,8 +7,8 @@ export const GIFT_CARD_AMOUNTS = [500_000, 1_000_000, 2_000_000];
 
 const GIFT_CARD_AMOUNT_SET = new Set(GIFT_CARD_AMOUNTS);
 const PROMOTION_NAME = "Gift Card System";
-const VOUCHER_PREFIX = "GIFT-";
-const VOUCHER_SUFFIX_LENGTH = 10;
+const PROMO_CODE_PREFIX = "GIFT-";
+const PROMO_CODE_SUFFIX_LENGTH = 10;
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const MAX_CODE_ATTEMPTS = 8;
 
@@ -16,10 +16,10 @@ function isUniqueConstraintError(error) {
   const number = error?.number ?? error?.originalError?.number;
   if (number === 2627 || number === 2601) return true;
   const message = String(error?.message ?? "");
-  return message.includes("UQ_Vouchers_code") || /unique|duplicate/i.test(message);
+  return message.includes("UQ_PromoCodes_code") || /unique|duplicate/i.test(message);
 }
 
-function generateVoucherSuffix(length = VOUCHER_SUFFIX_LENGTH) {
+function generatePromoCodeSuffix(length = PROMO_CODE_SUFFIX_LENGTH) {
   let suffix = "";
   for (let i = 0; i < length; i += 1) {
     suffix += CODE_CHARS[crypto.randomInt(0, CODE_CHARS.length)];
@@ -27,8 +27,8 @@ function generateVoucherSuffix(length = VOUCHER_SUFFIX_LENGTH) {
   return suffix;
 }
 
-function buildGiftVoucherCode() {
-  return `${VOUCHER_PREFIX}${generateVoucherSuffix()}`;
+function buildGiftPromoCode() {
+  return `${PROMO_CODE_PREFIX}${generatePromoCodeSuffix()}`;
 }
 
 async function findGiftCardPromotionId(amount) {
@@ -76,24 +76,24 @@ async function createGiftCardPromotion(amount) {
   return result.recordset[0]?.promotion_id ?? null;
 }
 
-async function insertGiftVoucher(promotionId, voucherCode) {
+async function insertGiftPromoCode(promotionId, promoCode) {
   const request = await createDbRequest();
   request.input("promotionId", sql.Int, promotionId);
-  request.input("voucherCode", sql.NVarChar(40), voucherCode);
+  request.input("promoCode", sql.NVarChar(40), promoCode);
 
   const result = await request.query(
-    `INSERT INTO dbo.Vouchers
-       (promotion_id, voucher_code, usage_limit, times_used, is_active)
-     OUTPUT INSERTED.voucher_code
-     VALUES (@promotionId, @voucherCode, 1, 0, 1);`
+    `INSERT INTO dbo.PromoCodes
+       (promotion_id, promo_code, usage_limit, times_used, is_active)
+     OUTPUT INSERTED.promo_code
+     VALUES (@promotionId, @promoCode, 1, 0, 1);`
   );
 
-  return result.recordset[0]?.voucher_code ?? voucherCode;
+  return result.recordset[0]?.promo_code ?? promoCode;
 }
 
 /**
  * POST /api/customer/gift-cards/buy
- * Creates a single-use fixed-value voucher backed by dbo.Promotions + dbo.Vouchers.
+ * Creates a single-use fixed-value promo code backed by dbo.Promotions + dbo.PromoCodes.
  */
 export async function buyGiftCard(req, res) {
   try {
@@ -118,11 +118,11 @@ export async function buyGiftCard(req, res) {
       });
     }
 
-    let voucherCode = null;
+    let promoCode = null;
     for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt += 1) {
-      const candidate = buildGiftVoucherCode();
+      const candidate = buildGiftPromoCode();
       try {
-        voucherCode = await insertGiftVoucher(promotionId, candidate);
+        promoCode = await insertGiftPromoCode(promotionId, candidate);
         break;
       } catch (error) {
         if (isUniqueConstraintError(error) && attempt < MAX_CODE_ATTEMPTS - 1) {
@@ -132,16 +132,16 @@ export async function buyGiftCard(req, res) {
       }
     }
 
-    if (!voucherCode) {
+    if (!promoCode) {
       return res.status(500).json({
         success: false,
-        message: "Could not generate voucher code.",
+        message: "Could not generate promo code.",
       });
     }
 
     return res.json({
       success: true,
-      voucher_code: voucherCode,
+      promo_code: promoCode,
     });
   } catch (error) {
     console.error("POST /api/customer/gift-cards/buy failed:", error);

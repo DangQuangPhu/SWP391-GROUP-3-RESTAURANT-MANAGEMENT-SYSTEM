@@ -1,5 +1,5 @@
 import express from "express";
-import { getQrSessionHistory, submitQrOrderPublic, cancelOrderItem, applyVoucherToQrSession, updateOrderItemQuantity } from '../controllers/qrSessionController.js';
+import { getQrSessionHistory, submitQrOrderPublic, cancelOrderItem, applyPromoCodeToQrSession, updateOrderItemQuantity } from '../controllers/qrSessionController.js';
 
 const router = express.Router();
 
@@ -7,7 +7,7 @@ router.post("/qr-order/submit", submitQrOrderPublic);
 router.delete("/qr-order/items/:itemId", cancelOrderItem);
 router.patch("/qr-order/items/:itemId/quantity", updateOrderItemQuantity);
 router.get("/qr-order/session/:token/history", getQrSessionHistory);
-router.post("/qr-order/session/:token/apply-voucher", applyVoucherToQrSession);
+router.post("/qr-order/session/:token/apply-promo", applyPromoCodeToQrSession);
 
 import { submitOrderReviewPublic } from "../controllers/reviewsController.js";
 router.post("/reviews/:orderId", submitOrderReviewPublic);
@@ -19,8 +19,8 @@ router.get('/debug-promos', async (req, res) => {
     const rawPool = await getRawPool();
     const result = await rawPool.request().query(`
       SELECT 
-        v.voucher_id AS promotion_id, 
-        v.voucher_code AS promo_code, 
+        v.promo_code_id AS promotion_id, 
+        v.promo_code AS promo_code, 
         UPPER(p.discount_type) AS discount_type, 
         p.discount_value, 
         p.max_discount AS max_discount_amount, 
@@ -32,7 +32,7 @@ router.get('/debug-promos', async (req, res) => {
         v.is_active, 
         v.created_at, 
         v.updated_at
-      FROM dbo.Vouchers v
+      FROM dbo.PromoCodes v
       JOIN dbo.Promotions p ON v.promotion_id = p.promotion_id
     `);
     res.json({ success: true, data: result.recordset });

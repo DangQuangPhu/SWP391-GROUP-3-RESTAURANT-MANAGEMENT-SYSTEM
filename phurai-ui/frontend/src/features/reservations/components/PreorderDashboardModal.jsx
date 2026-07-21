@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { formatVND } from "@/core/utils/formatCurrency.js";
-import { imagePathMap } from "@/features/menu/data/menuAssets.js";
+import { imagePathMap, menuImages } from "@/features/menu/data/menuAssets.js";
 import { Search, Filter, ArrowUpDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/Skeleton.jsx";
 import { useFavoritesStore } from "@/features/menu/context/MenuFavoritesContext.jsx";
@@ -350,11 +350,14 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave, curren
                 const qty = cart[dishId]?.quantity || 0;
                 // Safely handle "null" strings
                 const rawUrl = dish.image_url || dish.image;
-                let imageUrl = (rawUrl && String(rawUrl).trim() !== "null" && String(rawUrl).trim() !== "undefined") ? rawUrl : null;
-                
-                // Map the URL through imagePathMap if it exists
-                if (imageUrl && imagePathMap[imageUrl]) {
-                  imageUrl = imagePathMap[imageUrl];
+                let imageUrl = menuImages.hero;
+                if (rawUrl && String(rawUrl).trim() !== "null" && String(rawUrl).trim() !== "undefined" && String(rawUrl).trim() !== "") {
+                  const trimmedUrl = String(rawUrl).trim();
+                  if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://') || trimmedUrl.startsWith('/uploads') || trimmedUrl.startsWith('/api')) {
+                    imageUrl = trimmedUrl;
+                  } else if (imagePathMap[trimmedUrl]) {
+                    imageUrl = imagePathMap[trimmedUrl];
+                  }
                 }
                 
                 const isAvailable = dish.is_available !== false && dish.is_available !== 0;
@@ -372,15 +375,12 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave, curren
                     opacity: isAvailable ? 1 : 0.6
                   }}>
                     <div style={{ height: '180px', background: 'rgba(0, 0, 0, 0.2)', position: 'relative' }}>
-                      {imageUrl ? (
-                        <img 
-                          src={imageUrl} 
-                          alt={dishName} 
-                          style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isAvailable ? 'none' : 'grayscale(100%)' }} 
-                          onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                        />
-                      ) : null}
-                      <div style={{ width: '100%', height: '100%', display: imageUrl ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.4)' }}>No Image</div>
+                      <img 
+                        src={imageUrl} 
+                        alt={dishName} 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isAvailable ? 'none' : 'grayscale(100%)' }} 
+                        onError={(e) => { e.target.src = menuImages.hero; }}
+                      />
                       {currentUser && isAvailable && (
                         <button
                           type="button"

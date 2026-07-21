@@ -79,8 +79,8 @@ function ReservationSummary({
 
     const reapplyVoucher = async () => {
       try {
-        const res = await apiPost("/vouchers/apply", {
-          voucher_code: promoCode,
+        const res = await apiPost("/promotions/apply", {
+          promo_code: promoCode,
           cart_total: preorderTotal
         });
         if (res?.success) {
@@ -106,8 +106,8 @@ function ReservationSummary({
     if (!code || preorderTotal === 0) return;
     setPromoError("");
     try {
-      const res = await apiPost("/vouchers/apply", {
-        voucher_code: code,
+      const res = await apiPost("/promotions/apply", {
+        promo_code: code,
         cart_total: preorderTotal
       });
       if (res?.success) {

@@ -127,7 +127,7 @@ export async function handlePostCheckoutSuccess(orderId, receivedAmount) {
       let discountAmount = 0;
       const vrQuery = await pool.request()
         .input('orderId', sql.Int, orderId)
-        .query('SELECT SUM(discount_amount) as total_discount FROM dbo.VoucherRedemptions vr JOIN dbo.Payments p ON vr.payment_id = p.payment_id WHERE p.order_id = @orderId');
+        .query('SELECT SUM(discount_amount) as total_discount FROM dbo.PromotionRedemptions vr JOIN dbo.Payments p ON vr.payment_id = p.payment_id WHERE p.order_id = @orderId');
       if (vrQuery.recordset.length > 0) {
         discountAmount = vrQuery.recordset[0].total_discount || 0;
       }

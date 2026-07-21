@@ -30,18 +30,18 @@ export const startCronJobs = () => {
     try {
       const pool = await getRawPool();
       
-      // Sweep expired active customer vouchers
+      // Sweep expired active customer promotions
       try {
-        const sweepVouchersResult = await pool.request().query(`
-          UPDATE dbo.CustomerVouchers
+        const sweepPromotionsResult = await pool.request().query(`
+          UPDATE dbo.CustomerPromotions
           SET status = N'expired'
           WHERE status = N'active' AND expires_at <= SYSDATETIME()
         `);
-        if (sweepVouchersResult.rowsAffected[0] > 0) {
-          console.log(`[CronService] Swept ${sweepVouchersResult.rowsAffected[0]} expired vouchers.`);
+        if (sweepPromotionsResult.rowsAffected[0] > 0) {
+          console.log(`[CronService] Swept ${sweepPromotionsResult.rowsAffected[0]} expired promotions.`);
         }
-      } catch (voucherSweepErr) {
-        console.error('[CronService] Error sweeping expired vouchers:', voucherSweepErr.message);
+      } catch (promotionSweepErr) {
+        console.error('[CronService] Error sweeping expired promotions:', promotionSweepErr.message);
       }
       
       // Find all "Awaiting Deposit" reservations older than 16 minutes (1 min buffer after 15 min window)

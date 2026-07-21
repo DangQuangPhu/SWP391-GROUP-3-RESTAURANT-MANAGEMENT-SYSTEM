@@ -68,7 +68,7 @@ function GiftCardPage({ isAuthenticated, currentUser, onRequireAuth }) {
 
     try {
       const result = await buyGiftCard(userId, selectedAmount);
-      setVoucherCode(result.voucher_code || "");
+      setVoucherCode(result.promo_code || "");
       setPhase("success");
     } catch (error) {
       setPhase("confirm");

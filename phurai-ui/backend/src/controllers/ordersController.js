@@ -476,14 +476,14 @@ export const checkoutOrder = async (req, res) => {
     }
 };
 
-// POST /api/orders/:orderId/apply-voucher
-export const applyVoucher = async (req, res) => {
+// POST /api/orders/:orderId/apply-promo
+export const applyPromoCode = async (req, res) => {
     const { orderId } = req.params;
-    const { voucherCode } = req.body;
+    const { promo_code: promoCode } = req.body;
     const staffUserId = req.user?.user_id || req.body.actor_id || req.userId || null;
 
-    if (!voucherCode || !orderId) {
-        return res.status(400).json({ success: false, message: 'Missing orderId or voucherCode' });
+    if (!promoCode || !orderId) {
+        return res.status(400).json({ success: false, message: 'Missing orderId or promo_code' });
     }
 
     let pool;
@@ -497,7 +497,7 @@ export const applyVoucher = async (req, res) => {
     await transaction.begin();
 
     try {
-        // Step 1: Select & Lock Order, Voucher, Promotion
+        // Step 1: Select & Lock Order, PromoCode, Promotion
         const orderRes = await transaction.request()
             .input('orderId', sql.Int, orderId)
             .query(`SELECT subtotal, service_charge, discount_amount, order_status FROM dbo.Orders WITH (UPDLOCK) WHERE order_id = @orderId`);
@@ -510,7 +510,7 @@ export const applyVoucher = async (req, res) => {
         
         if (order.order_status === 'Paid' || order.order_status === 'Cancelled') {
             await transaction.rollback();
-            return res.status(400).json({ success: false, message: `Cannot apply voucher to ${order.order_status} order.` });
+            return res.status(400).json({ success: false, message: `Cannot apply promo code to ${order.order_status} order.` });
         }
 
         if (order.discount_amount > 0) {
@@ -519,38 +519,38 @@ export const applyVoucher = async (req, res) => {
         }
 
         const promoRes = await transaction.request()
-            .input('voucherCode', sql.NVarChar(50), voucherCode.trim().toUpperCase())
+            .input('promoCode', sql.NVarChar(50), promoCode.trim().toUpperCase())
             .query(`
                 SELECT 
-                    v.voucher_id, v.voucher_code, v.times_used, v.usage_limit, v.is_active as voucher_active,
+                    v.promo_code_id, v.promo_code, v.times_used, v.usage_limit, v.is_active as promo_code_active,
                     p.promotion_id, p.is_active as promo_active, p.start_at, p.end_at, 
-                    p.min_order_value, p.discount_type, p.discount_value, p.max_discount_amount
-                FROM dbo.Vouchers v WITH (UPDLOCK)
+                    p.min_order_value, p.discount_type, p.discount_value, p.max_discount AS max_discount_amount
+                FROM dbo.PromoCodes v WITH (UPDLOCK)
                 JOIN dbo.Promotions p ON v.promotion_id = p.promotion_id
-                WHERE v.voucher_code = @voucherCode
+                WHERE v.promo_code = @promoCode
             `);
             
         if (promoRes.recordset.length === 0) {
             await transaction.rollback();
-            return res.status(404).json({ success: false, message: 'Voucher not found' });
+            return res.status(404).json({ success: false, message: 'Promo code not found' });
         }
         const promo = promoRes.recordset[0];
 
         // Validations
-        if (!promo.voucher_active || !promo.promo_active) {
+        if (!promo.promo_code_active || !promo.promo_active) {
             await transaction.rollback();
-            return res.status(400).json({ success: false, message: 'Voucher is no longer active' });
+            return res.status(400).json({ success: false, message: 'Promo code is no longer active' });
         }
         
         const now = new Date();
         if (promo.start_at && new Date(promo.start_at) > now) {
             await transaction.rollback();
-            return res.status(400).json({ success: false, message: 'Voucher is not yet valid' });
+            return res.status(400).json({ success: false, message: 'Promo code is not yet valid' });
         }
         
         if (promo.end_at && new Date(promo.end_at) < now) {
             await transaction.rollback();
-            return res.status(400).json({ success: false, message: 'Voucher has expired' });
+            return res.status(400).json({ success: false, message: 'Promo code has expired' });
         }
         
         if (Number(order.subtotal) < Number(promo.min_order_value)) {
@@ -560,7 +560,7 @@ export const applyVoucher = async (req, res) => {
         
         if (promo.usage_limit !== null && promo.times_used >= promo.usage_limit) {
             await transaction.rollback();
-            return res.status(400).json({ success: false, message: 'Voucher usage limit exceeded' });
+            return res.status(400).json({ success: false, message: 'Promo code usage limit exceeded' });
         }
 
         // Step 2: Math
@@ -579,10 +579,10 @@ export const applyVoucher = async (req, res) => {
         const serviceCharge = Number(order.service_charge) || 0;
         const newTotalAmount = subtotal - discount + serviceCharge;
 
-        // Step 3: Immediate Deduction
+        // Step 3: Increment times_used on PromoCodes
         await transaction.request()
-            .input('voucherId', sql.Int, promo.voucher_id)
-            .query(`UPDATE dbo.Vouchers SET times_used = times_used + 1, updated_at = SYSDATETIME() WHERE voucher_id = @voucherId`);
+            .input('promoCodeId', sql.Int, promo.promo_code_id)
+            .query(`UPDATE dbo.PromoCodes SET times_used = times_used + 1, updated_at = SYSDATETIME() WHERE promo_code_id = @promoCodeId`);
 
         // Step 4: Update Order
         await transaction.request()
@@ -599,25 +599,25 @@ export const applyVoucher = async (req, res) => {
         await transaction.request()
             .input('userId', sql.Int, staffUserId)
             .input('targetId', sql.Int, orderId)
-            .input('newValue', sql.NVarChar(sql.MAX), JSON.stringify({ voucher_code: promo.voucher_code, discount_amount: discount }))
+            .input('newValue', sql.NVarChar(sql.MAX), JSON.stringify({ promo_code: promo.promo_code, discount_amount: discount }))
             .input('ipAddress', sql.NVarChar(45), req.ip || '127.0.0.1')
             .query(`
                 INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, ip_address, created_at)
-                VALUES (@userId, N'APPLY_VOUCHER', N'Orders', @targetId, @newValue, @ipAddress, SYSDATETIME())
+                VALUES (@userId, N'APPLY_PROMO_CODE', N'Orders', @targetId, @newValue, @ipAddress, SYSDATETIME())
             `);
 
         await transaction.commit();
         
         return res.status(200).json({
             success: true,
-            message: 'Voucher applied successfully',
+            message: 'Promo code applied successfully',
             data: { discount_amount: discount, total_amount: newTotalAmount }
         });
 
     } catch (error) {
         if (transaction) await transaction.rollback();
-        console.error('[ordersController] applyVoucher error:', error);
-        return res.status(500).json({ success: false, message: 'Failed to apply voucher', error: error.message });
+        console.error('[ordersController] applyPromoCode error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to apply promo code', error: error.message });
     }
 };
 

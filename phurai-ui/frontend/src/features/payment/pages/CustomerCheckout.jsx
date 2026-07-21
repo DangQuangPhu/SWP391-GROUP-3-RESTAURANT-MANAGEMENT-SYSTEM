@@ -6,7 +6,7 @@ import CustomerReviewModal from '../../reviews/CustomerReviewModal';
 import usePaymentPolling from '../hooks/usePaymentPolling';
 import { useTableSession } from '@/features/table-session';
 import { useAuth } from '@/features/auth/context/AuthContext';
-import { getMyVouchers, applyVoucher } from '@/features/loyalty/services/loyaltyApi.js';
+import { getMyPromotions, applyPromotion } from '@/features/loyalty/services/loyaltyApi.js';
 
 export default function CustomerCheckout() {
   const { orderId } = useParams();
@@ -37,9 +37,9 @@ export default function CustomerCheckout() {
     async function fetchVouchers() {
       if (!userId) return;
       try {
-        const res = await getMyVouchers(userId, 'active');
+        const res = await getMyPromotions(userId, 'active');
         if (res?.success) {
-          setMyActiveVouchers(res.vouchers || []);
+          setMyActiveVouchers(res.promotions || []);
         }
       } catch (err) {
         console.error("Failed to fetch customer vouchers for checkout:", err);
@@ -88,7 +88,7 @@ export default function CustomerCheckout() {
     setVoucherError('');
     try {
       const match = myActiveVouchers.find(
-        (v) => v.voucher_code.toUpperCase() === voucherCode.toUpperCase().trim()
+        (v) => v.promo_code.toUpperCase() === voucherCode.toUpperCase().trim()
       );
       if (!match) {
         setVoucherError('Voucher code not found in your wallet. Redeem it first!');
@@ -96,14 +96,14 @@ export default function CustomerCheckout() {
         return;
       }
 
-      const res = await applyVoucher(userId, {
-        customerVoucherId: match.customer_voucher_id,
+      const res = await applyPromotion(userId, {
+        customerPromotionId: match.customer_promotion_id,
         orderId: Number(orderId)
       });
 
       if (res?.success) {
         setAppliedVoucher({
-          code: match.voucher_code,
+          code: match.promo_code,
           discount_amount: res.discountAmount
         });
         setOriginalAmount(amount);

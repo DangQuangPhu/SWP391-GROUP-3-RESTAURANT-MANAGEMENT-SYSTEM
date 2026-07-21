@@ -13,11 +13,9 @@ export async function getMenu(req, res) {
         d.spicy_level,
         d.prep_time_min as prep_time_minutes,
         d.is_available,
-        d.is_recommended,
-        img.image_url
+        d.is_recommended
       FROM dbo.Dishes d
       JOIN dbo.MenuCategories c ON d.category_id = c.category_id
-      LEFT JOIN dbo.DishImages img ON d.dish_id = img.dish_id AND img.is_primary = 1
       WHERE c.is_active = 1
       ORDER BY c.display_order, d.dish_name
     `);
@@ -26,6 +24,7 @@ export async function getMenu(req, res) {
       success: true, 
       data: dishes.map(d => ({
         ...d,
+        image_url: `/api/dishes/${d.dish_id}/image`,
         is_available: !!d.is_available,
         is_recommended: !!d.is_recommended,
         is_preorderable: !!d.is_preorderable
@@ -39,7 +38,7 @@ export async function getMenu(req, res) {
 
 export async function createDish(req, res) {
   try {
-    const { name, category, price, description, image_url, spicy_level, prep_time_minutes, is_available, is_recommended, is_preorderable } = req.body;
+    const { name, category, price, description, spicy_level, prep_time_minutes, is_available, is_recommended, is_preorderable } = req.body;
 
     // Resolve category_id
     const [cats] = await pool.query(`SELECT category_id FROM dbo.MenuCategories WHERE category_name = ?`, [category]);
@@ -58,13 +57,6 @@ export async function createDish(req, res) {
 
     const newDishId = dish[0].dish_id;
 
-    if (image_url) {
-      await pool.query(`
-        INSERT INTO dbo.DishImages (dish_id, image_url, is_primary)
-        VALUES (?, ?, 1)
-      `, [newDishId, image_url]);
-    }
-
     const io = req.app.get('io');
     if (io) {
       io.emit('menu:updated');
@@ -80,7 +72,7 @@ export async function createDish(req, res) {
 export async function updateDish(req, res) {
   try {
     const { id } = req.params;
-    const { name, category, price, description, image_url, spicy_level, prep_time_minutes, is_available, is_recommended, is_preorderable } = req.body;
+    const { name, category, price, description, spicy_level, prep_time_minutes, is_available, is_recommended, is_preorderable } = req.body;
 
     // Resolve category_id
     const [cats] = await pool.query(`SELECT category_id FROM dbo.MenuCategories WHERE category_name = ?`, [category]);
@@ -105,14 +97,6 @@ export async function updateDish(req, res) {
           updated_at = SYSDATETIME()
       WHERE dish_id = ?
     `, [categoryId, name, description, price, spicy_level, prep_time_minutes, is_available ? 1 : 0, is_recommended ? 1 : 0, is_preorderable ? 1 : 0, id]);
-
-    if (image_url !== undefined) {
-      // Upsert the primary image
-      await pool.query(`DELETE FROM dbo.DishImages WHERE dish_id = ?`, [id]);
-      if (image_url) {
-        await pool.query(`INSERT INTO dbo.DishImages (dish_id, image_url, is_primary) VALUES (?, ?, 1)`, [id, image_url]);
-      }
-    }
 
     const io = req.app.get('io');
     if (io) {

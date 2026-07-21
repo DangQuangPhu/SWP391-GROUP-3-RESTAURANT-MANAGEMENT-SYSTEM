@@ -345,7 +345,7 @@ DELETE FROM dbo.OrderItems WHERE order_id IN (SELECT order_id FROM dbo.Orders WH
 DELETE FROM dbo.Payments WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE customer_id IN (SELECT user_id FROM @PhuUsers));
 DELETE FROM dbo.Orders WHERE customer_id IN (SELECT user_id FROM @PhuUsers);
 DELETE FROM dbo.Reservations WHERE customer_id IN (SELECT user_id FROM @PhuUsers);
-DELETE FROM dbo.CustomerVouchers WHERE customer_id IN (SELECT user_id FROM @PhuUsers);
+DELETE FROM dbo.CustomerPromotions WHERE customer_id IN (SELECT user_id FROM @PhuUsers);
 DELETE FROM dbo.LoyaltyTransactions WHERE customer_id IN (SELECT user_id FROM @PhuUsers);
 
 -- 1. Ensure a CustomerProfile exists for the customer account
@@ -378,11 +378,11 @@ SELECT source.user_id, 760, N'Earn', N'Payment', N'Points earned from premium di
 FROM @PhuUsers source;
 
 INSERT INTO dbo.LoyaltyTransactions (customer_id, points, transaction_type, reference_type, description, created_at)
-SELECT source.user_id, -100, N'Redeem', N'VoucherRedeem', N'Redeemed 50K Voucher', DATEADD(day, -2, GETDATE())
+SELECT source.user_id, -100, N'Redeem', N'PromotionRedeem', N'Redeemed 50K Voucher', DATEADD(day, -2, GETDATE())
 FROM @PhuUsers source;
 
--- 3. Insert Vouchers into CustomerVouchers (so the user has active and used vouchers)
-INSERT INTO dbo.CustomerVouchers (customer_id, promotion_id, points_spent, voucher_code, status, redeemed_at, expires_at)
+-- 3. Insert Vouchers into CustomerPromotions (so the user has active and used promotions)
+INSERT INTO dbo.CustomerPromotions (customer_id, promotion_id, points_spent, promo_code, status, redeemed_at, expires_at)
 SELECT source.user_id, 4, 100, N'PHU50K_' + CAST(source.user_id AS NVARCHAR(10)), N'active', DATEADD(day, -2, GETDATE()), DATEADD(day, 28, GETDATE())
 FROM @PhuUsers source;
 

@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Gem, Clock, Ticket, TrendingUp, CheckCircle2, AlertTriangle, Loader2, Star } from 'lucide-react';
-import { getLoyaltyBalance, getLoyaltyCatalog, redeemVoucher, getMyVouchers } from '../services/loyaltyApi.js';
+import { getLoyaltyBalance, getLoyaltyCatalog, redeemPromotion, getMyPromotions } from '../services/loyaltyApi.js';
 import { format } from 'date-fns';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import '../styles/loyalty.css';
@@ -49,47 +49,34 @@ function AnimatedCounter({ value }) {
   return <span>{count.toLocaleString()}</span>;
 }
 
-// ─── Countdown for active vouchers ────────────────────────────────────────────
-function VoucherCountdown({ expiryDate, onExpired }) {
-  const calcLeft = () => {
-    const diff = new Date(expiryDate).getTime() - Date.now();
-    if (diff <= 0) return null;
-    return {
-      hours: Math.floor(diff / 3600000),
-      minutes: Math.floor((diff % 3600000) / 60000),
-      seconds: Math.floor((diff % 60000) / 1000),
-      diff,
-    };
-  };
-  const [timeLeft, setTimeLeft] = useState(calcLeft());
+// ─── Promo Countdown ─────────────────────────────────────────────────────────
+function PromoCountdown({ expiryDate, onExpired }) {
+  const [timeLeft, setTimeLeft] = useState('');
   useEffect(() => {
-    const id = setInterval(() => {
-      const r = calcLeft();
-      setTimeLeft(r);
-      if (!r) { clearInterval(id); onExpired?.(); }
-    }, 1000);
-    return () => clearInterval(id);
+    const updateCountdown = () => {
+      const diff = new Date(expiryDate) - new Date();
+      if (diff <= 0) {
+        setTimeLeft('Expired');
+        onExpired?.();
+        return;
+      }
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+      const minutes = Math.floor((diff / (1000 * 60)) % 60);
+      let text = '';
+      if (days > 0) text += `${days}d `;
+      if (hours > 0 || days > 0) text += `${hours}h `;
+      text += `${minutes}m remaining`;
+      setTimeLeft(text);
+    };
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 60000);
+    return () => clearInterval(interval);
   }, [expiryDate]);
-
-  if (!timeLeft) return <span className="voucher-countdown__expired">Expired</span>;
-  const { hours, minutes, seconds, diff } = timeLeft;
-  const pct = Math.min((diff / (24 * 3600000)) * 100, 100);
-  const barColor = pct < 20 ? T.danger : pct < 50 ? '#D97706' : T.success;
-
   return (
-    <div className="voucher-countdown__wrapper">
-      <div className="voucher-countdown__header">
-        <span className="voucher-countdown__label-wrap">
-          <Clock size={11} /> Expires in:
-        </span>
-        <span className="voucher-countdown__timer" style={{ color: barColor }}>
-          {String(hours).padStart(2, '0')}:{String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
-        </span>
-      </div>
-      <div className="voucher-countdown__track">
-        <div className="voucher-countdown__bar" style={{ width: `${pct}%`, backgroundColor: barColor }} />
-      </div>
-    </div>
+    <span className="loyalty-vouchers__countdown">
+      <Clock size={13} /> {timeLeft}
+    </span>
   );
 }
 
@@ -107,11 +94,11 @@ function SectionHeader({ icon: Icon, title }) {
 export default function LoyaltyPointsPage() {
   const [balanceData, setBalanceData] = useState({ balance: 0, totalEarned: 0, totalRedeemed: 0 });
   const [catalog, setCatalog] = useState([]);
-  const [myVouchers, setMyVouchers] = useState([]);
+  const [myPromotions, setMyPromotions] = useState([]);
   const [activeTab, setActiveTab] = useState('active');
   const [loading, setLoading] = useState(true);
   const [exchanging, setExchanging] = useState(false);
-  const [selectedVoucher, setSelectedVoucher] = useState(null);
+  const [selectedPromo, setSelectedPromo] = useState(null);
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
 
@@ -125,11 +112,11 @@ export default function LoyaltyPointsPage() {
       const [balRes, catRes, vouchRes] = await Promise.all([
         getLoyaltyBalance(userId),
         getLoyaltyCatalog(userId),
-        getMyVouchers(userId),
+        getMyPromotions(userId),
       ]);
       if (balRes?.success) setBalanceData(balRes);
       if (catRes?.success) setCatalog(catRes.catalog || []);
-      if (vouchRes?.success) setMyVouchers(vouchRes.vouchers || []);
+      if (vouchRes?.success) setMyPromotions(vouchRes.promotions || []);
     } catch (err) {
       console.error('[LoyaltyPointsPage] load error:', err);
     } finally {
@@ -140,19 +127,19 @@ export default function LoyaltyPointsPage() {
   useEffect(() => { loadLoyaltyData(); }, [userId]);
 
   const handleRedeem = async () => {
-    if (!selectedVoucher || !userId) return;
+    if (!selectedPromo || !userId) return;
     setExchanging(true);
     setActionError('');
     setActionSuccess('');
     try {
-      const res = await redeemVoucher(userId, selectedVoucher.promotion_id);
+      const res = await redeemPromotion(userId, selectedPromo.promotion_id);
       if (res?.success) {
-        setActionSuccess(`Redeemed! Your voucher code: ${res.voucher.code}`);
-        setSelectedVoucher(null);
+        setActionSuccess(`Redeemed! Your promo code: ${res.promotion.code}`);
+        setSelectedPromo(null);
         await loadLoyaltyData();
         setTimeout(() => setActionSuccess(''), 6000);
       } else {
-        setActionError(res?.message || 'Failed to redeem voucher.');
+        setActionError(res?.message || 'Failed to redeem promotion.');
         setTimeout(() => setActionError(''), 5000);
       }
     } catch (err) {
@@ -163,7 +150,7 @@ export default function LoyaltyPointsPage() {
     }
   };
 
-  const filteredVouchers = useMemo(() => myVouchers.filter(v => v.status === activeTab), [myVouchers, activeTab]);
+  const filteredPromotions = useMemo(() => myPromotions.filter(v => v.status === activeTab), [myPromotions, activeTab]);
 
   if (loading) {
     return (
@@ -282,7 +269,7 @@ export default function LoyaltyPointsPage() {
                   </div>
 
                   <button
-                    onClick={() => setSelectedVoucher(promo)}
+                    onClick={() => setSelectedPromo(promo)}
                     disabled={!canRedeem || outOfStock}
                     className="loyalty-catalog__btn"
                   >
@@ -295,12 +282,12 @@ export default function LoyaltyPointsPage() {
         )}
       </section>
 
-      {/* ── My Vouchers ── */}
+      {/* ── My Promotions ── */}
       <section>
         <div className="loyalty-section-header loyalty-section-header--vouchers">
           <div className="loyalty-section-header__title-wrap">
             <Ticket size={18} className="loyalty-section-header__icon" />
-            <h3 className="loyalty-section-header__title">My Vouchers</h3>
+            <h3 className="loyalty-section-header__title">My Promo Codes</h3>
           </div>
 
           {/* Tab switcher */}
@@ -317,12 +304,12 @@ export default function LoyaltyPointsPage() {
           </div>
         </div>
 
-        {filteredVouchers.length === 0 ? (
-          <p className="loyalty-vouchers__empty">No {activeTab} vouchers found.</p>
+        {filteredPromotions.length === 0 ? (
+          <p className="loyalty-vouchers__empty">No {activeTab} promotions found.</p>
         ) : (
           <div className="loyalty-vouchers__grid">
-            {filteredVouchers.map(voucher => (
-              <div key={voucher.customer_voucher_id} className="loyalty-vouchers__card">
+            {filteredPromotions.map(voucher => (
+              <div key={voucher.customer_promotion_id} className="loyalty-vouchers__card">
                 {/* Decorative circle */}
                 <div className="loyalty-vouchers__deco" />
 
@@ -332,13 +319,13 @@ export default function LoyaltyPointsPage() {
                     <p className="loyalty-vouchers__desc">{voucher.description}</p>
                   </div>
                   <span className="loyalty-vouchers__code">
-                    {voucher.voucher_code}
+                    {voucher.promo_code}
                   </span>
                 </div>
 
                 <div className="loyalty-vouchers__footer">
                   {voucher.status === 'active' ? (
-                    <VoucherCountdown expiryDate={voucher.expires_at} onExpired={() => loadLoyaltyData()} />
+                    <PromoCountdown expiryDate={voucher.expires_at} onExpired={() => loadLoyaltyData()} />
                   ) : voucher.status === 'used' ? (
                     <span className="loyalty-vouchers__status-used">
                       <CheckCircle2 size={12} className="loyalty-vouchers__status-used-icon" />
@@ -357,7 +344,7 @@ export default function LoyaltyPointsPage() {
       </section>
 
       {/* ── Confirmation Modal ── */}
-      {selectedVoucher && createPortal(
+      {selectedPromo && createPortal(
         <div className="loyalty-confirm-overlay">
           <div className="loyalty-confirm-card">
             {/* Header */}
@@ -377,18 +364,18 @@ export default function LoyaltyPointsPage() {
               </div>
               <div className="loyalty-confirm-card__row loyalty-confirm-card__row--danger">
                 <span>Points to deduct</span>
-                <span>−{selectedVoucher.points_required} pts</span>
+                <span>−{selectedPromo.points_required} pts</span>
               </div>
               <div className="loyalty-confirm-card__row loyalty-confirm-card__row--total">
                 <span>Remaining balance</span>
-                <span className="loyalty-confirm-card__row--success"><AnimatedCounter value={(balanceData.balance || 0) - selectedVoucher.points_required} /> pts</span>
+                <span className="loyalty-confirm-card__row--success"><AnimatedCounter value={(balanceData.balance || 0) - selectedPromo.points_required} /> pts</span>
               </div>
             </div>
 
             {/* Actions */}
             <div className="loyalty-confirm-card__actions">
               <button
-                onClick={() => setSelectedVoucher(null)}
+                onClick={() => setSelectedPromo(null)}
                 disabled={exchanging}
                 className="loyalty-confirm-card__btn-cancel"
               >

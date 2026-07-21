@@ -10,9 +10,6 @@ async function syncMenu() {
     // We will just clear Dishes and MenuCategories.
     console.log("Clearing existing menu data...");
     
-    // First, delete DishImages
-    await pool.query('DELETE FROM dbo.DishImages');
-    
     // Delete Dishes
     await pool.query('DELETE FROM dbo.Dishes');
     

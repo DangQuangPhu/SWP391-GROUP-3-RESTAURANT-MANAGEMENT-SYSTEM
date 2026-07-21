@@ -155,14 +155,14 @@ export const handleSepayWebhook = async (req, res) => {
 
         const paymentId = paymentResult.recordset[0].payment_id;
 
-        // b2. Atomic Voucher Redemption
+        // b2. Atomic PromoCode Redemption
         if (reservation.applied_promo_code) {
-          const voucherResult = await transaction.request()
-            .input('voucherCode', sql.NVarChar(40), reservation.applied_promo_code)
-            .query('SELECT voucher_id FROM dbo.Vouchers WHERE voucher_code = @voucherCode');
+          const promoCodeResult = await transaction.request()
+            .input('promoCode', sql.NVarChar(40), reservation.applied_promo_code)
+            .query('SELECT promo_code_id FROM dbo.PromoCodes WHERE promo_code = @promoCode');
 
-          if (voucherResult.recordset.length > 0) {
-            const voucherId = voucherResult.recordset[0].voucher_id;
+          if (promoCodeResult.recordset.length > 0) {
+            const promoCodeId = promoCodeResult.recordset[0].promo_code_id;
             const baseDeposit = 20000;
             const poQuery = await transaction.request()
               .input('resId', sql.Int, reservation.reservation_id)
@@ -173,18 +173,18 @@ export const handleSepayWebhook = async (req, res) => {
 
             // Increment usage
             await transaction.request()
-              .input('vId', sql.Int, voucherId)
-              .query('UPDATE dbo.Vouchers SET times_used = times_used + 1 WHERE voucher_id = @vId');
+              .input('pcId', sql.Int, promoCodeId)
+              .query('UPDATE dbo.PromoCodes SET times_used = times_used + 1 WHERE promo_code_id = @pcId');
 
             // Insert redemption record
             await transaction.request()
-              .input('vId', sql.Int, voucherId)
+              .input('pcId', sql.Int, promoCodeId)
               .input('pId', sql.Int, paymentId)
               .input('cId', sql.Int, reservation.customer_id || null)
               .input('discount', sql.Decimal(12, 2), calculatedDiscount)
               .query(`
-                  INSERT INTO dbo.VoucherRedemptions (voucher_id, payment_id, customer_id, discount_amount, redeemed_at)
-                  VALUES (@vId, @pId, @cId, @discount, SYSDATETIME())
+                  INSERT INTO dbo.PromotionRedemptions (promo_code_id, payment_id, customer_id, discount_amount, redeemed_at)
+                  VALUES (@pcId, @pId, @cId, @discount, SYSDATETIME())
                 `);
           }
         }
