@@ -57,6 +57,10 @@ COPY backend/ ./backend/
 # Copy built frontend assets from builder stage (immutable static files)
 COPY --from=builder /app/dist ./dist
 
+# Create uploads folder and set ownership to non-root user
+RUN mkdir -p /app/backend/src/uploads/dishes /app/backend/src/uploads/reservations && \
+    chown -R appuser:appgroup /app
+
 # Switch to non-root user
 USER appuser
 
