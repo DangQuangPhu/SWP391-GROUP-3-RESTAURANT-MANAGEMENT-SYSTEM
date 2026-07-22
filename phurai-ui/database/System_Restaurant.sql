@@ -1270,17 +1270,17 @@ VALUES
 
 -- Area 4: VIP Lounge (Phòng VIP: 3 phòng x 6 ghế) — price_tier = VIP
 (5, 4, N'VIP-1', 6, N'Available', N'VIP', N'qr-vip-1', 0),
-(6, 4, N'VIP-2', 6, N'Occupied', N'VIP', N'qr-vip-2', 0), -- Khớp UI: Đang có khách
+(6, 4, N'VIP-2', 6, N'Available', N'VIP', N'qr-vip-2', 0),
 (7, 4, N'VIP-3', 6, N'Available', N'VIP', N'qr-vip-3', 0),
 
 -- Area 2: Standard Dining Area (Sảnh thường: 12 bàn x 4 ghế)
 (8, 2, N'S-01', 4, N'Available', N'Standard', N'qr-s-01', 0),
 (9, 2, N'S-02', 4, N'Available', N'Standard', N'qr-s-02', 0),
-(10, 2, N'S-03', 4, N'Occupied', N'Standard', N'qr-s-03', 0), -- Khớp UI: Đang có khách
+(10, 2, N'S-03', 4, N'Available', N'Standard', N'qr-s-03', 0),
 (11, 2, N'S-04', 4, N'Available', N'Standard', N'qr-s-04', 0),
 (12, 2, N'S-05', 4, N'Available', N'Standard', N'qr-s-05', 0),
 (13, 2, N'S-06', 4, N'Available', N'Standard', N'qr-s-06', 0),
-(14, 2, N'S-07', 4, N'Occupied', N'Standard', N'qr-s-07', 0), -- Khớp UI: Đang có khách
+(14, 2, N'S-07', 4, N'Available', N'Standard', N'qr-s-07', 0),
 (15, 2, N'S-08', 4, N'Available', N'Standard', N'qr-s-08', 0),
 (16, 2, N'S-09', 4, N'Available', N'Standard', N'qr-s-09', 0),
 (17, 2, N'S-10', 4, N'Available', N'Standard', N'qr-s-10', 0),
@@ -1294,7 +1294,7 @@ VALUES
 (23, 3, N'PRE-04', 4, N'Available', N'Premium', N'qr-pre-04', 0),
 
 -- Area 5: Private Rooms (Phòng riêng: 2, 4, 6, 8 ghế) — price_tier = VIP
-(24, 5, N'PR-01', 2, N'Occupied', N'VIP', N'qr-pr-01', 0), -- Khớp UI: Đang có khách
+(24, 5, N'PR-01', 2, N'Available', N'VIP', N'qr-pr-01', 0),
 (25, 5, N'PR-02', 4, N'Available', N'VIP', N'qr-pr-02', 0),
 (26, 5, N'PR-03', 6, N'Available', N'VIP', N'qr-pr-03', 0),
 (27, 5, N'PR-04', 8, N'Available', N'VIP', N'qr-pr-04', 0),

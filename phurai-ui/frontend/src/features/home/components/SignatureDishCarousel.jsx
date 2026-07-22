@@ -23,7 +23,7 @@ function SingleVideoPlayer({ src, active, onTextReveal, onEndedNext }) {
       v.currentTime = 0;
       v.playbackRate = 1.5; // Fast 1.5x start for first 2s
       setIsFading(false);
-      v.play().catch(() => {});
+      v.play().catch(() => { });
     }
   }, [active]);
 
@@ -75,9 +75,8 @@ function SingleVideoPlayer({ src, active, onTextReveal, onEndedNext }) {
         className="single-video-player__video"
       />
       <div
-        className={`dual-video-player__overlay ${
-          isFading ? 'dual-video-player__overlay--visible' : ''
-        }`}
+        className={`dual-video-player__overlay ${isFading ? 'dual-video-player__overlay--visible' : ''
+          }`}
       />
     </div>
   );
@@ -106,14 +105,14 @@ function DualVideoPlayer({ active, onVideoChange, onTextReveal, onEndedNext }) {
       v1.playbackRate = 1.5; // Fast 1.5x start for first 2s
       setIsFading(false);
       if (onVideoChange) onVideoChange(1);
-      v1.play().catch(() => {});
+      v1.play().catch(() => { });
     } else if (currentVideo === 2 && video2Ref.current) {
       const v2 = video2Ref.current;
       v2.currentTime = 0;
       v2.playbackRate = 1.5; // Fast 1.5x start for first 2s
       setIsFading(false);
       if (onVideoChange) onVideoChange(2);
-      v2.play().catch(() => {});
+      v2.play().catch(() => { });
     }
   }, [currentVideo, active]);
 
@@ -195,9 +194,8 @@ function DualVideoPlayer({ active, onVideoChange, onTextReveal, onEndedNext }) {
   return (
     <div className="dual-video-player">
       <div
-        className={`dual-video-player__item ${
-          currentVideo === 1 ? 'dual-video-player__item--active' : ''
-        }`}
+        className={`dual-video-player__item ${currentVideo === 1 ? 'dual-video-player__item--active' : ''
+          }`}
       >
         <video
           ref={video1Ref}
@@ -211,9 +209,8 @@ function DualVideoPlayer({ active, onVideoChange, onTextReveal, onEndedNext }) {
       </div>
 
       <div
-        className={`dual-video-player__item ${
-          currentVideo === 2 ? 'dual-video-player__item--active' : ''
-        }`}
+        className={`dual-video-player__item ${currentVideo === 2 ? 'dual-video-player__item--active' : ''
+          }`}
       >
         <video
           ref={video2Ref}
@@ -228,9 +225,8 @@ function DualVideoPlayer({ active, onVideoChange, onTextReveal, onEndedNext }) {
 
       {/* Dark overlay transition for seamless video crossfade */}
       <div
-        className={`dual-video-player__overlay ${
-          isFading ? 'dual-video-player__overlay--visible' : ''
-        }`}
+        className={`dual-video-player__overlay ${isFading ? 'dual-video-player__overlay--visible' : ''
+          }`}
       />
     </div>
   );
@@ -239,19 +235,19 @@ function DualVideoPlayer({ active, onVideoChange, onTextReveal, onEndedNext }) {
 const CARDS = [
   {
     id: 'cooking-showcase',
-    eyebrow: 'SPRING COLLECTION',
-    title: 'Harmonizing Tradition & Modernity',
+    eyebrow: 'THE CINEMATIC EXPERIENCE',
+    title: 'Artistry in Every Slice',
     description:
-      'Masterfully hand-crafted sushi and seasonal catches, elevated with subtle Peruvian notes.',
+      'Witness the rhythm of Japanese culinary mastery, where speed meets absolute precision.',
     isSingleVideoShowcase: true,
     videoSrc: homeImages.cookingVideo,
   },
   {
     id: 'video-showcase',
-    eyebrow: 'THE CINEMATIC EXPERIENCE',
-    title: 'Artistry in Every Slice',
+    eyebrow: 'SPRING COLLECTION',
+    title: 'Harmonizing Tradition & Modernity',
     description:
-      'Witness the rhythm of Japanese culinary mastery, where speed meets absolute precision.',
+      'Masterfully hand-crafted sushi and seasonal catches, elevated with subtle Peruvian notes.',
     isDualVideoShowcase: true,
   },
   {
@@ -472,7 +468,7 @@ function SignatureDishCarousel() {
         style={{ '--heading-parallax': `${headingOffset}px` }}
       >
         <h2 id="signature-dish-heading" className="signature-dish-carousel__heading">
-          OUR HIGHLIGHTS
+          OUR SIGNATURE FOOD
         </h2>
       </div>
 
@@ -520,9 +516,9 @@ function SignatureDishCarousel() {
                 : card.description
               : card.description;
 
-            const isTextVisible = card.isSingleVideoShowcase || card.isDualVideoShowcase
-              ? videoTextVisible
-              : true;
+            const isTextVisible = index === activeIndex
+              ? (card.isSingleVideoShowcase || card.isDualVideoShowcase ? videoTextVisible : true)
+              : false;
 
             return (
               <article
@@ -571,9 +567,8 @@ function SignatureDishCarousel() {
                 {/* Overlaid Content with Delayed Apple-style Typography */}
                 <div className="signature-dish-carousel__content">
                   <div
-                    className={`signature-dish-carousel__text-group ${
-                      isTextVisible ? 'signature-dish-carousel__text-group--visible' : ''
-                    }`}
+                    className={`signature-dish-carousel__text-group ${isTextVisible ? 'signature-dish-carousel__text-group--visible' : ''
+                      }`}
                   >
                     <p className="signature-dish-carousel__eyebrow">
                       {eyebrowText}
@@ -604,8 +599,8 @@ function SignatureDishCarousel() {
               type="button"
               role="tab"
               className={`signature-dish-carousel__dot${index === activeIndex
-                  ? ' signature-dish-carousel__dot--active'
-                  : ''
+                ? ' signature-dish-carousel__dot--active'
+                : ''
                 }`}
               aria-label={`Go to slide ${index + 1}`}
               aria-selected={index === activeIndex}
