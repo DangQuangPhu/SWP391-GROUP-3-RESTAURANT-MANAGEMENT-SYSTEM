@@ -39,7 +39,8 @@ export default defineConfig({
   envDir: '../',
   build: {
     outDir: '../dist',
-    emptyOutDir: true
+    emptyOutDir: true,
+    cssTarget: 'chrome90'
   },
   define: {
     'process.env': {}
