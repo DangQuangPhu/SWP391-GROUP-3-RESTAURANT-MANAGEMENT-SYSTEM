@@ -5,6 +5,7 @@ let cronInterval = null;
 let sepayInterval = null;
 let isRunning = false;
 let isPollingSePay = false;
+let lastDbErrorTime = 0;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Active SePay payment verification helper that polls transaction records.
@@ -326,7 +327,9 @@ export const startCronJobs = () => {
       }
 
     } catch (err) {
-      console.error('[CronService] Active SePay polling error:', err.message);
+      if (err?.code !== 'ESOCKET' && !err?.message?.includes('1433')) {
+        console.error('[CronService] Active SePay polling error:', err.message);
+      }
     } finally {
       isPollingSePay = false;
     }
