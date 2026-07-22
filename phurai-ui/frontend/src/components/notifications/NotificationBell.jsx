@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Skeleton } from "@/components/ui/Skeleton.jsx";
 import toast from "react-hot-toast";
 import { useSocket } from "@/core/socket/SocketContext.jsx";
@@ -148,6 +148,7 @@ function mergeNotifications(...groups) {
 }
 
 function NotificationBell({ user, listenForStaffEvents = false, className = "" }) {
+  const isReducedMotion = useReducedMotion();
   const { socket } = useSocket();
   const openTableModal = useStaffStore((state) => state.openTableModal);
   const userId = Number(user?.userId ?? user?.id);
@@ -435,7 +436,7 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
           <motion.span 
             key={unread}
             initial={isReducedMotion ? {} : { scale: 0.8 }}
-            animate={isReducedMotion ? {} : { scale: [1, 1.3, 1] }}
+            animate={isReducedMotion ? {} : { scale: 1 }}
             transition={isReducedMotion ? { duration: 0.1 } : { type: "spring", stiffness: 380, damping: 22 }}
             className="notification-bell__badge" 
             aria-label={`${unread} unread`}

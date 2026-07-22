@@ -1,4 +1,9 @@
 import heroVideo from '@/assets/videos/hero-video.mp4';
+import cookingVideo from '@/assets/videos/Cooking-Cinematic.mp4';
+import video3 from '@/assets/videos/3.mp4';
+import video5 from '@/assets/videos/5.mp4';
+
+const video4 = video5;
 import offeringSushi from '@/assets/images/offering-sushi.jpg';
 import kitchenSecrets from '@/assets/images/kitchen-secrets.jpg';
 import giftCard from '@/assets/images/gift-card.jpg';
@@ -33,6 +38,10 @@ export const homeImages = {
   Abus1,
   Abus2,
   heroVideo,
+  cookingVideo,
+  video3,
+  video4,
+  video5,
   hero,
   heroImage,
   offeringSushi,

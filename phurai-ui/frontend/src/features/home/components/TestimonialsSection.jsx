@@ -132,15 +132,34 @@ function TestimonialsSection() {
           </div>
         </div>
 
-        {/* Logo cloud */}
+        {/* Logo cloud - 2 Marquee Rows */}
         <div className="anim-testimonials__companies home-reveal-child home-reveal-child--delay-2">
           <h3 className="anim-testimonials__companies-title">Recognized by global culinary standards</h3>
-          <div className="anim-testimonials__companies-list">
-            {trustedCompanies.map((company) => (
-              <div key={company} className="anim-testimonials__company">
-                {company}
+          
+          <div className="anim-testimonials__marquee-wrapper">
+            {/* Row 1: Moving Left to Right */}
+            <div className="anim-testimonials__marquee">
+              <div className="anim-testimonials__marquee-track anim-testimonials__marquee-track--left-to-right">
+                {[...trustedCompanies, ...trustedCompanies, ...trustedCompanies, ...trustedCompanies].map((company, idx) => (
+                  <div key={`r1-${company}-${idx}`} className="anim-testimonials__company">
+                    {company}
+                    <span className="anim-testimonials__company-separator">✦</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+
+            {/* Row 2: Moving Right to Left */}
+            <div className="anim-testimonials__marquee">
+              <div className="anim-testimonials__marquee-track anim-testimonials__marquee-track--right-to-left">
+                {[...trustedCompanies, ...trustedCompanies, ...trustedCompanies, ...trustedCompanies].map((company, idx) => (
+                  <div key={`r2-${company}-${idx}`} className="anim-testimonials__company">
+                    {company}
+                    <span className="anim-testimonials__company-separator">✦</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>

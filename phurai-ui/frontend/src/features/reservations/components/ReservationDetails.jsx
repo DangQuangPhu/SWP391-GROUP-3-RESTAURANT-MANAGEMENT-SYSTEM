@@ -995,7 +995,7 @@ export default function ReservationDetails({
             maxDate={getMaxDateString()}
             className={errors.date ? 'rd-select--error' : ''}
           />
-          {errors.date && <p className="text-red-500 text-sm mt-1">{errors.date}</p>}
+          {errors.date && <p className="rd-error-message">{errors.date}</p>}
         </div>
       </div>
 
@@ -1012,7 +1012,7 @@ export default function ReservationDetails({
                 availableTimes={startHoursOptions}
                 className={errors.startTime ? 'rd-select--error' : ''}
               />
-              {errors.startTime && <p className="text-red-500 text-sm mt-1">{errors.startTime}</p>}
+              {errors.startTime && <p className="rd-error-message">{errors.startTime}</p>}
             </>
           )}
         </div>
@@ -1021,12 +1021,12 @@ export default function ReservationDetails({
       <div className="rd-row-3" ref={registerRef('guests')} style={{ marginTop: '1rem' }}>
         <div className="rd-field">
           <label>GUESTS</label>
-          <div className={`rd-guest-stepper ${errors.guests ? 'border-red-500 border-2' : ''}`}>
+          <div className={`rd-guest-stepper ${errors.guests ? 'rd-guest-stepper--error' : ''}`}>
             <button type="button" onClick={() => adjustGuests(-1)} aria-label="Decrease guests">-</button>
             <input type="text" value={form.guests} readOnly />
             <button type="button" onClick={() => adjustGuests(1)} aria-label="Increase guests">+</button>
           </div>
-          {errors.guests && <p className="text-red-500 text-sm mt-1">{errors.guests}</p>}
+          {errors.guests && <p className="rd-error-message">{errors.guests}</p>}
         </div>
       </div>
 
@@ -1041,13 +1041,13 @@ export default function ReservationDetails({
               <>
                 <button
                   type="button"
-                  className={`rd-btn-outline ${(!form.guests || form.guests < 1 || form.guests > 10) ? 'opacity-50 cursor-not-allowed' : ''} ${errors.selectedTable ? 'border-red-500 border-2 text-red-500' : ''}`}
+                  className={`rd-btn-outline ${(!form.guests || form.guests < 1 || form.guests > 10) ? 'opacity-50 cursor-not-allowed' : ''} ${errors.selectedTable ? 'rd-btn-outline--error' : ''}`}
                   onClick={() => form.guests && form.guests >= 1 && form.guests <= 10 && setShowTableBoard(true)}
                   disabled={!form.guests || form.guests < 1 || form.guests > 10}
                 >
                   CHOOSE AND VIEW TABLE
                 </button>
-                {errors.selectedTable && <p className="text-red-500 text-sm mt-1">{errors.selectedTable}</p>}
+                {errors.selectedTable && <p className="rd-error-message">{errors.selectedTable}</p>}
                 {(!form.guests || form.guests < 1 || form.guests > 10) && (
                   <p className="text-amber-600 text-sm mt-1">
                     Please select the number of guests before choosing a table.
@@ -1154,7 +1154,7 @@ export default function ReservationDetails({
             ]}
             className={errors.duration ? 'rd-select--error' : ''}
           />
-          {errors.duration && <p className="text-red-500 text-sm mt-1">{errors.duration}</p>}
+          {errors.duration && <p className="rd-error-message">{errors.duration}</p>}
           <BookingAlerts duration={form.duration} />
         </div>
       )}
@@ -1196,9 +1196,9 @@ export default function ReservationDetails({
           placeholder="Your Full Name"
           value={form.fullName}
           onChange={(e) => updateField('fullName', e.target.value)}
-          className={errors.fullName ? 'border-red-500 border-2' : ''}
+          className={errors.fullName ? 'rd-input--error' : ''}
         />
-        {errors.fullName && <p className="text-red-500 text-sm mt-1">{errors.fullName}</p>}
+        {errors.fullName && <p className="rd-error-message">{errors.fullName}</p>}
       </div>
 
       <div className="rd-row-2">
@@ -1209,9 +1209,9 @@ export default function ReservationDetails({
             placeholder="Your Email"
             value={form.email}
             onChange={(e) => updateField('email', e.target.value)}
-            className={errors.email ? 'border-red-500 border-2' : ''}
+            className={errors.email ? 'rd-input--error' : ''}
           />
-          {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+          {errors.email && <p className="rd-error-message">{errors.email}</p>}
         </div>
         <div className="rd-field" ref={registerRef('phone')}>
           <label>PHONE</label>
@@ -1220,9 +1220,9 @@ export default function ReservationDetails({
             placeholder="Your Phone Number"
             value={form.phone}
             onChange={(e) => updateField('phone', e.target.value)}
-            className={errors.phone ? 'border-red-500 border-2' : ''}
+            className={errors.phone ? 'rd-input--error' : ''}
           />
-          {errors.phone && <p className="text-red-500 text-sm mt-1">{errors.phone}</p>}
+          {errors.phone && <p className="rd-error-message">{errors.phone}</p>}
         </div>
       </div>
 

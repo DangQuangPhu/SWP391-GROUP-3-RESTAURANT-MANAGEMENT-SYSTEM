@@ -21,13 +21,9 @@
   background-repeat: no-repeat !important;
   background-attachment: fixed !important;
   min-height: 100vh;
-}
-
-@media (min-width: 901px) {
-  .rd-page {
-    height: 100vh !important;
-    overflow: hidden !important;
-  }
+  width: 100%;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
 }
 
 .rd-page--bg-summary {
@@ -113,18 +109,20 @@
   display: flex !important;
   min-height: 100vh !important;
   width: 100% !important;
-  align-items: center !important;
+  align-items: flex-start !important;
   justify-content: flex-start !important;
   /* Left aligned on desktop */
-  padding-left: 8vw !important;
-  /* Spacing from left border */
-  padding-right: 2rem !important;
+  padding-left: clamp(1rem, 6vw, 8vw) !important;
+  padding-right: clamp(1rem, 3vw, 2rem) !important;
+  padding-top: clamp(2rem, 5vh, 4rem) !important;
+  padding-bottom: clamp(3rem, 6vh, 5rem) !important;
+  box-sizing: border-box !important;
 }
 
 .rd-split--centered {
   display: flex !important;
   justify-content: center !important;
-  align-items: center !important;
+  align-items: flex-start !important;
   padding-left: 0 !important;
 }
 
@@ -143,11 +141,10 @@
   width: 100% !important;
   margin: 0 !important;
   /* Left aligned on desktop */
-  min-height: 100vh;
+  min-height: auto !important;
   display: flex !important;
   flex-direction: column !important;
-  justify-content: center !important;
-  /* Centered vertically */
+  justify-content: flex-start !important;
   position: relative;
   z-index: 1;
 }
@@ -253,26 +250,29 @@
 }
 
 .rd-card {
-  background: rgba(255, 255, 255, 0.09) !important;
-  backdrop-filter: blur(28px) saturate(220%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(220%) !important;
+  background: linear-gradient(
+    135deg,
+    rgba(30, 24, 20, 0.58) 0%,
+    rgba(16, 13, 10, 0.68) 100%
+  ) !important;
+  backdrop-filter: blur(32px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(190%) !important;
   border-radius: 28px !important;
-  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
   padding: 1.5rem !important;
   box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 32px 80px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
     inset 0 -1px 20px rgba(255, 255, 255, 0.05) !important;
-  opacity: 0;
-  animation: appleFadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  animation-delay: 0.5s;
   position: relative !important;
   color: #ffffff !important;
+  isolation: isolate;
+  transform: translateZ(0);
   transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), filter 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 .rd-card--blur {
-  opacity: 2.12 !important;
+  opacity: 0.15 !important;
   filter: blur(16px) !important;
   transform: scale(0.965) !important;
   pointer-events: none !important;
@@ -342,12 +342,13 @@
   height: 48px;
   padding: 0 14px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
   font-size: 15px;
-  background: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(0, 0, 0, 0.28) !important;
   color: #ffffff !important;
-  backdrop-filter: blur(10px) !important;
-  -webkit-backdrop-filter: blur(10px) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  transform: translateZ(0);
   transition: all 0.25s ease !important;
 }
 
@@ -621,8 +622,8 @@ div:has(> .rd-custom-select-container--open) {
   height: 48px !important;
   padding: 0 16px !important;
   border-radius: 12px !important;
-  border: 1px solid rgba(255, 255, 255, 0.16) !important;
-  background: rgba(255, 255, 255, 0.09) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  background: rgba(0, 0, 0, 0.28) !important;
   color: #ffffff !important;
   display: flex !important;
   align-items: center !important;
@@ -631,11 +632,12 @@ div:has(> .rd-custom-select-container--open) {
   cursor: pointer !important;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
   text-align: left !important;
-  backdrop-filter: blur(20px) saturate(200%) !important;
-  -webkit-backdrop-filter: blur(20px) saturate(200%) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  transform: translateZ(0);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 4px 12px rgba(0, 0, 0, 0.08) !important;
+    0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }
 
 .rd-custom-select-trigger:focus,
@@ -992,4 +994,41 @@ div:has(> .rd-custom-select-container--open) {
 .rd-timepicker-input::placeholder,
 .rd-datepicker-input::placeholder {
   color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* ── Validation Error Highlights ── */
+.rd-field input.rd-input--error,
+.rd-field select.rd-input--error {
+  border: 1.5px solid #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
+}
+
+.rd-guest-stepper.rd-guest-stepper--error {
+  border: 1.5px solid #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
+}
+
+.rd-btn-outline.rd-btn-outline--error {
+  border: 1.5px solid #ef4444 !important;
+  color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
+}
+
+/* Apple-style smooth reveal animation for error texts */
+.rd-error-message {
+  color: #ef4444;
+  font-size: 13px;
+  margin-top: 6px;
+  animation: appleErrorReveal 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes appleErrorReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

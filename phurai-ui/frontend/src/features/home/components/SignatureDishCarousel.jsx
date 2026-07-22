@@ -1,38 +1,270 @@
 import { useEffect, useRef, useState } from 'react';
 import OutlineButton from '@/components/common/OutlineButton';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
+import { homeImages } from '../data/homeAssets.js';
 import '@/features/home/styles/SignatureDishCarousel.css';
+
+function SingleVideoPlayer({ src, active, onTextReveal, onEndedNext }) {
+  const videoRef = useRef(null);
+  const [isFading, setIsFading] = useState(false);
+  const textRevealedRef = useRef(false);
+
+  useEffect(() => {
+    if (!active) {
+      if (videoRef.current) videoRef.current.pause();
+      return;
+    }
+
+    textRevealedRef.current = false;
+    if (onTextReveal) onTextReveal(false);
+
+    if (videoRef.current) {
+      const v = videoRef.current;
+      v.currentTime = 0;
+      v.playbackRate = 1.5; // Fast 1.5x start for first 2s
+      setIsFading(false);
+      v.play().catch(() => {});
+    }
+  }, [active]);
+
+  const handleTimeUpdate = () => {
+    const v = videoRef.current;
+    if (!v || !v.duration) return;
+
+    const ct = v.currentTime;
+    const dur = v.duration;
+
+    // After 2.0s, return to normal 1.0x playback speed
+    if (ct >= 2.0 && v.playbackRate !== 1.0) {
+      v.playbackRate = 1.0;
+    }
+
+    // Wait until video has played for ~3.5s before revealing text
+    if (ct >= 3.5 && ct < dur - 1.2 && !textRevealedRef.current) {
+      textRevealedRef.current = true;
+      if (onTextReveal) onTextReveal(true);
+    }
+
+    // 1.2s before end: float text out smoothly
+    if (dur - ct <= 1.2 && textRevealedRef.current) {
+      textRevealedRef.current = false;
+      if (onTextReveal) onTextReveal(false);
+    }
+
+    // 0.7s before end: trigger smooth dark vignette fade for video
+    if (dur - ct <= 0.7 && !isFading) {
+      setIsFading(true);
+    }
+  };
+
+  const handleEnded = () => {
+    textRevealedRef.current = false;
+    if (onTextReveal) onTextReveal(false);
+    if (onEndedNext) onEndedNext();
+  };
+
+  return (
+    <div className="single-video-player">
+      <video
+        ref={videoRef}
+        src={src}
+        muted
+        playsInline
+        onTimeUpdate={handleTimeUpdate}
+        onEnded={handleEnded}
+        className="single-video-player__video"
+      />
+      <div
+        className={`dual-video-player__overlay ${
+          isFading ? 'dual-video-player__overlay--visible' : ''
+        }`}
+      />
+    </div>
+  );
+}
+
+function DualVideoPlayer({ active, onVideoChange, onTextReveal, onEndedNext }) {
+  const video1Ref = useRef(null);
+  const video2Ref = useRef(null);
+  const [currentVideo, setCurrentVideo] = useState(1); // 1 for 4.mp4, 2 for 3.mp4
+  const [isFading, setIsFading] = useState(false);
+  const textRevealedRef = useRef(false);
+
+  useEffect(() => {
+    if (!active) {
+      if (video1Ref.current) video1Ref.current.pause();
+      if (video2Ref.current) video2Ref.current.pause();
+      return;
+    }
+
+    textRevealedRef.current = false;
+    if (onTextReveal) onTextReveal(false);
+
+    if (currentVideo === 1 && video1Ref.current) {
+      const v1 = video1Ref.current;
+      v1.currentTime = 0;
+      v1.playbackRate = 1.5; // Fast 1.5x start for first 2s
+      setIsFading(false);
+      if (onVideoChange) onVideoChange(1);
+      v1.play().catch(() => {});
+    } else if (currentVideo === 2 && video2Ref.current) {
+      const v2 = video2Ref.current;
+      v2.currentTime = 0;
+      v2.playbackRate = 1.5; // Fast 1.5x start for first 2s
+      setIsFading(false);
+      if (onVideoChange) onVideoChange(2);
+      v2.play().catch(() => {});
+    }
+  }, [currentVideo, active]);
+
+  const handleTimeUpdate1 = () => {
+    const v1 = video1Ref.current;
+    if (!v1 || !v1.duration) return;
+
+    const ct = v1.currentTime;
+    const dur = v1.duration;
+
+    // After 2.0s, return to normal 1.0x playback speed
+    if (ct >= 2.0 && v1.playbackRate !== 1.0) {
+      v1.playbackRate = 1.0;
+    }
+
+    // Wait until video has played for ~3.5s before revealing text
+    if (ct >= 3.5 && ct < dur - 1.2 && !textRevealedRef.current) {
+      textRevealedRef.current = true;
+      if (onTextReveal) onTextReveal(true);
+    }
+
+    // 1.2s before end: float text out smoothly
+    if (dur - ct <= 1.2 && textRevealedRef.current) {
+      textRevealedRef.current = false;
+      if (onTextReveal) onTextReveal(false);
+    }
+
+    // 0.7s before end: trigger smooth dark vignette fade for video
+    if (dur - ct <= 0.7 && !isFading) {
+      setIsFading(true);
+    }
+  };
+
+  const handleTimeUpdate2 = () => {
+    const v2 = video2Ref.current;
+    if (!v2 || !v2.duration) return;
+
+    const ct = v2.currentTime;
+    const dur = v2.duration;
+
+    // After 2.0s, return to normal 1.0x playback speed
+    if (ct >= 2.0 && v2.playbackRate !== 1.0) {
+      v2.playbackRate = 1.0;
+    }
+
+    // Wait until video has played for ~3.5s before revealing text
+    if (ct >= 3.5 && ct < dur - 1.2 && !textRevealedRef.current) {
+      textRevealedRef.current = true;
+      if (onTextReveal) onTextReveal(true);
+    }
+
+    // 1.2s before end: float text out smoothly
+    if (dur - ct <= 1.2 && textRevealedRef.current) {
+      textRevealedRef.current = false;
+      if (onTextReveal) onTextReveal(false);
+    }
+
+    // 0.7s before end: trigger smooth dark vignette fade for video
+    if (dur - ct <= 0.7 && !isFading) {
+      setIsFading(true);
+    }
+  };
+
+  const handleEnded1 = () => {
+    textRevealedRef.current = false;
+    if (onTextReveal) onTextReveal(false);
+    setCurrentVideo(2);
+    if (onVideoChange) onVideoChange(2);
+  };
+
+  const handleEnded2 = () => {
+    textRevealedRef.current = false;
+    if (onTextReveal) onTextReveal(false);
+    setCurrentVideo(1);
+    if (onVideoChange) onVideoChange(1);
+    if (onEndedNext) onEndedNext();
+  };
+
+  return (
+    <div className="dual-video-player">
+      <div
+        className={`dual-video-player__item ${
+          currentVideo === 1 ? 'dual-video-player__item--active' : ''
+        }`}
+      >
+        <video
+          ref={video1Ref}
+          src={homeImages.video5}
+          muted
+          playsInline
+          onTimeUpdate={handleTimeUpdate1}
+          onEnded={handleEnded1}
+          className="dual-video-player__video"
+        />
+      </div>
+
+      <div
+        className={`dual-video-player__item ${
+          currentVideo === 2 ? 'dual-video-player__item--active' : ''
+        }`}
+      >
+        <video
+          ref={video2Ref}
+          src={homeImages.video3}
+          muted
+          playsInline
+          onTimeUpdate={handleTimeUpdate2}
+          onEnded={handleEnded2}
+          className="dual-video-player__video"
+        />
+      </div>
+
+      {/* Dark overlay transition for seamless video crossfade */}
+      <div
+        className={`dual-video-player__overlay ${
+          isFading ? 'dual-video-player__overlay--visible' : ''
+        }`}
+      />
+    </div>
+  );
+}
 
 const CARDS = [
   {
-    id: 'spring-tasting',
-    eyebrow: 'SIGNATURE',
-    title: 'Spring tasting menu sushi platter',
+    id: 'cooking-showcase',
+    eyebrow: 'SPRING COLLECTION',
+    title: 'Harmonizing Tradition & Modernity',
     description:
-      'A curated selection of seasonal sushi, sashimi, and refined Phūrai signatures.',
-    
+      'Masterfully hand-crafted sushi and seasonal catches, elevated with subtle Peruvian notes.',
+    isSingleVideoShowcase: true,
+    videoSrc: homeImages.cookingVideo,
   },
   {
-    id: 'placeholder-2',
-    eyebrow: 'SIGNATURE',
-    title: 'Chef’s selection nigiri flight',
+    id: 'video-showcase',
+    eyebrow: 'THE CINEMATIC EXPERIENCE',
+    title: 'Artistry in Every Slice',
     description:
-      'Placeholder copy for a second signature dish card. Replace with final content.',
-    
+      'Witness the rhythm of Japanese culinary mastery, where speed meets absolute precision.',
+    isDualVideoShowcase: true,
   },
   {
-    id: 'placeholder-3',
-    eyebrow: 'SIGNATURE',
-    title: 'Seasonal omakase experience',
+    id: 'omakase-experience',
+    eyebrow: 'THE OMAKASE JOURNEY',
+    title: 'Curated by the Masters',
     description:
-      'Placeholder copy for a third signature dish card. Replace with final content.',
-   
+      'An intimate multi-course Omakase journey crafted live, honoring the peak harvest of every season.',
+    image: homeImages.kitchenSecrets,
   },
 ];
 
 const SCROLL_DURATION_MS = 1000;
-const AUTO_PLAY_INTERVAL_MS = 5000;
-const USER_IDLE_RESUME_MS = 10000;
 
 function easeOutExpo(t) {
   return t >= 1 ? 1 : 1 - 2 ** (-10 * t);
@@ -50,34 +282,16 @@ function SignatureDishCarousel() {
   useScrollReveal({}, sectionRef);
 
   const animationFrameRef = useRef(null);
-  const autoPlayTimerRef = useRef(null);
-  const resumeTimerRef = useRef(null);
-
   const isAnimatingRef = useRef(false);
-  const isUserPausedRef = useRef(false);
   const activeIndexRef = useRef(0);
-  const showControlsRef = useRef(false);
 
-  const [showControls, setShowControls] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [headingOffset, setHeadingOffset] = useState(0);
   const [mediaParallax, setMediaParallax] = useState(0);
-
-  const clearAutoPlayTimer = () => {
-    if (autoPlayTimerRef.current) {
-      clearInterval(autoPlayTimerRef.current);
-      autoPlayTimerRef.current = null;
-    }
-  };
-
-  const clearResumeTimer = () => {
-    if (resumeTimerRef.current) {
-      clearTimeout(resumeTimerRef.current);
-      resumeTimerRef.current = null;
-    }
-  };
+  const [videoIndex, setVideoIndex] = useState(1);
+  const [videoTextVisible, setVideoTextVisible] = useState(false);
 
   const getTargetScrollLeft = (index) => {
     const track = trackRef.current;
@@ -145,7 +359,7 @@ function SignatureDishCarousel() {
   const scrollToCard = (index, options = {}) => {
     if (isAnimatingRef.current) return;
 
-    const { loop = false, userAction = false } = options;
+    const { loop = false } = options;
 
     let safeIndex = index;
 
@@ -158,52 +372,12 @@ function SignatureDishCarousel() {
 
     if (safeIndex === activeIndexRef.current) return;
 
-    if (userAction) {
-      pauseAutoPlayAfterUserAction();
-    }
-
     const targetLeft = getTargetScrollLeft(safeIndex);
 
     animateScrollTo(targetLeft, SCROLL_DURATION_MS, () => {
       activeIndexRef.current = safeIndex;
       setActiveIndex(safeIndex);
     });
-  };
-
-  const startAutoPlay = () => {
-    clearAutoPlayTimer();
-
-    if (!showControlsRef.current || isUserPausedRef.current) return;
-
-    autoPlayTimerRef.current = setInterval(() => {
-      if (isAnimatingRef.current) return;
-      if (!showControlsRef.current) return;
-
-      const nextIndex =
-        activeIndexRef.current >= CARDS.length - 1
-          ? 0
-          : activeIndexRef.current + 1;
-
-      scrollToCard(nextIndex, {
-        loop: true,
-        userAction: false,
-      });
-    }, AUTO_PLAY_INTERVAL_MS);
-  };
-
-  const pauseAutoPlayAfterUserAction = () => {
-    isUserPausedRef.current = true;
-
-    clearAutoPlayTimer();
-    clearResumeTimer();
-
-    resumeTimerRef.current = setTimeout(() => {
-      isUserPausedRef.current = false;
-
-      if (showControlsRef.current) {
-        startAutoPlay();
-      }
-    }, USER_IDLE_RESUME_MS);
   };
 
   const goNext = () => {
@@ -221,18 +395,16 @@ function SignatureDishCarousel() {
   };
 
   useEffect(() => {
-    requestAnimationFrame(() => {
+    setIsReady(true);
+    const timer = setTimeout(() => {
       centerCardInstantly(0);
-      requestAnimationFrame(() => setIsReady(true));
-    });
+    }, 50);
 
     return () => {
+      clearTimeout(timer);
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
-
-      clearAutoPlayTimer();
-      clearResumeTimer();
     };
   }, []);
 
@@ -241,26 +413,13 @@ function SignatureDishCarousel() {
       const section = sectionRef.current;
 
       if (!section) {
-        showControlsRef.current = false;
-        setShowControls(false);
         setHeadingOffset(0);
         setMediaParallax(0);
-        clearAutoPlayTimer();
         return;
       }
 
       const rect = section.getBoundingClientRect();
       const viewportHeight = window.innerHeight;
-
-      const shouldShow =
-        rect.top < viewportHeight * 0.65 && rect.bottom > viewportHeight * 0.35;
-
-      showControlsRef.current = shouldShow;
-      setShowControls(shouldShow);
-
-      if (!shouldShow) {
-        clearAutoPlayTimer();
-      }
 
       const visibleProgress = Math.min(
         1,
@@ -270,7 +429,7 @@ function SignatureDishCarousel() {
       const centeredProgress =
         1 -
         Math.abs(rect.top + rect.height * 0.42 - viewportHeight * 0.5) /
-          viewportHeight;
+        viewportHeight;
 
       setHeadingOffset((0.5 - visibleProgress) * 14);
       setMediaParallax(Math.max(0, centeredProgress) * 0.018);
@@ -288,21 +447,6 @@ function SignatureDishCarousel() {
   }, []);
 
   useEffect(() => {
-    if (!showControls) {
-      clearAutoPlayTimer();
-      return undefined;
-    }
-
-    if (!isUserPausedRef.current) {
-      startAutoPlay();
-    }
-
-    return () => {
-      clearAutoPlayTimer();
-    };
-  }, [showControls]);
-
-  useEffect(() => {
     const handleResize = () => {
       if (isAnimatingRef.current) return;
       centerCardInstantly(activeIndexRef.current);
@@ -315,30 +459,24 @@ function SignatureDishCarousel() {
     };
   }, []);
 
-  const handleReserve = () => {
-    document.getElementById('reserve')?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   const controlsLocked = isAnimating;
 
   return (
     <section
       ref={sectionRef}
-      className={`signature-dish-carousel home-reveal-parent${
-        isReady ? ' signature-dish-carousel--ready' : ''
-      }`}
+      className={`signature-dish-carousel ${isReady ? 'signature-dish-carousel--ready' : ''}`}
       aria-labelledby="signature-dish-heading"
     >
       <div
-        className="signature-dish-carousel__header home-reveal-child"
+        className="signature-dish-carousel__header"
         style={{ '--heading-parallax': `${headingOffset}px` }}
       >
         <h2 id="signature-dish-heading" className="signature-dish-carousel__heading">
-          OUR SIGNATURE DISH
+          OUR HIGHLIGHTS
         </h2>
       </div>
 
-      <div className="signature-dish-carousel__viewport home-reveal-child home-reveal-child--delay-1">
+      <div className="signature-dish-carousel__viewport">
         <div
           ref={trackRef}
           className="signature-dish-carousel__track"
@@ -355,34 +493,97 @@ function SignatureDishCarousel() {
               .filter(Boolean)
               .join(' ');
 
+            const handleCardClick = () => {
+              if (controlsLocked) return;
+              if (index !== activeIndex) {
+                scrollToCard(index, { userAction: true });
+              } else {
+                goNext();
+              }
+            };
+
+            const eyebrowText = card.isDualVideoShowcase
+              ? videoIndex === 2
+                ? 'SEARING ACCENTS'
+                : card.eyebrow
+              : card.eyebrow;
+
+            const titleText = card.isDualVideoShowcase
+              ? videoIndex === 2
+                ? 'Refined Flames & Flawless Cuts'
+                : card.title
+              : card.title;
+
+            const descText = card.isDualVideoShowcase
+              ? videoIndex === 2
+                ? 'Intense flames meet pristine cuts of Wagyu & Toro, unlocking deep caramelized umami notes.'
+                : card.description
+              : card.description;
+
+            const isTextVisible = card.isSingleVideoShowcase || card.isDualVideoShowcase
+              ? videoTextVisible
+              : true;
+
             return (
               <article
                 key={card.id}
                 className={cardClassName}
                 aria-hidden={index !== activeIndex}
                 style={{ '--media-parallax': `${mediaParallax}` }}
+                onClick={handleCardClick}
               >
-                <div className="signature-dish-carousel__content">
-                  <div className="signature-dish-carousel__text-group">
-                    <p className="signature-dish-carousel__eyebrow">
-                      {card.eyebrow}
-                    </p>
-                    <h3 className="signature-dish-carousel__title">
-                      {card.title}
-                    </h3>
-                    <p className="signature-dish-carousel__description">
-                      {card.description}
-                    </p>
-                   
-                  </div>
+                {/* Full-bleed Media */}
+                <div className="signature-dish-carousel__media">
+                  {card.isSingleVideoShowcase ? (
+                    <SingleVideoPlayer
+                      src={card.videoSrc}
+                      active={index === activeIndex}
+                      onTextReveal={(vis) => {
+                        if (index === activeIndex) setVideoTextVisible(vis);
+                      }}
+                      onEndedNext={() => goNext()}
+                    />
+                  ) : card.isDualVideoShowcase ? (
+                    <DualVideoPlayer
+                      active={index === activeIndex}
+                      onVideoChange={setVideoIndex}
+                      onTextReveal={(vis) => {
+                        if (index === activeIndex) setVideoTextVisible(vis);
+                      }}
+                      onEndedNext={() => goNext()}
+                    />
+                  ) : card.image ? (
+                    <img
+                      src={card.image}
+                      alt={card.title}
+                      className="signature-dish-carousel__media-img"
+                    />
+                  ) : (
+                    <div
+                      className="signature-dish-carousel__placeholder"
+                      aria-hidden="true"
+                    >
+                      Add dish image here
+                    </div>
+                  )}
                 </div>
 
-                <div className="signature-dish-carousel__media">
+                {/* Overlaid Content with Delayed Apple-style Typography */}
+                <div className="signature-dish-carousel__content">
                   <div
-                    className="signature-dish-carousel__placeholder"
-                    aria-hidden="true"
+                    className={`signature-dish-carousel__text-group ${
+                      isTextVisible ? 'signature-dish-carousel__text-group--visible' : ''
+                    }`}
                   >
-                    Add dish image here
+                    <p className="signature-dish-carousel__eyebrow">
+                      {eyebrowText}
+                    </p>
+                    <h3 className="signature-dish-carousel__title">
+                      {titleText}
+                    </h3>
+                    <p className="signature-dish-carousel__description">
+                      {descText}
+                    </p>
                   </div>
                 </div>
               </article>
@@ -391,58 +592,31 @@ function SignatureDishCarousel() {
         </div>
       </div>
 
-      <div
-        className={`signature-dish-carousel__controls${
-          showControls ? ' signature-dish-carousel__controls--visible' : ''
-        }`}
-      >
-        <div className="signature-dish-carousel__controls-inner">
-          <button
-            type="button"
-            className="signature-dish-carousel__arrow"
-            onClick={goPrev}
-            disabled={controlsLocked}
-            aria-label="Previous signature dish"
-          >
-            <span aria-hidden="true">&lsaquo;</span>
-          </button>
-
-          <div
-            className="signature-dish-carousel__dots"
-            role="tablist"
-            aria-label="Carousel pagination"
-          >
-            {CARDS.map((card, index) => (
-              <button
-                key={card.id}
-                type="button"
-                role="tab"
-                className={`signature-dish-carousel__dot${
-                  index === activeIndex
-                    ? ' signature-dish-carousel__dot--active'
-                    : ''
+      <div className="signature-dish-carousel__controls signature-dish-carousel__controls--visible">
+        <div
+          className="signature-dish-carousel__dots"
+          role="tablist"
+          aria-label="Carousel pagination"
+        >
+          {CARDS.map((card, index) => (
+            <button
+              key={card.id}
+              type="button"
+              role="tab"
+              className={`signature-dish-carousel__dot${index === activeIndex
+                  ? ' signature-dish-carousel__dot--active'
+                  : ''
                 }`}
-                aria-label={`Go to slide ${index + 1}`}
-                aria-selected={index === activeIndex}
-                disabled={controlsLocked}
-                onClick={() =>
-                  scrollToCard(index, {
-                    userAction: true,
-                  })
-                }
-              />
-            ))}
-          </div>
-
-          <button
-            type="button"
-            className="signature-dish-carousel__arrow"
-            onClick={goNext}
-            disabled={controlsLocked}
-            aria-label="Next signature dish"
-          >
-            <span aria-hidden="true">&rsaquo;</span>
-          </button>
+              aria-label={`Go to slide ${index + 1}`}
+              aria-selected={index === activeIndex}
+              disabled={controlsLocked}
+              onClick={() =>
+                scrollToCard(index, {
+                  userAction: true,
+                })
+              }
+            />
+          ))}
         </div>
       </div>
     </section>
