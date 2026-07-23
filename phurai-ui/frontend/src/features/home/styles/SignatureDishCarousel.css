@@ -38,7 +38,7 @@
   --signature-card-height: min(560px, 70vh);
   display: flex;
   gap: clamp(1rem, 2vw, 1.5rem);
-  padding-block: 0 0.5rem;
+  padding-block: 1rem 1rem;
   padding-inline: max(1.75rem, calc((100vw - var(--signature-card-width)) / 2));
   overflow-x: auto;
   overflow-y: hidden;
@@ -69,7 +69,7 @@
   background: #0d0a07;
   box-shadow: none !important;
   opacity: 0.8;
-  transform: scale(0.965);
+  transform: scale(0.97);
   filter: saturate(0.88);
   cursor: pointer;
   transition:
@@ -81,35 +81,35 @@
 
 .signature-dish-carousel__card--active {
   opacity: 1;
-  transform: scale(0.965);
+  transform: scale(0.97);
   filter: none;
 }
 
-/* 1. Playing State: Video actively running -> Card Expands To Big Size (1.025) */
+/* 1. Playing State: Video actively running -> Card Expands To Moderate Big Size (1.012) */
 .signature-dish-carousel__card--playing {
   opacity: 1;
-  transform: scale(1.025) !important;
+  transform: scale(1.012) !important;
   filter: none;
 }
 
-/* 2. Ended State: Video finished -> Card Shrinks Back Down Small (0.965) */
+/* 2. Ended State: Video finished -> Card Shrinks Back Down Small (0.97) */
 .signature-dish-carousel__card--ended {
   opacity: 0.9;
-  transform: scale(0.965) !important;
+  transform: scale(0.97) !important;
 }
 
 /* Side Cards Default */
 .signature-dish-carousel__card--previous,
 .signature-dish-carousel__card--next {
   opacity: 0.78;
-  transform: scale(0.965);
+  transform: scale(0.97);
   filter: saturate(0.85);
 }
 
-/* 3. Hover Micro-Interaction: User hovers mouse over ANY card -> Expands slightly (1.035) & elevates */
+/* 3. Hover Micro-Interaction: User hovers mouse over ANY card -> Expands moderately (1.018) */
 .signature-dish-carousel__card:hover {
   opacity: 1 !important;
-  transform: scale(1.035) translateY(-4px) !important;
+  transform: scale(1.018) translateY(-2px) !important;
   filter: saturate(1.05) brightness(1.03) !important;
   z-index: 10;
 }
@@ -117,7 +117,7 @@
 .signature-dish-carousel__card:hover .signature-dish-carousel__media-img,
 .signature-dish-carousel__card:hover .single-video-player__video,
 .signature-dish-carousel__card:hover .dual-video-player__video {
-  transform: scale(1.16);
+  transform: scale(1.15);
   filter: brightness(1.02);
 }
 
@@ -149,14 +149,18 @@
   max-width: 580px;
   pointer-events: auto;
   opacity: 0;
-  transform: translateY(-14px);
+  will-change: opacity, transform, filter;
   transition:
     opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: opacity, transform;
+    transform 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.65s ease;
 }
 
-.signature-dish-carousel__text-group--visible {
+/* Carousel 1 (Card 0) Text Entrance: Rise Up Float */
+.signature-dish-carousel__text-group--card-0 {
+  transform: translateY(28px);
+}
+.signature-dish-carousel__text-group--card-0.signature-dish-carousel__text-group--visible {
   opacity: 1;
   transform: translateY(0);
   transition:
@@ -164,28 +168,31 @@
     transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.signature-dish-carousel--ready
-  .signature-dish-carousel__card--active:not(.signature-dish-carousel__card--animating)
-  .signature-dish-carousel__eyebrow {
+/* Carousel 2 (Card 1) Text Entrance: Slide Right & Subtle Scale */
+.signature-dish-carousel__text-group--card-1 {
+  transform: translateX(-32px) scale(0.95);
+}
+.signature-dish-carousel__text-group--card-1.signature-dish-carousel__text-group--visible {
   opacity: 1;
-  transform: translateY(0);
-  transition-delay: 0.15s;
+  transform: translateX(0) scale(1);
+  transition:
+    opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.signature-dish-carousel--ready
-  .signature-dish-carousel__card--active:not(.signature-dish-carousel__card--animating)
-  .signature-dish-carousel__title {
-  opacity: 1;
-  transform: translateY(0);
-  transition-delay: 0.28s;
+/* Carousel 3 (Card 2) Text Entrance: Unblur & Glass Float In */
+.signature-dish-carousel__text-group--card-2 {
+  transform: translateY(20px);
+  filter: blur(10px);
 }
-
-.signature-dish-carousel--ready
-  .signature-dish-carousel__card--active:not(.signature-dish-carousel__card--animating)
-  .signature-dish-carousel__description {
+.signature-dish-carousel__text-group--card-2.signature-dish-carousel__text-group--visible {
   opacity: 1;
   transform: translateY(0);
-  transition-delay: 0.4s;
+  filter: blur(0px);
+  transition:
+    opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.85s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.85s ease;
 }
 
 .signature-dish-carousel__eyebrow {

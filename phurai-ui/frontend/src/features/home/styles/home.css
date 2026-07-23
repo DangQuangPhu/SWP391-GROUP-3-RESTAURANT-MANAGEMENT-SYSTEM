@@ -529,6 +529,7 @@ body.intro-running .phurai-navbar {
   position: relative;
   height: 728px;
   overflow: hidden;
+  cursor: pointer;
 }
 
 .phurai-kitchen__banner img {
@@ -536,6 +537,14 @@ body.intro-running .phurai-navbar {
   height: 100%;
   object-fit: cover;
   object-position: bottom;
+  transform: scale(1);
+  transition: transform 0.85s cubic-bezier(0.16, 1, 0.3, 1), filter 0.85s ease;
+  will-change: transform;
+}
+
+.phurai-kitchen__banner:hover img {
+  transform: scale(1.08);
+  filter: brightness(1.04);
 }
 
 .phurai-kitchen__banner h2 {
@@ -548,6 +557,14 @@ body.intro-running .phurai-navbar {
   color: #fff;
   text-align: center;
   white-space: nowrap;
+  transition: transform 0.85s cubic-bezier(0.16, 1, 0.3, 1), text-shadow 0.85s ease;
+  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.phurai-kitchen__banner:hover h2 {
+  transform: translate(-50%, -50%) scale(1.05);
+  text-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
 }
 
 .phurai-kitchen__body {

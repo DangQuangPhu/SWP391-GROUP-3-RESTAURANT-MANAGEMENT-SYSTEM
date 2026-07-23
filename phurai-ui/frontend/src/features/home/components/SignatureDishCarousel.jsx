@@ -50,36 +50,28 @@ function SingleVideoPlayer({ src, active, onTextReveal, onEndedNext, onEndedStat
       v.playbackRate = 1.0;
     }
 
-    if (onEndedNext) {
-      // Wait until video has played for ~3.5s before revealing text
-      if (ct >= 3.5 && ct < dur - 1.2 && !textRevealedRef.current) {
-        textRevealedRef.current = true;
-        if (onTextReveal) onTextReveal(true);
-      }
+    // Wait until video has played for ~3.5s before revealing text
+    if (ct >= 3.5 && ct < dur - 1.2 && !textRevealedRef.current) {
+      textRevealedRef.current = true;
+      if (onTextReveal) onTextReveal(true);
+    }
 
-      // 1.2s before end: float text out smoothly
-      if (dur - ct <= 1.2 && textRevealedRef.current) {
-        textRevealedRef.current = false;
-        if (onTextReveal) onTextReveal(false);
-      }
+    // 1.2s before end: float text out smoothly so text hides before video stops
+    if (dur - ct <= 1.2 && textRevealedRef.current) {
+      textRevealedRef.current = false;
+      if (onTextReveal) onTextReveal(false);
+    }
 
-      // 0.7s before end: trigger smooth dark vignette fade for video
-      if (dur - ct <= 0.7 && !isFading) {
-        setIsFading(true);
-      }
-    } else {
-      // For cards that stop on end: reveal text at 3.5s and keep text displayed until ended
-      if (ct >= 3.5 && !textRevealedRef.current) {
-        textRevealedRef.current = true;
-        if (onTextReveal) onTextReveal(true);
-      }
+    // 0.7s before end: trigger smooth dark vignette fade for video
+    if (onEndedNext && dur - ct <= 0.7 && !isFading) {
+      setIsFading(true);
     }
   };
 
   const handleEnded = () => {
+    textRevealedRef.current = false;
+    if (onTextReveal) onTextReveal(false);
     if (onEndedNext) {
-      textRevealedRef.current = false;
-      if (onTextReveal) onTextReveal(false);
       onEndedNext();
     } else {
       // Video ended: trigger Apple-style blur animation and wait for user click
@@ -214,28 +206,21 @@ function DualVideoPlayer({ active, onVideoChange, onTextReveal, onEndedNext, onE
       v2.playbackRate = 1.0;
     }
 
-    if (onEndedNext) {
-      // Wait until video has played for ~3.5s before revealing text
-      if (ct >= 3.5 && ct < dur - 1.2 && !textRevealedRef.current) {
-        textRevealedRef.current = true;
-        if (onTextReveal) onTextReveal(true);
-      }
+    // Wait until video has played for ~3.5s before revealing text
+    if (ct >= 3.5 && ct < dur - 1.2 && !textRevealedRef.current) {
+      textRevealedRef.current = true;
+      if (onTextReveal) onTextReveal(true);
+    }
 
-      // 1.2s before end: float text out smoothly
-      if (dur - ct <= 1.2 && textRevealedRef.current) {
-        textRevealedRef.current = false;
-        if (onTextReveal) onTextReveal(false);
-      }
+    // 1.2s before end: float text out smoothly so text hides before video stops
+    if (dur - ct <= 1.2 && textRevealedRef.current) {
+      textRevealedRef.current = false;
+      if (onTextReveal) onTextReveal(false);
+    }
 
-      // 0.7s before end: trigger smooth dark vignette fade for video
-      if (dur - ct <= 0.7 && !isFading) {
-        setIsFading(true);
-      }
-    } else {
-      if (ct >= 3.5 && !textRevealedRef.current) {
-        textRevealedRef.current = true;
-        if (onTextReveal) onTextReveal(true);
-      }
+    // 0.7s before end: trigger smooth dark vignette fade for video
+    if (onEndedNext && dur - ct <= 0.7 && !isFading) {
+      setIsFading(true);
     }
   };
 
@@ -247,9 +232,9 @@ function DualVideoPlayer({ active, onVideoChange, onTextReveal, onEndedNext, onE
   };
 
   const handleEnded2 = () => {
+    textRevealedRef.current = false;
+    if (onTextReveal) onTextReveal(false);
     if (onEndedNext) {
-      textRevealedRef.current = false;
-      if (onTextReveal) onTextReveal(false);
       setCurrentVideo(1);
       if (onVideoChange) onVideoChange(1);
       onEndedNext();
@@ -402,6 +387,7 @@ function SignatureDishCarousel() {
     activeIndexRef.current = index;
     setActiveIndex(index);
     setActiveVideoEnded(false);
+    setVideoTextVisible(false);
   };
 
   const animateScrollTo = (targetLeft, duration = SCROLL_DURATION_MS, onComplete) => {
@@ -458,6 +444,7 @@ function SignatureDishCarousel() {
     activeIndexRef.current = targetIndex;
     setActiveIndex(targetIndex);
     setActiveVideoEnded(false);
+    setVideoTextVisible(false);
 
     const targetLeft = getTargetScrollLeft(targetIndex);
     animateScrollTo(targetLeft, SCROLL_DURATION_MS);
@@ -608,9 +595,7 @@ function SignatureDishCarousel() {
                 : card.description
               : card.description;
 
-            const isTextVisible = index === activeIndex
-              ? (card.isSingleVideoShowcase || card.isDualVideoShowcase ? videoTextVisible : true)
-              : false;
+            const isTextVisible = index === activeIndex && !activeVideoEnded && videoTextVisible;
 
             return (
               <article
@@ -666,7 +651,7 @@ function SignatureDishCarousel() {
                 {/* Overlaid Content with Delayed Apple-style Typography */}
                 <div className="signature-dish-carousel__content">
                   <div
-                    className={`signature-dish-carousel__text-group ${isTextVisible ? 'signature-dish-carousel__text-group--visible' : ''
+                    className={`signature-dish-carousel__text-group signature-dish-carousel__text-group--card-${index} ${isTextVisible ? 'signature-dish-carousel__text-group--visible' : ''
                       }`}
                   >
                     <p className="signature-dish-carousel__eyebrow">
