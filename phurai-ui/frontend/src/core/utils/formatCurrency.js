@@ -2,7 +2,7 @@ export function normalizePrice(price) {
   const numberPrice = Number(price) || 0;
 
   if (numberPrice > 0 && numberPrice < 1000) {
-    return Math.round(numberPrice * 10000);
+    return Math.round(numberPrice * 1000);
   }
 
   return Math.round(numberPrice);
