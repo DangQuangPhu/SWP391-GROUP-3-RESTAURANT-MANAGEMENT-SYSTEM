@@ -2,6 +2,7 @@ import heroVideo from '@/assets/videos/hero-video.mp4';
 import cookingVideo from '@/assets/videos/Cooking-Cinematic.mp4';
 import video3 from '@/assets/videos/3.mp4';
 import video5 from '@/assets/videos/5.mp4';
+import omakaseVideo from '@/assets/videos/videoplayback (online-video-cutter.com).mp4';
 
 const video4 = video5;
 import offeringSushi from '@/assets/images/offering-sushi.jpg';
@@ -39,6 +40,7 @@ export const homeImages = {
   Abus2,
   heroVideo,
   cookingVideo,
+  omakaseVideo,
   video3,
   video4,
   video5,

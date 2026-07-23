@@ -4,28 +4,39 @@ import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { homeImages } from '../data/homeAssets.js';
 import '@/features/home/styles/SignatureDishCarousel.css';
 
-function SingleVideoPlayer({ src, active, onTextReveal, onEndedNext }) {
+function SingleVideoPlayer({ src, active, onTextReveal, onEndedNext, onEndedStateChange, initialSpeed = 1.5 }) {
   const videoRef = useRef(null);
   const [isFading, setIsFading] = useState(false);
+  const [isEndedBlur, setIsEndedBlur] = useState(false);
   const textRevealedRef = useRef(false);
 
   useEffect(() => {
     if (!active) {
-      if (videoRef.current) videoRef.current.pause();
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+      }
+      setIsFading(false);
+      setIsEndedBlur(false);
+      if (onEndedStateChange) onEndedStateChange(false);
+      textRevealedRef.current = false;
+      if (onTextReveal) onTextReveal(false);
       return;
     }
 
     textRevealedRef.current = false;
     if (onTextReveal) onTextReveal(false);
+    setIsEndedBlur(false);
+    if (onEndedStateChange) onEndedStateChange(false);
 
     if (videoRef.current) {
       const v = videoRef.current;
       v.currentTime = 0;
-      v.playbackRate = 1.5; // Fast 1.5x start for first 2s
+      v.playbackRate = initialSpeed;
       setIsFading(false);
       v.play().catch(() => { });
     }
-  }, [active]);
+  }, [active, initialSpeed]);
 
   const handleTimeUpdate = () => {
     const v = videoRef.current;
@@ -34,37 +45,68 @@ function SingleVideoPlayer({ src, active, onTextReveal, onEndedNext }) {
     const ct = v.currentTime;
     const dur = v.duration;
 
-    // After 2.0s, return to normal 1.0x playback speed
-    if (ct >= 2.0 && v.playbackRate !== 1.0) {
+    // After 2.0s (if boosted to 1.5x at start), return to normal 1.0x playback speed
+    if (initialSpeed !== 1.0 && ct >= 2.0 && v.playbackRate !== 1.0) {
       v.playbackRate = 1.0;
     }
 
-    // Wait until video has played for ~3.5s before revealing text
-    if (ct >= 3.5 && ct < dur - 1.2 && !textRevealedRef.current) {
-      textRevealedRef.current = true;
-      if (onTextReveal) onTextReveal(true);
-    }
+    if (onEndedNext) {
+      // Wait until video has played for ~3.5s before revealing text
+      if (ct >= 3.5 && ct < dur - 1.2 && !textRevealedRef.current) {
+        textRevealedRef.current = true;
+        if (onTextReveal) onTextReveal(true);
+      }
 
-    // 1.2s before end: float text out smoothly
-    if (dur - ct <= 1.2 && textRevealedRef.current) {
-      textRevealedRef.current = false;
-      if (onTextReveal) onTextReveal(false);
-    }
+      // 1.2s before end: float text out smoothly
+      if (dur - ct <= 1.2 && textRevealedRef.current) {
+        textRevealedRef.current = false;
+        if (onTextReveal) onTextReveal(false);
+      }
 
-    // 0.7s before end: trigger smooth dark vignette fade for video
-    if (dur - ct <= 0.7 && !isFading) {
-      setIsFading(true);
+      // 0.7s before end: trigger smooth dark vignette fade for video
+      if (dur - ct <= 0.7 && !isFading) {
+        setIsFading(true);
+      }
+    } else {
+      // For cards that stop on end: reveal text at 3.5s and keep text displayed until ended
+      if (ct >= 3.5 && !textRevealedRef.current) {
+        textRevealedRef.current = true;
+        if (onTextReveal) onTextReveal(true);
+      }
     }
   };
 
   const handleEnded = () => {
-    textRevealedRef.current = false;
-    if (onTextReveal) onTextReveal(false);
-    if (onEndedNext) onEndedNext();
+    if (onEndedNext) {
+      textRevealedRef.current = false;
+      if (onTextReveal) onTextReveal(false);
+      onEndedNext();
+    } else {
+      // Video ended: trigger Apple-style blur animation and wait for user click
+      setIsEndedBlur(true);
+      if (onEndedStateChange) onEndedStateChange(true);
+    }
+  };
+
+  const handleReplayClick = (e) => {
+    if (isEndedBlur) {
+      if (e) e.stopPropagation();
+      setIsEndedBlur(false);
+      if (onEndedStateChange) onEndedStateChange(false);
+      textRevealedRef.current = false;
+      if (onTextReveal) onTextReveal(false);
+
+      if (videoRef.current) {
+        const v = videoRef.current;
+        v.currentTime = 0;
+        v.playbackRate = initialSpeed;
+        v.play().catch(() => { });
+      }
+    }
   };
 
   return (
-    <div className="single-video-player">
+    <div className="single-video-player" onClick={isEndedBlur ? handleReplayClick : undefined}>
       <video
         ref={videoRef}
         src={src}
@@ -72,32 +114,46 @@ function SingleVideoPlayer({ src, active, onTextReveal, onEndedNext }) {
         playsInline
         onTimeUpdate={handleTimeUpdate}
         onEnded={handleEnded}
-        className="single-video-player__video"
+        className={`single-video-player__video ${isEndedBlur ? 'single-video-player__video--blurred' : ''}`}
       />
       <div
-        className={`dual-video-player__overlay ${isFading ? 'dual-video-player__overlay--visible' : ''
-          }`}
+        className={`dual-video-player__overlay ${isFading ? 'dual-video-player__overlay--visible' : ''}`}
       />
     </div>
   );
 }
 
-function DualVideoPlayer({ active, onVideoChange, onTextReveal, onEndedNext }) {
+function DualVideoPlayer({ active, onVideoChange, onTextReveal, onEndedNext, onEndedStateChange }) {
   const video1Ref = useRef(null);
   const video2Ref = useRef(null);
   const [currentVideo, setCurrentVideo] = useState(1); // 1 for 4.mp4, 2 for 3.mp4
   const [isFading, setIsFading] = useState(false);
+  const [isEndedBlur, setIsEndedBlur] = useState(false);
   const textRevealedRef = useRef(false);
 
   useEffect(() => {
     if (!active) {
-      if (video1Ref.current) video1Ref.current.pause();
-      if (video2Ref.current) video2Ref.current.pause();
+      if (video1Ref.current) {
+        video1Ref.current.pause();
+        video1Ref.current.currentTime = 0;
+      }
+      if (video2Ref.current) {
+        video2Ref.current.pause();
+        video2Ref.current.currentTime = 0;
+      }
+      setCurrentVideo(1);
+      setIsFading(false);
+      setIsEndedBlur(false);
+      if (onEndedStateChange) onEndedStateChange(false);
+      textRevealedRef.current = false;
+      if (onTextReveal) onTextReveal(false);
       return;
     }
 
     textRevealedRef.current = false;
     if (onTextReveal) onTextReveal(false);
+    setIsEndedBlur(false);
+    if (onEndedStateChange) onEndedStateChange(false);
 
     if (currentVideo === 1 && video1Ref.current) {
       const v1 = video1Ref.current;
@@ -158,21 +214,28 @@ function DualVideoPlayer({ active, onVideoChange, onTextReveal, onEndedNext }) {
       v2.playbackRate = 1.0;
     }
 
-    // Wait until video has played for ~3.5s before revealing text
-    if (ct >= 3.5 && ct < dur - 1.2 && !textRevealedRef.current) {
-      textRevealedRef.current = true;
-      if (onTextReveal) onTextReveal(true);
-    }
+    if (onEndedNext) {
+      // Wait until video has played for ~3.5s before revealing text
+      if (ct >= 3.5 && ct < dur - 1.2 && !textRevealedRef.current) {
+        textRevealedRef.current = true;
+        if (onTextReveal) onTextReveal(true);
+      }
 
-    // 1.2s before end: float text out smoothly
-    if (dur - ct <= 1.2 && textRevealedRef.current) {
-      textRevealedRef.current = false;
-      if (onTextReveal) onTextReveal(false);
-    }
+      // 1.2s before end: float text out smoothly
+      if (dur - ct <= 1.2 && textRevealedRef.current) {
+        textRevealedRef.current = false;
+        if (onTextReveal) onTextReveal(false);
+      }
 
-    // 0.7s before end: trigger smooth dark vignette fade for video
-    if (dur - ct <= 0.7 && !isFading) {
-      setIsFading(true);
+      // 0.7s before end: trigger smooth dark vignette fade for video
+      if (dur - ct <= 0.7 && !isFading) {
+        setIsFading(true);
+      }
+    } else {
+      if (ct >= 3.5 && !textRevealedRef.current) {
+        textRevealedRef.current = true;
+        if (onTextReveal) onTextReveal(true);
+      }
     }
   };
 
@@ -184,15 +247,39 @@ function DualVideoPlayer({ active, onVideoChange, onTextReveal, onEndedNext }) {
   };
 
   const handleEnded2 = () => {
-    textRevealedRef.current = false;
-    if (onTextReveal) onTextReveal(false);
-    setCurrentVideo(1);
-    if (onVideoChange) onVideoChange(1);
-    if (onEndedNext) onEndedNext();
+    if (onEndedNext) {
+      textRevealedRef.current = false;
+      if (onTextReveal) onTextReveal(false);
+      setCurrentVideo(1);
+      if (onVideoChange) onVideoChange(1);
+      onEndedNext();
+    } else {
+      setIsEndedBlur(true);
+      if (onEndedStateChange) onEndedStateChange(true);
+    }
+  };
+
+  const handleReplayClick = (e) => {
+    if (isEndedBlur) {
+      if (e) e.stopPropagation();
+      setIsEndedBlur(false);
+      if (onEndedStateChange) onEndedStateChange(false);
+      setCurrentVideo(1);
+      if (onVideoChange) onVideoChange(1);
+      textRevealedRef.current = false;
+      if (onTextReveal) onTextReveal(false);
+
+      if (video1Ref.current) {
+        const v1 = video1Ref.current;
+        v1.currentTime = 0;
+        v1.playbackRate = 1.5;
+        v1.play().catch(() => { });
+      }
+    }
   };
 
   return (
-    <div className="dual-video-player">
+    <div className="dual-video-player" onClick={isEndedBlur ? handleReplayClick : undefined}>
       <div
         className={`dual-video-player__item ${currentVideo === 1 ? 'dual-video-player__item--active' : ''
           }`}
@@ -204,7 +291,7 @@ function DualVideoPlayer({ active, onVideoChange, onTextReveal, onEndedNext }) {
           playsInline
           onTimeUpdate={handleTimeUpdate1}
           onEnded={handleEnded1}
-          className="dual-video-player__video"
+          className={`dual-video-player__video ${isEndedBlur ? 'dual-video-player__video--blurred' : ''}`}
         />
       </div>
 
@@ -219,7 +306,7 @@ function DualVideoPlayer({ active, onVideoChange, onTextReveal, onEndedNext }) {
           playsInline
           onTimeUpdate={handleTimeUpdate2}
           onEnded={handleEnded2}
-          className="dual-video-player__video"
+          className={`dual-video-player__video ${isEndedBlur ? 'dual-video-player__video--blurred' : ''}`}
         />
       </div>
 
@@ -241,6 +328,7 @@ const CARDS = [
       'Witness the rhythm of Japanese culinary mastery, where speed meets absolute precision.',
     isSingleVideoShowcase: true,
     videoSrc: homeImages.cookingVideo,
+    stopCarouselOnEnd: true,
   },
   {
     id: 'video-showcase',
@@ -249,14 +337,18 @@ const CARDS = [
     description:
       'Masterfully hand-crafted sushi and seasonal catches, elevated with subtle Peruvian notes.',
     isDualVideoShowcase: true,
+    stopCarouselOnEnd: true,
   },
   {
     id: 'omakase-experience',
     eyebrow: 'THE OMAKASE JOURNEY',
-    title: 'Curated by the Masters',
+    title: 'Culinary Craftsmanship in Motion',
     description:
-      'An intimate multi-course Omakase journey crafted live, honoring the peak harvest of every season.',
-    image: homeImages.kitchenSecrets,
+      'An intimate front-row view of master chefs handcrafting exquisite Japanese delicacies with passion and precision.',
+    isSingleVideoShowcase: true,
+    videoSrc: homeImages.omakaseVideo,
+    stopCarouselOnEnd: true,
+    initialSpeed: 1.0,
   },
 ];
 
@@ -288,6 +380,7 @@ function SignatureDishCarousel() {
   const [mediaParallax, setMediaParallax] = useState(0);
   const [videoIndex, setVideoIndex] = useState(1);
   const [videoTextVisible, setVideoTextVisible] = useState(false);
+  const [activeVideoEnded, setActiveVideoEnded] = useState(false);
 
   const getTargetScrollLeft = (index) => {
     const track = trackRef.current;
@@ -308,6 +401,7 @@ function SignatureDishCarousel() {
     track.scrollLeft = targetLeft;
     activeIndexRef.current = index;
     setActiveIndex(index);
+    setActiveVideoEnded(false);
   };
 
   const animateScrollTo = (targetLeft, duration = SCROLL_DURATION_MS, onComplete) => {
@@ -318,15 +412,15 @@ function SignatureDishCarousel() {
       cancelAnimationFrame(animationFrameRef.current);
     }
 
-    isAnimatingRef.current = true;
-    setIsAnimating(true);
-    track.classList.add('signature-dish-carousel__track--animating');
-
     const startLeft = track.scrollLeft;
     const distance = targetLeft - startLeft;
     const startTime = performance.now();
 
-    const animate = (currentTime) => {
+    setIsAnimating(true);
+    isAnimatingRef.current = true;
+    track.classList.add('signature-dish-carousel__track--animating');
+
+    const step = (currentTime) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const easedProgress = easeOutExpo(progress);
@@ -334,46 +428,39 @@ function SignatureDishCarousel() {
       track.scrollLeft = startLeft + distance * easedProgress;
 
       if (progress < 1) {
-        animationFrameRef.current = requestAnimationFrame(animate);
-        return;
-      }
-
-      track.scrollLeft = targetLeft;
-      isAnimatingRef.current = false;
-      animationFrameRef.current = null;
-      track.classList.remove('signature-dish-carousel__track--animating');
-      setIsAnimating(false);
-
-      if (typeof onComplete === 'function') {
-        onComplete();
+        animationFrameRef.current = requestAnimationFrame(step);
+      } else {
+        track.classList.remove('signature-dish-carousel__track--animating');
+        setIsAnimating(false);
+        isAnimatingRef.current = false;
+        animationFrameRef.current = null;
+        if (onComplete) onComplete();
       }
     };
 
-    animationFrameRef.current = requestAnimationFrame(animate);
+    animationFrameRef.current = requestAnimationFrame(step);
   };
 
   const scrollToCard = (index, options = {}) => {
-    if (isAnimatingRef.current) return;
-
     const { loop = false } = options;
 
-    let safeIndex = index;
-
-    if (loop) {
-      if (index > CARDS.length - 1) safeIndex = 0;
-      if (index < 0) safeIndex = CARDS.length - 1;
-    } else {
-      safeIndex = Math.max(0, Math.min(index, CARDS.length - 1));
+    let targetIndex = index;
+    if (targetIndex < 0) {
+      targetIndex = loop ? CARDS.length - 1 : 0;
+    } else if (targetIndex >= CARDS.length) {
+      targetIndex = loop ? 0 : CARDS.length - 1;
     }
 
-    if (safeIndex === activeIndexRef.current) return;
+    if (targetIndex === activeIndexRef.current && !isAnimatingRef.current) {
+      return;
+    }
 
-    const targetLeft = getTargetScrollLeft(safeIndex);
+    activeIndexRef.current = targetIndex;
+    setActiveIndex(targetIndex);
+    setActiveVideoEnded(false);
 
-    animateScrollTo(targetLeft, SCROLL_DURATION_MS, () => {
-      activeIndexRef.current = safeIndex;
-      setActiveIndex(safeIndex);
-    });
+    const targetLeft = getTargetScrollLeft(targetIndex);
+    animateScrollTo(targetLeft, SCROLL_DURATION_MS);
   };
 
   const goNext = () => {
@@ -481,9 +568,14 @@ function SignatureDishCarousel() {
         >
           {CARDS.map((card, index) => {
             const cardState = getCardStateClass(index, activeIndex);
+            const isPlaying = index === activeIndex && !activeVideoEnded;
+            const isEnded = index === activeIndex && activeVideoEnded;
+
             const cardClassName = [
               'signature-dish-carousel__card',
               cardState,
+              isPlaying ? 'signature-dish-carousel__card--playing' : '',
+              isEnded ? 'signature-dish-carousel__card--ended' : '',
               isAnimating ? 'signature-dish-carousel__card--animating' : '',
             ]
               .filter(Boolean)
@@ -534,10 +626,14 @@ function SignatureDishCarousel() {
                     <SingleVideoPlayer
                       src={card.videoSrc}
                       active={index === activeIndex}
+                      initialSpeed={card.initialSpeed ?? 1.5}
                       onTextReveal={(vis) => {
                         if (index === activeIndex) setVideoTextVisible(vis);
                       }}
-                      onEndedNext={() => goNext()}
+                      onEndedNext={card.stopCarouselOnEnd ? null : () => goNext()}
+                      onEndedStateChange={(ended) => {
+                        if (index === activeIndex) setActiveVideoEnded(ended);
+                      }}
                     />
                   ) : card.isDualVideoShowcase ? (
                     <DualVideoPlayer
@@ -546,7 +642,10 @@ function SignatureDishCarousel() {
                       onTextReveal={(vis) => {
                         if (index === activeIndex) setVideoTextVisible(vis);
                       }}
-                      onEndedNext={() => goNext()}
+                      onEndedNext={card.stopCarouselOnEnd ? null : () => goNext()}
+                      onEndedStateChange={(ended) => {
+                        if (index === activeIndex) setActiveVideoEnded(ended);
+                      }}
                     />
                   ) : card.image ? (
                     <img
