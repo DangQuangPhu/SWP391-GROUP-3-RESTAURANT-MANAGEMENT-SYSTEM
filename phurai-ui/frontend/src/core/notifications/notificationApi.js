@@ -1,6 +1,6 @@
 import { request, profileRequestHeaders } from "@/core/api/httpClient.js";
 
-export async function fetchNotifications(userId, { limit = 50 } = {}) {
+export async function fetchNotifications(userId, { limit = 60 } = {}) {
   const res = await request(`/notifications?limit=${limit}`, {
     method: "GET",
     headers: profileRequestHeaders(userId),
