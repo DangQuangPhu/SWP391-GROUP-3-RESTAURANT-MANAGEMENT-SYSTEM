@@ -19,6 +19,7 @@ function DashboardDateRangePicker({
   inline = false,
   allowFuture = false,
   minDate = null,
+  months = 1,
 }) {
   // Always use real today for max date
   const today = new Date();
@@ -100,7 +101,7 @@ function DashboardDateRangePicker({
             <DateRangePicker
               onChange={(item) => onDraftChange?.(item.selection)}
               moveRangeOnFirstSelection={false}
-              months={2}
+              months={months}
               ranges={[
                 draftRange?.startDate
                   ? draftRange

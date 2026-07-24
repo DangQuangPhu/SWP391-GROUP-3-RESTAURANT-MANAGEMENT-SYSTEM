@@ -1291,18 +1291,18 @@ function ReservationManagement({ user, toast, refreshKey }) {
                     <div className="sfx-table-wrap">
                       <table
                         className="sfx-table sfx-table--hover staff-reservations-table"
-                        style={{ background: "#ffffff" }}
+                        style={{ background: "#ffffff", tableLayout: "fixed", width: "100%" }}
                       >
                         <thead>
                           <tr style={{ background: "#ffffff" }}>
-                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle", width: '50px' }}>#</th>
-                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Reservation ID</th>
-                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Date</th>
-                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Customer</th>
-                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Phone</th>
-                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Email</th>
-                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Status</th>
-                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle" }}>Actions</th>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle", width: "50px" }}>#</th>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle", width: "130px" }}>Reservation ID</th>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle", width: "110px" }}>Date</th>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle", width: "160px" }}>Customer</th>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle", width: "125px" }}>Phone</th>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle", width: "190px" }}>Email</th>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle", width: "135px" }}>Status</th>
+                            <th style={{ color: "#000", fontSize: 13, textTransform: "uppercase", textAlign: "center", verticalAlign: "middle", width: "210px" }}>Actions</th>
                           </tr>
                         </thead>
                         <motion.tbody

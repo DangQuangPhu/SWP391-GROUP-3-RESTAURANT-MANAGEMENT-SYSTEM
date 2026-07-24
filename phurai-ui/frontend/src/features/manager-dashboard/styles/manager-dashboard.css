@@ -1214,8 +1214,9 @@ button.sfx-kpi__icon--trigger:focus-visible {
 /* Inline dropdown variant — no backdrop, no fixed overlay */
 .sfx-dp-inline-root {
   position: relative;
-  z-index: 1;
-  display: block;
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .sfx-dp-backdrop {
