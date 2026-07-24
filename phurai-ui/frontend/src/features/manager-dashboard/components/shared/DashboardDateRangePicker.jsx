@@ -19,10 +19,18 @@ function DashboardDateRangePicker({
   inline = false,
   allowFuture = false,
   minDate = null,
-  months = 1,
+  months = 2,
 }) {
   // Always use real today for max date
   const today = new Date();
+
+  // Initial shown date: 1 month back so left month = previous month, right month = current month
+  const [shownDate, setShownDate] = useState(() => {
+    const refDate = new Date(draftRange?.startDate || today);
+    const prev = new Date(refDate);
+    prev.setMonth(prev.getMonth() - 1);
+    return prev;
+  });
   
   let presets = getDateRangePresets(today);
   if (minDate) {
@@ -102,6 +110,8 @@ function DashboardDateRangePicker({
               onChange={(item) => onDraftChange?.(item.selection)}
               moveRangeOnFirstSelection={false}
               months={months}
+              shownDate={shownDate}
+              onShownDateChange={(d) => setShownDate(d)}
               ranges={[
                 draftRange?.startDate
                   ? draftRange
