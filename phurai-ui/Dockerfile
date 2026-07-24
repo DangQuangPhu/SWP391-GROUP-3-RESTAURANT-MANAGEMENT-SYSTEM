@@ -71,7 +71,7 @@ EXPOSE 5001
 
 # Health check — verifies the container is alive
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD wget -qO- http://localhost:5001/api/health || exit 1
+  CMD wget -qO- http://localhost:5001/health || exit 1
 
 # Start the Express server.
 # Runtime env vars (DB_SERVER, JWT_SECRET, etc.) are injected by
