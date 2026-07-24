@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import { useEffect, useRef } from 'react';
 
 export function useScrollReveal(options = {}, externalRef = null) {
@@ -35,12 +34,3 @@ export function useScrollReveal(options = {}, externalRef = null) {
 
   return ref;
 }
-=======
-/**
- * useScrollReveal.js
- * Re-exports the canonical useScrollReveal hook from advancedScrollToolkit.
- * Multiple home-page components import from this path; this shim ensures
- * they all receive the same implementation without duplication.
- */
-export { useScrollReveal } from './advancedScrollToolkit.js';
->>>>>>> f806b6a516e7391a2486c456e4d2139f2df344d6
