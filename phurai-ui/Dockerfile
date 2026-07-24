@@ -1,8 +1,14 @@
 # =============================================================================
 # Stage 1: Build Frontend (Vite/React)
+#
+# KEY: --platform=$BUILDPLATFORM forces this stage to run on the NATIVE
+# architecture of the CI runner (x86_64), regardless of the target platform.
+# This avoids QEMU emulation for the heavy npm ci + Vite build steps,
+# preventing the "Illegal instruction" crash seen with arm64 cross-compilation.
+# The compiled JS/CSS output is architecture-independent, so it's safe to
+# build on x86 and copy the result into an arm64 runner image.
 # =============================================================================
-FROM node:20-alpine AS builder
-
+FROM --platform=$BUILDPLATFORM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -37,9 +43,12 @@ RUN npm run build
 
 # =============================================================================
 # Stage 2: Production Runner (Express serves API + static frontend)
+#
+# This stage uses the TARGET platform (arm64 / amd64) — no QEMU needed here
+# because npm ci only installs production deps (small, fast) and Node.js
+# runtime operations do not trigger the V8/QEMU illegal instruction bug.
 # =============================================================================
 FROM node:20-alpine AS runner
-
 
 # Add non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
