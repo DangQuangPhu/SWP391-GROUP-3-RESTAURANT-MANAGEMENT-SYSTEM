@@ -1,0 +1,212 @@
+/* Apple Liquid Glass Design Language - Phūrai AI & Menu Features */
+
+:root {
+  --lg-blur: 24px;
+  --lg-saturate: 190%;
+  --lg-glass-bg: rgba(255, 255, 255, 0.72);
+  --lg-glass-bg-hover: rgba(255, 255, 255, 0.88);
+  --lg-glass-bg-dark: rgba(20, 24, 33, 0.75);
+  --lg-border-specular: rgba(255, 255, 255, 0.85);
+  --lg-border-subtle: rgba(208, 197, 186, 0.45);
+  --lg-shadow-apple: 0 12px 32px rgba(0, 0, 0, 0.06), inset 0 1px 1px rgba(255, 255, 255, 0.9);
+  --lg-shadow-apple-hover: 0 20px 48px rgba(155, 132, 94, 0.25), inset 0 1.5px 2px rgba(255, 255, 255, 1);
+  --lg-gold: #9b845e;
+  --lg-gold-dark: #7a6644;
+  --lg-text-primary: #342716;
+  --lg-text-secondary: #5c4d37;
+}
+
+/* Apple Liquid Glass Section Container */
+.liquid-glass-container {
+  position: relative;
+  border-radius: 28px;
+  background: var(--lg-glass-bg);
+  backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+  -webkit-backdrop-filter: blur(var(--lg-blur)) saturate(var(--lg-saturate));
+  border: 1px solid var(--lg-border-specular);
+  box-shadow: var(--lg-shadow-apple);
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.liquid-glass-container:hover {
+  box-shadow: var(--lg-shadow-apple-hover);
+}
+
+/* Apple Liquid Glass Action Button - Phūrai Gold Tone (#9b845e) */
+.apple-liquid-glass-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 26px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #9b845e 0%, #856f4b 100%);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  color: #ffffff;
+  font-family: var(--font-body, 'Hanken Grotesk', system-ui, sans-serif);
+  font-weight: 700;
+  font-size: 0.88rem;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 22px rgba(155, 132, 94, 0.35), inset 0 1.5px 1.5px rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.apple-liquid-glass-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  transition: left 0.6s ease;
+}
+
+.apple-liquid-glass-btn:hover {
+  transform: translateY(-2px) scale(1.03);
+  background: linear-gradient(135deg, #aa936c 0%, #907851 100%);
+  box-shadow: 0 14px 32px rgba(155, 132, 94, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.7);
+}
+
+.apple-liquid-glass-btn:hover::before {
+  left: 100%;
+}
+
+.apple-liquid-glass-btn:active {
+  transform: translateY(0) scale(0.96);
+  box-shadow: 0 4px 12px rgba(155, 132, 94, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+}
+
+/* Secondary Translucent Variant */
+.apple-liquid-glass-btn--secondary {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(246, 243, 237, 0.75) 100%);
+  color: #342716;
+  border-color: rgba(255, 255, 255, 0.9);
+  outline: 1px solid rgba(155, 132, 94, 0.35);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05), inset 0 1.5px 1.5px rgba(255, 255, 255, 0.95);
+}
+
+.apple-liquid-glass-btn--secondary:hover {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 244, 235, 0.9) 100%);
+  color: #342716;
+}
+
+/* Apple Liquid Glass Recommendation Card */
+.apple-liquid-glass-card {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04), inset 0 1px 1px #ffffff;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.apple-liquid-glass-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(155, 132, 94, 0.45);
+  box-shadow: 0 18px 40px rgba(155, 132, 94, 0.2), inset 0 1.5px 2px #ffffff;
+}
+
+/* Apple Liquid Score Badge */
+.liquid-score-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: rgba(155, 132, 94, 0.16);
+  border: 1px solid rgba(155, 132, 94, 0.35);
+  backdrop-filter: blur(12px);
+  color: #7a6644;
+  font-family: var(--font-body, 'Hanken Grotesk', system-ui, sans-serif);
+  font-weight: 800;
+  font-size: 0.75rem;
+  letter-spacing: 0.4px;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.7);
+}
+
+/* Optical Lensing Beam Animation for AI Visual Search */
+@keyframes liquidLaserScan {
+  0% {
+    top: 0%;
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.95;
+  }
+  100% {
+    top: 96%;
+    opacity: 0.3;
+  }
+}
+
+.liquid-laser-beam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent 0%, #9b845e 50%, transparent 100%);
+  box-shadow: 0 0 18px #9b845e, 0 0 35px #9b845e;
+  animation: liquidLaserScan 2s ease-in-out infinite alternate;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Apple Liquid Modal Overlay & Card */
+.liquid-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.liquid-modal-card {
+  width: 100%;
+  max-width: 680px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(36px) saturate(210%);
+  -webkit-backdrop-filter: blur(36px) saturate(210%);
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  border-radius: 32px;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.2), inset 0 1.5px 2px rgba(255, 255, 255, 1);
+  padding: 36px;
+  position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+/* Dropzone Liquid Glass Effect */
+.liquid-dropzone {
+  border: 2px dashed rgba(155, 132, 94, 0.45);
+  border-radius: 24px;
+  padding: 40px 24px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(16px);
+  cursor: pointer;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.liquid-dropzone:hover, .liquid-dropzone.active {
+  border-color: #9b845e;
+  background: rgba(155, 132, 94, 0.12);
+  box-shadow: 0 12px 36px rgba(155, 132, 94, 0.22);
+}

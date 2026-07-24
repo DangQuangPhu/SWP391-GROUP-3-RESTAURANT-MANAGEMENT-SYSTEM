@@ -7,6 +7,8 @@ import {
   useRef,
   useState,
 } from 'react';
+import { resolveDishImage } from '../data/menuAssets.js';
+
 
 /**
  * Per-user favorites storage.
@@ -109,19 +111,21 @@ export function MenuFavoritesProvider({ children, currentUser }) {
           (f) => f.id !== dish.id && f.dish_id !== dish.id
         );
       }
+      const resolvedImg = resolveDishImage(dish.image || dish.image_url) || dish.image || dish.image_url;
       return [
         ...prev,
         {
           id: dish.id,
           dish_id: dish.dish_id || dish.id,
-          name: dish.name,
+          name: dish.name || dish.dish_name,
           price: dish.price,
-          image: dish.image,
+          image: resolvedImg,
           description: dish.description,
         },
       ];
     });
   }, []);
+
 
   const removeFavorite = useCallback((dishId) => {
     setFavorites((prev) =>
@@ -216,6 +220,7 @@ export function useFavoritesStore(currentUser) {
       if (exists) {
         next = favorites.filter((f) => f.id !== targetId && f.dish_id !== targetId);
       } else {
+        const resolvedImg = resolveDishImage(dish.image || dish.image_url) || dish.image || dish.image_url;
         next = [
           ...favorites,
           {
@@ -223,7 +228,7 @@ export function useFavoritesStore(currentUser) {
             dish_id: targetId,
             name: dish.dish_name || dish.name,
             price: dish.price,
-            image: dish.image || dish.image_url || null,
+            image: resolvedImg,
             description: dish.description || "",
           },
         ];
@@ -233,6 +238,7 @@ export function useFavoritesStore(currentUser) {
     },
     [favorites, storageKey]
   );
+
 
   return { favorites, removeFavorite, toggleFavorite };
 }

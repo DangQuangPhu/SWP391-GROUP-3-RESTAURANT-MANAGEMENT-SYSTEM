@@ -1,15 +1,23 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Bookmark, Trash2 } from 'lucide-react';
+import { X, Bookmark, Trash2, Search } from 'lucide-react';
 import { useMenuFavorites } from '../context/MenuFavoritesContext.jsx';
 import { formatVND } from '@/core/utils/formatCurrency';
-import { menuImages } from '../data/menuAssets.js';
+import { menuImages, resolveDishImage } from '../data/menuAssets.js';
 
 const FALLBACK_IMAGE = menuImages.hero;
 
-export function FavoritesSidebar() {
+
+export function FavoritesSidebar({ onPreviewImage }) {
   const { favorites, removeFavorite, isSidebarOpen, closeSidebar } = useMenuFavorites();
+  const [searchTerm, setSearchTerm] = useState('');
   const panelRef = useRef(null);
+
+
+  /* Reset search on close */
+  useEffect(() => {
+    if (!isSidebarOpen) setSearchTerm('');
+  }, [isSidebarOpen]);
 
   /* Close on Escape */
   useEffect(() => {
@@ -30,6 +38,15 @@ export function FavoritesSidebar() {
     }
     return () => { document.body.style.overflow = ''; };
   }, [isSidebarOpen]);
+
+  const filteredFavorites = useMemo(() => {
+    const query = searchTerm.toLowerCase().trim();
+    if (!query) return favorites;
+    return favorites.filter((dish) =>
+      (dish.name || '').toLowerCase().includes(query) ||
+      (dish.description || '').toLowerCase().includes(query)
+    );
+  }, [favorites, searchTerm]);
 
   return (
     <AnimatePresence>
@@ -69,7 +86,7 @@ export function FavoritesSidebar() {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Bookmark size={18} style={{ color: '#342716' }} />
+                <Bookmark size={18} style={{ color: '#9b845e' }} />
                 <span
                   style={{
                     fontFamily: "'Hanken Grotesk', system-ui, sans-serif",
@@ -84,7 +101,7 @@ export function FavoritesSidebar() {
                 {favorites.length > 0 && (
                   <span
                     style={{
-                      background: '#342716',
+                      background: '#9b845e',
                       color: '#fff',
                       borderRadius: '999px',
                       fontSize: '11px',
@@ -118,6 +135,29 @@ export function FavoritesSidebar() {
               </button>
             </div>
 
+            {/* Filter Search Bar */}
+            {favorites.length > 3 && (
+              <div style={{ padding: '12px 16px 4px 16px', position: 'relative' }}>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Filter saved dishes..."
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px 8px 34px',
+                    borderRadius: '9999px',
+                    border: '1px solid #e2dad0',
+                    fontSize: '0.82rem',
+                    color: '#342716',
+                    outline: 'none',
+                    fontFamily: "'Hanken Grotesk', system-ui, sans-serif"
+                  }}
+                />
+                <Search size={14} style={{ position: 'absolute', left: '28px', top: '20px', color: '#9b845e' }} />
+              </div>
+            )}
+
             {/* Body */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
               {favorites.length === 0 ? (
@@ -146,7 +186,7 @@ export function FavoritesSidebar() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <AnimatePresence>
-                    {favorites.map((dish) => (
+                    {filteredFavorites.map((dish) => (
                       <motion.div
                         key={dish.id ?? dish.dish_id}
                         initial={{ opacity: 0, y: 10 }}
@@ -164,8 +204,9 @@ export function FavoritesSidebar() {
                         }}
                       >
                         <img
-                          src={dish.image || FALLBACK_IMAGE}
+                          src={resolveDishImage(dish.image) || FALLBACK_IMAGE}
                           alt={dish.name}
+                          onClick={() => onPreviewImage?.({ ...dish, image: resolveDishImage(dish.image) })}
                           onError={(e) => { e.currentTarget.src = FALLBACK_IMAGE; }}
                           style={{
                             width: '56px',
@@ -173,9 +214,11 @@ export function FavoritesSidebar() {
                             objectFit: 'cover',
                             borderRadius: '8px',
                             flexShrink: 0,
+                            cursor: 'zoom-in',
                           }}
                         />
-                        <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => onPreviewImage?.({ ...dish, image: resolveDishImage(dish.image) })}>
+
                           <p
                             style={{
                               fontFamily: "'Hanken Grotesk', system-ui, sans-serif",
@@ -190,18 +233,8 @@ export function FavoritesSidebar() {
                           >
                             {dish.name}
                           </p>
-                          <p
-                            style={{
-                              fontFamily: "'Hanken Grotesk', system-ui, sans-serif",
-                              fontSize: '13px',
-                              color: '#9b845e',
-                              fontWeight: 600,
-                              margin: '2px 0 0',
-                            }}
-                          >
-                            {formatVND(dish.price)}
-                          </p>
                         </div>
+
                         <button
                           type="button"
                           onClick={() => removeFavorite(dish.id ?? dish.dish_id)}
@@ -241,7 +274,7 @@ export function FavoritesSidebar() {
                   textAlign: 'center',
                 }}
               >
-                {favorites.length} saved {favorites.length === 1 ? 'dish' : 'dishes'} · Favorites are saved on this device
+                {favorites.length} saved {favorites.length === 1 ? 'dish' : 'dishes'} · Saved to account
               </div>
             )}
           </motion.div>

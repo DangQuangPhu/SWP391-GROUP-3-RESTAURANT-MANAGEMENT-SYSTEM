@@ -30,6 +30,22 @@ import wine2 from '@/assets/images/menu/Ruouvang2.jpg';
 import wine3 from '@/assets/images/menu/Ruouvang3.jpg';
 import orangejuice from '@/assets/images/menu/Nuoccam.jpg';
 
+// Vite Eager Glob to bundle all downloaded dish images automatically
+const globImages = import.meta.glob('@/assets/images/menu/*.jpg', { eager: true, import: 'default' });
+
+export function resolveDishImage(imagePath) {
+  if (!imagePath) return menuHero;
+  if (imagePath.startsWith('http')) return imagePath;
+
+  const filename = imagePath.split('/').pop();
+  const globKey = `/src/assets/images/menu/${filename}`;
+
+  if (globImages[globKey]) {
+    return globImages[globKey];
+  }
+  return imagePath;
+}
+
 export const menuIcons = {
   nav: [
     menuCategoryIcons.sushiSashimi,

@@ -26,6 +26,7 @@ import adminKdsRoutes from "./routes/admin.kds.routes.js";
 import ordersRoutes from "./routes/orders.routes.js";
 
 import loyaltyRoutes from "./routes/loyalty.js";
+import aiRoutes from "./routes/ai.routes.js";
 import pool from "./db.js";
 import reviewRoutes from "./routes/review.routes.js";
 import { initSocket } from "./socket.js";
@@ -61,7 +62,7 @@ app.use((_req, res, next) => {
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
   next();
 });
-app.use(express.json({ limit: "3mb" }));
+app.use(express.json({ limit: "10mb" }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/menu", (req, res, next) => {
   if (req.url.startsWith('/') && req.url.endsWith('.jpg') && !req.url.startsWith('/menu-')) {
@@ -96,6 +97,8 @@ app.use("/api/promotions", promotionRoutes);
 app.use("/api/public", publicRoutes);
 app.use("/api/loyalty", loyaltyRoutes);
 app.use("/api/reviews", reviewRoutes);
+app.use("/api/ai", aiRoutes);
+
 
 
 import paymentRoutes from "./routes/paymentRoutes.js";

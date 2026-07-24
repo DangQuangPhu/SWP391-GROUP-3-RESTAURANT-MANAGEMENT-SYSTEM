@@ -3,12 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Bookmark } from 'lucide-react';
 
 /**
- * BookmarkButton — animated bookmark icon adapted from BookmarkIconButton.
- * White background, black icon — matches the `+` add-to-cart button style.
- *
- * Props:
- *   isSaved   bool     — controlled saved state
- *   onToggle  function — called when button is clicked
+ * BookmarkButton — animated Apple Liquid Glass bookmark button.
+ * Hover Spring & Glow animation matching Apple design language.
  */
 
 const particleConfigs = Array.from({ length: 5 }, (_, i) => {
@@ -31,35 +27,49 @@ export function BookmarkButton({ isSaved, onToggle }) {
 
   return (
     <div className="relative flex items-center justify-center">
-      <button
+      <motion.button
         type="button"
         onClick={handleClick}
         aria-pressed={isSaved}
         aria-label={isSaved ? 'Remove from favorites' : 'Add to favorites'}
-        className="menu-card__bookmark-btn absolute bottom-3 left-3 bg-white text-gray-900 w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.15)] active:scale-95 transition-all z-10 border-2 border-white/80"
+        whileHover={{ scale: 1.18, y: -2 }}
+        whileTap={{ scale: 0.88 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+        style={{
+          boxShadow: isSaved
+            ? '0 6px 18px rgba(155, 132, 94, 0.4), inset 0 1px 1px #ffffff'
+            : '0 4px 14px rgba(0, 0, 0, 0.12), inset 0 1px 1px #ffffff',
+          borderColor: isSaved ? '#9b845e' : 'rgba(255, 255, 255, 0.9)',
+          background: isSaved ? '#ffffff' : 'rgba(255, 255, 255, 0.92)'
+        }}
+        className="menu-card__bookmark-btn absolute bottom-3 left-3 w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-colors z-10 border-2"
       >
         <motion.div
           initial={{ scale: 1 }}
           animate={{ scale: isSaved ? 1.1 : 1 }}
-          whileTap={{ scale: 0.85, rotate: isSaved ? 0 : -10 }}
           transition={{ type: 'spring', stiffness: 300, damping: 15 }}
           className="relative flex items-center justify-center"
         >
-          {/* Outline bookmark (always visible) */}
+          {/* Outline bookmark */}
           <Bookmark
-            size={16}
-            className="opacity-60"
+            size={18}
+            className="transition-colors duration-300"
+            style={{
+              color: isSaved ? '#9b845e' : '#4d463d',
+              opacity: isSaved ? 1 : 0.75
+            }}
             aria-hidden="true"
           />
 
-          {/* Filled bookmark (visible when saved) */}
+          {/* Filled bookmark when saved */}
           <Bookmark
-            size={16}
+            size={18}
             aria-hidden="true"
             className="absolute inset-0 transition-all duration-300"
             style={{
               opacity: isSaved ? 1 : 0,
-              fill: isSaved ? 'currentColor' : 'none',
+              fill: isSaved ? '#9b845e' : 'none',
+              color: '#9b845e'
             }}
           />
 
@@ -70,17 +80,17 @@ export function BookmarkButton({ isSaved, onToggle }) {
                 className="absolute inset-0 rounded-full"
                 style={{
                   background:
-                    'radial-gradient(circle, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0) 80%)',
+                    'radial-gradient(circle, rgba(155, 132, 94, 0.35) 0%, rgba(155, 132, 94, 0) 80%)',
                 }}
                 initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: [0, 1.4, 1], opacity: [0, 0.4, 0] }}
+                animate={{ scale: [0, 1.5, 1], opacity: [0, 0.6, 0] }}
                 exit={{}}
-                transition={{ duration: 0.7, ease: 'easeOut' }}
+                transition={{ duration: 0.6, ease: 'easeOut' }}
               />
             )}
           </AnimatePresence>
         </motion.div>
-      </button>
+      </motion.button>
 
       {/* Particle burst */}
       <AnimatePresence>
@@ -92,10 +102,11 @@ export function BookmarkButton({ isSaved, onToggle }) {
             {particleConfigs.map((cfg, i) => (
               <motion.div
                 key={i}
-                className="absolute rounded-full bg-gray-800"
+                className="absolute rounded-full"
                 style={{
                   width: `${4 + Math.random() * 2}px`,
                   height: `${4 + Math.random() * 2}px`,
+                  background: '#9b845e',
                   filter: 'blur(0.5px)',
                   top: '50%',
                   left: '50%',
@@ -104,7 +115,7 @@ export function BookmarkButton({ isSaved, onToggle }) {
                 initial={{ scale: 0, opacity: 0.3, x: 0, y: 0 }}
                 animate={{
                   scale: [0, cfg.scale, 0],
-                  opacity: [0.3, 0.8, 0],
+                  opacity: [0.4, 0.9, 0],
                   x: [0, Math.cos(cfg.angle) * cfg.radius],
                   y: [0, Math.sin(cfg.angle) * cfg.radius * 0.75],
                 }}

@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
-import { menuImages } from '../data/menuAssets.js';
+import { menuImages, resolveDishImage } from '../data/menuAssets.js';
 import { formatVND } from '@/core/utils/formatCurrency';
 import { flyToCart } from '../utils/flyToCart.js';
 import { BookmarkButton } from './BookmarkButton.jsx';
 
 const FALLBACK_IMAGE = menuImages.hero;
+
 
 function MenuGrid({
   dishes,
@@ -104,7 +105,8 @@ function MenuCard({
   onBookmark,
   isFavorite,
 }) {
-  const [imageSrc, setImageSrc] = useState(dish.image || FALLBACK_IMAGE);
+  const resolved = resolveDishImage(dish.image) || FALLBACK_IMAGE;
+  const [imageSrc, setImageSrc] = useState(resolved);
   const { imageWrapRef, handleAdd } = useAddToCartHandler({
     dish,
     imageSrc,
@@ -117,6 +119,7 @@ function MenuCard({
   const openPreview = () => {
     onPreviewImage?.({ ...dish, image: imageSrc });
   };
+
 
   return (
     <article
@@ -214,7 +217,8 @@ function SetMenuCard({
   onBookmark,
   isFavorite,
 }) {
-  const [imageSrc, setImageSrc] = useState(dish.image || FALLBACK_IMAGE);
+  const resolved = resolveDishImage(dish.image) || FALLBACK_IMAGE;
+  const [imageSrc, setImageSrc] = useState(resolved);
   const { imageWrapRef, handleAdd } = useAddToCartHandler({
     dish,
     imageSrc,
@@ -222,6 +226,7 @@ function SetMenuCard({
     onAddToCart,
     cartFabRef,
   });
+
   const saved = isFavorite ? isFavorite(dish.id ?? dish.dish_id) : false;
 
   const setCard = dish.setCard ?? {};

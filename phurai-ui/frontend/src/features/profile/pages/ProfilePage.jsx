@@ -5,7 +5,11 @@ import { MonitorSmartphone, CreditCard, LayoutDashboard, Gem, ArrowDownLeft, Arr
 import CustomerDashboard from "../components/CustomerDashboard";
 import LoyaltyPointsPage from "@/features/loyalty/pages/LoyaltyPointsPage";
 import { useFavoritesStore } from "@/features/menu/context/MenuFavoritesContext.jsx";
+import MenuImagePreview from "@/features/menu/components/MenuImagePreview.jsx";
+import { resolveDishImage } from "@/features/menu/data/menuAssets.js";
 import CustomerNotificationBell from "@/components/notifications/CustomerNotificationBell.jsx";
+
+
 
 import { getProfilePayments } from "../services/profileApi.js";
 import {
@@ -642,12 +646,19 @@ function PaymentHistoryPanel({ profile }) {
 
 function FavoritesProfilePanel({ currentUser }) {
   const { favorites, removeFavorite } = useFavoritesStore(currentUser);
-  const { formatVND } = { formatVND: (v) => {
-    if (!v && v !== 0) return '';
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(v);
-  }};
+  const [searchTerm, setSearchTerm] = useState("");
+  const [previewDish, setPreviewDish] = useState(null);
 
   const FALLBACK = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=80&q=60';
+
+  const filteredFavorites = useMemo(() => {
+    const query = searchTerm.toLowerCase().trim();
+    if (!query) return favorites;
+    return favorites.filter((dish) =>
+      (dish.name || '').toLowerCase().includes(query) ||
+      (dish.description || '').toLowerCase().includes(query)
+    );
+  }, [favorites, searchTerm]);
 
   if (favorites.length === 0) {
     return (
@@ -663,46 +674,98 @@ function FavoritesProfilePanel({ currentUser }) {
 
   return (
     <div>
-      <div className="profile-dashboard__section-header">
-        <h2 className="profile-favorites__title">My Favorites</h2>
-        <p className="profile-favorites__subtitle">{favorites.length} saved {favorites.length === 1 ? 'dish' : 'dishes'}</p>
-      </div>
-      <div className="profile-favorites__grid">
-        {favorites.map((dish) => (
-          <div
-            key={dish.id ?? dish.dish_id}
-            className="profile-favorites__card"
+      <div className="profile-dashboard__section-header" style={{ flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <h2 className="profile-favorites__title">My Favorites</h2>
+          <p className="profile-favorites__subtitle">{favorites.length} saved {favorites.length === 1 ? 'dish' : 'dishes'}</p>
+        </div>
+
+        {/* Filter Search Bar in Profile */}
+        <div style={{ position: 'relative', width: '100%', maxWidth: '280px' }}>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search saved dishes..."
+            style={{
+              width: '100%',
+              padding: '9px 14px 9px 36px',
+              borderRadius: '9999px',
+              border: '1px solid #e0d8cd',
+              background: '#ffffff',
+              fontSize: '0.85rem',
+              color: '#342716',
+              outline: 'none',
+              fontFamily: "'Hanken Grotesk', system-ui, sans-serif"
+            }}
+          />
+          <svg
+            viewBox="0 0 20 20"
+            fill="none"
+            style={{
+              position: 'absolute',
+              left: '12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: '16px',
+              height: '16px',
+              color: '#9b845e',
+              pointerEvents: 'none'
+            }}
           >
-            <img
-              src={dish.image || FALLBACK}
-              alt={dish.name}
-              onError={(e) => { e.currentTarget.src = FALLBACK; }}
-              className="profile-favorites__img"
-            />
-            <div className="profile-favorites__info">
-              <p className="profile-favorites__name">
-                {dish.name}
-              </p>
-              <p className="profile-favorites__price">
-                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(dish.price)}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => removeFavorite(dish.id ?? dish.dish_id)}
-              aria-label={`Remove ${dish.name} from favorites`}
-              className="profile-favorites__btn-delete"
-            >
-              <svg viewBox="0 0 16 16" fill="none" className="profile-favorites__btn-delete-svg">
-                <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M10 7v5M6 7v5M3 4l.8 8a1 1 0 0 0 1 .9h6.4a1 1 0 0 0 1-.9L13 4H3z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          </div>
-        ))}
+            <circle cx="9" cy="9" r="5.5" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M13.5 13.5L17 17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </div>
       </div>
+
+      {filteredFavorites.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '32px 16px', color: '#8c7d6c', fontFamily: "'Hanken Grotesk', system-ui, sans-serif" }}>
+          <p style={{ fontWeight: 600, fontSize: '0.95rem' }}>No matching favorites found for "{searchTerm}".</p>
+        </div>
+      ) : (
+        <div className="profile-favorites__grid">
+          {filteredFavorites.map((dish) => (
+            <div
+              key={dish.id ?? dish.dish_id}
+              className="profile-favorites__card"
+            >
+              <img
+                src={resolveDishImage(dish.image) || FALLBACK}
+                alt={dish.name}
+                onClick={() => setPreviewDish({ ...dish, image: resolveDishImage(dish.image) })}
+                onError={(e) => { e.currentTarget.src = FALLBACK; }}
+                className="profile-favorites__img"
+                style={{ cursor: 'zoom-in' }}
+              />
+              <div className="profile-favorites__info" onClick={() => setPreviewDish({ ...dish, image: resolveDishImage(dish.image) })} style={{ cursor: 'pointer' }}>
+
+                <p className="profile-favorites__name">
+                  {dish.name}
+                </p>
+                {/* Note: Price omitted in Profile view per requirements */}
+              </div>
+              <button
+                type="button"
+                onClick={() => removeFavorite(dish.id ?? dish.dish_id)}
+                aria-label={`Remove ${dish.name} from favorites`}
+                className="profile-favorites__btn-delete"
+              >
+                <svg viewBox="0 0 16 16" fill="none" className="profile-favorites__btn-delete-svg">
+                  <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M10 7v5M6 7v5M3 4l.8 8a1 1 0 0 0 1 .9h6.4a1 1 0 0 0 1-.9L13 4H3z" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <MenuImagePreview dish={previewDish} onClose={() => setPreviewDish(null)} />
     </div>
   );
 }
+
+
 
 function ProfilePage({
   profile,

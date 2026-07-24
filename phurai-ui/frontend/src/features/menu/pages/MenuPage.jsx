@@ -15,8 +15,13 @@ import { useTableSession } from '@/features/table-session';
 import '@/features/table-session/styles/table-session.css';
 import { useSocket } from '@/core/socket/SocketContext.jsx';
 
+import AIDishRecommendations from '../components/AIDishRecommendations.jsx';
+import AIVisualSearchModal from '../components/AIVisualSearchModal.jsx';
+import MenuPagination from '../components/MenuPagination.jsx';
 import { flattenMenuDishes, menuCategories } from '../data/menuData.js';
 import { menuImages } from '../data/menuAssets.js';
+
+
 import { normalizePrice, formatVND } from '@/core/utils/formatCurrency';
 import { isMenuCustomer } from '../utils/menuCustomer.js';
 
@@ -68,7 +73,9 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
   const [apiDishes, setApiDishes] = useState([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSendingOrder, setIsSendingOrder] = useState(false);
+  const [isVisualSearchOpen, setIsVisualSearchOpen] = useState(false);
   const { socket } = useSocket();
+
 
   const fetchMenu = useCallback(() => {
     fetch('/api/menu')
@@ -184,10 +191,35 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
     return sortDishes(filtered, sortOrder, selectedCategory);
   }, [baseDishes, searchTerm, sortOrder, selectedCategory]);
 
+  const ITEMS_PER_PAGE = 9;
+  const [currentPage, setCurrentPage] = useState(1);
+  const catalogRef = useRef(null);
+  const filterRef = useRef(null);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategory, searchTerm, sortOrder]);
+
+  const totalPages = useMemo(() => {
+    return Math.ceil(visibleDishes.length / ITEMS_PER_PAGE) || 1;
+  }, [visibleDishes]);
+
+  const paginatedDishes = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return visibleDishes.slice(start, start + ITEMS_PER_PAGE);
+  }, [visibleDishes, currentPage]);
+
+  const handlePageChange = useCallback((page) => {
+    setCurrentPage(page);
+    filterRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+
   const gridLayoutVariant =
     selectedCategory === 'chefs-set-menu' ? 'set-cards' : 'grid';
 
-  const contentKey = `${selectedCategory}-${searchTerm}-${sortOrder}`;
+  const contentKey = `${selectedCategory}-${searchTerm}-${sortOrder}-p${currentPage}`;
+
 
   const handleCategorySelect = useCallback((categoryId) => {
     if (isTransitioningRef.current || categoryId === selectedCategory) return;
@@ -329,14 +361,30 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
             </div>
           </section>
 
-          <div className="menu-catalog">
-            <MenuToolbar
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-              sortOrder={sortOrder}
-              onSortChange={setSortOrder}
-              resultCount={visibleDishes.length}
+          <div className="menu-catalog" ref={catalogRef}>
+            <AIDishRecommendations
+              recommendedDishes={baseDishes}
+              onOpenVisualSearch={() => setIsVisualSearchOpen(true)}
+              onPreviewImage={setPreviewDish}
             />
+
+            <AIVisualSearchModal
+              isOpen={isVisualSearchOpen}
+              onClose={() => setIsVisualSearchOpen(false)}
+              menuDishes={baseDishes}
+              onPreviewImage={setPreviewDish}
+            />
+
+            <div ref={filterRef} style={{ scrollMarginTop: '100px' }}>
+              <MenuToolbar
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                sortOrder={sortOrder}
+                onSortChange={setSortOrder}
+                resultCount={visibleDishes.length}
+              />
+            </div>
+
 
             <div
               className={`menu-catalog__content menu-catalog__content--${contentPhase}`}
@@ -357,12 +405,13 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
                 <div className="menu-results menu-content-panel" key={contentKey}>
                   <header className="menu-results-header">
                     <span className="menu-results-header__count">
-                      {visibleDishes.length} DISHES
+                      {visibleDishes.length} DISHES (PAGE {currentPage} OF {totalPages})
                     </span>
                     <h2 className="menu-results-header__title">{selectedCategoryLabel}</h2>
                   </header>
+
                   <MenuGrid
-                    dishes={visibleDishes}
+                    dishes={paginatedDishes}
                     layoutVariant={gridLayoutVariant}
                     onPreviewImage={setPreviewDish}
                     canAddToCart={canAddToCart}
@@ -372,10 +421,18 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
                     onBookmark={handleBookmark}
                     isFavorite={isFavorite}
                   />
+
+                  {/* Apple Style Fluid Spring Pagination */}
+                  <MenuPagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={handlePageChange}
+                  />
                 </div>
               )}
             </div>
           </div>
+
         </main>
       </div>
 
@@ -385,8 +442,9 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
         </div>
       ) : null}
 
-      <FavoritesSidebar />
+      <FavoritesSidebar onPreviewImage={setPreviewDish} />
       <MenuImagePreview dish={previewDish} onClose={() => setPreviewDish(null)} />
+
     </div>
   );
 }
