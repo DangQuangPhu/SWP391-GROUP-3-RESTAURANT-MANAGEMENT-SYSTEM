@@ -17,6 +17,22 @@ const accordionItems = [
   { id: 10, title: "Chef's Counter", imageUrl: homeImages.gallery[9] },
 ];
 
+// ─── Preload all 10 images immediately on module load ───────────────────────
+// This injects <link rel="preload" as="image"> into <head> so the browser
+// begins fetching all gallery images in the background as soon as the JS
+// bundle loads — long before the user scrolls down to the section.
+// Result: zero lag / flicker on hover animation.
+if (typeof window !== 'undefined') {
+  accordionItems.forEach(({ imageUrl }) => {
+    if (!imageUrl) return;
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'image';
+    link.href = imageUrl;
+    document.head.appendChild(link);
+  });
+}
+
 function navigateToMenu() {
   if (window.location.pathname !== '/menus') {
     window.history.pushState(null, '', '/menus');
@@ -37,7 +53,9 @@ function AccordionPanel({ item }) {
         className="uxp-panel__img"
         src={src}
         alt=""
-        loading="lazy"
+        loading="eager"
+        fetchPriority="high"
+        decoding="async"
         onError={() => {
           if (src !== FALLBACK_IMAGE) setSrc(FALLBACK_IMAGE);
         }}

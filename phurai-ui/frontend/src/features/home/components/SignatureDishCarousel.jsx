@@ -560,6 +560,7 @@ function SignatureDishCarousel() {
 
             const cardClassName = [
               'signature-dish-carousel__card',
+              `signature-dish-carousel__card--${card.id}`,
               cardState,
               isPlaying ? 'signature-dish-carousel__card--playing' : '',
               isEnded ? 'signature-dish-carousel__card--ended' : '',

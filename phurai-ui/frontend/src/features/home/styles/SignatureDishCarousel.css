@@ -125,6 +125,18 @@
   pointer-events: none;
 }
 
+/* ── Per-card video brightness corrections ─────────────────────────────────
+   The omakase video is shot in low-light kitchen ambience so we boost it
+   to match the brightness level of the other two cards.                    */
+.signature-dish-carousel__card--omakase-experience .single-video-player__video {
+  filter: brightness(1.35) saturate(1.15) !important;
+}
+.signature-dish-carousel__card--omakase-experience.signature-dish-carousel__card:hover .single-video-player__video {
+  filter: brightness(1.42) saturate(1.18) !important;
+}
+
+
+
 .signature-dish-carousel__content {
   position: absolute;
   inset: 0;
