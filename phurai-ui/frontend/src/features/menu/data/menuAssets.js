@@ -33,18 +33,76 @@ import orangejuice from '@/assets/images/menu/Nuoccam.jpg';
 // Vite Eager Glob to bundle all downloaded dish images automatically
 const globImages = import.meta.glob('@/assets/images/menu/*.jpg', { eager: true, import: 'default' });
 
-export function resolveDishImage(imagePath) {
-  if (!imagePath) return menuHero;
-  if (imagePath.startsWith('http')) return imagePath;
-
-  const filename = imagePath.split('/').pop();
-  const globKey = `/src/assets/images/menu/${filename}`;
-
-  if (globImages[globKey]) {
-    return globImages[globKey];
+export function resolveDishImage(imagePath, dishName = '') {
+  if (typeof imagePath === 'object' && imagePath !== null) {
+    dishName = imagePath.dish_name || imagePath.name || dishName;
+    imagePath = imagePath.image_url || imagePath.image || '';
   }
-  return imagePath;
+
+  let cleanPath = String(imagePath || '').trim();
+  // Filter out internal API route URLs so token scoring operates on dishName!
+  if (cleanPath.startsWith('/api/dishes/') || cleanPath.endsWith('/image')) {
+    cleanPath = '';
+  }
+
+  // 1. Direct http or base64 data URL
+  if (cleanPath.startsWith('http') || cleanPath.startsWith('data:')) {
+    return cleanPath;
+  }
+
+  // 2. Direct glob match if cleanPath is an exact asset path or filename
+  if (cleanPath) {
+    const filename = cleanPath.split('/').pop().toLowerCase();
+    for (const [key, val] of Object.entries(globImages)) {
+      const keyLower = key.toLowerCase();
+      if (keyLower.endsWith(`/${filename}`) || keyLower.endsWith(filename)) {
+        return val;
+      }
+    }
+  }
+
+  // 3. Smart Token Scoring match on dishName & cleanPath against all globImages
+  const rawText = String(dishName || cleanPath || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+  const tokens = rawText.split(/\s+/).filter(t => t.length > 2 && t !== 'with' && t !== 'and');
+
+  if (tokens.length > 0) {
+    let bestMatch = null;
+    let highestScore = 0;
+
+    for (const [key, val] of Object.entries(globImages)) {
+      const keyLower = key.toLowerCase();
+      // Skip non-dish UI utility images
+      if (keyLower.includes('menu-hero') || keyLower.includes('icon') || keyLower.includes('social') || keyLower.includes('footer') || keyLower.includes('nav')) {
+        continue;
+      }
+
+      let score = 0;
+      for (const token of tokens) {
+        if (keyLower.includes(token)) {
+          score += 1;
+        }
+      }
+
+      if (score > highestScore) {
+        highestScore = score;
+        bestMatch = val;
+      }
+    }
+
+    if (bestMatch && highestScore >= 1) {
+      return bestMatch;
+    }
+  }
+
+  // 4. Fallback map & default dish image
+  if (cleanPath && imagePathMap[cleanPath]) return imagePathMap[cleanPath];
+
+  return globImages['/src/assets/images/menu/dish-sushi-sashimi.jpg'] || menuHero;
 }
+
+
+
+
 
 export const menuIcons = {
   nav: [

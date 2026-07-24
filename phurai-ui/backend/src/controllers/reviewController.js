@@ -14,11 +14,13 @@ export async function submitReview(req, res) {
       return res.status(400).json({ success: false, message: "Please provide ratings for Food, Service, and Ambiance." });
     }
 
+    const overall = Math.round((Number(food_rating) + Number(service_rating) + Number(ambiance_rating)) / 3);
+
     // Insert into DB
     const [result] = await pool.query(
       `INSERT INTO dbo.CustomerReviews 
-       (customer_id, reservation_id, order_id, food_rating, service_rating, ambiance_rating, comment, is_visible)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+       (customer_id, reservation_id, order_id, food_rating, service_rating, ambiance_rating, overall_rating, comment, is_visible, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, SYSDATETIME())`,
       [
         customer_id || null, 
         reservation_id || null, 
@@ -26,9 +28,33 @@ export async function submitReview(req, res) {
         food_rating, 
         service_rating, 
         ambiance_rating, 
+        overall,
         comment || null
       ]
     );
+
+    // Emit Socket.IO event to Manager and Admin Portals in real-time
+    try {
+      const io = req.app?.get?.("io");
+      if (io) {
+        const payload = {
+          review_id: result.insertId,
+          order_id: orderId,
+          customer_id,
+          food_rating,
+          service_rating,
+          ambiance_rating,
+          overall_rating: overall,
+          comment,
+          created_at: new Date()
+        };
+        io.emit("NEW_REVIEW_SUBMITTED", payload);
+        io.to("room:manager").to("room:admin").emit("reviews:sync", { action: "new", review: payload });
+        io.emit("review:new", payload);
+      }
+    } catch (socketErr) {
+      console.warn("Socket notification failed for new review:", socketErr);
+    }
 
     res.json({ success: true, message: "Review submitted successfully" });
   } catch (error) {
@@ -36,6 +62,7 @@ export async function submitReview(req, res) {
     res.status(500).json({ success: false, message: "Failed to submit review" });
   }
 }
+
 
 export async function getManagerReviews(req, res) {
   try {

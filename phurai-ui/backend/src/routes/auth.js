@@ -227,23 +227,40 @@ router.post("/register", async (req, res) => {
     );
     if (existingEmail[0]) {
       return res.status(409).json({
-        message: "Email is already registered.",
-        errors: { email: "Email is already registered." },
+        message: "Email is already registered by another account.",
+        errors: { email: "Email is already registered by another account." },
       });
     }
 
-    const [existingUsername] = await pool.query(
-      `SELECT cp.customer_id
-       FROM dbo.CustomerProfiles cp
-       WHERE LOWER(cp.username) = LOWER(?)`,
-      [normalized.username]
-    );
-    if (existingUsername[0]) {
-      return res.status(409).json({
-        message: "Username is already taken.",
-        errors: { username: "Username is already taken." },
-      });
+    if (normalized.phoneNumber) {
+      const cleanPhone = normalized.phoneNumber.replace(/[\s\-()]/g, '');
+      const [existingPhone] = await pool.query(
+        `SELECT user_id FROM dbo.UserAccounts WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') = ?`,
+        [cleanPhone]
+      );
+      if (existingPhone[0]) {
+        return res.status(409).json({
+          message: "Phone number is already registered by another account.",
+          errors: { phoneNumber: "Phone number is already registered by another account." },
+        });
+      }
     }
+
+    if (normalized.username) {
+      const [existingUsername] = await pool.query(
+        `SELECT cp.customer_id
+         FROM dbo.CustomerProfiles cp
+         WHERE LOWER(cp.username) = LOWER(?)`,
+        [normalized.username]
+      );
+      if (existingUsername[0]) {
+        return res.status(409).json({
+          message: "Username is already taken by another account.",
+          errors: { username: "Username is already taken by another account." },
+        });
+      }
+    }
+
 
     const roleId = await getCustomerRoleId();
     const fullName = `${normalized.firstName} ${normalized.lastName}`.trim();

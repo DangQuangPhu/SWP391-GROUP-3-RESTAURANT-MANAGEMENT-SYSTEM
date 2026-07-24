@@ -29,6 +29,18 @@ export default function StaffNotificationListener({ user, isAuthenticated }) {
 
     socket.on("NEW_DINEIN_ORDER", handleNewDineInOrder);
 
+    const handleUnpaidTimeout = (data) => {
+      const formattedVal = data.amount ? new Intl.NumberFormat("vi-VN").format(data.amount) + ' VND' : '';
+      toast.error(`⚠️ Table ${data.tableNumber || "Unknown"} QR Payment timed out after 15 mins (Unpaid ${formattedVal})! Please check table.`, {
+        icon: "⏳",
+        duration: 15000,
+        id: `unpaid-timeout-${data.orderId}-${Date.now()}`
+      });
+    };
+
+    socket.on("UNPAID_PAYMENT_TIMEOUT", handleUnpaidTimeout);
+
+
     const handleRoleChanged = () => {
       alert("Your role has changed. Please log in again.");
       handleSignOut();

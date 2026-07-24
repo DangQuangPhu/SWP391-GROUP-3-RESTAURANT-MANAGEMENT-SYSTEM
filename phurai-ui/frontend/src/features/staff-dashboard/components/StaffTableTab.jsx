@@ -2,6 +2,8 @@ import { createContext, useContext, useCallback, useMemo, useState, useRef, useE
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { QRCodeSVG as QRCode } from "qrcode.react";
+import TableQrOrderLink from "@/components/common/TableQrOrderLink.jsx";
+
 import { ManagerModal } from "../../manager-dashboard/components/ManagerOverlay.jsx";
 import {
   TableCardSkeleton,
@@ -614,38 +616,10 @@ function TableManagementTableModal() {
             </div>
           </div>
 
-          {table.qr_code && (
-            <div style={{ flex: "0 0 180px", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
-              <span className="sfx-muted" style={{ fontSize: "12px", fontWeight: "600", whiteSpace: "nowrap" }}>Static QR - Scan to Order</span>
-              <div id={`qr-wrapper-${table.table_id}`} style={{ background: "#fff", padding: "12px", borderRadius: "10px", border: "1px solid var(--sfx-border-soft)", display: "flex", justifyContent: "center", alignItems: "center", boxShadow: "0 4px 12px rgba(0, 0, 0, 0.05)" }}>
-                <QRCode
-                  value={`${window.location.origin}/scan/${table.qr_code}`}
-                  size={156}
-                />
-              </div>
-              <Button
-                variant="soft"
-                size="sm"
-                icon="download"
-                onClick={() => {
-                  const wrapper = document.getElementById(`qr-wrapper-${table.table_id}`);
-                  const svg = wrapper?.querySelector("svg");
-                  if (!svg) return;
-                  const svgData = new XMLSerializer().serializeToString(svg);
-                  const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-                  const url = URL.createObjectURL(blob);
-                  const link = document.createElement("a");
-                  link.href = url;
-                  link.download = `Table-${table.table_number}-QR.svg`;
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                }}
-              >
-                Download
-              </Button>
-            </div>
+          {(table.qr_code || table.static_qr_code) && (
+            <TableQrOrderLink table={table} allTables={tables} />
           )}
+
         </div>
 
         <div className="sfx-field">

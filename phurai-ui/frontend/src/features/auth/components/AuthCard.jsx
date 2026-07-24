@@ -193,6 +193,19 @@ function AuthCard({
         });
         return;
       }
+      
+      const isOriginError = 
+        error?.message?.includes("origin_mismatch") || 
+        error?.message?.includes("idpiframe") || 
+        error?.message?.includes("cancelled") ||
+        error?.message?.includes("OAuth") ||
+        error?.message?.includes("access_denied");
+
+      if (isOriginError) {
+        setShowGoogleChooser(true);
+        return;
+      }
+
       setAlert({
         type: "error",
         message: error?.message || "Google login failed. Please try again.",
@@ -220,9 +233,21 @@ function AuthCard({
         initialTiming: buildInitialTiming(data),
       });
     } catch (error) {
+      const isOriginError = 
+        error?.message?.includes("origin_mismatch") || 
+        error?.message?.includes("idpiframe") || 
+        error?.message?.includes("cancelled") ||
+        error?.message?.includes("OAuth") ||
+        error?.message?.includes("access_denied");
+
+      if (isOriginError) {
+        setShowGoogleChooser(true);
+        return;
+      }
+
       setAlert({
         type: "error",
-        message: error?.message || "Google login failed. Please try again.",
+        message: error?.message || "Google registration failed. Please try again.",
       });
     } finally {
       setGoogleLoading(false);

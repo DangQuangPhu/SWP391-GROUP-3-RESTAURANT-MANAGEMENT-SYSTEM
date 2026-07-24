@@ -23,7 +23,31 @@
   min-height: 100vh;
 }
 
+.rd-page--checkout {
+  background-image: url('../../../assets/images/checkout/4.jpeg') !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+}
+
+/* Dark Obsidian Glossy Glass Panel for Checkout */
+.rd-card--checkout {
+  background: rgba(10, 8, 12, 0.86) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
+  backdrop-filter: blur(40px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  box-shadow: 0 35px 90px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+
+.rd-card--checkout::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 100%) !important;
+}
+
+
+
 .rd-page--bg-summary {
+
   background-image: url('../../../assets/images/reservation/6.jpeg') !important;
   background-size: cover;
   background-position: center;
@@ -283,6 +307,20 @@
   pointer-events: none !important;
   z-index: 0 !important;
 }
+
+/* Dark Black Blur Panel for Checkout */
+.rd-page--checkout .rd-card {
+  background: rgba(12, 11, 15, 0.92) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
+  backdrop-filter: blur(40px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 35px 90px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+}
+
+.rd-page--checkout .rd-card::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 100%) !important;
+}
+
 
 .rd-card-title {
   font-size: 22px;

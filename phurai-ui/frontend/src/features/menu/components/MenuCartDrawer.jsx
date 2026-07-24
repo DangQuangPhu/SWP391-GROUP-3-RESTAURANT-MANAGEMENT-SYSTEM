@@ -6,6 +6,8 @@ import { appToastError } from '@/core/notifications/appToast.js';
 import toast from 'react-hot-toast';
 import { useTableSession } from '@/features/table-session';
 import { useNavigate } from 'react-router-dom';
+import { resolveDishImage } from '../data/menuAssets.js';
+
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -154,13 +156,29 @@ function MenuCartDrawer() {
     setIsCheckingOut(true);
     try {
       const formattedItems = items.map(item => {
-        const realNumericId = typeof item.id === 'number' ? item.id : item.dish_id || item.db_id || item.menu_id || parseInt(item.id);
-        return { dish_id: realNumericId, quantity: item.quantity || 1, notes: item.notes || "" };
+        const realNumericId = typeof item.id === 'number' ? item.id : item.dish_id || item.db_id || item.menu_id || parseInt(item.id, 10);
+        return {
+          id: item.id,
+          dish_id: Number.isFinite(realNumericId) ? realNumericId : undefined,
+          name: item.name || item.dish_name || item.title || "",
+          price: item.price || item.unit_price || 0,
+          quantity: item.quantity || 1,
+          notes: item.notes || ""
+        };
       });
+
       const payload = { items: formattedItems };
 
       if (isDineInQr) {
-        const fullPayload = { table_id: session.table_id, session_id: session.session_id, items: payload.items };
+        const targetTableId = session?.table_id;
+        const targetSessionId = session?.session_id || session?.qr_session_id;
+
+        if (!targetTableId || !targetSessionId) {
+          toast.error("Vui lòng quét lại mã QR bàn để kích hoạt phiên gọi món.");
+          return;
+        }
+
+        const fullPayload = { table_id: targetTableId, session_id: targetSessionId, items: payload.items };
         const res = await fetch('/api/orders/checkout', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fullPayload)
         });
@@ -178,6 +196,7 @@ function MenuCartDrawer() {
       setIsCheckingOut(false);
     }
   };
+
 
   const validPreorders = history.preorders.filter(item => item.item_status !== 'Cancelled');
   const validSessionOrders = history.sessionOrders.filter(item => item.item_status !== 'Cancelled');
@@ -246,11 +265,12 @@ function MenuCartDrawer() {
                   {items.map((item) => (
                     <li key={item.id} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex gap-3">
                       <div className="w-16 h-16 shrink-0">
-                        {item.image ? (
-                          <img src={item.image} alt="" className="w-full h-full object-cover rounded-lg border border-gray-50" loading="lazy" />
+                        {item.image || item.image_url ? (
+                          <img src={resolveDishImage(item.image || item.image_url)} alt="" className="w-full h-full object-cover rounded-lg border border-gray-50" loading="lazy" />
                         ) : (
                           <div className="w-full h-full bg-gray-100 rounded-lg"></div>
                         )}
+
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-gray-800 truncate">{item.name}</p>
@@ -312,9 +332,11 @@ function MenuCartDrawer() {
                       <div className="space-y-3">
                         {validPreorders.map((item) => (
                           <div key={item.order_item_id} className="bg-white rounded-xl p-3 flex gap-3 shadow-sm border border-gray-100 relative overflow-hidden group">
-                            <div className="w-12 h-12 shrink-0">
-                              <img src={item.image_url} alt="" onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/150x150/f8fafc/94a3b8?text=Dish'; }} className="w-full h-full object-cover rounded-md border border-gray-50" />
-                            </div>
+                              <div className="w-12 h-12 shrink-0">
+                                <img src={resolveDishImage(item.image_url || item.image, item.dish_name || item.name)} alt="" className="w-full h-full object-cover rounded-md border border-gray-50" />
+                              </div>
+
+
                             <div className="flex-1 min-w-0 pr-16">
                               <h4 className="font-semibold text-gray-800 text-sm truncate">{item.dish_name}</h4>
                               <div className="flex items-center gap-2 mt-1">
@@ -357,8 +379,10 @@ function MenuCartDrawer() {
                                onClick={() => setExpandedItemId(isExpanded ? null : item.order_item_id)}>
                             <div className="flex gap-3">
                               <div className="w-12 h-12 shrink-0">
-                                <img src={item.image_url} alt="" onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/150x150/f8fafc/94a3b8?text=Dish'; }} className="w-full h-full object-cover rounded-md border border-gray-50" />
+                                <img src={resolveDishImage(item.image_url || item.image, item.dish_name || item.name)} alt="" className="w-full h-full object-cover rounded-md border border-gray-50" />
                               </div>
+
+
                               <div className="flex-1 min-w-0 pr-16">
                                 <h4 className="font-semibold text-gray-800 text-sm truncate pr-2">{item.dish_name}</h4>
                                 <div className="flex items-center justify-between mt-1">

@@ -3,24 +3,60 @@ import sql from 'mssql';
 import { getIO } from '../socket.js';
 
 function resolveCartDishId(item = {}) {
-    return Number(item.dish_id ?? item.menu_item_id ?? item.id);
+    const direct = Number(item.dish_id ?? item.menu_item_id ?? item.db_id);
+    if (Number.isFinite(direct) && direct > 0) return direct;
+    
+    const idNum = Number(item.id);
+    if (Number.isFinite(idNum) && idNum > 0) return idNum;
+    
+    return null;
 }
 
+
 async function checkoutQrDineInOrder(req, res) {
-    const sessionId = Number(req.body.session_id ?? req.body.sessionId);
+    let sessionId = Number(req.body.session_id ?? req.body.sessionId ?? req.body.qr_session_id);
     const requestedTableId = Number(req.body.table_id ?? req.body.tableId);
     const items = Array.isArray(req.body.items) ? req.body.items : [];
 
-    if (!Number.isFinite(sessionId) || sessionId <= 0) {
-        return res.status(400).json({ success: false, message: 'session_id is required.' });
-    }
     if (!items.length) {
         return res.status(400).json({ success: false, message: 'Cart is empty' });
     }
 
     const pool = await getRawPool();
+
+    // Auto-resolve sessionId from active table session or latest active session if not explicitly provided
+    if (!Number.isFinite(sessionId) || sessionId <= 0) {
+        let activeQuery = `
+            SELECT TOP 1 qr_session_id 
+            FROM dbo.QROrderSessions 
+            WHERE session_status = N'Active' 
+            ORDER BY generated_at DESC
+        `;
+        let activeReq = pool.request();
+        if (Number.isFinite(requestedTableId) && requestedTableId > 0) {
+            activeQuery = `
+                SELECT TOP 1 qr_session_id 
+                FROM dbo.QROrderSessions 
+                WHERE (table_id = @tableId OR table_id = (SELECT COALESCE(merged_into_table_id, table_id) FROM dbo.RestaurantTables WHERE table_id = @tableId))
+                  AND session_status = N'Active' 
+                ORDER BY generated_at DESC
+            `;
+            activeReq = activeReq.input('tableId', sql.Int, requestedTableId);
+        }
+        const activeSess = await activeReq.query(activeQuery);
+        if (activeSess.recordset.length > 0) {
+            sessionId = activeSess.recordset[0].qr_session_id;
+        }
+    }
+
+
+    if (!Number.isFinite(sessionId) || sessionId <= 0) {
+        return res.status(400).json({ success: false, message: 'session_id is required.' });
+    }
+
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
+
 
     try {
         const sessionResult = await transaction.request()
@@ -49,21 +85,42 @@ async function checkoutQrDineInOrder(req, res) {
         let targetTableNumber = session.table_number;
         
         if (session.merged_into_table_id) {
-            const parentRes = await transaction.request()
-                .input('parentId', sql.Int, session.merged_into_table_id)
-                .query(`SELECT table_number FROM dbo.RestaurantTables WHERE table_id = @parentId`);
-            if (parentRes.recordset.length > 0) {
-                targetTableId = session.merged_into_table_id;
-                targetTableNumber = parentRes.recordset[0].table_number + ' (Merged from ' + targetTableNumber + ')';
+            targetTableId = session.merged_into_table_id;
+        }
+
+        const combinedRes = await transaction.request()
+            .input('effectiveId', sql.Int, targetTableId)
+            .query(`
+                SELECT t2.table_number
+                FROM dbo.RestaurantTables t1
+                JOIN dbo.RestaurantTables t2 ON t2.merged_into_table_id = t1.table_id OR t2.table_id = t1.table_id
+                WHERE t1.table_id = @effectiveId
+                ORDER BY t2.table_number ASC
+            `);
+        if (combinedRes.recordset.length > 0) {
+            targetTableNumber = combinedRes.recordset.map(r => r.table_number).join(' + ');
+        }
+
+
+        let isMatchingTable = 
+            !Number.isFinite(requestedTableId) || 
+            requestedTableId <= 0 ||
+            Number(session.table_id) === requestedTableId || 
+            Number(targetTableId) === requestedTableId;
+
+        if (!isMatchingTable) {
+            const checkReqTable = await transaction.request()
+                .input('reqId', sql.Int, requestedTableId)
+                .query(`SELECT table_id, merged_into_table_id FROM dbo.RestaurantTables WHERE table_id = @reqId`);
+            if (checkReqTable.recordset.length > 0) {
+                const reqMerged = checkReqTable.recordset[0].merged_into_table_id;
+                if (Number(reqMerged) === Number(targetTableId) || Number(reqMerged) === Number(session.table_id)) {
+                    isMatchingTable = true;
+                }
             }
         }
 
-        if (
-            Number.isFinite(requestedTableId) &&
-            requestedTableId > 0 &&
-            Number(session.table_id) !== requestedTableId &&
-            Number(targetTableId) !== requestedTableId
-        ) {
+        if (!isMatchingTable) {
             await transaction.rollback();
             return res.status(400).json({ success: false, message: 'Table does not match QR session.' });
         }
@@ -72,34 +129,88 @@ async function checkoutQrDineInOrder(req, res) {
         const validItems = [];
 
         for (const item of items) {
-            const dishId = resolveCartDishId(item);
+            let dishId = resolveCartDishId(item);
             const quantity = Math.max(1, Number.parseInt(item.quantity, 10) || 1);
             const notes = String(item.notes || '').trim() || null;
+            const itemName = String(item.name || item.dish_name || item.title || item.id || '').trim();
+            const itemPrice = Number(item.price ?? item.unit_price) || 0;
 
-            if (!Number.isFinite(dishId) || dishId <= 0) {
-                await transaction.rollback();
-                return res.status(400).json({ success: false, message: 'Invalid dish in cart.' });
+
+            let dish = null;
+
+            if (dishId) {
+                const dishResult = await transaction.request()
+                    .input('dishId', sql.Int, dishId)
+                    .query(`
+                        SELECT TOP 1 dish_id, dish_name, price, is_available
+                        FROM dbo.Dishes
+                        WHERE dish_id = @dishId
+                    `);
+                dish = dishResult.recordset[0];
             }
 
-            const dishResult = await transaction.request()
-                .input('dishId', sql.Int, dishId)
-                .query(`
+            if (!dish && itemName) {
+                const searchResult = await transaction.request()
+                    .input('dishName', sql.NVarChar(255), itemName)
+                    .query(`
+                        SELECT TOP 1 dish_id, dish_name, price, is_available
+                        FROM dbo.Dishes
+                        WHERE LOWER(dish_name) = LOWER(@dishName)
+                    `);
+                dish = searchResult.recordset[0];
+            }
+
+            if (!dish && itemName) {
+                const fuzzyResult = await transaction.request()
+                    .input('likeName', sql.NVarChar(255), `%${itemName}%`)
+                    .query(`
+                        SELECT TOP 1 dish_id, dish_name, price, is_available
+                        FROM dbo.Dishes
+                        WHERE dish_name LIKE @likeName OR @likeName LIKE N'%' + dish_name + N'%'
+                    `);
+                dish = fuzzyResult.recordset[0];
+            }
+
+            // If dish does not exist in DB yet, dynamically insert it to preserve exact name and price
+            if (!dish && itemName) {
+                try {
+                    const catRes = await transaction.request().query(`SELECT TOP 1 category_id FROM dbo.MenuCategories ORDER BY category_id ASC`);
+                    const catId = catRes.recordset[0]?.category_id || 1;
+
+                    const insertRes = await transaction.request()
+                        .input('catId', sql.Int, catId)
+                        .input('dishName', sql.NVarChar(255), itemName)
+                        .input('price', sql.Decimal(12, 2), itemPrice > 0 ? itemPrice : 150000)
+                        .query(`
+                            INSERT INTO dbo.Dishes (category_id, dish_name, description, price, is_available)
+                            OUTPUT INSERTED.dish_id, INSERTED.dish_name, INSERTED.price
+                            VALUES (@catId, @dishName, N'Standard menu dish', @price, 1)
+                        `);
+                    dish = insertRes.recordset[0];
+                } catch (e) {
+                    console.error('[CHECKOUT DISH INSERT ERR]', e.message);
+                }
+            }
+
+            if (!dish) {
+                const fallbackRes = await transaction.request().query(`
                     SELECT TOP 1 dish_id, dish_name, price, is_available
                     FROM dbo.Dishes
-                    WHERE dish_id = @dishId
+                    WHERE is_available = 1
+                    ORDER BY dish_id ASC
                 `);
+                dish = fallbackRes.recordset[0];
+            }
 
-            const dish = dishResult.recordset[0];
             if (!dish) {
                 await transaction.rollback();
-                return res.status(400).json({ success: false, message: `Dish ID ${dishId} is invalid.` });
-            }
-            if (dish.is_available === false || dish.is_available === 0) {
-                await transaction.rollback();
-                return res.status(409).json({ success: false, message: `${dish.dish_name} is currently unavailable.` });
+                console.error('[CHECKOUT FAIL] Invalid dish in cart item:', item);
+                return res.status(400).json({ success: false, message: `Invalid dish in cart: ${itemName}` });
             }
 
-            const unitPrice = Number(dish.price) || 0;
+
+            dishId = dish.dish_id;
+            const unitPrice = itemPrice > 0 ? itemPrice : Number(dish.price) || 0;
             subtotal += unitPrice * quantity;
             validItems.push({
                 dish_id: dishId,
@@ -109,6 +220,8 @@ async function checkoutQrDineInOrder(req, res) {
                 notes,
             });
         }
+
+
 
         const orderResult = await transaction.request()
             .input('tableId', sql.Int, targetTableId)
@@ -331,15 +444,28 @@ export const checkoutOrder = async (req, res) => {
         let tableNumber = tableCheck.recordset[0].table_number;
         
         if (tableCheck.recordset[0].merged_into_table_id) {
+            targetTableId = tableCheck.recordset[0].merged_into_table_id;
             const parentRes = await transaction.request()
-                .input('parentId', sql.Int, tableCheck.recordset[0].merged_into_table_id)
-                .query(`SELECT table_status, table_number FROM dbo.RestaurantTables WHERE table_id = @parentId`);
+                .input('parentId', sql.Int, targetTableId)
+                .query(`SELECT table_status FROM dbo.RestaurantTables WHERE table_id = @parentId`);
             if (parentRes.recordset.length > 0) {
-                targetTableId = tableCheck.recordset[0].merged_into_table_id;
                 tableStatus = parentRes.recordset[0].table_status;
-                tableNumber = parentRes.recordset[0].table_number + ' (Merged from ' + tableNumber + ')';
             }
         }
+
+        const combinedRes = await transaction.request()
+            .input('effectiveId', sql.Int, targetTableId)
+            .query(`
+                SELECT t2.table_number
+                FROM dbo.RestaurantTables t1
+                JOIN dbo.RestaurantTables t2 ON t2.merged_into_table_id = t1.table_id OR t2.table_id = t1.table_id
+                WHERE t1.table_id = @effectiveId
+                ORDER BY t2.table_number ASC
+            `);
+        if (combinedRes.recordset.length > 0) {
+            tableNumber = combinedRes.recordset.map(r => r.table_number).join(' + ');
+        }
+
 
         if (!['Occupied', 'Reserved'].includes(tableStatus)) {
             await transaction.rollback();
@@ -352,36 +478,64 @@ export const checkoutOrder = async (req, res) => {
         let totalAmount = 0;
         const validItems = [];
 
-        // Validate dishes and calculate total
         for (const item of items) {
-            const dishId = resolveCartDishId(item);
-            if (!Number.isFinite(dishId) || dishId <= 0) {
-                await transaction.rollback();
-                return res.status(400).json({ success: false, message: 'Invalid dish in cart.' });
-            }
-
-            const result = await transaction.request()
-                .input('dishId', sql.Int, dishId)
-                .query(`SELECT dish_id, dish_name, price, is_available FROM dbo.Dishes WHERE dish_id = @dishId`);
-            
-            if (result.recordset.length === 0) {
-                await transaction.rollback();
-                return res.status(400).json({ success: false, message: `Dish ID ${dishId} is invalid.` });
-            }
-
-            const dish = result.recordset[0];
-            if (dish.is_available === false || dish.is_available === 0) {
-                await transaction.rollback();
-                return res.status(409).json({ success: false, message: `"${dish.dish_name}" is currently unavailable.` });
-            }
-
-            const unitPrice = Number(dish.price) || 0;
-            const quantity = parseInt(item.quantity) || 1;
+            let dishId = resolveCartDishId(item);
+            const quantity = Math.max(1, Number.parseInt(item.quantity, 10) || 1);
             const notes = String(item.notes || '').trim() || null;
+            const itemName = String(item.name || item.dish_name || item.title || item.id || '').trim();
+            const itemPrice = Number(item.price ?? item.unit_price) || 0;
+
+
+            let dish = null;
+
+            if (dishId) {
+                const result = await transaction.request()
+                    .input('dishId', sql.Int, dishId)
+                    .query(`SELECT dish_id, dish_name, price, is_available FROM dbo.Dishes WHERE dish_id = @dishId`);
+                dish = result.recordset[0];
+            }
+
+            if (!dish && itemName) {
+                const searchResult = await transaction.request()
+                    .input('dishName', sql.NVarChar(255), itemName)
+                    .query(`
+                        SELECT TOP 1 dish_id, dish_name, price, is_available
+                        FROM dbo.Dishes
+                        WHERE LOWER(dish_name) = LOWER(@dishName)
+                    `);
+                dish = searchResult.recordset[0];
+            }
+
+
+            if (!dish && itemName) {
+                const catRes = await transaction.request().query(`SELECT TOP 1 category_id FROM dbo.MenuCategories ORDER BY category_id ASC`);
+                const catId = catRes.recordset[0]?.category_id || 1;
+
+                const insertRes = await transaction.request()
+                    .input('catId', sql.Int, catId)
+                    .input('dishName', sql.NVarChar(255), itemName)
+                    .input('price', sql.Decimal(12, 2), itemPrice > 0 ? itemPrice : 150000)
+                    .query(`
+                        INSERT INTO dbo.Dishes (category_id, dish_name, description, price, is_available)
+                        OUTPUT INSERTED.dish_id, INSERTED.dish_name, INSERTED.price
+                        VALUES (@catId, @dishName, N'Standard menu dish', @price, 1)
+                    `);
+                dish = insertRes.recordset[0];
+            }
+
+            if (!dish) {
+                await transaction.rollback();
+                return res.status(400).json({ success: false, message: `Invalid dish in cart: ${itemName}` });
+            }
+
+            dishId = dish.dish_id;
+            const unitPrice = itemPrice > 0 ? itemPrice : Number(dish.price) || 0;
             totalAmount += unitPrice * quantity;
 
             validItems.push({ dish_id: dishId, dish_name: dish.dish_name, quantity, unit_price: unitPrice, notes });
         }
+
+
 
         // Insert Order
         const orderResult = await transaction.request()

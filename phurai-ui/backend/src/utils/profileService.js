@@ -201,9 +201,40 @@ export async function updateUserProfile(userId, payload) {
     return null;
   }
 
+  // Enforce Phone Uniqueness across all accounts
+  if (phone && phone !== existing.phone) {
+    const cleanPhone = String(phone).replace(/[\s\-()]/g, '');
+    const [dupPhone] = await pool.query(
+      `SELECT user_id FROM dbo.UserAccounts 
+       WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '') = ?
+         AND user_id != ?`,
+      [cleanPhone, userId]
+    );
+    if (dupPhone[0]) {
+      const err = new Error("Phone number is already in use by another account.");
+      err.status = 409;
+      throw err;
+    }
+  }
+
+  // Enforce Username Uniqueness across all accounts
+  if (username && username !== existing.username) {
+    const [dupUser] = await pool.query(
+      `SELECT customer_id FROM dbo.CustomerProfiles 
+       WHERE LOWER(username) = LOWER(?) AND user_id != ?`,
+      [username, userId]
+    );
+    if (dupUser[0]) {
+      const err = new Error("Username is already in use by another account.");
+      err.status = 409;
+      throw err;
+    }
+  }
+
   if (existing.customer_id == null) {
     await ensureCustomerProfile(userId, existing.email, { username });
   }
+
 
   await pool.query(
     `UPDATE dbo.UserAccounts

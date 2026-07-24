@@ -17,11 +17,15 @@ import { useSocket } from "@/core/socket/SocketContext.jsx";
 const TableSessionContext = createContext(null);
 
 function normalizeSession(session) {
-  if (!session?.table_id || !session?.session_id) return null;
+  if (!session) return null;
+  const sId = Number(session.session_id ?? session.qr_session_id ?? session.id);
+  const tId = Number(session.table_id ?? session.tableId);
+  if (!Number.isFinite(sId) || sId <= 0 || !Number.isFinite(tId) || tId <= 0) return null;
 
   return {
-    table_id: Number(session.table_id),
-    session_id: Number(session.session_id),
+    table_id: tId,
+    session_id: sId,
+    qr_session_id: sId,
     table_number: session.table_number ?? null,
     area_name: session.area_name ?? null,
     token: session.token ?? null,
@@ -29,6 +33,7 @@ function normalizeSession(session) {
     table_status: session.table_status ?? "Occupied",
   };
 }
+
 
 export function TableSessionProvider({
   children,

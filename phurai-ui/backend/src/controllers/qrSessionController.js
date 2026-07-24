@@ -139,20 +139,28 @@ export async function scanStaticQr(req, res) {
 
     const table = tables[0];
 
+    // Rule 1: Resolve merged table first (if merged into a main table)
+    const resolvedTableId = table.merged_into_table_id ? table.merged_into_table_id : table.table_id;
 
+    // Fetch effective main table details for status check
+    const [effectiveTables] = await pool.query(`
+      SELECT table_id, is_counter, table_status 
+      FROM dbo.RestaurantTables 
+      WHERE table_id = ?
+    `, [resolvedTableId]);
+
+    const effectiveTable = effectiveTables[0] || table;
 
     // Enforce Rule: Only Occupied tables (which have active checked-in sessions) can scan QR to order
-    if (table.table_status !== 'Occupied') {
+    if (effectiveTable.table_status !== 'Occupied' && !effectiveTable.is_counter) {
       return res.status(403).json({
         success: false,
         message: "Table has not been activated. Please contact staff to check-in and activate the table before scanning the QR code to order."
       });
     }
 
-    // Rule 1: Resolve merged table
-    const resolvedTableId = table.merged_into_table_id ? table.merged_into_table_id : table.table_id;
-
     let session = null;
+
 
     // If Occupied, Find existing active session
     const [existingSessions] = await pool.query(
@@ -239,20 +247,28 @@ export async function scanStaticQrCodeUrl(req, res) {
     const table = tables[0];
     const tableId = table.table_id;
 
+    // Rule 1: Resolve merged table first (if merged into a main table)
+    const resolvedTableId = table.merged_into_table_id ? table.merged_into_table_id : table.table_id;
 
+    // Fetch effective main table details for status check
+    const [effectiveTables] = await pool.query(`
+      SELECT table_id, is_counter, table_status 
+      FROM dbo.RestaurantTables 
+      WHERE table_id = ?
+    `, [resolvedTableId]);
+
+    const effectiveTable = effectiveTables[0] || table;
 
     // Enforce Rule: Only Occupied tables (which have active checked-in sessions) can scan QR to order
-    if (table.table_status !== 'Occupied') {
+    if (effectiveTable.table_status !== 'Occupied' && !effectiveTable.is_counter) {
       return res.status(403).json({
         success: false,
         message: "Table has not been activated. Please contact staff to check-in and activate the table before scanning the QR code to order."
       });
     }
 
-    // Rule 1: Resolve merged table
-    const resolvedTableId = table.merged_into_table_id ? table.merged_into_table_id : table.table_id;
-
     let session = null;
+
 
     // If Occupied, Find existing active session
     const [existingSessions] = await pool.query(
@@ -607,7 +623,9 @@ export async function submitQrOrderPublic(req, res) {
  * Fetch history of orders for a given QR session token, categorized into preorders and session orders.
  */
 export async function getQrSessionHistory(req, res) {
+  // Fetch history of orders for a given QR session token
   try {
+
     const { token } = req.params;
     if (!token) return res.status(400).json({ success: false, message: "Token is required" });
 
@@ -623,17 +641,24 @@ export async function getQrSessionHistory(req, res) {
       return res.status(404).json({ success: false, message: "Session not found." });
     }
 
-    const { qr_session_id, reservation_id, table_id } = sessions[0];
+    const sessionObj = sessions[0] || {};
+    const safeResId = sessionObj.reservation_id ?? null;
+    const safeSessionId = sessionObj.qr_session_id ?? null;
+    const safeTableId = sessionObj.table_id ?? null;
+
+
 
     // 2. Query all relevant Orders for this session/table/reservation
     const [orders] = await pool.query(
       `SELECT order_id, order_type, subtotal, discount_amount, service_charge, total_amount, amount_paid
        FROM dbo.Orders
        WHERE (reservation_id = ? AND reservation_id IS NOT NULL) 
-          OR qr_session_id = ? 
+          OR (qr_session_id = ? AND qr_session_id IS NOT NULL)
           OR (table_id = ? AND order_status = N'Open')`,
-      [reservation_id, qr_session_id, table_id]
+      [safeResId, safeSessionId, safeTableId]
     );
+
+
 
     let globalSubtotal = 0;
     let globalPrepaid = 0;
@@ -650,19 +675,16 @@ export async function getQrSessionHistory(req, res) {
       globalSubtotal += Number(order.subtotal || 0);
       globalPrepaid += Number(order.amount_paid || 0); // Pre-paid deposit is stored here
 
-      const request = await createDbRequest();
-      const result = await request
-        .input("orderId", sql.Int, order.order_id)
-        .query(`
-          SELECT 
-            oi.order_item_id, oi.order_id, oi.quantity, oi.unit_price, oi.item_status, oi.notes, oi.line_total,
-            d.dish_name, CONCAT('/api/dishes/', d.dish_id, '/image') AS image_url, o.order_type
-          FROM dbo.OrderItems oi
-          JOIN dbo.Dishes d ON oi.dish_id = d.dish_id
-          JOIN dbo.Orders o ON oi.order_id = o.order_id
-          WHERE oi.order_id = @orderId AND oi.item_status != N'Cancelled'
-        `);
-      const items = result.recordset || [];
+      const [items] = await pool.query(`
+        SELECT 
+          oi.order_item_id, oi.order_id, oi.quantity, oi.unit_price, oi.item_status, oi.notes, oi.line_total,
+          d.dish_name, CONCAT('/api/dishes/', d.dish_id, '/image') AS image_url, o.order_type
+        FROM dbo.OrderItems oi
+        JOIN dbo.Dishes d ON oi.dish_id = d.dish_id
+        JOIN dbo.Orders o ON oi.order_id = o.order_id
+        WHERE oi.order_id = ? AND oi.item_status != N'Cancelled'
+      `, [order.order_id]);
+
 
       if (order.order_type === 'Preorder') {
         preorders = preorders.concat(items);

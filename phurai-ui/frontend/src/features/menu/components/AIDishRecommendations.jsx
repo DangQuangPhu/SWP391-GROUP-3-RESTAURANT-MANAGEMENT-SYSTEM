@@ -2,7 +2,9 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { formatVND } from '@/core/utils/formatCurrency.js';
 import OutlineButton from '@/components/common/OutlineButton.jsx';
+import { resolveDishImage } from '../data/menuAssets.js';
 import '../styles/liquidGlass.css';
+
 
 export default function AIDishRecommendations({ recommendedDishes = [], onOpenVisualSearch, onPreviewImage }) {
   const defaultRecommendations = [
@@ -164,11 +166,12 @@ export default function AIDishRecommendations({ recommendedDishes = [], onOpenVi
                 }}
               >
                 <img 
-                  src={dish.image_url || dish.image || '/menu/yellowtail-jalapeno.jpg'} 
+                  src={resolveDishImage(dish.image_url || dish.image)} 
                   alt={dish.name || dish.dish_name}
                   style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.45s cubic-bezier(0.22, 1, 0.36, 1)' }}
                   className="hover:scale-105"
                 />
+
                 <div style={{ position: 'absolute', top: '10px', right: '10px', pointerEvents: 'none' }}>
                   <span className="liquid-score-badge" style={{ background: 'rgba(15, 23, 42, 0.85)', color: '#ffffff', fontSize: '0.72rem', backdropFilter: 'blur(8px)' }}>
                     {dish.aiScore}% AI Match

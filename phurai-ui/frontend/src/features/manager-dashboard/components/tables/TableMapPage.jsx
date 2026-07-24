@@ -10,6 +10,8 @@ import AddTableModal from "./AddTableModal.jsx";
 import TableMapFilterBar from "./TableMapFilterBar.jsx";
 import { STATUS_KEYS, STATUS_SLUG_TO_API } from "./tableConstants.js";
 import { QRCodeSVG as QRCode } from "qrcode.react";
+import TableQrOrderLink from "@/components/common/TableQrOrderLink.jsx";
+
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -478,38 +480,12 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
                 </div>
               </div>
               
-              {editing.static_qr_code && (
-                <div className="sfx-tablemap__qr-col">
-                  <span className="sfx-muted sfx-tablemap__qr-label">Static QR - Scan to Order</span>
-                  <div id={`qr-wrapper-${editing.table_id}`} className="sfx-tablemap__qr-wrapper">
-                    <QRCode
-                      value={`${window.location.origin}/scan/${editing.static_qr_code}`} 
-                      size={150} 
-                    />
-                  </div>
-                  <Button 
-                    variant="soft" 
-                    size="sm" 
-                    icon="download"
-                    onClick={() => {
-                      const wrapper = document.getElementById(`qr-wrapper-${editing.table_id}`);
-                      const svg = wrapper?.querySelector("svg");
-                      if (!svg) return;
-                      const svgData = new XMLSerializer().serializeToString(svg);
-                      const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-                      const url = URL.createObjectURL(blob);
-                      const link = document.createElement("a");
-                      link.href = url;
-                      link.download = `Table-${editing.table_number}-QR.svg`;
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                    }}
-                  >
-                    Download
-                  </Button>
+              {(editing.static_qr_code || editing.qr_code) && (
+                <div style={{ flex: "0 0 200px" }}>
+                  <TableQrOrderLink table={editing} allTables={tableList} />
                 </div>
               )}
+
             </div>
 
             <div className="sfx-field">

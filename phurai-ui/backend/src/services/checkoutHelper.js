@@ -59,18 +59,23 @@ export async function handlePostCheckoutSuccess(orderId, receivedAmount) {
 
     const combinedNotes = [reservationNote, orderNote].filter(Boolean).join('; ');
 
-    // 3. Award +200 Loyalty Points
+    // 3. Award Loyalty Points & Update Total Spent
+    let pointsToAward = 0;
     if (customerId) {
-      console.log(`[checkoutHelper] Awarding +200 loyalty points to Customer #${customerId}`);
+      pointsToAward = Math.max(10, Math.floor(Number(receivedAmount) / 10000));
+      console.log(`[checkoutHelper] Awarding +${pointsToAward} loyalty points to Customer #${customerId}`);
       await pool.request()
         .input('customerId', sql.Int, customerId)
         .input('orderId', sql.Int, orderId)
+        .input('points', sql.Int, pointsToAward)
+        .input('amount', sql.Decimal(12, 2), Number(receivedAmount))
         .query(`
           INSERT INTO dbo.LoyaltyTransactions (customer_id, points, transaction_type, reference_type, reference_id, description, created_at)
-          VALUES (@customerId, 200, N'Earn', N'Payment', @orderId, N'Bonus points for successful checkout', SYSDATETIME());
+          VALUES (@customerId, @points, N'Earn', N'Payment', @orderId, N'Tích điểm từ thanh toán đơn hàng', SYSDATETIME());
 
           UPDATE dbo.CustomerProfiles
           SET loyalty_points = (SELECT ISNULL(SUM(points), 0) FROM dbo.LoyaltyTransactions WHERE customer_id = @customerId),
+              total_spent = ISNULL(total_spent, 0) + @amount,
               updated_at = SYSDATETIME()
           WHERE user_id = @customerId;
         `);
@@ -82,11 +87,12 @@ export async function handlePostCheckoutSuccess(orderId, receivedAmount) {
       await notifyCustomerStaffAction({
         customerId,
         notificationType: 'Payment Receipt',
-        title: 'Payment Successful',
-        message: `Your payment of ${Number(receivedAmount).toLocaleString('vi-VN')}₫ for Table ${order.table_number || 'N/A'} was successful. You earned +200 loyalty points!`,
-        payload: { orderId }
+        title: 'Thanh toán thành công & Tích điểm! 🍽️',
+        message: `Bạn đã thanh toán ${Number(receivedAmount).toLocaleString('vi-VN')}₫ cho Bàn ${order.table_number || 'N/A'}. Tài khoản ${customerName} được cộng +${pointsToAward} điểm thưởng loyalty!`,
+        payload: { orderId, amount: receivedAmount, points: pointsToAward }
       });
     }
+
 
     // 5. Query all relevant orders in this session to separate preorder vs. dining items
     if (emailTo) {
