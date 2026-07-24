@@ -1,7 +1,8 @@
 // Trigger HMR
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { DateRangePicker } from "react-date-range";
+import { format } from "date-fns";
 import "react-date-range/dist/styles.css";
 import "react-date-range/dist/theme/default.css";
 import {
@@ -21,22 +22,57 @@ function DashboardDateRangePicker({
   minDate = null,
   months = 2,
 }) {
-  // Always use real today for max date
-  const today = new Date();
+  const today = useMemo(() => new Date(), []);
+  const [animDirection, setAnimDirection] = useState(null);
 
-  // Initial shown date: 1 month back so left month = previous month, right month = current month
+  // Initial shownDate: 1 month prior so left month = previous month, right month = current month
   const [shownDate, setShownDate] = useState(() => {
     const refDate = new Date(draftRange?.startDate || today);
-    const prev = new Date(refDate);
-    prev.setMonth(prev.getMonth() - 1);
+    const prev = new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1);
     return prev;
   });
-  
+
+  // Calculate left and right month dates for header display
+  const leftMonth = shownDate;
+  const rightMonth = useMemo(
+    () => new Date(shownDate.getFullYear(), shownDate.getMonth() + 1, 1),
+    [shownDate]
+  );
+
+  // Header Title format: e.g. "Jun – Jul 2026" or "Dec 2025 – Jan 2026"
+  const monthRangeTitle = useMemo(() => {
+    if (leftMonth.getFullYear() === rightMonth.getFullYear()) {
+      return `${format(leftMonth, "MMM")} – ${format(rightMonth, "MMM yyyy")}`;
+    }
+    return `${format(leftMonth, "MMM yyyy")} – ${format(rightMonth, "MMM yyyy")}`;
+  }, [leftMonth, rightMonth]);
+
+  // Stepper handlers (step 2 months at a time)
+  const handlePrev2Months = () => {
+    setAnimDirection("prev");
+    setShownDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 2, 1));
+    setTimeout(() => setAnimDirection(null), 380);
+  };
+
+  const handleNext2Months = () => {
+    setAnimDirection("next");
+    setShownDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 2, 1));
+    setTimeout(() => setAnimDirection(null), 380);
+  };
+
+  const handlePresetClick = (preset) => {
+    if (preset.range && preset.range.startDate) {
+      const d = new Date(preset.range.startDate);
+      setShownDate(new Date(d.getFullYear(), d.getMonth() - 1, 1));
+    }
+    onPresetSelect?.(preset);
+  };
+
   let presets = getDateRangePresets(today);
   if (minDate) {
     const minD = new Date(minDate);
     minD.setHours(0, 0, 0, 0);
-    presets = presets.map(preset => {
+    presets = presets.map((preset) => {
       if (preset.range && preset.range.startDate) {
         const start = new Date(preset.range.startDate);
         if (start < minD) {
@@ -45,18 +81,17 @@ function DashboardDateRangePicker({
             ...preset,
             range: {
               ...preset.range,
-              startDate: clampedStart
-            }
+              startDate: clampedStart,
+            },
           };
         }
       } else if (preset.range && preset.range.startDate === null) {
-        // "All Dates" / "All Time" preset -> clamp to minDate
         return {
           ...preset,
           range: {
             ...preset.range,
-            startDate: minD
-          }
+            startDate: minD,
+          },
         };
       }
       return preset;
@@ -71,10 +106,7 @@ function DashboardDateRangePicker({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onCancel]);
 
-
-
   const handleApply = () => {
-    // Allow null range for "All Dates" / "All time" presets
     onApply?.({
       startDate: draftRange?.startDate || null,
       endDate: draftRange?.endDate || null,
@@ -89,7 +121,7 @@ function DashboardDateRangePicker({
         role="dialog"
         aria-label="Date range picker"
         onClick={(event) => event.stopPropagation()}
-        style={inline ? { boxShadow: "0 10px 40px rgba(0,0,0,0.15)", borderRadius: 12, overflow: "hidden", border: "1px solid #e5e7eb" } : {}}
+        style={inline ? { boxShadow: "0 10px 40px rgba(0,0,0,0.15)", borderRadius: 16, overflow: "hidden", border: "1px solid #e5e7eb" } : {}}
       >
         <div className="sfx-dp-body">
           <aside className="sfx-dp-presets">
@@ -98,31 +130,62 @@ function DashboardDateRangePicker({
                 key={preset.id}
                 type="button"
                 className={`sfx-dp-preset ${activePresetId === preset.id ? "is-active" : ""}`}
-                onClick={() => onPresetSelect?.(preset)}
+                onClick={() => handlePresetClick(preset)}
               >
                 {preset.label}
               </button>
             ))}
           </aside>
 
-          <div className="sfx-dp-cal">
-            <DateRangePicker
-              onChange={(item) => onDraftChange?.(item.selection)}
-              moveRangeOnFirstSelection={false}
-              months={months}
-              shownDate={shownDate}
-              onShownDateChange={(d) => setShownDate(d)}
-              ranges={[
-                draftRange?.startDate
-                  ? draftRange
-                  : { startDate: today, endDate: today, key: "selection" },
-              ]}
-              direction="horizontal"
-              maxDate={allowFuture ? undefined : today}
-              minDate={minDate || undefined}
-              rangeColors={["#9f8655"]}
-              showDateDisplay={false}
-            />
+          <div className="sfx-dp-cal-container">
+            {/* Custom Apple 2-Month Stepper Header */}
+            <div className="sfx-dp-apple-header">
+              <button
+                type="button"
+                className="sfx-dp-apple-nav-btn"
+                onClick={handlePrev2Months}
+                aria-label="Previous 2 months"
+                title="Previous 2 months"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+
+              <span className="sfx-dp-apple-title">{monthRangeTitle}</span>
+
+              <button
+                type="button"
+                className="sfx-dp-apple-nav-btn"
+                onClick={handleNext2Months}
+                aria-label="Next 2 months"
+                title="Next 2 months"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </button>
+            </div>
+
+            <div className={`sfx-dp-cal ${animDirection ? `anim-${animDirection}` : ""}`}>
+              <DateRangePicker
+                onChange={(item) => onDraftChange?.(item.selection)}
+                moveRangeOnFirstSelection={false}
+                months={months}
+                shownDate={shownDate}
+                onShownDateChange={(d) => setShownDate(d)}
+                ranges={[
+                  draftRange?.startDate
+                    ? draftRange
+                    : { startDate: today, endDate: today, key: "selection" },
+                ]}
+                direction="horizontal"
+                maxDate={allowFuture ? undefined : today}
+                minDate={minDate || undefined}
+                rangeColors={["#9f8655"]}
+                showDateDisplay={false}
+              />
+            </div>
           </div>
         </div>
 

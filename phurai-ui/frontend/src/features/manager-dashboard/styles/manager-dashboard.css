@@ -1314,6 +1314,97 @@ button.sfx-kpi__icon--trigger:focus-visible {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Custom Apple 2-Month Header & Stepper */
+.sfx-dp-cal-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.sfx-dp-apple-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px 10px;
+  background: #ffffff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.sfx-dp-apple-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1510;
+  letter-spacing: -0.2px;
+  user-select: none;
+}
+
+.sfx-dp-apple-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #faf8f5;
+  color: #2b2118;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sfx-dp-apple-nav-btn:hover {
+  background: #f0eae1;
+  color: #000000;
+  transform: scale(1.06);
+}
+
+.sfx-dp-apple-nav-btn:active {
+  transform: scale(0.94);
+}
+
+/* Hide default react-date-range month/year header pickers to use Apple header */
+.sfx-dp-cal .rdrMonthAndYearWrapper {
+  display: none !important;
+}
+
+/* Apple Smooth Slide-Fade Transition for Calendar 2-Month Stepping */
+.sfx-dp-cal {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sfx-dp-cal.anim-prev {
+  animation: appleSlideFromLeft 0.36s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.sfx-dp-cal.anim-next {
+  animation: appleSlideFromRight 0.36s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes appleSlideFromLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-24px) scale(0.98);
+    filter: blur(3px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes appleSlideFromRight {
+  0% {
+    opacity: 0;
+    transform: translateX(24px) scale(0.98);
+    filter: blur(3px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+
 /* Hide react-date-range built-in presets — portal uses .sfx-dp-presets */
 .sfx-dp-cal .rdrDefinedRangesWrapper {
   display: none;
