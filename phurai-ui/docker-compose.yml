@@ -18,6 +18,7 @@ services:
   # app — Single self-contained container: Express API + built React frontend
   # ---------------------------------------------------------------------------
   app:
+    platform: linux/amd64   # Image is built as amd64; Docker emulates on ARM64 server
     build:
       context: .
       dockerfile: Dockerfile
@@ -53,6 +54,7 @@ services:
   # app-local — Same image, but overrides DB_SERVER to point at local MSSQL
   # ---------------------------------------------------------------------------
   app-local:
+    platform: linux/amd64   # Image is built as amd64; Docker emulates on ARM64 server
     build:
       context: .
       dockerfile: Dockerfile
