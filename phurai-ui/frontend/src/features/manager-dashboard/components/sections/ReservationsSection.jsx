@@ -603,14 +603,14 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
           <table className="sfx-table sfx-table--hover staff-reservations-table sfx-reservations-table sfx-reservations__table-bg">
             <thead>
               <tr className="sfx-reservations__tr-head-bg">
-                <th className="sfx-reservations__th sfx-reservations__th--w50">#</th>
-                <th className="sfx-reservations__th">Reservation ID</th>
-                <th className="sfx-reservations__th">Date</th>
-                <th className="sfx-reservations__th">Customer</th>
-                <th className="sfx-reservations__th">Phone</th>
-                <th className="sfx-reservations__th">Email</th>
-                <th className="sfx-reservations__th">Status</th>
-                <th className="sfx-reservations__th">Actions</th>
+                <th className="sfx-reservations__th" style={{ width: "50px", textAlign: "center" }}>#</th>
+                <th className="sfx-reservations__th" style={{ width: "130px", textAlign: "center" }}>Reservation ID</th>
+                <th className="sfx-reservations__th" style={{ width: "110px", textAlign: "center" }}>Date</th>
+                <th className="sfx-reservations__th" style={{ width: "160px", textAlign: "center" }}>Customer</th>
+                <th className="sfx-reservations__th" style={{ width: "125px", textAlign: "center" }}>Phone</th>
+                <th className="sfx-reservations__th" style={{ width: "190px", textAlign: "center" }}>Email</th>
+                <th className="sfx-reservations__th" style={{ width: "135px", textAlign: "center" }}>Status</th>
+                <th className="sfx-reservations__th" style={{ width: "210px", textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
             <motion.tbody

@@ -3033,14 +3033,29 @@ button.sfx-kpi__icon--trigger:focus-visible {
 .sfx-picker__trigger-icon {
   display: inline-flex !important;
   align-items: center !important;
+  justify-content: center !important;
   color: #b09460 !important;
+  background: #f8f5ef !important;
+  border: 1px solid #e2dcd0 !important;
+  border-radius: 8px !important;
+  width: 34px !important;
+  height: 34px !important;
+  flex-shrink: 0 !important;
 }
 .sfx-picker__popover {
   position: absolute !important;
-  left: 0 !important;
+  right: 0 !important;
+  left: auto !important;
   top: calc(100% + 8px) !important;
   z-index: 1000 !important;
 }
+
+.staff-reservations-table,
+.sfx-reservations-table {
+  table-layout: fixed !important;
+  width: 100% !important;
+}
+
 
 /* Table columns */
 .sfx-th--w50 {
