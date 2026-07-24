@@ -49,13 +49,6 @@ coverage/
 .bmad/
 .agyrules
 
-# Large media assets — Vite bakes these into dist at build time;
-# they are NOT needed in the runner stage (Express serves from dist/).
-# Excluding them dramatically shrinks the Docker build context.
-frontend/src/assets/images/
-frontend/src/assets/videos/
-frontend/public/
-
 # Dev / seed scripts not needed at runtime
 backend/seed-*.js
 scripts/
