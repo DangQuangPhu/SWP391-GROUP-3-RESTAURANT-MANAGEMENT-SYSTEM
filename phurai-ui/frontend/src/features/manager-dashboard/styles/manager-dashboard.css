@@ -533,17 +533,17 @@ a.sfx-nav__item.is-active:visited {
 
 .sfx-portal-user-dropdown {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 10px);
   right: 0;
-  width: 250px;
-  background: #181410;
-  border: 1px solid rgba(212, 175, 55, 0.25);
-  border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
-  z-index: 1000;
+  width: 260px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  z-index: 1100;
   overflow: hidden;
-  animation: sfxDropdownFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  color: #f5eedc;
+  animation: sfxDropdownFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  color: #2b2118;
 }
 
 @keyframes sfxDropdownFadeIn {
@@ -562,8 +562,8 @@ a.sfx-nav__item.is-active:visited {
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #faf8f5;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .sfx-portal-user-dropdown__identity {
@@ -573,9 +573,9 @@ a.sfx-nav__item.is-active:visited {
 }
 
 .sfx-portal-user-dropdown__name {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 14px;
-  color: #ffffff;
+  color: #1a1510;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -584,8 +584,8 @@ a.sfx-nav__item.is-active:visited {
 
 .sfx-portal-user-dropdown__role {
   font-size: 11px;
-  color: var(--sfx-gold, #d4af37);
-  font-weight: 600;
+  color: #8c764b;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin: 0;
@@ -593,7 +593,7 @@ a.sfx-nav__item.is-active:visited {
 
 .sfx-portal-user-dropdown__email {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
+  color: #6a5e33;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -616,7 +616,7 @@ a.sfx-nav__item.is-active:visited {
   background: transparent;
   border: none;
   border-radius: 8px;
-  color: #e5ded0;
+  color: #2b2118;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -626,18 +626,25 @@ a.sfx-nav__item.is-active:visited {
 }
 
 .sfx-portal-user-dropdown__item:hover {
-  background: rgba(212, 175, 55, 0.12);
-  color: #ffffff;
+  background: #f4efe6;
+  color: #1a1510;
 }
 
 .sfx-portal-user-dropdown__item--danger {
-  color: #ff6b6b;
+  color: #d93838;
 }
 
 .sfx-portal-user-dropdown__item--danger:hover {
-  background: rgba(255, 107, 107, 0.15);
-  color: #ff8585;
+  background: #fdf2f2;
+  color: #dc2626;
 }
+
+.sfx-portal-user-dropdown__divider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.06);
+  margin: 4px 0;
+}
+
 
 .sfx-portal-user-dropdown__divider {
   height: 1px;
