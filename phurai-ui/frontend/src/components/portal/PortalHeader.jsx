@@ -195,7 +195,7 @@ function PortalHeader({
                     onClick={handleOpenEditProfile}
                   >
                     <PortalIcon name="user" size={16} />
-                    <span>Chỉnh sửa hồ sơ</span>
+                    <span>Edit Profile</span>
                   </button>
                 </li>
                 <li>
@@ -205,7 +205,7 @@ function PortalHeader({
                     onClick={handleOpenChangePassword}
                   >
                     <PortalIcon name="key" size={16} />
-                    <span>Đổi mật khẩu</span>
+                    <span>Change Password</span>
                   </button>
                 </li>
                 <div className="sfx-portal-user-dropdown__divider" />
@@ -219,7 +219,7 @@ function PortalHeader({
                     }}
                   >
                     <PortalIcon name="logout" size={16} />
-                    <span>Đăng xuất</span>
+                    <span>Sign Out</span>
                   </button>
                 </li>
               </ul>

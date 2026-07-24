@@ -621,7 +621,7 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
                               fontSize: "0.8rem",
                             }}
                           >
-                            Xem chi tiết bàn
+                            View Table Details
                           </button>
                           <button
                             type="button"
@@ -637,7 +637,7 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
                                     prev.filter((row) => row.notification_id !== item.notification_id)
                                   );
                                 } catch (err) {
-                                  toast.error("Không thể đánh dấu đã xử lý");
+                                  toast.error("Could not mark as handled");
                                 }
                               }
                             }}
@@ -653,7 +653,7 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
                               fontSize: "0.8rem",
                             }}
                           >
-                            Đánh dấu đã xử lý
+                            Mark as Handled
                           </button>
                         </div>
                       </div>
