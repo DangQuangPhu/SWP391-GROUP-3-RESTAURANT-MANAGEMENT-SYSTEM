@@ -496,6 +496,156 @@ a.sfx-nav__item.is-active:visited {
   gap: 10px;
 }
 
+/* User Avatar Dropdown in Portal Header */
+.sfx-header__user-wrapper {
+  position: relative;
+}
+
+.sfx-header__user-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 4px 8px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: inherit;
+  font-family: inherit;
+}
+
+.sfx-header__user-btn:hover,
+.sfx-header__user-btn[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.sfx-header__user-chevron {
+  transition: transform 0.25s ease;
+  opacity: 0.7;
+}
+
+.sfx-header__user-chevron.is-open {
+  transform: rotate(180deg);
+  opacity: 1;
+}
+
+.sfx-portal-user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 250px;
+  background: #181410;
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  overflow: hidden;
+  animation: sfxDropdownFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  color: #f5eedc;
+}
+
+@keyframes sfxDropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.sfx-portal-user-dropdown__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sfx-portal-user-dropdown__identity {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sfx-portal-user-dropdown__name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+}
+
+.sfx-portal-user-dropdown__role {
+  font-size: 11px;
+  color: var(--sfx-gold, #d4af37);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.sfx-portal-user-dropdown__email {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+  margin-bottom: 0;
+}
+
+.sfx-portal-user-dropdown__menu {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+}
+
+.sfx-portal-user-dropdown__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: #e5ded0;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.sfx-portal-user-dropdown__item:hover {
+  background: rgba(212, 175, 55, 0.12);
+  color: #ffffff;
+}
+
+.sfx-portal-user-dropdown__item--danger {
+  color: #ff6b6b;
+}
+
+.sfx-portal-user-dropdown__item--danger:hover {
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff8585;
+}
+
+.sfx-portal-user-dropdown__divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0;
+}
+
+
 .sfx-avatar {
   width: 38px;
   height: 38px;

@@ -3,23 +3,12 @@
  * Parameterized: all hardcoded strings moved to props.
  *
  * Merged from: ManagerHeader.jsx + StaffHeader.jsx
- * Usage: import PortalHeader from '@/components/portal/PortalHeader';
- *
- * Props:
- *   title          string   — page title (e.g. "Manager Portal")
- *   subtitle       string   — subtitle line
- *   role           string   — "manager" | "restaurant_staff" | "admin"
- *   user           object   — { fullName, avatarUrl }
- *   search         string   — search input value
- *   onSearch       fn       — search change handler
- *   searchPlaceholder string — placeholder text
- *   onToggleSidebar fn
- *   onMobileMenu   fn
- *   actionLabel    string?  — primary action button label (omit to hide)
- *   onAction       fn?      — primary action button click
- *   extraAction    node?    — any extra right-side element (e.g. Refresh button)
+ * Includes: Avatar dropdown menu for editing profile & changing password.
  */
+import { useEffect, useRef, useState } from "react";
 import NotificationBell from "@/components/notifications/NotificationBell.jsx";
+import ProfileModal from "@/features/auth/components/ProfileModal.jsx";
+import UserAvatar from "@/features/auth/components/UserAvatar.jsx";
 import PortalIcon from "./PortalIcon.jsx";
 
 function greeting() {
@@ -48,14 +37,65 @@ function PortalHeader({
   actionLabel,
   onAction,
   extraAction,
+  onSignOut,
+  onSaveProfile,
 }) {
-  const name = user?.fullName || user?.username || "Phūrai";
-  const initials = name
-    .split(" ")
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+  const [currentUserState, setCurrentUserState] = useState(user);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [modalInitialView, setModalInitialView] = useState("edit");
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    setCurrentUserState(user);
+  }, [user]);
+
+  // Click outside & Escape key to close dropdown
+  useEffect(() => {
+    if (!dropdownOpen) return undefined;
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    const handleEscape = (e) => {
+      if (e.key === "Escape") setDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [dropdownOpen]);
+
+  const activeUser = currentUserState || user || {};
+  const name =
+    activeUser?.fullName ||
+    activeUser?.full_name ||
+    activeUser?.name ||
+    activeUser?.username ||
+    "Phūrai";
+
+  const handleOpenEditProfile = () => {
+    setDropdownOpen(false);
+    setModalInitialView("edit");
+    setShowProfileModal(true);
+  };
+
+  const handleOpenChangePassword = () => {
+    setDropdownOpen(false);
+    setModalInitialView("password");
+    setShowProfileModal(true);
+  };
+
+  const handleProfileSave = (updatedUser) => {
+    const nextUser = { ...activeUser, ...updatedUser };
+    setCurrentUserState(nextUser);
+    if (onSaveProfile) {
+      onSaveProfile(nextUser);
+    }
+  };
 
   return (
     <header className="sfx-header">
@@ -95,7 +135,7 @@ function PortalHeader({
           />
         </label>
 
-        <NotificationBell user={user} listenForStaffEvents />
+        <NotificationBell user={activeUser} listenForStaffEvents />
 
         {extraAction}
 
@@ -110,18 +150,91 @@ function PortalHeader({
           </button>
         )}
 
-        <div className="sfx-header__user">
-          <span className="sfx-avatar" aria-hidden="true">
-            {user?.avatarUrl ? <img src={user.avatarUrl} alt="" referrerPolicy="no-referrer" /> : initials}
-          </span>
-          <span className="sfx-header__usermeta">
-            <strong>{name}</strong>
-            <span className={`sfx-role sfx-role--${role}`}>
-              {ROLE_LABEL[role] || role?.toUpperCase() || "User"}
+        <div className="sfx-header__user-wrapper" ref={dropdownRef}>
+          <button
+            type="button"
+            className="sfx-header__user-btn"
+            onClick={() => setDropdownOpen((prev) => !prev)}
+            aria-label="User account menu"
+            aria-expanded={dropdownOpen}
+          >
+            <UserAvatar user={activeUser} size="sm" />
+            <span className="sfx-header__usermeta">
+              <strong>{name}</strong>
+              <span className={`sfx-role sfx-role--${role}`}>
+                {ROLE_LABEL[role] || role?.toUpperCase() || "User"}
+              </span>
             </span>
-          </span>
+            <PortalIcon
+              name="chevronDown"
+              size={14}
+              className={`sfx-header__user-chevron ${dropdownOpen ? "is-open" : ""}`}
+            />
+          </button>
+
+          {dropdownOpen && (
+            <div className="sfx-portal-user-dropdown">
+              <div className="sfx-portal-user-dropdown__header">
+                <UserAvatar user={activeUser} size="md" />
+                <div className="sfx-portal-user-dropdown__identity">
+                  <p className="sfx-portal-user-dropdown__name">{name}</p>
+                  <p className="sfx-portal-user-dropdown__role">
+                    {ROLE_LABEL[role] || role?.toUpperCase() || "User"}
+                  </p>
+                  {activeUser.email ? (
+                    <p className="sfx-portal-user-dropdown__email">{activeUser.email}</p>
+                  ) : null}
+                </div>
+              </div>
+
+              <ul className="sfx-portal-user-dropdown__menu">
+                <li>
+                  <button
+                    type="button"
+                    className="sfx-portal-user-dropdown__item"
+                    onClick={handleOpenEditProfile}
+                  >
+                    <PortalIcon name="user" size={16} />
+                    <span>Chỉnh sửa hồ sơ</span>
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    className="sfx-portal-user-dropdown__item"
+                    onClick={handleOpenChangePassword}
+                  >
+                    <PortalIcon name="key" size={16} />
+                    <span>Đổi mật khẩu</span>
+                  </button>
+                </li>
+                <div className="sfx-portal-user-dropdown__divider" />
+                <li>
+                  <button
+                    type="button"
+                    className="sfx-portal-user-dropdown__item sfx-portal-user-dropdown__item--danger"
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      onSignOut?.();
+                    }}
+                  >
+                    <PortalIcon name="logout" size={16} />
+                    <span>Đăng xuất</span>
+                  </button>
+                </li>
+              </ul>
+            </div>
+          )}
         </div>
       </div>
+
+      <ProfileModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        user={activeUser}
+        onSave={handleProfileSave}
+        initialView={modalInitialView}
+      />
     </header>
   );
 }

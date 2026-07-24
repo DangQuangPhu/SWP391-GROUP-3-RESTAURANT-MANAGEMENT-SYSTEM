@@ -18,6 +18,8 @@ function ManagerHeader({
   onMobileMenu,
   onRefresh,
   refreshing,
+  onSignOut,
+  onSaveProfile,
 }) {
   const refreshBtn = (
     <button
@@ -44,6 +46,8 @@ function ManagerHeader({
       onToggleSidebar={onToggleSidebar}
       onMobileMenu={onMobileMenu}
       extraAction={onRefresh ? refreshBtn : undefined}
+      onSignOut={onSignOut}
+      onSaveProfile={onSaveProfile}
     />
   );
 }

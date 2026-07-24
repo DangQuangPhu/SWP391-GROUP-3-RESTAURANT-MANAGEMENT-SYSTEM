@@ -17,6 +17,8 @@ function StaffHeader({
   onRefresh,
   refreshing,
   refreshLabel = "Refresh",
+  onSignOut,
+  onSaveProfile,
 }) {
   const refreshBtn = (
     <button
@@ -42,6 +44,8 @@ function StaffHeader({
       onToggleSidebar={onToggleSidebar}
       onMobileMenu={onMobileMenu}
       extraAction={onRefresh ? refreshBtn : undefined}
+      onSignOut={onSignOut}
+      onSaveProfile={onSaveProfile}
     />
   );
 }

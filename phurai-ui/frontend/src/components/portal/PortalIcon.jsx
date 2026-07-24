@@ -49,6 +49,9 @@ const PATHS = {
   spark:       "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18",
   arrowUp:     "M12 19V5M5 12l7-7 7 7",
   arrowDown:   "M12 5v14M5 12l7 7 7-7",
+  chevronDown: "M6 9l6 6 6-6",
+  user:        "M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z",
+  key:         "M21 2l-2 2m-2-2l2 2m2 4l-4 4M15 7l-8.5 8.5a2.121 2.121 0 01-3 0l-.5-.5a2.121 2.121 0 010-3L11.5 3.5M15 7l2.5 2.5",
 };
 
 function PortalIcon({ name, size = 18, strokeWidth = 1.7, className = "", style }) {

@@ -14,6 +14,7 @@ function StaffLayout({
   refreshing,
   refreshLabel,
   onSignOut,
+  onSaveProfile,
   children,
 }) {
   // Default: sidebar collapsed (icon-only). User toggles to expand.
@@ -46,6 +47,8 @@ function StaffLayout({
           onRefresh={onRefresh}
           refreshing={refreshing}
           refreshLabel={refreshLabel}
+          onSignOut={onSignOut}
+          onSaveProfile={onSaveProfile}
         />
         <main className="sfx-canvas">
           {loading && (

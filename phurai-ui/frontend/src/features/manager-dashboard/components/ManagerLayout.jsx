@@ -13,6 +13,7 @@ function ManagerLayout({
   onRefresh,
   refreshing,
   onSignOut,
+  onSaveProfile,
   toasts,
   children,
 }) {
@@ -44,6 +45,8 @@ function ManagerLayout({
           onMobileMenu={() => setMobileOpen(true)}
           onRefresh={onRefresh}
           refreshing={refreshing}
+          onSignOut={onSignOut}
+          onSaveProfile={onSaveProfile}
         />
         <main className="sfx-canvas">{children}</main>
       </div>
