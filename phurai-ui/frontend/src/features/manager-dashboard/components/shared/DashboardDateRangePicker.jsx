@@ -169,6 +169,7 @@ function DashboardDateRangePicker({
 
             <div className={`sfx-dp-cal ${animDirection ? `anim-${animDirection}` : ""}`}>
               <DateRangePicker
+                key={shownDate.getTime()}
                 onChange={(item) => onDraftChange?.(item.selection)}
                 moveRangeOnFirstSelection={false}
                 months={months}
