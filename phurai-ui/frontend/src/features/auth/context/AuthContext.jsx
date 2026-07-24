@@ -211,10 +211,23 @@ export function AuthProvider({ children }) {
   );
 }
 
+const defaultAuthContext = {
+  currentUser: null,
+  isAuthenticated: false,
+  authReady: true,
+  setCurrentUser: () => {},
+  handleSignOut: () => {},
+  handlePasswordReset: () => {},
+  openAuthModal: () => {},
+  closeAuthModal: () => {},
+  navigateToPath: () => {},
+};
+
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    return defaultAuthContext;
   }
   return context;
 }
+
