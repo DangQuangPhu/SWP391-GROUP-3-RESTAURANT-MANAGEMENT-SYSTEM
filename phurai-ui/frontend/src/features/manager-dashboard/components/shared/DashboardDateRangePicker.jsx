@@ -175,6 +175,7 @@ function DashboardDateRangePicker({
                 months={months}
                 shownDate={shownDate}
                 onShownDateChange={(d) => setShownDate(d)}
+                preventSnapToSelection={true}
                 ranges={[
                   draftRange?.startDate
                     ? draftRange
