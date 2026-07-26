@@ -75,11 +75,30 @@ export function formatProfileResponse(row) {
   const loyaltyPoints = Number(row.loyalty_points) || 0;
   const preferences = parsePreferences(row.preferences);
 
+  const fullName = (row.full_name || "").trim();
+  let firstName = (row.first_name || "").trim();
+  let lastName = (row.last_name || "").trim();
+
+  if (!firstName && !lastName && fullName) {
+    const parts = fullName.split(/\s+/);
+    if (parts.length === 1) {
+      firstName = parts[0];
+    } else if (parts.length > 1) {
+      lastName = parts.pop();
+      firstName = parts.join(" ");
+    }
+  }
+
   return {
     user_id: row.user_id,
     role_id: row.role_id,
     role_name: row.role_name,
-    full_name: row.full_name || "",
+    full_name: fullName,
+    first_name: firstName,
+    last_name: lastName,
+    firstName,
+    lastName,
+    fullName,
     email: row.email || "",
     phone: row.phone || "",
     avatar_url: row.avatar_url || null,

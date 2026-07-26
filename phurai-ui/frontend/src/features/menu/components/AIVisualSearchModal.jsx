@@ -7,6 +7,8 @@ import '../styles/liquidGlass.css';
 export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], onPreviewImage }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [urlInput, setUrlInput] = useState('');
+  const [textInput, setTextInput] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [aiResponse, setAiResponse] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
@@ -17,6 +19,8 @@ export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], 
   const handleReset = () => {
     setSelectedFile(null);
     setPreviewUrl(null);
+    setUrlInput('');
+    setTextInput('');
     setIsScanning(false);
     setAiResponse(null);
     setErrorMessage('');
@@ -66,26 +70,62 @@ export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], 
     }
   };
 
-  const runVisualSearch = async (dataUrl, mimeType) => {
+  const handleUrlSubmit = (e) => {
+    e.preventDefault();
+    if (!urlInput || !urlInput.trim()) {
+      setErrorMessage('Please enter or paste a valid food image URL.');
+      return;
+    }
+    const cleanUrl = urlInput.trim();
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://') && !cleanUrl.startsWith('data:')) {
+      setErrorMessage('Image URL must start with http:// or https://');
+      return;
+    }
+    setErrorMessage('');
+    setPreviewUrl(cleanUrl);
+    runVisualSearch({ imageUrl: cleanUrl });
+  };
+
+  const handleTextSubmit = (e) => {
+    e.preventDefault();
+    if (!textInput || !textInput.trim()) {
+      setErrorMessage('Please describe the food you are craving.');
+      return;
+    }
+    setErrorMessage('');
+    runVisualSearch({ textPrompt: textInput.trim() });
+  };
+
+  const runVisualSearch = async (payload) => {
     setIsScanning(true);
     setErrorMessage('');
 
     try {
-      const base64Data = dataUrl.split(',')[1];
+      let bodyData = {};
+      if (typeof payload === 'string') {
+        const mimeType = payload.split(';')[0]?.split(':')[1] || 'image/jpeg';
+        const base64Data = payload.includes(',') ? payload.split(',')[1] : payload;
+        bodyData = { imageBase64: base64Data, mimeType };
+      } else if (payload && payload.imageUrl) {
+        bodyData = { imageUrl: payload.imageUrl };
+      } else if (payload && payload.textPrompt) {
+        bodyData = { textPrompt: payload.textPrompt };
+      } else if (payload && payload.imageBase64) {
+        bodyData = payload;
+      }
+
+      bodyData.clientMenuList = menuDishes.map(d => ({
+        id: d.id || d.dish_id,
+        name: d.name || d.dish_name,
+        category: d.category || d.category_name,
+        description: d.description,
+        price: d.price
+      }));
+
       const res = await fetch('/api/ai/visual-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64: base64Data,
-          mimeType: mimeType || 'image/jpeg',
-          clientMenuList: menuDishes.map(d => ({
-            id: d.id || d.dish_id,
-            name: d.name || d.dish_name,
-            category: d.category || d.category_name,
-            description: d.description,
-            price: d.price
-          }))
-        })
+        body: JSON.stringify(bodyData)
       });
 
       const json = await res.json();
@@ -171,34 +211,152 @@ export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], 
         )}
 
         {/* Dropzone or Image Preview Scanning View */}
-        {!previewUrl ? (
-          <div 
-            className="liquid-dropzone"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleFileDrop}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input 
-              ref={fileInputRef}
-              type="file"
-              accept="image/png, image/jpeg, image/webp"
-              style={{ display: 'none' }}
-              onChange={handleFileChange}
-            />
-            <p style={{ fontWeight: '700', color: '#342716', fontSize: '1.05rem', margin: '0 0 6px 0' }}>
-              Drag & Drop your food photo here
-            </p>
-            <p style={{ fontSize: '0.85rem', color: '#6a5e33', margin: 0 }}>
-              or click to upload (PNG, JPG, WebP up to 10MB)
-            </p>
+        {!previewUrl && !isScanning && !aiResponse ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div 
+              className="liquid-dropzone"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleFileDrop}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input 
+                ref={fileInputRef}
+                type="file"
+                accept="image/png, image/jpeg, image/webp"
+                style={{ display: 'none' }}
+                onChange={handleFileChange}
+              />
+              <p style={{ fontWeight: '700', color: '#342716', fontSize: '1.05rem', margin: '0 0 6px 0' }}>
+                Drag & Drop your food photo here
+              </p>
+              <p style={{ fontSize: '0.85rem', color: '#6a5e33', margin: 0 }}>
+                or click to upload (PNG, JPG, WebP up to 10MB)
+              </p>
+            </div>
+
+            {/* Divider OR PASTE IMAGE URL */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '2px 0' }}>
+              <div style={{ flex: 1, height: '1px', background: 'rgba(0,0,0,0.1)' }} />
+              <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#888', letterSpacing: '0.05em' }}>OR PASTE IMAGE URL</span>
+              <div style={{ flex: 1, height: '1px', background: 'rgba(0,0,0,0.1)' }} />
+            </div>
+
+            {/* Image URL Input Form */}
+            <form onSubmit={handleUrlSubmit} style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="url"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="Paste food photo URL (https://...)..."
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(0,0,0,0.15)',
+                  fontSize: '0.9rem',
+                  outline: 'none',
+                  background: 'rgba(255,255,255,0.85)',
+                  color: '#342716'
+                }}
+              />
+              <motion.button
+                type="submit"
+                whileHover={{ scale: 1.04, y: -1.5, boxShadow: "0 8px 20px rgba(159,134,85,0.38)" }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                style={{
+                  padding: '12px 20px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #9f8655, #886d3b)',
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  fontSize: '0.88rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(159,134,85,0.25)',
+                  whiteSpace: 'nowrap',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                Analyze URL
+              </motion.button>
+            </form>
+
+            {/* Divider OR DESCRIBE YOUR CRAVING */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '2px 0' }}>
+              <div style={{ flex: 1, height: '1px', background: 'rgba(0,0,0,0.1)' }} />
+              <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#888', letterSpacing: '0.05em' }}>OR DESCRIBE YOUR CRAVING</span>
+              <div style={{ flex: 1, height: '1px', background: 'rgba(0,0,0,0.1)' }} />
+            </div>
+
+            {/* Text Input Form */}
+            <form onSubmit={handleTextSubmit} style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                placeholder="e.g. I want something spicy with noodles..."
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(0,0,0,0.15)',
+                  fontSize: '0.9rem',
+                  outline: 'none',
+                  background: 'rgba(255,255,255,0.85)',
+                  color: '#342716'
+                }}
+              />
+              <motion.button
+                type="submit"
+                whileHover={{ scale: 1.04, y: -1.5, boxShadow: "0 8px 20px rgba(159,134,85,0.38)" }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                style={{
+                  padding: '12px 20px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #342716, #4d463d)',
+                  color: '#fff',
+                  fontWeight: 'bold',
+                  fontSize: '0.88rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(52,39,22,0.25)',
+                  whiteSpace: 'nowrap',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                Ask AI
+              </motion.button>
+            </form>
           </div>
         ) : (
-          <div style={{ position: 'relative', borderRadius: '20px', overflow: 'hidden', maxHeight: '280px', marginBottom: '20px', background: '#000' }}>
-            <img 
-              src={previewUrl} 
-              alt="Uploaded visual dish query" 
-              style={{ width: '100%', height: '280px', objectFit: 'cover', opacity: isScanning ? 0.75 : 1, transition: 'opacity 0.3s' }}
-            />
+          <div style={{ position: 'relative', borderRadius: '20px', overflow: 'hidden', maxHeight: '280px', marginBottom: '20px', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {previewUrl ? (
+              <img 
+                src={previewUrl} 
+                alt="Uploaded visual dish query" 
+                style={{ width: '100%', height: '280px', objectFit: 'cover', opacity: isScanning ? 0.75 : 1, transition: 'opacity 0.3s' }}
+              />
+            ) : (
+              <div style={{ height: '200px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', gap: '16px' }}>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.8 }}>
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                <span style={{ fontSize: '1.1rem', fontWeight: '500', opacity: 0.9 }}>"{textInput}"</span>
+              </div>
+            )}
             
             {/* Lensing Beam Scan Effect */}
             {isScanning && (
@@ -214,7 +372,7 @@ export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], 
                   backdropFilter: 'blur(4px)'
                 }}>
                   <div className="liquid-score-badge" style={{ background: 'rgba(255,255,255,0.92)', color: '#342716', fontSize: '0.95rem', padding: '10px 20px' }}>
-                    AI Lens Scanning & Analyzing Dish...
+                    {previewUrl ? 'AI Lens Scanning & Analyzing Dish...' : 'AI is reading your craving...'}
                   </div>
                 </div>
               </>
@@ -227,7 +385,7 @@ export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], 
                 onClick={handleReset}
                 style={{ position: 'absolute', top: '12px', right: '12px', padding: '6px 16px', fontSize: '0.8rem' }}
               >
-                Change Photo
+                {previewUrl ? 'Change Photo' : 'New Search'}
               </button>
             )}
 

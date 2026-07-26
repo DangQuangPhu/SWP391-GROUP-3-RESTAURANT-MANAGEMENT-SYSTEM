@@ -437,3 +437,9 @@ export async function fetchOrderTimeline(orderId) {
   const res = await staffGet(`/staff/orders/${orderId}/timeline`, []);
   return { source: res.source, data: res.data };
 }
+
+export async function verifyCustomerEmailApi(email) {
+  return request(`/staff/customers/verify?email=${encodeURIComponent(email)}`, {
+    method: "GET",
+  });
+}

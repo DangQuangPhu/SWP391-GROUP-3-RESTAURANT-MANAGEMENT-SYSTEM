@@ -47,12 +47,12 @@ export const fadeScaleVariants = {
 
 export const listContainerVariants = {
   hidden:  {},
-  visible: { transition: { staggerChildren: 0.05, delayChildren: 0.04 } },
+  visible: { transition: { staggerChildren: 0.02, delayChildren: 0.02 } },
 };
 
 export const listItemVariants = {
-  hidden:  { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { ease: APPLE, duration: 0.42 } },
+  hidden:  { opacity: 0 },
+  visible: { opacity: 1, transition: { ease: APPLE, duration: 0.2 } },
 };
 
 /* ─── Base Shimmer block ────────────────────────────────────────────────────── */

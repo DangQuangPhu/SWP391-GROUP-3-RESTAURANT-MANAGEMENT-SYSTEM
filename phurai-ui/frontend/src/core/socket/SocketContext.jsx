@@ -42,9 +42,11 @@ export function SocketProvider({ children, user = null, sessionId = null }) {
       return undefined;
     }
 
+    let isMounted = true;
+
     const instance = io(SOCKET_URL, {
-      autoConnect: true,
-      transports: ["websocket", "polling"],
+      autoConnect: false,
+      transports: ["polling", "websocket"],
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       auth: {
@@ -54,17 +56,32 @@ export function SocketProvider({ children, user = null, sessionId = null }) {
       },
     });
 
-    const onConnect = () => setConnected(true);
-    const onDisconnect = () => setConnected(false);
+    const onConnect = () => {
+      if (isMounted) setConnected(true);
+    };
+    const onDisconnect = () => {
+      if (isMounted) setConnected(false);
+    };
 
     instance.on("connect", onConnect);
     instance.on("disconnect", onDisconnect);
+
+    instance.connect();
     setSocket(instance);
 
     return () => {
+      isMounted = false;
       instance.off("connect", onConnect);
       instance.off("disconnect", onDisconnect);
-      instance.disconnect();
+      if (instance.connected) {
+        instance.disconnect();
+      } else {
+        setTimeout(() => {
+          try {
+            instance.disconnect();
+          } catch {}
+        }, 50);
+      }
       setSocket(null);
       setConnected(false);
     };

@@ -32,6 +32,7 @@ import {
   parseDateOfBirth,
   validateAvatarFile,
 } from "../utils/authHelpers.js";
+import { mapApiUserToFrontend } from "@/features/auth/utils/userMapper.js";
 import "@/features/profile/styles/profileModal.css";
 
 const PROFILE_MODES = {
@@ -173,11 +174,7 @@ function ProfileModal({
       return;
     }
 
-    const base = {
-      ...user,
-      id: user.id ?? user.userId,
-      userId: user.userId ?? user.id,
-    };
+    const base = mapApiUserToFrontend(user);
     setDraft(base);
     const mode = mapInitialViewToMode(initialView);
     setProfileMode(mode);
@@ -189,12 +186,7 @@ function ProfileModal({
     getProfile(uid)
       .then((data) => {
         if (!data?.user) return;
-        const merged = {
-          ...data.user,
-          avatarUrl: normalizeStoredAvatarUrl(data.user.avatarUrl),
-          id: data.user.id ?? data.user.userId,
-          userId: data.user.userId ?? data.user.id,
-        };
+        const merged = mapApiUserToFrontend(data.user);
         setDraft(merged);
         onSave?.(merged);
       })
@@ -264,20 +256,20 @@ function ProfileModal({
     try {
       setSaving(true);
       setAlert(null);
+      const fn = (draft.firstName || "").trim();
+      const ln = (draft.lastName || "").trim();
+      const fullName = `${fn} ${ln}`.trim();
       const payload = {
-        firstName: draft.firstName.trim(),
-        lastName: draft.lastName.trim(),
-        username: draft.username.trim().toLowerCase(),
+        firstName: fn,
+        lastName: ln,
+        fullName: fullName,
+        username: (draft.username || "").trim().toLowerCase(),
         phone: normalizePhone(draft.phone),
         dateOfBirth: draft.dateOfBirth,
       };
 
       const data = await updateProfile(userId, payload);
-      const merged = {
-        ...draft,
-        ...data.user,
-        avatarUrl: normalizeStoredAvatarUrl(data.user?.avatarUrl ?? draft.avatarUrl),
-      };
+      const merged = mapApiUserToFrontend(data.user || { ...draft, ...payload });
       setDraft(merged);
       onSave?.(merged);
       setAlert({ type: "success", message: "Profile saved successfully." });
@@ -459,21 +451,44 @@ function ProfileModal({
 
         <div className="profile-edit__banner" />
         <div className="profile-edit__head">
-          <div className="profile-edit__avatar-wrap">
-            <UserAvatar user={previewUser} size="lg" imgClassName="profile-edit__avatar-img" />
-            {profileMode === PROFILE_MODES.VIEW ? (
-              <button
-                type="button"
-                className="profile-edit__avatar-btn"
-                onClick={() => {
-                  setProfileMode(PROFILE_MODES.CHANGE_AVATAR);
-                  setAlert(null);
-                }}
-              >
-                Change Avatar
-              </button>
-            ) : null}
+          <div
+            className="profile-edit__avatar-wrap"
+            onClick={() => fileInputRef.current?.click()}
+            style={{ cursor: "pointer", position: "relative" }}
+            title="Click to upload avatar photo"
+          >
+            <UserAvatar user={previewUser} size="lg" imgClassName="profile-edit__avatar-img" previewUrl={avatarPreview} />
+            <div
+              style={{
+                position: "absolute",
+                bottom: 2,
+                right: 2,
+                background: "#9f8655",
+                color: "#ffffff",
+                borderRadius: "50%",
+                width: 26,
+                height: 26,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                border: "2px solid #ffffff",
+              }}
+              title="Upload photo"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+            </div>
           </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/jpg,image/png,image/webp"
+            style={{ display: "none" }}
+            onChange={handleAvatarFileSelect}
+          />
           <div>
             <h2>{displayName}</h2>
             <p>@{draft.username}</p>

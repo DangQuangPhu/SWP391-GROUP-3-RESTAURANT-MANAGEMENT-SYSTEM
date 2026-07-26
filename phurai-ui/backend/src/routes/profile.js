@@ -41,10 +41,10 @@ const upload = multer({
 });
 
 function mapValidatedToDb(normalized, body) {
-  const fullName = String(body.fullName || "").trim();
-  const composedName =
-    fullName ||
-    [normalized.firstName, normalized.lastName].filter(Boolean).join(" ").trim();
+  const fn = String(body.firstName || normalized.firstName || "").trim();
+  const ln = String(body.lastName || normalized.lastName || "").trim();
+  const fullName = String(body.fullName || body.name || "").trim();
+  const composedName = fullName || [fn, ln].filter(Boolean).join(" ").trim();
 
   return {
     full_name: composedName,

@@ -83,6 +83,16 @@ export async function updateDish(req, res) {
        categoryId = insertCat[0].category_id;
     }
 
+    const categoryVal = categoryId ?? null;
+    const nameVal = name ?? null;
+    const descVal = description ?? null;
+    const priceVal = price !== undefined && price !== null ? Number(price) : null;
+    const spicyVal = spicy_level !== undefined && spicy_level !== null ? Number(spicy_level) : 0;
+    const prepVal = prep_time_minutes !== undefined && prep_time_minutes !== null && Number(prep_time_minutes) > 0 ? Number(prep_time_minutes) : null;
+    const availVal = is_available !== undefined && is_available !== null ? (is_available ? 1 : 0) : null;
+    const recVal = is_recommended !== undefined && is_recommended !== null ? (is_recommended ? 1 : 0) : null;
+    const preordVal = is_preorderable !== undefined && is_preorderable !== null ? (is_preorderable ? 1 : 0) : null;
+
     await pool.query(`
       UPDATE dbo.Dishes
       SET category_id = COALESCE(?, category_id),
@@ -96,7 +106,7 @@ export async function updateDish(req, res) {
           is_preorderable = COALESCE(?, is_preorderable),
           updated_at = SYSDATETIME()
       WHERE dish_id = ?
-    `, [categoryId, name, description, price, spicy_level, prep_time_minutes, is_available ? 1 : 0, is_recommended ? 1 : 0, is_preorderable ? 1 : 0, id]);
+    `, [categoryVal, nameVal, descVal, priceVal, spicyVal, prepVal, availVal, recVal, preordVal, id]);
 
     const io = req.app.get('io');
     if (io) {

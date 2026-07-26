@@ -1248,16 +1248,15 @@ function ReservationManagement({ user, toast, refreshKey }) {
                 >
                   <button
                     type="button"
-                    className="staff-reservations-date-trigger"
+                    className="staff-reservations-date-trigger sfx-picker__trigger"
                     onClick={() => (pickerOpen ? closePicker() : openPicker())}
                     aria-label="Select date"
                     aria-expanded={pickerOpen}
-                    style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", padding: 0 }}
                   >
-                    <span className="staff-reservations-toolbar__date-label" style={{ fontSize: 13, color: "#1a1a1a", fontWeight: 500 }}>
+                    <span className="staff-reservations-toolbar__date-label sfx-picker__trigger-label">
                       {selectedDateLabel}
                     </span>
-                    <span className="sfx-kpi__icon sfx-kpi__icon--trigger" style={{ position: "relative", zIndex: 20, background: "#f8f5ef", border: "1px solid #e2dcd0", borderRadius: 8, width: 34, height: 34, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#b09460" }}>
+                    <span className="sfx-kpi__icon sfx-kpi__icon--trigger sfx-picker__trigger-icon">
                       <Icon name="calendar" size={16} style={{ pointerEvents: "none" }} />
                     </span>
                   </button>
@@ -1371,7 +1370,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
                       currentPage={currentPage}
                       totalPages={totalPages}
                       totalCount={totalCount}
-                      limit={20}
+                      limit={10}
                       onPageChange={setCurrentPage}
                     />
                   </>

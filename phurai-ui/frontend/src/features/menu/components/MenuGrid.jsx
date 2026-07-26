@@ -127,7 +127,7 @@ function MenuCard({
       style={{
         animationDelay: `${index * 45}ms`,
         '--reveal-index': index,
-        ...((dish.is_available === false || dish.is_available === 0) ? { opacity: 0.5, pointerEvents: 'none' } : {})
+        ...((dish.is_available === false || dish.is_available === 0) ? { opacity: 0.85 } : {})
       }}
     >
       <div className="menu-card__imageArea relative w-24 h-24 md:w-full md:h-auto shrink-0 rounded-lg md:rounded-none overflow-hidden">
@@ -140,7 +140,7 @@ function MenuCard({
           <div
             ref={imageWrapRef}
             className="menu-card__imageWrap menu-grid__media"
-            style={(dish.is_available === false || dish.is_available === 0) ? { filter: 'grayscale(100%) opacity(70%)' } : {}}
+            style={(dish.is_available === false || dish.is_available === 0) ? { filter: 'grayscale(100%) opacity(75%)' } : {}}
           >
             <img
               src={imageSrc}
@@ -153,7 +153,7 @@ function MenuCard({
             />
           </div>
         </button>
-        {isCustomer && dish.is_available !== false && dish.is_available !== 0 ? (
+        {isCustomer ? (
           <BookmarkButton
             isSaved={saved}
             onToggle={() => onBookmark?.(dish)}
@@ -242,7 +242,7 @@ function SetMenuCard({
       style={{
         animationDelay: `${index * 60}ms`,
         '--reveal-index': index,
-        ...((dish.is_available === false || dish.is_available === 0) ? { opacity: 0.5, pointerEvents: 'none' } : {})
+        ...((dish.is_available === false || dish.is_available === 0) ? { opacity: 0.85 } : {})
       }}
     >
       <div className="menu-set-card__imageArea relative w-24 h-24 md:w-full md:h-auto shrink-0 rounded-lg md:rounded-none overflow-hidden">
@@ -274,7 +274,7 @@ function SetMenuCard({
             label={`Add ${dish.name} to cart`}
           />
         ) : null}
-        {isCustomer && dish.is_available !== false && dish.is_available !== 0 ? (
+        {isCustomer ? (
           <BookmarkButton
             isSaved={saved}
             onToggle={() => onBookmark?.(dish)}

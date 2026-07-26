@@ -5,9 +5,9 @@ import {
   resolveAvatarUrl,
 } from "@/features/profile/utils/avatarUtils.js";
 
-function UserAvatar({ user, className = "", imgClassName = "", size = "md" }) {
+function UserAvatar({ user, className = "", imgClassName = "", size = "md", previewUrl = "" }) {
   const [broken, setBroken] = useState(false);
-  const rawSrc = getAvatarSrc(user);
+  const rawSrc = previewUrl || getAvatarSrc(user);
   const src = resolveAvatarUrl(rawSrc);
   const initial = getAvatarInitial(user);
   const showImage = Boolean(src) && !broken;

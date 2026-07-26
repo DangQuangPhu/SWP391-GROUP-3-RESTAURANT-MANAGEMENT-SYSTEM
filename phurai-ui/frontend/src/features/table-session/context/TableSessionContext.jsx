@@ -189,7 +189,17 @@ export function TableSessionProvider({
 export function useTableSession() {
   const ctx = useContext(TableSessionContext);
   if (!ctx) {
-    throw new Error("useTableSession must be used within TableSessionProvider");
+    return {
+      session: null,
+      table: null,
+      loading: false,
+      hasActiveSession: false,
+      cartItemCount: 0,
+      setSession: () => {},
+      clearSession: () => {},
+      fetchActiveSession: async () => null,
+      updateCartItemCount: () => {},
+    };
   }
   return ctx;
 }

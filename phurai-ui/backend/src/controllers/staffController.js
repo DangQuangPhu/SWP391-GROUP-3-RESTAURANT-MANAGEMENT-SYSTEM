@@ -7,6 +7,7 @@ import {
 import { getIO } from "../socket.js";
 import { updateReservationStatus } from "../services/reservationStateService.js";
 import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
+import { handlePostCheckoutSuccess } from "../services/checkoutHelper.js";
 
 function jsonOk(res, data, status = 200) {
   return res.status(status).json({ success: true, data });
@@ -1687,12 +1688,13 @@ export async function getTableBill(req, res) {
   const connection = await pool.getConnection();
 
   try {
+    await connection.beginTransaction();
     const { table, order } = await loadOccupiedTableContext(connection, tableId);
     const serviceChargePercent = await getServiceChargePercent(connection);
 
     // Fetch active reservation details if they exist for the table
     const [reservationRows] = await connection.query(
-      `SELECT TOP 1 r.reservation_id, r.deposit_amount, r.final_total, r.applied_promo_code, r.order_code
+      `SELECT TOP 1 r.reservation_id, r.contact_name, r.contact_phone, r.contact_email, r.deposit_amount, r.final_total, r.applied_promo_code, r.order_code, r.reservation_start_at
        FROM dbo.Reservations r
        INNER JOIN dbo.ReservationTables rt ON rt.reservation_id = r.reservation_id
        WHERE rt.table_id = ? AND r.reservation_status IN (N'Dining', N'Cleaning')`,
@@ -1704,6 +1706,7 @@ export async function getTableBill(req, res) {
 
     if (!order) {
       const emptyTotals = computeBillTotals(0, serviceChargePercent, 0);
+      await connection.commit();
       return jsonOk(res, {
         table_id: table.table_id,
         table_number: table.table_number,
@@ -1713,8 +1716,11 @@ export async function getTableBill(req, res) {
         order_status: null,
         items: [],
         applied_promo: null,
+        contact_name: reservation?.contact_name || null,
+        contact_email: reservation?.contact_email || null,
         reservation_id: reservation ? reservation.reservation_id : null,
         reservation_order_code: reservation ? reservation.order_code : null,
+        reservation_start_at: reservation ? reservation.reservation_start_at : null,
         reservation_remaining_balance,
         ...emptyTotals,
         total_amount: emptyTotals.total_amount + reservation_remaining_balance,
@@ -1730,6 +1736,7 @@ export async function getTableBill(req, res) {
     );
 
     await syncOrderBillTotals(connection, order.order_id, totals);
+    await connection.commit();
 
     return jsonOk(res, {
       table_id: table.table_id,
@@ -1740,14 +1747,18 @@ export async function getTableBill(req, res) {
       order_status: order.order_status,
       items,
       applied_promo: null,
+      contact_name: reservation?.contact_name || null,
+      contact_email: reservation?.contact_email || null,
       reservation_id: reservation ? reservation.reservation_id : null,
       reservation_order_code: reservation ? reservation.order_code : null,
+      reservation_start_at: reservation ? reservation.reservation_start_at : null,
       reservation_deposit_amount: reservation ? Number(reservation.deposit_amount) : 0,
       reservation_remaining_balance,
       ...totals,
       total_amount: totals.total_amount + reservation_remaining_balance,
     });
   } catch (error) {
+    await connection.rollback();
     if (error.code === "TABLE_NOT_FOUND") {
       return jsonError(res, "Table not found.", 404);
     }
@@ -1904,6 +1915,7 @@ export async function checkoutTablePayment(req, res) {
   const amountPaid = Number(req.body?.amount_paid);
   const promoCodeId = req.body?.promo_code_id ? Number(req.body.promo_code_id) : null;
   const transactionRef = String(req.body?.transaction_ref ?? "").trim() || null;
+  const customerEmail = req.body?.customer_email ? String(req.body.customer_email).trim().toLowerCase() : null;
 
   if (!Number.isFinite(tableId) || tableId <= 0) {
     return jsonError(res, "Invalid table id.", 400);
@@ -1918,6 +1930,7 @@ export async function checkoutTablePayment(req, res) {
   const connection = await pool.getConnection();
 
   try {
+    await connection.beginTransaction();
     const { table, order } = await loadOccupiedTableContext(connection, tableId);
     const serviceChargePercent = await getServiceChargePercent(connection);
 
@@ -2059,7 +2072,39 @@ export async function checkoutTablePayment(req, res) {
       [tableId]
     );
 
+    if (order && customerEmail) {
+      const [userRows] = await connection.query(
+        `SELECT TOP 1 user_id FROM dbo.UserAccounts WHERE LOWER(email) = ?;`,
+        [customerEmail]
+      );
+      const matchedUserId = userRows[0]?.user_id || null;
+      await connection.query(
+        `UPDATE dbo.Orders
+         SET customer_id = ISNULL(?, customer_id),
+             updated_at = SYSDATETIME()
+         WHERE order_id = ?;`,
+        [matchedUserId, order.order_id]
+      );
+      if (reservation) {
+        await connection.query(
+          `UPDATE dbo.Reservations
+           SET contact_email = ?,
+               customer_id = ISNULL(?, customer_id),
+               updated_at = SYSDATETIME()
+           WHERE reservation_id = ?;`,
+          [customerEmail, matchedUserId, reservation.reservation_id]
+        );
+      }
+    }
+
     await connection.commit();
+
+    // If customer email was specified for receipt & loyalty, fire post-checkout tasks (awards points & sends receipt email)
+    if (customerEmail && order) {
+      handlePostCheckoutSuccess(order.order_id, amountPaid).catch((err) => {
+        console.error("[checkoutTablePayment] post-checkout email/loyalty error:", err?.message);
+      });
+    }
 
     // ── Auto-checkout: if this table had an Occupied reservation, mark it Completed ──
     // Fire-and-forget after commit — does not affect payment success
@@ -2722,7 +2767,7 @@ export async function getOrderTimeline(req, res) {
 
   try {
     const [logs] = await pool.query(
-      `SELECT a.audit_log_id, a.action_name, a.new_value_json, a.created_at, u.full_name, u.username
+      `SELECT a.audit_log_id, a.action_name, a.new_value_json, a.created_at, u.full_name, u.email
        FROM dbo.AuditLogs a
        LEFT JOIN dbo.UserAccounts u ON a.user_id = u.user_id
        WHERE a.target_table = N'Orders' AND a.target_id = ?
@@ -2734,5 +2779,44 @@ export async function getOrderTimeline(req, res) {
   } catch (error) {
     console.error("GET /api/staff/orders/:orderId/timeline failed:", error);
     return jsonError(res, "Could not load order timeline.");
+  }
+}
+
+/**
+ * GET /api/staff/customers/verify?email=xxx
+ * Verifies if a customer email exists in UserAccounts/CustomerProfiles for loyalty.
+ */
+export async function verifyCustomerEmail(req, res) {
+  const email = String(req.query?.email || "").trim().toLowerCase();
+  if (!email || !email.includes("@")) {
+    return res.json({ success: true, exists: false, message: "Invalid email format" });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT TOP 1 u.user_id, u.email, u.full_name, cp.loyalty_points
+       FROM dbo.UserAccounts u
+       LEFT JOIN dbo.CustomerProfiles cp ON cp.user_id = u.user_id
+       WHERE LOWER(u.email) = ?`,
+      [email]
+    );
+
+    if (rows.length > 0) {
+      return res.json({
+        success: true,
+        exists: true,
+        user: {
+          user_id: rows[0].user_id,
+          email: rows[0].email,
+          full_name: rows[0].full_name,
+          loyalty_points: rows[0].loyalty_points || 0,
+        },
+      });
+    }
+
+    return res.json({ success: true, exists: false });
+  } catch (error) {
+    console.error("GET /api/staff/customers/verify failed:", error);
+    return res.json({ success: false, exists: false, message: "Email lookup error" });
   }
 }

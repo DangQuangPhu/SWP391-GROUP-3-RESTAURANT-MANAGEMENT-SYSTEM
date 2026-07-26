@@ -14,6 +14,7 @@ import { apiPatch, profileRequestHeaders } from "@/core/api/httpClient.js";
 import "./notification-bell.css";
 
 const QR_NOTIFICATION_STORAGE_KEY = "phurai_pending_qr_notifications";
+const PAYMENT_NOTIFICATION_STORAGE_KEY = "phurai_payment_notifications";
 
 function formatSentAt(value) {
   if (!value) return "";
@@ -78,6 +79,31 @@ function writeStoredQrNotifications(notifications) {
       (item) => item.notification_type === "QR_PENDING"
     );
     localStorage.setItem(QR_NOTIFICATION_STORAGE_KEY, JSON.stringify(qrNotifications));
+  } catch {
+    /* storage is best-effort only */
+  }
+}
+
+function readStoredPaymentNotifications() {
+  try {
+    const raw = localStorage.getItem(PAYMENT_NOTIFICATION_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    // Only keep notifications from the last 8 hours
+    const cutoff = Date.now() - 8 * 60 * 60 * 1000;
+    return parsed.filter((n) => new Date(n.sent_at).getTime() > cutoff);
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredPaymentNotifications(notifications) {
+  try {
+    const paymentNotifs = notifications
+      .filter((item) => item.notification_type === "Payment Confirmed")
+      .slice(0, 20); // max 20 persisted
+    localStorage.setItem(PAYMENT_NOTIFICATION_STORAGE_KEY, JSON.stringify(paymentNotifs));
   } catch {
     /* storage is best-effort only */
   }
@@ -157,9 +183,11 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
 
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [notifications, setNotifications] = useState(() =>
-    listenForStaffEvents ? readStoredQrNotifications() : []
-  );
+  const [notifications, setNotifications] = useState(() => {
+    const stored = listenForStaffEvents ? readStoredQrNotifications() : [];
+    const payments = listenForStaffEvents ? readStoredPaymentNotifications() : [];
+    return mergeNotifications(payments, stored);
+  });
   const [expandedId, setExpandedId] = useState(null);
   const unread = notifications.filter((item) => !item.is_read).length;
 
@@ -201,6 +229,7 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
   useEffect(() => {
     if (listenForStaffEvents) {
       writeStoredQrNotifications(notifications);
+      writeStoredPaymentNotifications(notifications);
     }
   }, [notifications, listenForStaffEvents]);
 
@@ -265,16 +294,18 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
     };
 
     const handleCashPending = (payload = {}) => {
-      appToastSuccess(`Table ${payload.tableNumber || 'Unknown'} requested Cash Payment (${new Intl.NumberFormat("vi-VN").format(payload.amount || 0)}đ)`);
-      const notificationId = `cash-${payload.orderId}-${Date.now()}`;
+      const tableId = payload.tableNumber || payload.tableId || payload.table_id || "N/A";
+      const amountStr = new Intl.NumberFormat("vi-VN").format(payload.amount || payload.total_amount || 0);
+      appToastSuccess(`💵 [CASH ON DELIVERY] Table ${tableId} requested cash payment (${amountStr}₫)`);
+      const notificationId = `cash-${payload.orderId || payload.order_id || Date.now()}-${Date.now()}`;
       setNotifications((prev) =>
         mergeNotifications(
           [
             {
               notification_id: notificationId,
-              title: "Cash Payment Request",
-              message_body: `Table ${payload.tableNumber} wants to pay by cash.`,
-              notification_type: "Payment",
+              title: `💵 [CASH ON DELIVERY] Table #${tableId}`,
+              message_body: `Customer requested Cash Payment (${amountStr}₫) at table.`,
+              notification_type: "Cash Payment Request",
               is_read: false,
               sent_at: new Date().toISOString(),
               _live: true,
@@ -317,17 +348,56 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
       );
     };
 
+    const handlePaymentConfirmed = (payload = {}) => {
+      const orderId = payload.orderId || payload.order_id;
+      const tableId = payload.table_id || payload.tableNumber;
+      const amount = payload.amount_paid || payload.amount || 0;
+      const amountStr = Number(amount).toLocaleString('vi-VN');
+      const confirmedAt = new Date().toISOString();
+      const notificationId = `pay-confirmed-${orderId}-${Date.now()}`;
+      const title = `✅ [PAYMENT ONLINE] Order #${orderId}`;
+      const message = tableId
+        ? `Table #${tableId} paid ${amountStr}₫ via SePay / Online Transfer.`
+        : `Order #${orderId} payment of ${amountStr}₫ confirmed online.`;
+
+      appToastSuccess(title);
+
+      setNotifications((prev) =>
+        mergeNotifications(
+          [
+            {
+              notification_id: notificationId,
+              title,
+              message_body: message,
+              notification_type: "Online Payment Confirmed",
+              is_read: false,
+              sent_at: confirmedAt,
+              _live: true,
+              _payload: { ...payload, confirmedAt },
+            },
+          ],
+          prev
+        )
+      );
+    };
+
     socket.on("NEW_CUSTOMER_ACTION", handleIncoming);
     socket.on("notification:new", handleSystemAlert);
     socket.on("NEW_QR_SESSION_PENDING", handleQrRequest);
     socket.on("payment:cash_pending", handleCashPending);
+    socket.on("table:cash_payment_requested", handleCashPending);
     socket.on("table:overrun_warning", handleOverrun);
+    socket.on("PAYMENT_STATUS_CHANGED", handlePaymentConfirmed);
+    socket.on("QR_SESSION_PAYMENT_COMPLETED", handlePaymentConfirmed);
     return () => {
       socket.off("NEW_CUSTOMER_ACTION", handleIncoming);
       socket.off("notification:new", handleSystemAlert);
       socket.off("NEW_QR_SESSION_PENDING", handleQrRequest);
       socket.off("payment:cash_pending", handleCashPending);
+      socket.off("table:cash_payment_requested", handleCashPending);
       socket.off("table:overrun_warning", handleOverrun);
+      socket.off("PAYMENT_STATUS_CHANGED", handlePaymentConfirmed);
+      socket.off("QR_SESSION_PAYMENT_COMPLETED", handlePaymentConfirmed);
     };
   }, [socket, listenForStaffEvents]);
 
@@ -401,17 +471,27 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
   };
 
   const handleMarkAllRead = async () => {
-    if (!userId || unread === 0) return;
+    if (notifications.length === 0) return;
     try {
-      await markAllNotificationsRead(userId);
+      if (userId) {
+        await markAllNotificationsRead(userId).catch(() => {});
+      }
       setNotifications((prev) =>
-        prev.map((row) =>
-          row.notification_type === "QR_PENDING" ? row : { ...row, is_read: true }
-        )
+        prev.map((row) => ({ ...row, is_read: true }))
       );
-    } catch (err) {
-      toast.error(err.message || "Could not mark all as read.");
+      toast.success("Marked all notifications as read.");
+    } catch {
+      setNotifications((prev) =>
+        prev.map((row) => ({ ...row, is_read: true }))
+      );
     }
+  };
+
+  const handleClearAll = () => {
+    setNotifications([]);
+    localStorage.removeItem(QR_NOTIFICATION_STORAGE_KEY);
+    localStorage.removeItem(PAYMENT_NOTIFICATION_STORAGE_KEY);
+    toast.success("Cleared all notifications.");
   };
 
   if (!userId) return null;
@@ -460,19 +540,40 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
             role="dialog" 
             aria-label="Notifications"
           >
-            <header className="notification-bell__head">
+            <header className="notification-bell__head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <h2>Notifications</h2>
                 <p>{unread > 0 ? `${unread} unread` : "You're all caught up"}</p>
               </div>
-              <button
-                type="button"
-                className="notification-bell__mark-all"
-                onClick={handleMarkAllRead}
-                disabled={unread === 0}
-              >
-                Mark all read
-              </button>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <button
+                  type="button"
+                  className="notification-bell__mark-all"
+                  onClick={handleMarkAllRead}
+                  disabled={unread === 0}
+                  style={{ opacity: unread === 0 ? 0.4 : 1, cursor: unread === 0 ? "not-allowed" : "pointer" }}
+                >
+                  Mark all read
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  disabled={notifications.length === 0}
+                  title="Clear all notifications"
+                  aria-label="Clear all notifications"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: notifications.length === 0 ? "not-allowed" : "pointer",
+                    opacity: notifications.length === 0 ? 0.3 : 0.8,
+                    fontSize: "15px",
+                    padding: "4px",
+                    lineHeight: 1,
+                  }}
+                >
+                  🗑️
+                </button>
+              </div>
             </header>
 
             <div className="notification-bell__list">
@@ -567,7 +668,105 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
                         </div>
                       </div>
                     );
+                  } else if (item.notification_type === "Cash Payment Request") {
+                    itemContent = (
+                      <div
+                        className={`notification-bell__item ${item.is_read ? "is-read" : "is-unread"}`}
+                        style={{
+                          background: item.is_read ? "#fffbe6" : "#fef9c3",
+                          borderLeft: "4px solid #ca8a04",
+                          padding: "12px",
+                          cursor: "default",
+                        }}
+                      >
+                        <div className="notification-bell__item-top">
+                          <strong style={{ color: "#854d0e" }}>{item.title}</strong>
+                          <span>{formatSentAt(item.sent_at)}</span>
+                        </div>
+                        <p style={{ margin: "6px 0 8px", color: "#713f12", fontSize: "0.875rem", fontWeight: 500 }}>
+                          {item.message_body}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNotifications((prev) =>
+                              prev.map((row) =>
+                                row.notification_id === item.notification_id
+                                  ? { ...row, is_read: true }
+                                  : row
+                              )
+                            );
+                          }}
+                          style={{
+                            padding: "5px 10px",
+                            background: "#ca8a04",
+                            color: "#fff",
+                            borderRadius: "4px",
+                            border: "none",
+                            cursor: "pointer",
+                            fontWeight: "bold",
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          Mark as Handled
+                        </button>
+                      </div>
+                    );
+                  } else if (item.notification_type === "Payment Confirmed" || item.notification_type === "Online Payment Confirmed") {
+                    const confirmedAt = payload.confirmedAt || item.sent_at;
+                    const timeStr = confirmedAt
+                      ? new Date(confirmedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+                      : "";
+                    itemContent = (
+                      <div
+                        className={`notification-bell__item ${item.is_read ? "is-read" : "is-unread"}`}
+                        style={{
+                          background: item.is_read ? "#f0fdf4" : "#dcfce7",
+                          borderLeft: "4px solid #16a34a",
+                          padding: "12px",
+                          cursor: "default",
+                        }}
+                      >
+                        <div className="notification-bell__item-top">
+                          <strong style={{ color: "#15803d" }}>{item.title}</strong>
+                          <span>{formatSentAt(item.sent_at)}</span>
+                        </div>
+                        <p style={{ margin: "6px 0 8px", color: "#166534", fontSize: "0.875rem", fontWeight: 500 }}>
+                          {item.message_body}
+                        </p>
+                        {timeStr && (
+                          <p style={{ margin: "0 0 8px", color: "#15803d", fontSize: "0.75rem", fontFamily: "monospace" }}>
+                            ⏱ Confirmed at {timeStr}
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNotifications((prev) =>
+                              prev.map((row) =>
+                                row.notification_id === item.notification_id
+                                  ? { ...row, is_read: true }
+                                  : row
+                              )
+                            );
+                          }}
+                          style={{
+                            padding: "5px 10px",
+                            background: "#16a34a",
+                            color: "#fff",
+                            borderRadius: "4px",
+                            border: "none",
+                            cursor: "pointer",
+                            fontWeight: "bold",
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          Mark as Handled
+                        </button>
+                      </div>
+                    );
                   } else if (item.notification_type === "Overrun Warning") {
+
                     const details = [];
                     if (payload.estimatedReleaseAt) {
                       const estTime = new Date(payload.estimatedReleaseAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });

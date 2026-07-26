@@ -164,7 +164,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
     } catch (error) {
       console.error("Failed to fetch paginated reservations:", error);
     }
-  }, [currentPage, search, statusFilter, appliedRange, user, setReservations]);
+  }, [currentPage, search, statusFilter, appliedRange?.startDate, appliedRange?.endDate, user?.userId, user?.user_id]);
 
   // Reset page to 1 when filters change
   useEffect(() => {
@@ -714,7 +714,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
             totalPages={totalPages}
             onPageChange={setCurrentPage}
             totalCount={totalCount}
-            limit={20}
+            limit={10}
           />
         )}
         {filtered.length === 0 ? (

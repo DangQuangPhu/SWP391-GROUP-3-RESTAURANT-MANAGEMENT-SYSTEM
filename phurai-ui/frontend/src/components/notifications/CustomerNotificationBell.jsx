@@ -135,12 +135,7 @@ export default function CustomerNotificationBell({ variant = "navbar" }) {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className={isProfile ? "profile-dashboard__icon-btn" : undefined}
-        style={!isProfile ? {
-          background: "none", border: "none", cursor: "pointer",
-          position: "relative", padding: "8px", color: "#fff",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        } : { position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}
+        className={isProfile ? "profile-dashboard__icon-btn" : "phurai-navbar__bell-btn"}
         aria-label="Notifications"
       >
         <svg

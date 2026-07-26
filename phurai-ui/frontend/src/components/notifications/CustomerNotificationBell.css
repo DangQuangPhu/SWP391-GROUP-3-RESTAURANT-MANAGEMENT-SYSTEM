@@ -26,3 +26,33 @@
   animation: bell-shake 1.5s ease-in-out infinite;
   transform-origin: 50% 4px; /* pivot at bell top */
 }
+
+/* Dynamic Navbar Bell Button Styling */
+.phurai-navbar__bell-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #342716;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.phurai-navbar__bell-btn:hover {
+  transform: scale(1.08);
+}
+
+/* Light navbar / white background pages / scrolled navbar -> dark icon */
+.phurai-navbar.phurai-navbar--light-top-page .phurai-navbar__bell-btn,
+.phurai-navbar.phurai-navbar--scrolled .phurai-navbar__bell-btn,
+.phurai-navbar.phurai-navbar--visible .phurai-navbar__bell-btn {
+  color: #342716 !important;
+}
+
+/* Dark hero top navbar -> white icon */
+.phurai-navbar.phurai-navbar--dark-top-page.phurai-navbar--top .phurai-navbar__bell-btn {
+  color: #ffffff !important;
+}

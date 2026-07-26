@@ -14,7 +14,7 @@ export default function AppRealtimeShell({
   currentUser,
   isAuthenticated,
 }) {
-  const { session } = useTableSession();
+  const { session = null } = useTableSession() || {};
 
   return (
     <SocketProvider user={currentUser} sessionId={session?.session_id}>

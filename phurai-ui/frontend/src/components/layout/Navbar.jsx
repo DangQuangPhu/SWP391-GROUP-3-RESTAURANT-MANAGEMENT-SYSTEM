@@ -60,7 +60,7 @@ function Navbar({
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const lastScrollY = useRef(0);
 
-  const { hasActiveSession } = useTableSession();
+  const { hasActiveSession = false } = useTableSession() || {};
   const isMenuCustomerUser = isMenuCustomer(isAuthenticated, currentUser);
   const showQrTableAction = isMenuCustomerUser && hasActiveSession;
 

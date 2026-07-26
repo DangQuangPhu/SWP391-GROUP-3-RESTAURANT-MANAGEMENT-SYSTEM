@@ -1361,6 +1361,61 @@ button.sfx-kpi__icon--trigger:focus-visible {
   transform: scale(0.94);
 }
 
+/* Apple Style Notice Banner for Past / Future Dates */
+.sfx-dp-apple-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  margin: 10px 16px 4px;
+  background: #f2f2f7;
+  border: 1px solid #e5e5ea;
+  border-radius: 12px;
+  animation: appleNoticeFadeIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.sfx-dp-apple-notice__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #e5e5ea;
+  color: #8e8e93;
+  flex-shrink: 0;
+}
+
+.sfx-dp-apple-notice__content {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sfx-dp-apple-notice__title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #3a3a3c;
+  line-height: 1.2;
+}
+
+.sfx-dp-apple-notice__sub {
+  font-size: 11.5px;
+  color: #8e8e93;
+  line-height: 1.2;
+}
+
+@keyframes appleNoticeFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* Hide default react-date-range month/year header pickers to use Apple header */
 .sfx-dp-cal .rdrMonthAndYearWrapper {
   display: none !important;
@@ -1588,6 +1643,8 @@ button.sfx-kpi__icon--trigger:focus-visible {
 /* ---------- Tables ---------- */
 .sfx-table-wrap {
   overflow-x: auto;
+  min-height: 240px;
+  position: relative;
 }
 
 .sfx-table {
@@ -1620,11 +1677,15 @@ button.sfx-kpi__icon--trigger:focus-visible {
 }
 
 .sfx-table--hover tbody tr {
-  transition: background 0.14s ease;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.25s ease, box-shadow 0.25s ease;
+  position: relative;
 }
 
 .sfx-table--hover tbody tr:hover {
-  background: var(--sfx-gold-soft);
+  background: rgba(159, 134, 85, 0.07) !important;
+  transform: scale(1.004) translateY(-1px);
+  box-shadow: 0 4px 16px -2px rgba(159, 134, 85, 0.12);
+  z-index: 2;
 }
 
 .sfx-table__right {
@@ -3106,33 +3167,51 @@ button.sfx-kpi__icon--trigger:focus-visible {
 .sfx-picker__container {
   position: relative !important;
 }
-.sfx-picker__trigger {
+.sfx-picker__trigger,
+.staff-reservations-date-trigger {
   display: inline-flex !important;
   align-items: center !important;
   gap: 8px !important;
-  background: #f8f5ef !important;
-  border: 1px solid #e2dcd0 !important;
-  border-radius: 8px !important;
-  padding: 8px 12px !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  padding: 5px 8px 5px 14px !important;
   cursor: pointer !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
-.sfx-picker__trigger-label {
+
+.sfx-picker__trigger:hover,
+.staff-reservations-date-trigger:hover {
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08) !important;
+}
+
+.sfx-picker__trigger-label,
+.staff-reservations-toolbar__date-label {
   font-size: 13px !important;
-  color: #1a1a1a !important;
-  font-weight: 500 !important;
+  color: #1e293b !important;
+  font-weight: 600 !important;
 }
+
 .sfx-picker__trigger-icon {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   color: #b09460 !important;
-  background: #f8f5ef !important;
-  border: 1px solid #e2dcd0 !important;
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
   border-radius: 8px !important;
-  width: 34px !important;
-  height: 34px !important;
+  width: 32px !important;
+  height: 32px !important;
   flex-shrink: 0 !important;
 }
+
+.sfx-tablemap-filter__container,
+.staff-reservations-toolbar {
+  margin-bottom: 24px !important;
+}
+
 .sfx-picker__popover {
   position: absolute !important;
   right: 0 !important;

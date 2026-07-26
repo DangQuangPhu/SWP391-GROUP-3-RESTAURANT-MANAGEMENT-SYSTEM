@@ -47,6 +47,33 @@ function DashboardDateRangePicker({
     return `${format(leftMonth, "MMM yyyy")} – ${format(rightMonth, "MMM yyyy")}`;
   }, [leftMonth, rightMonth]);
 
+  const openingDate = useMemo(() => {
+    if (minDate) return new Date(minDate);
+    return new Date(2024, 0, 1);
+  }, [minDate]);
+
+  // Notice banner for dates before opening or in the future
+  const periodNotice = useMemo(() => {
+    const windowEnd = new Date(shownDate.getFullYear(), shownDate.getMonth() + 2, 0, 23, 59, 59);
+    if (windowEnd < openingDate) {
+      return {
+        type: "past",
+        title: "Before Restaurant Opening",
+        subtitle: "Restaurant established in Jan 2024. No past operational records.",
+      };
+    }
+    const windowStart = new Date(shownDate.getFullYear(), shownDate.getMonth(), 1);
+    const endOfCurrentMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59);
+    if (windowStart > endOfCurrentMonth) {
+      return {
+        type: "future",
+        title: "Upcoming Booking Period",
+        subtitle: "Viewing future dates for advance reservations & orders.",
+      };
+    }
+    return null;
+  }, [shownDate, openingDate, today]);
+
   // Stepper handlers (step 2 months at a time)
   const handlePrev2Months = () => {
     setAnimDirection("prev");
@@ -67,6 +94,21 @@ function DashboardDateRangePicker({
     }
     onPresetSelect?.(preset);
   };
+
+  // Dynamic ranges passed to react-date-range so it syncs its month view with shownDate
+  const activeRanges = useMemo(() => {
+    if (!draftRange?.startDate) {
+      return [{ startDate: null, endDate: null, key: "selection" }];
+    }
+    const start = new Date(draftRange.startDate);
+    const windowStart = new Date(shownDate.getFullYear(), shownDate.getMonth(), 1);
+    const windowEnd = new Date(shownDate.getFullYear(), shownDate.getMonth() + 2, 0, 23, 59, 59);
+
+    if (start >= windowStart && start <= windowEnd) {
+      return [draftRange];
+    }
+    return [{ startDate: null, endDate: null, key: "selection" }];
+  }, [draftRange, shownDate]);
 
   let presets = getDateRangePresets(today);
   if (minDate) {
@@ -167,6 +209,29 @@ function DashboardDateRangePicker({
               </button>
             </div>
 
+            {/* Apple Style Notice Banner for Past / Future Dates */}
+            {periodNotice && (
+              <div className={`sfx-dp-apple-notice sfx-dp-apple-notice--${periodNotice.type}`}>
+                <span className="sfx-dp-apple-notice__icon">
+                  {periodNotice.type === "past" ? (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                      <polyline points="9 22 9 12 15 12 15 22" />
+                    </svg>
+                  ) : (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                  )}
+                </span>
+                <div className="sfx-dp-apple-notice__content">
+                  <span className="sfx-dp-apple-notice__title">{periodNotice.title}</span>
+                  <span className="sfx-dp-apple-notice__sub">{periodNotice.subtitle}</span>
+                </div>
+              </div>
+            )}
+
             <div className={`sfx-dp-cal ${animDirection ? `anim-${animDirection}` : ""}`}>
               <DateRangePicker
                 key={shownDate.getTime()}
@@ -176,11 +241,7 @@ function DashboardDateRangePicker({
                 shownDate={shownDate}
                 onShownDateChange={(d) => setShownDate(d)}
                 preventSnapToSelection={true}
-                ranges={[
-                  draftRange?.startDate
-                    ? draftRange
-                    : { startDate: today, endDate: today, key: "selection" },
-                ]}
+                ranges={activeRanges}
                 direction="horizontal"
                 maxDate={allowFuture ? undefined : today}
                 minDate={minDate || undefined}

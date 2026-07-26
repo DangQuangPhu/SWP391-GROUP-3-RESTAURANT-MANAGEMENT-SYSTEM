@@ -1,6 +1,6 @@
 import React from "react";
 
-export function Pagination({ currentPage, totalPages, onPageChange, totalCount, limit = 20 }) {
+export function Pagination({ currentPage, totalPages, onPageChange, totalCount, limit = 10 }) {
   if (totalPages <= 1 && !totalCount) return null;
 
   const handlePrev = () => {

@@ -67,7 +67,7 @@ function StaffDashboard({ authReady, isAuthenticated, currentUser, onSignOut }) 
         <Route path="reservations" element={<StaffReservationTab search={searchQuery} tables={tables} user={currentUser} toast={toast} dataSource={dataSource} refreshing={refreshing} onRefresh={() => refreshAll(true)} />} />
         <Route path="tables" element={<StaffTableTab search={searchQuery} tables={tables} setTables={setTables} user={currentUser} toast={toast} dataSource={dataSource} refreshing={refreshing} onRefresh={() => refreshAll(true)} />} />
         <Route path="orders" element={<StaffOrderTab search={searchQuery} orderTables={orderTables} setOrderTables={setOrderTables} user={currentUser} toast={toast} dataSource={dataSource} refreshing={refreshing} onRefresh={() => refreshAll(true)} />} />
-        <Route path="payments" element={<StaffPaymentTab search={searchQuery} orderTables={orderTables} setOrderTables={setOrderTables} user={currentUser} toast={toast} dataSource={dataSource} refreshing={refreshing} onRefresh={() => refreshAll(true)} />} />
+        <Route path="payments" element={<StaffPaymentTab search={searchQuery} tables={tables} setTables={setTables} orderTables={orderTables} setOrderTables={setOrderTables} user={currentUser} toast={toast} dataSource={dataSource} refreshing={refreshing} onRefresh={() => refreshAll(true)} />} />
         <Route path="kds" element={<StaffKdsTab user={currentUser} toast={toast} refreshing={refreshing} onRefresh={() => refreshAll(true)} />} />
         <Route path="*" element={<Navigate to={defaultRoute} replace />} />
       </Routes>
