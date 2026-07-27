@@ -173,7 +173,7 @@ export default function AIDishRecommendations({ recommendedDishes = [], onOpenVi
                 />
 
                 <div style={{ position: 'absolute', top: '10px', right: '10px', pointerEvents: 'none' }}>
-                  <span className="liquid-score-badge" style={{ background: 'rgba(15, 23, 42, 0.85)', color: '#ffffff', fontSize: '0.72rem', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+                  <span className="liquid-score-badge" style={{ background: 'rgba(15, 23, 42, 0.85)', color: '#ffffff', fontSize: '0.72rem', backdropFilter: 'blur(8px)' }}>
                     {dish.aiScore}% AI Match
                   </span>
                 </div>

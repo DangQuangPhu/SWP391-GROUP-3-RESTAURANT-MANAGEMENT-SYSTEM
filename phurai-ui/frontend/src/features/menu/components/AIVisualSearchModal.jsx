@@ -132,15 +132,7 @@ export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], 
   const displayDishes = getDisplayDishes();
 
   return (
-    <div 
-      className="liquid-modal-overlay" 
-      onClick={handleClose}
-      style={{
-        backdropFilter: 'blur(40px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(40px) saturate(180%)',
-        background: 'rgba(10, 8, 6, 0.75)',
-      }}
-    >
+    <div className="liquid-modal-overlay" onClick={handleClose}>
       <motion.div 
         className="liquid-modal-card"
         initial={{ opacity: 0, scale: 0.94, y: 16 }}
@@ -228,9 +220,8 @@ export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], 
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: 'rgba(0,0,0,0.55)',
-                  backdropFilter: 'blur(8px)',
-                  WebkitBackdropFilter: 'blur(8px)'
+                  background: 'rgba(0,0,0,0.35)',
+                  backdropFilter: 'blur(4px)'
                 }}>
                   <div className="liquid-score-badge" style={{ background: 'rgba(255,255,255,0.92)', color: '#342716', fontSize: '0.95rem', padding: '10px 20px' }}>
                     {previewUrl ? 'AI Lens Scanning & Analyzing Dish...' : 'AI is reading your craving...'}
