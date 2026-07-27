@@ -1123,7 +1123,9 @@
   inset: 0;
   padding: 0;
   border: none;
-  background: rgba(0, 0, 0, 0.68);
+  background: rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(28px) saturate(220%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(220%) !important;
   cursor: pointer;
   animation: menuPreviewFadeIn 0.3s ease;
 }
