@@ -279,83 +279,13 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
     return () => observer.disconnect();
   }, []);
 
-  const isModalActive = isVisualSearchOpen || Boolean(previewDish);
-
-  useEffect(() => {
-    const navbar = document.querySelector('.phurai-navbar');
-    const footer = document.querySelector('.phurai-footer');
-
-    if (isModalActive) {
-      document.body.classList.add('modal-open');
-      if (navbar) {
-        navbar.style.filter = 'blur(8px)';
-        navbar.style.webkitFilter = 'blur(8px)';
-        navbar.style.pointerEvents = 'none';
-      }
-      if (footer) {
-        footer.style.filter = 'blur(8px)';
-        footer.style.webkitFilter = 'blur(8px)';
-        footer.style.pointerEvents = 'none';
-      }
-    } else {
-      document.body.classList.remove('modal-open');
-      if (navbar) {
-        navbar.style.filter = '';
-        navbar.style.webkitFilter = '';
-        navbar.style.pointerEvents = '';
-      }
-      if (footer) {
-        footer.style.filter = '';
-        footer.style.webkitFilter = '';
-        footer.style.pointerEvents = '';
-      }
-    }
-
-    return () => {
-      document.body.classList.remove('modal-open');
-      if (navbar) {
-        navbar.style.filter = '';
-        navbar.style.webkitFilter = '';
-        navbar.style.pointerEvents = '';
-      }
-      if (footer) {
-        footer.style.filter = '';
-        footer.style.webkitFilter = '';
-        footer.style.pointerEvents = '';
-      }
-    };
-  }, [isModalActive]);
-
   const showEmptyState = visibleDishes.length === 0;
 
   return (
-    <div className={`menu-page${isDrawerOpen ? ' menu-page--cart-open' : ''}${isModalActive ? ' menu-page--modal-open' : ''}`}>
+    <div className={`menu-page${isDrawerOpen ? ' menu-page--cart-open' : ''}`}>
       <MenuCartDrawer />
 
-      {isModalActive && (
-        <div
-          className="menu-modal-backdrop-blur"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
-            backgroundColor: 'rgba(0, 0, 0, 0.35)',
-            zIndex: 99990,
-            pointerEvents: 'none'
-          }}
-        />
-      )}
-
-      <div
-        className="menu-body flex flex-col lg:flex-row"
-        style={{
-          filter: isModalActive ? 'blur(8px)' : 'none',
-          WebkitFilter: isModalActive ? 'blur(8px)' : 'none',
-          transition: 'filter 0.35s ease, -webkit-filter 0.35s ease',
-          pointerEvents: isModalActive ? 'none' : 'auto'
-        }}
-      >
+      <div className="menu-body flex flex-col lg:flex-row">
         <MenuSidebar
           categories={menuCategories}
           selectedCategory={selectedCategory}

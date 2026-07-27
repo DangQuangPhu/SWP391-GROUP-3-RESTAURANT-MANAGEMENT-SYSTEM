@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatVND } from '@/core/utils/formatCurrency.js';
 import OutlineButton from '@/components/common/OutlineButton.jsx';
@@ -131,17 +132,43 @@ export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], 
 
   const displayDishes = getDisplayDishes();
 
-  return (
-    <div className="liquid-modal-overlay" onClick={handleClose}>
+  return createPortal(
+    <div
+      onClick={handleClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 99999,
+        backgroundColor: 'rgba(0, 0, 0, 0.45)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+      }}
+    >
       <motion.div
-        className="liquid-modal-card"
         initial={{ opacity: 0, scale: 0.94, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.94, y: 16 }}
         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
         onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: '680px',
+          background: 'rgba(255, 255, 255, 0.92)',
+          border: '1px solid rgba(255, 255, 255, 0.75)',
+          borderRadius: '32px',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.8)',
+          padding: '36px',
+          position: 'relative',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+        }}
       >
         {/* Header */}
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
             <h2 style={{ fontSize: '1.35rem', fontWeight: '700', color: 'var(--menu-text, #342716)', margin: 0, letterSpacing: '-0.01em' }}>
@@ -332,6 +359,7 @@ export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], 
           </OutlineButton>
         </div>
       </motion.div>
-    </div>
+    </div>,
+    document.body
   );
 }

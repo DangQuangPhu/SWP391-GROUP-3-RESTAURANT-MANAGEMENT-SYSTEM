@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { formatVND } from '@/core/utils/formatCurrency';
 
 function MenuImagePreview({ dish, onClose }) {
@@ -33,7 +34,7 @@ function MenuImagePreview({ dish, onClose }) {
 
   if (!dish) return null;
 
-  return (
+  return createPortal(
     <div
       className={`menu-image-preview${closing ? ' menu-image-preview--closing' : ''}`}
       role="dialog"
@@ -57,7 +58,8 @@ function MenuImagePreview({ dish, onClose }) {
         <img src={dish.image} alt={dish.name} className="menu-image-preview__image" />
         
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
