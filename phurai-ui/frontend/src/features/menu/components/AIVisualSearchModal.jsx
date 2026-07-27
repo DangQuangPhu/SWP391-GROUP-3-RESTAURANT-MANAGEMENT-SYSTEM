@@ -133,7 +133,7 @@ export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], 
 
   return (
     <div className="liquid-modal-overlay" onClick={handleClose}>
-      <motion.div 
+      <motion.div
         className="liquid-modal-card"
         initial={{ opacity: 0, scale: 0.94, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -151,8 +151,8 @@ export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], 
               Upload any dish photo to discover matching menu recommendations at Phūrai
             </p>
           </div>
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={handleClose}
             style={{
               background: 'rgba(0,0,0,0.06)',
@@ -179,13 +179,13 @@ export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], 
         {/* Dropzone or Image Preview Scanning View */}
         {!previewUrl && !isScanning && !aiResponse ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div 
+            <div
               className="liquid-dropzone"
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleFileDrop}
               onClick={() => fileInputRef.current?.click()}
             >
-              <input 
+              <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/png, image/jpeg, image/webp"
@@ -203,13 +203,13 @@ export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], 
         ) : (
           <div style={{ position: 'relative', borderRadius: '20px', overflow: 'hidden', maxHeight: '280px', marginBottom: '20px', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {previewUrl && (
-              <img 
-                src={previewUrl} 
-                alt="Uploaded visual dish query" 
+              <img
+                src={previewUrl}
+                alt="Uploaded visual dish query"
                 style={{ width: '100%', height: '280px', objectFit: 'cover', opacity: isScanning ? 0.75 : 1, transition: 'opacity 0.3s' }}
               />
             )}
-            
+
             {/* Lensing Beam Scan Effect */}
             {isScanning && (
               <>
@@ -262,7 +262,7 @@ export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], 
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                   <strong style={{ fontSize: '0.95rem', color: '#342716' }}>
-                    {aiResponse.detectedFoodName 
+                    {aiResponse.detectedFoodName
                       ? `Detected: ${aiResponse.detectedFoodName}`
                       : aiResponse.isFood ? 'Dish Match Result' : 'Non-Food Image Detected'}
                   </strong>
@@ -284,15 +284,15 @@ export default function AIVisualSearchModal({ isOpen, onClose, menuDishes = [], 
                   const reason = aiResponse.reasons ? aiResponse.reasons[dishIdStr] : null;
 
                   return (
-                    <motion.div 
+                    <motion.div
                       key={dishIdStr}
                       whileHover={{ scale: 1.01 }}
                       onClick={() => handleDishImageClick(dish)}
                       className="liquid-glass-container"
                       style={{ padding: '14px', display: 'flex', alignItems: 'center', gap: '16px', borderRadius: '16px', background: '#ffffff', cursor: 'zoom-in' }}
                     >
-                      <img 
-                        src={dish.image_url || dish.image || '/menu/yellowtail-jalapeno.jpg'} 
+                      <img
+                        src={dish.image_url || dish.image || '/menu/yellowtail-jalapeno.jpg'}
                         alt={dish.name || dish.dish_name}
                         style={{ width: '72px', height: '72px', borderRadius: '14px', objectFit: 'cover' }}
                       />

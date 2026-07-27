@@ -1756,3 +1756,25 @@
   }
 }
 
+/* ==========================================================================
+   DOM Background Blur Fallback for Menu Modals (Server & Cross-Browser Safe)
+   Matches Reservation background blur behavior exactly.
+   ========================================================================== */
+.menu-page--modal-open .menu-body,
+.menu-page--modal-open .menu-main,
+.menu-page--modal-open .menu-hero,
+.menu-page--modal-open .menu-catalog {
+  filter: blur(8px) brightness(0.88) !important;
+  -webkit-filter: blur(8px) brightness(0.88) !important;
+  transition: filter 0.35s cubic-bezier(0.16, 1, 0.3, 1), -webkit-filter 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+#root:has(.menu-page--modal-open) .phurai-navbar,
+#root:has(.menu-page--modal-open) .phurai-footer {
+  filter: blur(8px) brightness(0.88) !important;
+  -webkit-filter: blur(8px) brightness(0.88) !important;
+  pointer-events: none !important;
+}
+
