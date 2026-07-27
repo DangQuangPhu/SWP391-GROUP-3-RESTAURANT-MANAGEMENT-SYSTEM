@@ -2626,15 +2626,15 @@
 }
 
 .rzv-fullscreen-content {
-  position: absolute;
-  width: 105vw !important;
+  position: relative;
+  width: 98vw !important;
   max-width: 1600px !important;
-  height: 90vh;
+  height: 92vh;
   max-height: 95vh;
   background-color: var(--bg-card, #ffffff);
-  border-radius: 12px;
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
-  padding: 1.5rem;
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+  padding: 1.25rem 1.5rem;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2643,8 +2643,11 @@
 
 .rzv-fullscreen-content>*:last-child {
   flex: 1;
-  overflow-y: auto;
-  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
 }
 
 .rzv-fullscreen-content .tb-grid {

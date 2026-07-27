@@ -361,7 +361,7 @@ function MenuPageContent({ isAuthenticated, currentUser }) {
             </div>
           </section>
 
-          <div className="menu-catalog" ref={catalogRef}>
+          <div className={`menu-catalog ${isVisualSearchOpen || previewDish ? 'menu-catalog--blur' : ''}`} ref={catalogRef}>
             <AIDishRecommendations
               recommendedDishes={baseDishes}
               onOpenVisualSearch={() => setIsVisualSearchOpen(true)}

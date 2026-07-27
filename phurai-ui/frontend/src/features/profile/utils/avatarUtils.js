@@ -54,12 +54,19 @@ export function getAvatarSrc(userOrProfile) {
   if (!userOrProfile) return "";
 
   const avatarUrl = normalizeStoredAvatarUrl(
-    userOrProfile?.avatarUrl || userOrProfile?.AvatarUrl || ""
+    userOrProfile?.avatarUrl ||
+      userOrProfile?.AvatarUrl ||
+      userOrProfile?.avatar_url ||
+      userOrProfile?.avatar ||
+      ""
   );
   const googleUrl = normalizeStoredAvatarUrl(
     userOrProfile?.googleAvatarUrl ||
       userOrProfile?.google_avatar_url ||
       userOrProfile?.picture ||
+      userOrProfile?.photoURL ||
+      userOrProfile?.photo_url ||
+      userOrProfile?.image ||
       ""
   );
   const source = String(

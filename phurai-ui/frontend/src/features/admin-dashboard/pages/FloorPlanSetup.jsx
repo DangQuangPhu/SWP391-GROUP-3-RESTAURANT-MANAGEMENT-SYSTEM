@@ -1,18 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import Draggable from 'react-draggable';
-import { apiGet, apiPatch } from '@/core/api/httpClient';
+import { motion, AnimatePresence } from 'framer-motion';
+import { apiGet, apiPost, apiPatch, apiDelete } from '@/core/api/httpClient';
 import AdminPageHeader from '@/features/admin-dashboard/components/AdminPageHeader';
-import CapacityLimitModal from '@/features/admin-dashboard/components/CapacityLimitModal';
-import { Plus, Edit2, Users, LayoutDashboard } from 'lucide-react';
+import { Plus, Users, LayoutDashboard, Sparkles, CheckCircle2, AlertCircle, Edit2, Trash2, Power } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 export default function FloorPlanSetup() {
   const [areas, setAreas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeAreaId, setActiveAreaId] = useState(null);
-  const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
 
-  const MAX_TABLES_PER_AREA = 15; // Synced with backend limit
+  // Modal states
+  const [isAddTableModalOpen, setIsAddTableModalOpen] = useState(false);
+  const [isAddAreaModalOpen, setIsAddAreaModalOpen] = useState(false);
+  const [editingTable, setEditingTable] = useState(null);
+
+  // Form states
+  const [newTableName, setNewTableName] = useState('');
+  const [newTableCapacity, setNewTableCapacity] = useState(4);
+  const [newTableStatus, setNewTableStatus] = useState('Inactive'); // Default Draft/Inactive for Admin
+  const [newAreaName, setNewAreaName] = useState('');
+  const [newAreaType, setNewAreaType] = useState('Standard');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchFloorPlan();
@@ -25,11 +35,10 @@ export default function FloorPlanSetup() {
       const res = await apiGet('/manager/floor-plan');
       if (res.success && res.data) {
         setAreas(res.data);
-        if (res.data.length > 0) {
+        if (res.data.length > 0 && !activeAreaId) {
           setActiveAreaId(res.data[0].area_id);
         }
       } else {
-        console.error("FLOOR PLAN API ERROR:", res);
         setError(res.error || res.message || 'Failed to fetch floor plan data.');
       }
     } catch (err) {
@@ -42,45 +51,120 @@ export default function FloorPlanSetup() {
 
   const activeArea = areas.find(a => a.area_id === activeAreaId) || null;
 
-  const handleAddTable = () => {
-    if (activeArea && activeArea.tables.length >= MAX_TABLES_PER_AREA) {
-      setIsLimitModalOpen(true);
+  // Natural deterministic sorting for tables
+  const sortedTables = React.useMemo(() => {
+    if (!activeArea || !activeArea.tables) return [];
+    return [...activeArea.tables].sort((a, b) => {
+      return a.table_number.localeCompare(b.table_number, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [activeArea]);
+
+  const totalSeats = React.useMemo(() => {
+    if (!activeArea || !activeArea.tables) return 0;
+    return activeArea.tables.reduce((acc, t) => acc + (t.capacity || 0), 0);
+  }, [activeArea]);
+
+  const activeTablesCount = React.useMemo(() => {
+    if (!activeArea || !activeArea.tables) return 0;
+    return activeArea.tables.filter(t => t.table_status !== 'Inactive').length;
+  }, [activeArea]);
+
+  const draftTablesCount = React.useMemo(() => {
+    if (!activeArea || !activeArea.tables) return 0;
+    return activeArea.tables.filter(t => t.table_status === 'Inactive').length;
+  }, [activeArea]);
+
+  // Handle Add Area
+  const handleCreateArea = async (e) => {
+    e.preventDefault();
+    if (!newAreaName.trim()) {
+      toast.error('Please enter an area name');
       return;
     }
-    alert('Add table coming soon!');
-  };
-
-  const handleEditTable = (table) => {
-    alert(`Edit table ${table.table_number} coming soon!`);
-  };
-
-  const handleDragStop = async (e, data, tableId) => {
-    const { x, y } = data;
-    
-    // Optimistically update local state so UI doesn't jump
-    setAreas(prevAreas => 
-      prevAreas.map(area => {
-        if (area.area_id !== activeAreaId) return area;
-        return {
-          ...area,
-          tables: area.tables.map(t => 
-            t.table_id === tableId ? { ...t, position_x: x, position_y: y } : t
-          )
-        };
-      })
-    );
-
-    // Persist to backend
     try {
-      const res = await apiPatch(`/manager/floor-plan/tables/${tableId}/position`, {
-        position_x: x,
-        position_y: y
+      setSubmitting(true);
+      const res = await apiPost('/manager/areas', {
+        area_name: newAreaName.trim(),
+        area_type: newAreaType
       });
-      if (!res.success) {
-        console.error("Failed to save table position:", res.message);
+      if (res.success) {
+        toast.success(`Area "${newAreaName}" created successfully!`);
+        setNewAreaName('');
+        setIsAddAreaModalOpen(false);
+        await fetchFloorPlan();
+      } else {
+        toast.error(res.message || 'Failed to create area');
       }
     } catch (err) {
-      console.error("Error saving table position:", err);
+      toast.error(err.message || 'Error creating area');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Handle Add Table
+  const handleCreateTable = async (e) => {
+    e.preventDefault();
+    if (!newTableName.trim()) {
+      toast.error('Please enter a table number/code');
+      return;
+    }
+    try {
+      setSubmitting(true);
+      const res = await apiPost('/manager/tables', {
+        area_id: activeAreaId,
+        table_number: newTableName.trim(),
+        capacity: Number(newTableCapacity) || 4,
+        table_status: newTableStatus // Default Inactive/Draft for Admin
+      });
+      if (res.success) {
+        toast.success(`Table ${newTableName} created as ${newTableStatus === 'Inactive' ? 'Draft (Inactive)' : 'Active'}!`);
+        setNewTableName('');
+        setNewTableCapacity(4);
+        setNewTableStatus('Inactive');
+        setIsAddTableModalOpen(false);
+        await fetchFloorPlan();
+      } else {
+        toast.error(res.message || 'Failed to create table');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Error creating table');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Handle Toggle Table Active Status
+  const handleToggleStatus = async (table) => {
+    const nextStatus = table.table_status === 'Inactive' ? 'Available' : 'Inactive';
+    try {
+      const res = await apiPatch(`/manager/tables/${table.table_id}`, {
+        table_status: nextStatus
+      });
+      if (res.success) {
+        toast.success(`Table ${table.table_number} status updated to ${nextStatus}!`);
+        await fetchFloorPlan();
+      } else {
+        toast.error(res.message || 'Failed to update table status');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Error updating status');
+    }
+  };
+
+  // Handle Delete Table
+  const handleDeleteTable = async (table) => {
+    if (!window.confirm(`Are you sure you want to delete Table ${table.table_number}?`)) return;
+    try {
+      const res = await apiDelete(`/manager/tables/${table.table_id}`);
+      if (res.success) {
+        toast.success(`Table ${table.table_number} deleted.`);
+        await fetchFloorPlan();
+      } else {
+        toast.error(res.message || 'Failed to delete table');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Error deleting table');
     }
   };
 
@@ -88,132 +172,325 @@ export default function FloorPlanSetup() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <AdminPageHeader
         title="Floor Plan Configuration"
-        description="Design your restaurant layout, manage table capacities, and organize areas."
-        primaryAction={{ label: 'Add Area', onClick: () => alert('Add Area coming soon!') }}
+        description="Configure restaurant areas and tables. New tables are saved as Draft (Inactive) by default until approved by Manager."
+        primaryAction={{
+          label: '+ Add Area',
+          onClick: () => setIsAddAreaModalOpen(true),
+        }}
       />
 
       {loading ? (
-        <div className="flex justify-center items-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#8c764b]"></div>
+        <div className="flex justify-center items-center py-16">
+          <div className="animate-spin rounded-full h-9 w-9 border-b-2 border-[#c8a96e]"></div>
         </div>
       ) : error ? (
         <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-red-700 text-sm">
           {error}
         </div>
       ) : areas.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-100">
-          <p className="text-gray-500">No areas found. Please add an area first.</p>
+        <div className="text-center py-16 bg-white rounded-2xl shadow-sm border border-gray-100">
+          <LayoutDashboard className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-900 font-semibold text-lg">No Areas Configured</p>
+          <p className="text-gray-500 text-sm mt-1 mb-4">Click "+ Add Area" to create your first restaurant zone.</p>
+          <button
+            onClick={() => setIsAddAreaModalOpen(true)}
+            className="adm-btn-gold"
+          >
+            + Add Area
+          </button>
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Tabs */}
+          {/* Area Navigation Tabs */}
           <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8 overflow-x-auto scrollbar-hide" aria-label="Tabs">
-              {areas.map((area) => (
-                <button
-                  key={area.area_id}
-                  onClick={() => setActiveAreaId(area.area_id)}
-                  className={`
-                    whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200
-                    ${activeAreaId === area.area_id
-                      ? 'border-[#8c764b] text-[#8c764b]'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }
-                  `}
-                >
-                  {area.area_name}
-                  <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${activeAreaId === area.area_id ? 'bg-[#8c764b]/10 text-[#8c764b]' : 'bg-gray-100 text-gray-600'}`}>
-                    {area.tables.length}
-                  </span>
-                </button>
-              ))}
+            <nav className="-mb-px flex space-x-4 overflow-x-auto scrollbar-hide" aria-label="Area Tabs">
+              {areas.map((area) => {
+                const isActive = activeAreaId === area.area_id;
+                return (
+                  <button
+                    key={area.area_id}
+                    onClick={() => setActiveAreaId(area.area_id)}
+                    className={`
+                      whitespace-nowrap py-3.5 px-4 border-b-2 font-semibold text-sm transition-all duration-200 flex items-center gap-2 rounded-t-lg
+                      ${isActive
+                        ? 'border-[#c8a96e] text-[#8b6e36] bg-amber-50/40'
+                        : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
+                      }
+                    `}
+                  >
+                    <span>{area.area_name}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${isActive ? 'bg-[#c8a96e] text-white' : 'bg-gray-100 text-gray-600'}`}>
+                      {area.tables.length}
+                    </span>
+                  </button>
+                );
+              })}
             </nav>
           </div>
 
-          {/* Active Area Canvas */}
+          {/* Active Area Banner & Toolbar */}
           {activeArea && (
-            <div className="bg-[#f8f9fa] rounded-2xl border border-gray-300 overflow-hidden relative" style={{ minHeight: '600px', backgroundImage: 'radial-gradient(#e5e7eb 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
-              
-              <div className="absolute top-4 left-4 right-4 flex justify-between items-center z-10 bg-white/80 backdrop-blur-sm p-4 rounded-xl border border-gray-200 shadow-sm pointer-events-auto">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-5">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{activeArea.area_name}</h3>
-                  <p className="text-sm text-gray-500">{activeArea.area_type} Area &bull; {activeArea.tables.length} Tables</p>
-                </div>
-                <button 
-                  onClick={handleAddTable}
-                  className="inline-flex items-center px-4 py-2 border border-[#8c764b] text-[#8c764b] text-sm font-medium rounded-lg hover:bg-[#8c764b] hover:text-white transition-colors duration-200 shadow-sm bg-white"
-                >
-                  <Plus className="w-4 h-4 mr-1.5" />
-                  Add Table
-                </button>
-              </div>
-
-              {/* DRAG AND DROP BOUNDARY */}
-              <div className="w-full h-[800px] relative mt-24">
-                {activeArea.tables.map(table => {
-                  let shapeClass = "w-24 h-24 rounded-xl";
-                  if (table.is_counter) {
-                    shapeClass = "w-20 h-20 rounded-full";
-                  } else if (table.capacity > 4) {
-                    shapeClass = "w-32 h-24 rounded-xl";
-                  }
-                  const isInactive = !table.is_active;
-
-                  return (
-                    <Draggable
-                      key={table.table_id}
-                      bounds="parent"
-                      defaultPosition={{ x: table.position_x || 0, y: table.position_y || 0 }}
-                      onStop={(e, data) => handleDragStop(e, data, table.table_id)}
-                    >
-                      <div className={`absolute cursor-move group flex items-center justify-center bg-white border-2 shadow-md transition-shadow hover:shadow-lg hover:border-[#8c764b]/50 ${shapeClass} ${isInactive ? 'border-dashed border-gray-300 opacity-60' : 'border-gray-200'}`}>
-                        {/* Edit overlay */}
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center z-10 cursor-pointer"
-                             style={{ borderRadius: 'inherit' }}
-                             onClick={(e) => { e.stopPropagation(); handleEditTable(table); }}>
-                          <Edit2 className="w-5 h-5 text-white drop-shadow-md" />
-                        </div>
-
-                        {/* Capacity badge */}
-                        <div className="absolute -top-3 -right-3 bg-gray-900 text-white text-[10px] font-bold px-2 py-1 rounded-full flex items-center shadow-sm z-20">
-                          <Users className="w-3 h-3 mr-1 opacity-80" />
-                          {table.capacity}
-                        </div>
-
-                        <span className="text-xl font-bold text-gray-800 font-mono tracking-tight pointer-events-none">
-                          {table.table_number}
-                        </span>
-                        
-                        {isInactive && (
-                          <div className="absolute -bottom-3 text-[10px] font-bold tracking-wider text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200 z-20 shadow-sm uppercase pointer-events-none">
-                            Offline
-                          </div>
-                        )}
-                      </div>
-                    </Draggable>
-                  );
-                })}
-                
-                {activeArea.tables.length === 0 && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4 border border-gray-200">
-                      <LayoutDashboard className="w-10 h-10 text-gray-400" />
-                    </div>
-                    <p className="text-gray-900 font-medium text-lg">No tables configured</p>
-                    <p className="text-gray-500 text-sm mt-1 max-w-sm text-center">Get started by adding your first table to the {activeArea.area_name}.</p>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl font-bold text-gray-900">{activeArea.area_name}</h3>
+                    <span className="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-gray-100 text-gray-600 uppercase tracking-wider">
+                      {activeArea.area_type || 'Zone'}
+                    </span>
                   </div>
-                )}
+                  <div className="flex items-center gap-4 text-xs font-medium text-gray-500 mt-1">
+                    <span className="flex items-center gap-1">
+                      <Users size={14} className="text-[#c8a96e]" />
+                      <strong>{totalSeats}</strong> Total Seats
+                    </span>
+                    <span>&bull;</span>
+                    <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                      <CheckCircle2 size={13} /> {activeTablesCount} Active
+                    </span>
+                    <span>&bull;</span>
+                    <span className="text-amber-600 font-semibold flex items-center gap-1">
+                      <AlertCircle size={13} /> {draftTablesCount} Draft (Inactive)
+                    </span>
+                  </div>
+                </div>
+
+                <motion.button
+                  whileHover={{ scale: 1.03, boxShadow: '0 6px 20px rgba(159, 134, 85, 0.4)' }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => setIsAddTableModalOpen(true)}
+                  className="adm-btn-gold"
+                >
+                  <Plus size={16} />
+                  Add Table to {activeArea.area_name}
+                </motion.button>
               </div>
+
+              {/* Responsive Auto-Stretching Equal Spaced Table Cards Grid */}
+              {sortedTables.length === 0 ? (
+                <div className="text-center py-12 bg-gray-50/60 rounded-xl border border-dashed border-gray-200">
+                  <p className="text-gray-600 font-medium">No tables in this area yet.</p>
+                  <p className="text-gray-400 text-xs mt-1">Click "+ Add Table" above to populate {activeArea.area_name}.</p>
+                </div>
+              ) : (
+                <motion.div
+                  layout
+                  className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
+                >
+                  <AnimatePresence>
+                    {sortedTables.map((table) => {
+                      const isInactive = table.table_status === 'Inactive';
+                      return (
+                        <motion.div
+                          key={table.table_id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.9 }}
+                          transition={{ type: 'spring', stiffness: 450, damping: 30 }}
+                          className={`
+                            relative rounded-xl border p-4 bg-white transition-all duration-200 shadow-sm hover:shadow-md flex flex-col justify-between gap-3 group
+                            ${isInactive
+                              ? 'border-dashed border-amber-300 bg-amber-50/20'
+                              : 'border-gray-200 hover:border-[#c8a96e]/60'
+                            }
+                          `}
+                        >
+                          {/* Card Top: Table Code & Capacity */}
+                          <div className="flex justify-between items-center">
+                            <span className="font-mono text-base font-bold text-gray-900 tracking-tight">
+                              {table.table_number}
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 text-gray-700 text-xs font-semibold">
+                              <Users size={12} className="text-gray-500" />
+                              {table.capacity} Seats
+                            </span>
+                          </div>
+
+                          {/* Card Middle: Status Indicator */}
+                          <div>
+                            {isInactive ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100/80 text-amber-800 text-xs font-semibold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                Draft (Inactive)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100/80 text-emerald-800 text-xs font-semibold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                {table.table_status || 'Active'}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Card Footer Actions */}
+                          <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleStatus(table)}
+                              className={`text-xs font-semibold px-2 py-1 rounded-lg transition-colors flex items-center gap-1 ${isInactive ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100' : 'text-amber-700 bg-amber-50 hover:bg-amber-100'}`}
+                              title={isInactive ? "Activate Table" : "Set to Draft"}
+                            >
+                              <Power size={12} />
+                              {isInactive ? 'Activate' : 'Draft'}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTable(table)}
+                              className="text-gray-400 hover:text-red-600 p-1 rounded.lg hover:bg-red-50 transition-colors"
+                              title="Delete Table"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                </motion.div>
+              )}
             </div>
           )}
         </div>
       )}
 
-      {/* Capacity Limit Restriction Modal */}
-      <CapacityLimitModal 
-        isOpen={isLimitModalOpen} 
-        onClose={() => setIsLimitModalOpen(false)} 
-      />
+      {/* Add Table Modal */}
+      {isAddTableModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-5 border border-gray-100"
+          >
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <h3 className="text-lg font-bold text-gray-900">Add Table to {activeArea?.area_name}</h3>
+              <button onClick={() => setIsAddTableModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+            </div>
+
+            <form onSubmit={handleCreateTable} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Table Number / Code</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. PRE-05, T-12, VIP-01"
+                  value={newTableName}
+                  onChange={(e) => setNewTableName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-sm font-medium focus:outline-none focus:border-[#c8a96e]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Seating Capacity (Guests)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="30"
+                  required
+                  value={newTableCapacity}
+                  onChange={(e) => setNewTableCapacity(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-sm font-medium focus:outline-none focus:border-[#c8a96e]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Initial Status</label>
+                <select
+                  value={newTableStatus}
+                  onChange={(e) => setNewTableStatus(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-sm font-medium focus:outline-none focus:border-[#c8a96e] bg-white"
+                >
+                  <option value="Inactive">Draft (Inactive - Hidden from Customers)</option>
+                  <option value="Available">Available (Active - Visible immediately)</option>
+                </select>
+                <p className="text-[11px] text-gray-500 mt-1">Recommended: Keep as Draft until Manager verifies on floor.</p>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddTableModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-gray-300 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="adm-btn-gold"
+                >
+                  {submitting ? 'Creating…' : 'Create Table'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Add Area Modal */}
+      {isAddAreaModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-5 border border-gray-100"
+          >
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <h3 className="text-lg font-bold text-gray-900">Add New Dining Area</h3>
+              <button onClick={() => setIsAddAreaModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+            </div>
+
+            <form onSubmit={handleCreateArea} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Area Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Terrace Garden, Rooftop Deck"
+                  value={newAreaName}
+                  onChange={(e) => setNewAreaName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-sm font-medium focus:outline-none focus:border-[#c8a96e]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Area Type</label>
+                <select
+                  value={newAreaType}
+                  onChange={(e) => setNewAreaType(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-sm font-medium focus:outline-none focus:border-[#c8a96e] bg-white"
+                >
+                  <option value="Standard">Standard Dining</option>
+                  <option value="VIP">VIP Lounge</option>
+                  <option value="Outdoor">Outdoor / Garden</option>
+                  <option value="Bar">Bar / Counter</option>
+                </select>
+              </div>
+
+              <div className="pt-3 flex justify-end gap-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddAreaModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-gray-300 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="adm-btn-gold"
+                >
+                  {submitting ? 'Creating…' : 'Create Area'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

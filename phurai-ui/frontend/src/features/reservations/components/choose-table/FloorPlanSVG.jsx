@@ -1,6 +1,6 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Eye } from 'lucide-react';
+import { Eye, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import TableUnit from './TableUnit';
 import { TABLES } from '../../config/floorPlanConfig';
 import { validateTableCapacity } from '../../utils/validateTableCapacity';
@@ -50,9 +50,41 @@ export default function FloorPlanSVG({
   guestCount,
   onTableClick,
   activeFilter = null,
+  zoomScale: externalZoomScale,
+  setZoomScale: externalSetZoomScale,
+  pan: externalPan,
+  setPan: externalSetPan,
+  onResetZoomAndPan,
   onViewZone
 }) {
   const [activeTooltip, setActiveTooltip] = useState(null);
+  const [internalZoomScale, setInternalZoomScale] = useState(1);
+  const [internalPan, setInternalPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+
+  const zoomScale = externalZoomScale !== undefined ? externalZoomScale : internalZoomScale;
+  const setZoomScale = externalSetZoomScale || setInternalZoomScale;
+  const pan = externalPan !== undefined ? externalPan : internalPan;
+  const setPan = externalSetPan || setInternalPan;
+  
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const hasDraggedRef = useRef(false);
+  const containerRef = useRef(null);
+
+  // Helper to clamp pan offset within map boundary when zoomed in
+  const getClampedPan = (rawX, rawY, scale) => {
+    if (scale <= 1 || !containerRef.current) {
+      return { x: 0, y: 0 };
+    }
+    const rect = containerRef.current.getBoundingClientRect();
+    const maxPanX = (rect.width * (scale - 1)) / 2;
+    const maxPanY = (rect.height * (scale - 1)) / 2;
+
+    return {
+      x: Math.max(-maxPanX, Math.min(maxPanX, rawX)),
+      y: Math.max(-maxPanY, Math.min(maxPanY, rawY))
+    };
+  };
 
   useEffect(() => {
     const handleOutsideClick = (e) => {
@@ -64,6 +96,55 @@ export default function FloorPlanSVG({
     return () => window.removeEventListener('click', handleOutsideClick);
   }, []);
 
+  useEffect(() => {
+    if (zoomScale <= 1) {
+      setPan({ x: 0, y: 0 });
+    } else {
+      setPan(prev => getClampedPan(prev.x, prev.y, zoomScale));
+    }
+  }, [zoomScale]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleWheel = (e) => {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 0.12 : -0.12;
+      setZoomScale(prev => Math.min(2.5, Math.max(1.0, prev + delta)));
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [setZoomScale]);
+
+  // Mouse Drag / Pan Handlers
+  const handleMouseDown = (e) => {
+    if (e.button !== 0 || zoomScale <= 1) return; // Only drag when zoomed in (> 100%)
+    if (e.target.closest('button') || e.target.closest('.zone-view-btn')) return;
+
+    setIsDragging(true);
+    hasDraggedRef.current = false;
+    dragStartRef.current = {
+      x: e.clientX - pan.x,
+      y: e.clientY - pan.y
+    };
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging || zoomScale <= 1) return;
+    const rawX = e.clientX - dragStartRef.current.x;
+    const rawY = e.clientY - dragStartRef.current.y;
+    if (Math.abs(rawX - pan.x) > 3 || Math.abs(rawY - pan.y) > 3) {
+      hasDraggedRef.current = true;
+    }
+    setPan(getClampedPan(rawX, rawY, zoomScale));
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
   // We need to map config Table ID (e.g. "S-03") to API Table object
   const apiTableMap = useMemo(() => {
     const map = new Map();
@@ -74,6 +155,7 @@ export default function FloorPlanSVG({
   }, [tables]);
 
   const handleShowTooltip = (e, tableConfig, apiTable, status) => {
+    if (isDragging) return;
     let text = "";
     if (status === 'Occupied' && apiTable?.estimated_release_at) {
       const releaseTime = new Date(apiTable.estimated_release_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
@@ -114,8 +196,34 @@ export default function FloorPlanSVG({
     : false;
 
   return (
-    <div className="floorplan-box w-full flex items-center justify-center relative">
-      <svg id="floorplan-svg" className="w-full" viewBox="18 18 1294 884" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+    <div
+      ref={containerRef}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      className={`floorplan-box w-full flex items-center justify-center relative overflow-hidden select-none ${zoomScale > 1 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'}`}
+      style={{ touchAction: 'none' }}
+    >
+      <div
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomScale})`,
+          transformOrigin: 'center center',
+          transition: isDragging ? 'none' : 'transform 0.12s cubic-bezier(0.16, 1, 0.3, 1)',
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        <svg
+          id="floorplan-svg"
+          className="w-full h-full"
+          viewBox="18 18 1294 884"
+          preserveAspectRatio="xMidYMid meet"
+          xmlns="http://www.w3.org/2000/svg"
+        >
         <defs>
           {/* Graph paper grid pattern */}
           <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -231,6 +339,7 @@ export default function FloorPlanSVG({
           })}
         </g>
       </svg>
+      </div>
 
       <AnimatePresence>
         {activeTooltip && (

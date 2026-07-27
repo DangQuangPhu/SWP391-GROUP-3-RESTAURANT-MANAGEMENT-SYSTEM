@@ -615,6 +615,7 @@ function CustomTimePicker({ value, onChange, availableTimes, className }) {
 }
 
 export default function ReservationDetails({
+  settings,
   onContinue,
   onGoHome,
   initialForm,
@@ -628,6 +629,20 @@ export default function ReservationDetails({
   error
 }) {
   const navigate = useNavigate();
+
+  const openHour = useMemo(() => {
+    if (settings?.open_time && settings.open_time.includes(':')) {
+      return parseInt(settings.open_time.split(':')[0], 10);
+    }
+    return 10;
+  }, [settings]);
+
+  const closeHour = useMemo(() => {
+    if (settings?.close_time && settings.close_time.includes(':')) {
+      return parseInt(settings.close_time.split(':')[0], 10);
+    }
+    return 22;
+  }, [settings]);
   const getTodayString = () => {
     const d = new Date();
     const year = d.getFullYear();
@@ -798,10 +813,27 @@ export default function ReservationDetails({
     }
   };
 
+  const isClosedDay = useMemo(() => {
+    if (!form.date || !settings?.closed_days) return false;
+    const closedConfig = String(settings.closed_days).toLowerCase();
+    if (!closedConfig.trim()) return false;
+
+    if (closedConfig.includes(form.date)) return true;
+
+    const dateObj = new Date(form.date);
+    if (isNaN(dateObj.getTime())) return false;
+
+    const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    const dayOfWeek = dayNames[dateObj.getDay()];
+
+    return closedConfig.includes(dayOfWeek);
+  }, [form.date, settings?.closed_days]);
+
   const startHoursOptions = useMemo(() => {
-    const all = generateTimeOptions(10, 22, 15);
+    if (isClosedDay) return [];
+    const all = generateTimeOptions(openHour, closeHour, 15);
     return all.filter(time => !isTimeConflicting(time));
-  }, [tableBookings, isTimeConflicting]);
+  }, [openHour, closeHour, isClosedDay, tableBookings, isTimeConflicting]);
 
   const handleDurationChange = (newDurationStr) => {
     const newDuration = Number(newDurationStr);
@@ -893,6 +925,8 @@ export default function ReservationDetails({
       newErrors.date = "Cannot book a table in the past.";
     } else if (form.date > getMaxDateString()) {
       newErrors.date = "Reservations can only be made up to 1 year in advance.";
+    } else if (isClosedDay) {
+      newErrors.date = `Phūrai Restaurant is closed on this date (${form.date}). Please select another reservation date.`;
     }
 
     // Validate Start Time
@@ -998,6 +1032,30 @@ export default function ReservationDetails({
           {errors.date && <p className="rd-error-message">{errors.date}</p>}
         </div>
       </div>
+
+      {isClosedDay && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.08)',
+          border: '1px solid rgba(239, 68, 68, 0.3)',
+          borderRadius: '16px',
+          padding: '16px 20px',
+          margin: '12px 0 20px 0',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '14px',
+          color: '#b91c1c'
+        }}>
+          <span style={{ fontSize: '1.6rem' }}>🛑</span>
+          <div>
+            <h4 style={{ margin: 0, fontWeight: '700', fontSize: '1rem', color: '#991b1b' }}>
+              Thông báo Tạm Nghỉ (Phūrai Restaurant Closed)
+            </h4>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.88rem', color: '#7f1d1d', opacity: 0.9 }}>
+              Nhà hàng tạm nghỉ hoạt động vào ngày đã chọn ({form.date}). Quý khách vui lòng chọn ngày khác để đặt bàn trực tuyến!
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="rd-row-2">
         <div className="rd-field" ref={registerRef('startTime')} style={{ marginTop: '1rem' }}>

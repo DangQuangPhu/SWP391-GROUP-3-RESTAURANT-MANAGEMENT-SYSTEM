@@ -15,7 +15,6 @@ export const ADMIN_NAV_GROUPS = [
     group: "ACCOUNTS",
     items: [
       { id: "accounts",   label: "Accounts",          icon: "users",   to: "/admin/accounts" },
-      { id: "roles",      label: "Roles & permissions", icon: "shield", to: "/admin/roles" },
       { id: "audit-logs", label: "Audit logs",         icon: "report",  to: "/admin/audit-logs" },
     ],
   },
@@ -31,7 +30,6 @@ export const ADMIN_NAV_GROUPS = [
   {
     group: "SETTINGS",
     items: [
-      { id: "restaurant-info",  label: "Restaurant info",   icon: "dish",     to: "/admin/settings/restaurant" },
       { id: "system-settings",  label: "System settings",   icon: "settings", to: "/admin/settings/system" },
       { id: "floor-plan",       label: "Floor Plan Config",  icon: "table",    to: "/admin/settings/floor-plan" },
     ],

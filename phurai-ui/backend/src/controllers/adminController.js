@@ -66,8 +66,11 @@ export const getRecentAuditLogs = async (req, res) => {
 // GET /api/admin/accounts
 export const getAccounts = async (req, res) => {
     try {
+        const callerUserId = req.user?.user_id || 0;
         const pool = await getRawPool();
-        const result = await pool.request().query(`
+        const request = pool.request();
+        request.input('callerUserId', sql.Int, callerUserId);
+        const result = await request.query(`
             SELECT 
                 u.user_id,
                 s.staff_id,
@@ -79,6 +82,10 @@ export const getAccounts = async (req, res) => {
                 r.role_name,
                 u.is_active,
                 u.last_login_at,
+                CASE 
+                    WHEN u.is_active = 1 AND (u.user_id = @callerUserId OR (u.last_login_at IS NOT NULL AND u.last_login_at >= DATEADD(minute, -120, SYSDATETIME()))) THEN 1 
+                    ELSE 0 
+                END AS is_online,
                 s.job_title,
                 s.job_title_id,
                 s.has_system_account,
@@ -86,7 +93,7 @@ export const getAccounts = async (req, res) => {
                 u.created_at
             FROM dbo.UserAccounts u
             LEFT JOIN dbo.Roles r ON u.role_id = r.role_id
-            LEFT JOIN dbo.StaffProfiles s ON u.user_id = s.user_id
+            LEFT JOIN dbo.StaffProfiles s ON (s.user_id = u.user_id OR (u.email IS NOT NULL AND LOWER(s.email) = LOWER(u.email)))
             UNION ALL
             SELECT 
                 NULL AS user_id,
@@ -99,6 +106,7 @@ export const getAccounts = async (req, res) => {
                 NULL AS role_name,
                 0 AS is_active,
                 NULL AS last_login_at,
+                0 AS is_online,
                 s.job_title,
                 s.job_title_id,
                 s.has_system_account,

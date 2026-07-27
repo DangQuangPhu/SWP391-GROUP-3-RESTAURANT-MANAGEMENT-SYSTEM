@@ -649,7 +649,7 @@ function FavoritesProfilePanel({ currentUser }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [previewDish, setPreviewDish] = useState(null);
 
-  const FALLBACK = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=80&q=60';
+  const FALLBACK = '/src/assets/images/menu/dish-sushi-sashimi.jpg';
 
   const filteredFavorites = useMemo(() => {
     const query = searchTerm.toLowerCase().trim();

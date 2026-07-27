@@ -286,20 +286,45 @@ export const deleteStaffAccount = async (req, res) => {
                 }
             }
 
-            // Delete from UserAccounts (Cascades to StaffProfiles)
+            // Soft deactivate StaffProfiles (employment_status = 'Resigned')
             await transaction.request()
-                .input('userId', sql.Int, userId)
-                .query('DELETE FROM dbo.UserAccounts WHERE user_id = @userId');
+                .input('staffId', sql.Int, id)
+                .query(`UPDATE dbo.StaffProfiles SET employment_status = N'Resigned', updated_at = SYSDATETIME() WHERE staff_id = @staffId`);
+
+            // Soft deactivate UserAccounts (is_active = 0)
+            if (userId) {
+                await transaction.request()
+                    .input('userId', sql.Int, userId)
+                    .query(`UPDATE dbo.UserAccounts SET is_active = 0, session_revoked_at = SYSDATETIME(), updated_at = SYSDATETIME() WHERE user_id = @userId`);
+            }
+
+            // Insert 1 row into dbo.AuditLogs
+            const actorId = req.user?.user_id || req.user?.id || 1;
+            const payload = JSON.stringify({
+                staff_id: Number(id),
+                user_id: userId,
+                action: 'STAFF_DEACTIVATED',
+                deactivated_by: actorId
+            });
+
+            await transaction.request()
+                .input('actorId', sql.Int, actorId)
+                .input('staffId', sql.Int, id)
+                .input('payload', sql.NVarChar(sql.MAX), payload)
+                .query(`
+                    INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, created_at)
+                    VALUES (@actorId, N'STAFF_DEACTIVATED', N'StaffProfiles', @staffId, @payload, SYSDATETIME())
+                `);
 
             await transaction.commit();
 
             // Emit Socket event to kick them out
             const io = req.app?.get('io');
-            if (io) {
-                io.to(`user_${userId}`).emit('auth:force_logout', { message: "Your account has been deleted." });
+            if (io && userId) {
+                io.to(`user_${userId}`).emit('auth:force_logout', { message: "Your account has been deactivated." });
             }
 
-            return res.json({ success: true, message: 'Staff deleted successfully' });
+            return res.json({ success: true, message: 'Staff deactivated successfully' });
         } catch (innerError) {
             await transaction.rollback();
             throw innerError;

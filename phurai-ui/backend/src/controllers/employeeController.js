@@ -69,12 +69,15 @@ const ADMIN_GRANTABLE_ROLES    = [2, 3];    // Staff + Manager
 // GET /api/manager/employees
 // ─────────────────────────────────────────────────────────────
 export const listEmployees = async (req, res) => {
+  const callerUserId = req.user?.user_id || 0;
   const callerRoleId = req.user?.role_id;
   const includeSalary = false;
 
   try {
     const pool = await getRawPool();
-    const result = await pool.request().query(`
+    const request = pool.request();
+    request.input('callerUserId', sql.Int, callerUserId);
+    const result = await request.query(`
       SELECT
         sp.staff_id,
         sp.user_id,
@@ -87,13 +90,17 @@ export const listEmployees = async (req, res) => {
         COALESCE(ua.phone,     sp.phone)     AS phone,
         ua.role_id,
         ua.is_active   AS account_is_active,
+        CASE 
+          WHEN (ua.is_active = 1 OR sp.employment_status = 'Active') AND (ua.user_id = @callerUserId OR sp.user_id = @callerUserId OR (ua.last_login_at IS NOT NULL AND ua.last_login_at >= DATEADD(minute, -120, SYSDATETIME()))) THEN 1 
+          ELSE 0 
+        END AS is_online,
         jt.title_name  AS job_title,
         sp.job_title_id,
         pr_latest.rating     AS latest_rating,
         pr_latest.review_date AS last_review_date,
         pr_latest.notes      AS last_review_notes
       FROM dbo.StaffProfiles sp
-      LEFT JOIN dbo.UserAccounts ua ON ua.user_id = sp.user_id
+      LEFT JOIN dbo.UserAccounts ua ON (ua.user_id = sp.user_id OR (sp.email IS NOT NULL AND LOWER(ua.email) = LOWER(sp.email)))
       LEFT JOIN dbo.JobTitles jt ON jt.job_title_id = sp.job_title_id
       OUTER APPLY (
         SELECT TOP 1 rating, review_date, notes
@@ -830,9 +837,10 @@ export const listPerformanceHistory = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// DELETE /api/manager/employees/:id — delete employee completely
+// POST /api/manager/employees/:id/deactivate & DELETE /api/manager/employees/:id
+// Soft deactivates staff without deleting DB row, writes to AuditLogs inside transaction
 // ─────────────────────────────────────────────────────────────
-export const deleteEmployee = async (req, res) => {
+export const deactivateEmployee = async (req, res) => {
   const staffId = parseInt(req.params.id, 10);
   if (!Number.isFinite(staffId)) {
     return res.status(400).json({ success: false, message: 'Invalid employee ID.' });
@@ -841,65 +849,61 @@ export const deleteEmployee = async (req, res) => {
   try {
     const pool = await getRawPool();
 
-    // 1. Get linked user_id
+    // 1. Get linked user_id and current status
     const empResult = await pool.request()
       .input('staffId', sql.Int, staffId)
-      .query(`SELECT user_id FROM dbo.StaffProfiles WHERE staff_id = @staffId`);
+      .query(`SELECT user_id, full_name, employment_status FROM dbo.StaffProfiles WHERE staff_id = @staffId`);
     const employee = empResult.recordset[0];
     if (!employee) {
       return res.status(404).json({ success: false, message: 'Employee not found.' });
     }
 
     const linkedUserId = employee.user_id;
+    const actorId = req.user?.user_id || req.user?.id || 1;
 
-    // 2. Perform deletions inside a transaction
+    // 2. Perform deactivation inside a transaction
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
     try {
-      // Delete from PerformanceReviews
+      // Update StaffProfiles employment_status to 'Resigned'
       await transaction.request()
         .input('staffId', sql.Int, staffId)
-        .query(`DELETE FROM dbo.PerformanceReviews WHERE staff_id = @staffId`);
+        .query(`
+          UPDATE dbo.StaffProfiles
+          SET employment_status = N'Resigned', updated_at = SYSDATETIME()
+          WHERE staff_id = @staffId
+        `);
 
-      // Set user_id to NULL on StaffProfiles to break the foreign key before deletion
-      await transaction.request()
-        .input('staffId', sql.Int, staffId)
-        .query(`UPDATE dbo.StaffProfiles SET user_id = NULL WHERE staff_id = @staffId`);
-
-      // Delete StaffProfiles row
-      await transaction.request()
-        .input('staffId', sql.Int, staffId)
-        .query(`DELETE FROM dbo.StaffProfiles WHERE staff_id = @staffId`);
-
-      // 3. If there is a linked user_id, try to delete it
+      // If linked user_id exists, set UserAccounts is_active = 0
       if (linkedUserId) {
-        try {
-          // Delete from OtpTokens first
-          await transaction.request()
-            .input('userId', sql.Int, linkedUserId)
-            .query(`DELETE FROM dbo.OtpTokens WHERE user_id = @userId`);
-
-          // Delete from CustomerProfiles
-          await transaction.request()
-            .input('userId', sql.Int, linkedUserId)
-            .query(`DELETE FROM dbo.CustomerProfiles WHERE user_id = @userId`);
-
-          // Try to delete UserAccounts
-          await transaction.request()
-            .input('userId', sql.Int, linkedUserId)
-            .query(`DELETE FROM dbo.UserAccounts WHERE user_id = @userId`);
-        } catch (acctErr) {
-          // If deletion fails (e.g. historical data in Orders/Reservations), fall back to deactivating the account
-          await transaction.request()
-            .input('userId', sql.Int, linkedUserId)
-            .query(`
-              UPDATE dbo.UserAccounts
-              SET is_active = 0, session_revoked_at = SYSDATETIME(), updated_at = SYSDATETIME()
-              WHERE user_id = @userId
-            `);
-        }
+        await transaction.request()
+          .input('userId', sql.Int, linkedUserId)
+          .query(`
+            UPDATE dbo.UserAccounts
+            SET is_active = 0, session_revoked_at = SYSDATETIME(), updated_at = SYSDATETIME()
+            WHERE user_id = @userId
+          `);
       }
+
+      // Insert exactly 1 record into dbo.AuditLogs
+      const payload = JSON.stringify({
+        staff_id: staffId,
+        linked_user_id: linkedUserId,
+        previous_status: employee.employment_status,
+        new_status: 'Resigned',
+        deactivated_by: actorId,
+        action: 'STAFF_DEACTIVATED'
+      });
+
+      await transaction.request()
+        .input('actorId', sql.Int, actorId)
+        .input('staffId', sql.Int, staffId)
+        .input('payload', sql.NVarChar(sql.MAX), payload)
+        .query(`
+          INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, created_at)
+          VALUES (@actorId, N'STAFF_DEACTIVATED', N'StaffProfiles', @staffId, @payload, SYSDATETIME())
+        `);
 
       await transaction.commit();
     } catch (txErr) {
@@ -907,34 +911,28 @@ export const deleteEmployee = async (req, res) => {
       throw txErr;
     }
 
-    // Emit socket session revocation just in case
+    // Emit socket session revocation
     if (linkedUserId) {
       try {
         const { getIO } = await import('../socket.js');
         const io = getIO();
         if (io) {
           io.to(`room:user:${linkedUserId}`).emit('auth:session_revoked', {
-            reason: 'Your account has been deleted or deactivated by an administrator.',
-            code: 'ACCOUNT_DELETED',
+            reason: 'Your account has been deactivated by an administrator.',
+            code: 'ACCOUNT_DEACTIVATED',
           });
         }
       } catch (socketErr) {
-        console.warn('[employeeController] deleteEmployee: socket emit failed:', socketErr.message);
+        console.warn('[employeeController] deactivateEmployee: socket emit failed:', socketErr.message);
       }
     }
 
-    // AuditLog
-    await pool.request()
-      .input('actorId', sql.Int, req.user?.user_id || 1)
-      .input('staffId', sql.Int, staffId)
-      .query(`
-        INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json, created_at)
-        VALUES (@actorId, N'EMPLOYEE_DELETED', N'StaffProfiles', @staffId, NULL, SYSDATETIME())
-      `);
-
-    return res.json({ success: true, message: 'Employee deleted successfully.' });
+    return res.json({ success: true, message: 'Employee deactivated successfully.' });
   } catch (err) {
-    console.error('[employeeController] deleteEmployee error:', err);
-    return res.status(500).json({ success: false, message: 'Failed to delete employee.' });
+    console.error('[employeeController] deactivateEmployee error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to deactivate employee.' });
   }
 };
+
+export const deleteEmployee = deactivateEmployee;
+

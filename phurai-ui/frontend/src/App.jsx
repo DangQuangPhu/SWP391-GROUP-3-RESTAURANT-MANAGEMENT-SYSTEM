@@ -38,7 +38,7 @@ import AdminAuditLogsPage from '@/features/admin-dashboard/pages/AuditLogs';
 import AdminSystemSettingsPage from '@/features/admin-dashboard/pages/SystemSettings';
 import AdminRolesPage from '@/features/admin-dashboard/pages/Roles';
 import AdminAnalyticsPage from '@/features/admin-dashboard/pages/Analytics';
-import AdminRestaurantInfoPage from '@/features/admin-dashboard/pages/RestaurantInfo';
+
 import AdminFloorPlanConfigPage from '@/features/admin-dashboard/pages/FloorPlanSetup';
 import RequireRole from "@/features/auth/components/RequireRole";
 import NotFound from "@/pages/NotFound";
@@ -235,7 +235,7 @@ function App() {
   return (
     <TableSessionProvider userId={customerUserId} isCustomer={isCustomerUser}>
       <AppRealtimeShell
-        currentUser={currentUser}
+        currentUser={profile || currentUser}
         isAuthenticated={isAuthenticated}
       >
         <ScrollToTop />
@@ -244,7 +244,7 @@ function App() {
             activePage={activePage}
             onNavigate={handleNavigate}
             isAuthenticated={isAuthenticated}
-            currentUser={currentUser}
+            currentUser={profile || currentUser}
             status={status}
             onSaveStatus={saveStatus}
             onClearStatus={clearStatus}
@@ -376,7 +376,7 @@ function App() {
               <Route path="analytics/staff-performance" element={<AdminAnalyticsPage type="staff-performance" title="Staff Performance" description="Total shifts handled per staff member" />} />
               
               {/* Settings Group */}
-              <Route path="settings/restaurant" element={<AdminRestaurantInfoPage />} />
+              <Route path="settings/restaurant" element={<Navigate to="/admin/settings/system" replace />} />
               <Route path="settings/system" element={<AdminSystemSettingsPage />} />
               <Route path="settings/floor-plan" element={<AdminFloorPlanConfigPage />} />
             </Route>

@@ -589,6 +589,7 @@ function ReservationPage({
                 exit="exit"
               >
                 <ReservationDetails
+                  settings={settings}
                   initialForm={{
                     date: form.date,
                     startTime: form.time,

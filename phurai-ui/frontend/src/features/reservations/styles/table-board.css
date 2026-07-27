@@ -27,6 +27,30 @@
   margin: 0;
 }
 
+.table-board-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.floorplan-box {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+  background-color: #fffdf9;
+  border-radius: 16px;
+  border: 1px solid rgba(142, 128, 106, 0.25);
+  touch-action: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
 /* Filter */
 .tb-filter-container {
   margin-bottom: 24px;
@@ -347,74 +371,79 @@
   pointer-events: none;
 }
 
+/* Available Status (Clear Emerald Stroke + Soft Glow while keeping zone table fill!) */
+.table-unit.available .table-shape {
+  stroke: #10b981 !important;
+  stroke-width: 3.5px !important;
+  filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.45));
+}
+.table-unit.available .chair {
+  stroke: #10b981 !important;
+  stroke-width: 2.2px !important;
+}
+
+/* Selected Status (Vibrant Gold Stroke + Warm Gold Glow) */
 .table-unit.selected .table-shape {
-  fill: #f6c453 !important;
-  stroke: #b8862c !important;
+  fill: #fef3c7 !important;
+  stroke: #d97706 !important;
+  stroke-width: 4px !important;
+  filter: drop-shadow(0 0 10px rgba(217, 119, 6, 0.6));
 }
-
 .table-unit.selected .chair {
-  fill: #f8d98a !important;
-  stroke: #b8862c !important;
+  fill: #fde68a !important;
+  stroke: #d97706 !important;
+  stroke-width: 2.5px !important;
 }
 
+/* Occupied / Unavailable Status (Vibrant Soft Red/Amber Overlay) */
 .table-unit.occupied {
   cursor: not-allowed;
-  opacity: 0.8;
+  opacity: 0.85;
 }
-
 .table-unit.occupied .table-shape {
-  fill: #fcf4e8 !important;
-  stroke: #b7791f !important;
+  fill: #fee2e2 !important;
+  stroke: #ef4444 !important;
+  stroke-width: 3.5px !important;
+  filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.3));
 }
-
 .table-unit.occupied .chair {
-  fill: #faebd7 !important;
-  stroke: #b7791f !important;
+  fill: #fca5a5 !important;
+  stroke: #ef4444 !important;
+  stroke-width: 2.2px !important;
 }
 
-.table-unit.occupied:hover .table-shape,
-.table-unit.occupied:hover .chair {
-  filter: none;
-}
-
+/* Reserved Status (Vibrant Purple Stroke & Fill) */
 .table-unit.reserved {
   cursor: not-allowed;
-  opacity: 0.8;
+  opacity: 0.85;
 }
-
 .table-unit.reserved .table-shape {
-  fill: #ebf3fb !important;
-  stroke: #3a6ea5 !important;
+  fill: #f3e8ff !important;
+  stroke: #8b5cf6 !important;
+  stroke-width: 3.5px !important;
+  filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.35));
 }
-
 .table-unit.reserved .chair {
-  fill: #dbe8f5 !important;
-  stroke: #3a6ea5 !important;
+  fill: #ddd6fe !important;
+  stroke: #8b5cf6 !important;
+  stroke-width: 2.2px !important;
 }
 
-.table-unit.reserved:hover .table-shape,
-.table-unit.reserved:hover .chair {
-  filter: none;
-}
-
+/* Cleaning Status (Vibrant Cyan/Teal Stroke & Fill) */
 .table-unit.cleaning {
   cursor: not-allowed;
-  opacity: 0.8;
+  opacity: 0.85;
 }
-
 .table-unit.cleaning .table-shape {
-  fill: #f3eff9 !important;
-  stroke: #7c5cbf !important;
+  fill: #cffafe !important;
+  stroke: #06b6d4 !important;
+  stroke-width: 3.5px !important;
+  filter: drop-shadow(0 0 6px rgba(6, 182, 212, 0.35));
 }
-
 .table-unit.cleaning .chair {
-  fill: #ebe1f5 !important;
-  stroke: #7c5cbf !important;
-}
-
-.table-unit.cleaning:hover .table-shape,
-.table-unit.cleaning:hover .chair {
-  filter: none;
+  fill: #a5f3fc !important;
+  stroke: #06b6d4 !important;
+  stroke-width: 2.2px !important;
 }
 
 /* ---- SVG Floor Plan Zones ---- */

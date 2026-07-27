@@ -460,34 +460,163 @@
 /* Role Dropdown Select */
 .adm-select-wrapper {
   position: relative;
-  width: 160px;
+  min-width: 150px;
 }
 
 .adm-inline-select {
   width: 100%;
-  padding: 6px 30px 6px 12px;
+  padding: 7px 32px 7px 12px;
   font-size: 13px;
-  color: #1f1a17;
-  background: #fff;
-  border: 1px solid rgba(31, 26, 23, 0.12);
+  font-weight: 500;
+  color: #1e293b;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   outline: none;
   cursor: pointer;
   appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8175' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
   background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-size: 14px;
+  background-position: right 10px center;
+  background-size: 13px;
   transition: all 0.2s ease;
 }
 
 .adm-inline-select:hover {
-  border-color: #c8a96e;
+  border-color: #cbd5e1;
+  background-color: #f8fafc;
+}
+
+.adm-inline-select:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
 }
 
 .adm-inline-select:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  background-color: #f1f5f9;
+}
+
+/* Apple Glassmorphism Custom Select & Gold Buttons */
+.adm-apple-dropdown {
+  position: relative;
+  display: inline-block;
+  user-select: none;
+  z-index: 50;
+}
+
+.adm-apple-dropdown__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1f1a17;
+  background: #ffffff;
+  border: 1px solid rgba(200, 169, 110, 0.35);
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(31, 26, 23, 0.04);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+}
+
+.adm-apple-dropdown__trigger:hover {
+  background: #fdfbf7;
+  border-color: #c8a96e;
+  box-shadow: 0 4px 12px rgba(200, 169, 110, 0.18);
+}
+
+.adm-apple-dropdown__trigger--active {
+  border-color: #c8a96e;
+  box-shadow: 0 0 0 3px rgba(200, 169, 110, 0.2);
+  background: #ffffff;
+}
+
+.adm-apple-dropdown__chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c8a96e;
+}
+
+.adm-apple-dropdown__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 190px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(200, 169, 110, 0.28);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(31, 26, 23, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
+  z-index: 100;
+  transform-origin: top right;
+  overflow: hidden;
+}
+
+.adm-apple-dropdown__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #2c2520;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+}
+
+.adm-apple-dropdown__item:hover {
+  background: rgba(200, 169, 110, 0.12);
+  color: #8b6e36;
+  font-weight: 600;
+}
+
+.adm-apple-dropdown__item--selected {
+  background: rgba(200, 169, 110, 0.16);
+  color: #8b6e36;
+  font-weight: 700;
+}
+
+.adm-apple-dropdown__check {
+  color: #c8a96e;
+  display: flex;
+  align-items: center;
+}
+
+/* Rich Dark Gold Button (+ Add Staff & Primary Actions) */
+.adm-btn-gold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 18px !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #c8a96e 0%, #9f8655 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 14px rgba(159, 134, 85, 0.32) !important;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  outline: none;
+}
+
+.adm-btn-gold:hover {
+  background: linear-gradient(135deg, #d8b97e 0%, #ad935f 100%) !important;
+  box-shadow: 0 6px 20px rgba(159, 134, 85, 0.45) !important;
 }
 
 /* Dot status badges */

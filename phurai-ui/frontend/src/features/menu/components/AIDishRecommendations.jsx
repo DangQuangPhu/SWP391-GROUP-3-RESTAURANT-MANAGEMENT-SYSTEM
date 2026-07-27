@@ -12,7 +12,7 @@ export default function AIDishRecommendations({ recommendedDishes = [], onOpenVi
       id: 'ai-rec-1',
       name: 'YELLOWTAIL JALAPEÑO',
       price: 320000,
-      image_url: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=600&auto=format&fit=crop&q=80',
+      image_url: '/src/assets/images/menu/menu-yellowtail-jalapeno.jpg',
       aiScore: 98,
       aiReason: 'delicately sliced yellowtail sashimi with touches of garlic puree & jalapeno'
     },
@@ -20,7 +20,7 @@ export default function AIDishRecommendations({ recommendedDishes = [], onOpenVi
       id: 'ai-rec-2',
       name: 'TORO TARTARE WITH CAVIAR',
       price: 428000,
-      image_url: 'https://images.unsplash.com/photo-1611143669185-af224c5e3252?w=600&auto=format&fit=crop&q=80',
+      image_url: '/src/assets/images/menu/menu-toro-tartare.jpg',
       aiScore: 96,
       aiReason: 'finely chopped bluefin toro topped with ossetra caviar and wasabi soy'
     },
@@ -28,7 +28,7 @@ export default function AIDishRecommendations({ recommendedDishes = [], onOpenVi
       id: 'ai-rec-3',
       name: 'FLUKE SASHIMI DRY MISO',
       price: 188000,
-      image_url: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=600&auto=format&fit=crop&q=80',
+      image_url: '/src/assets/images/menu/menu-fluke-sashimi.jpg',
       aiScore: 94,
       aiReason: 'yuzu juice, extra virgin olive oil, dry miso, chives'
     },
@@ -36,7 +36,7 @@ export default function AIDishRecommendations({ recommendedDishes = [], onOpenVi
       id: 'ai-rec-4',
       name: 'NEW STYLE SASHIMI',
       price: 228000,
-      image_url: 'https://images.unsplash.com/photo-1617196034796-73dfa7b1fd56?w=600&auto=format&fit=crop&q=80',
+      image_url: '/src/assets/images/menu/menu-new-style-sashimi.jpg',
       aiScore: 92,
       aiReason: 'seared with hot sesame and olive oil, garlic puree, and ginger'
     },
@@ -44,7 +44,7 @@ export default function AIDishRecommendations({ recommendedDishes = [], onOpenVi
       id: 'ai-rec-5',
       name: 'SALMON NEW STYLE',
       price: 168000,
-      image_url: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=600&auto=format&fit=crop&q=80',
+      image_url: '/src/assets/images/menu/menu-salmon-new-style.jpg',
       aiScore: 90,
       aiReason: 'thinly sliced fresh salmon lightly seared with hot oil blend'
     },
@@ -52,7 +52,7 @@ export default function AIDishRecommendations({ recommendedDishes = [], onOpenVi
       id: 'ai-rec-6',
       name: 'SEAFOOD UDON',
       price: 148000,
-      image_url: 'https://images.unsplash.com/photo-1618841557871-b4664fbf0cb3?w=600&auto=format&fit=crop&q=80',
+      image_url: '/src/assets/images/menu/menu-seafood-udon.jpg',
       aiScore: 88,
       aiReason: 'stir-fried thick udon noodles with fresh seafood and spicy broth'
     }
@@ -173,7 +173,7 @@ export default function AIDishRecommendations({ recommendedDishes = [], onOpenVi
                 />
 
                 <div style={{ position: 'absolute', top: '10px', right: '10px', pointerEvents: 'none' }}>
-                  <span className="liquid-score-badge" style={{ background: 'rgba(15, 23, 42, 0.85)', color: '#ffffff', fontSize: '0.72rem', backdropFilter: 'blur(8px)' }}>
+                  <span className="liquid-score-badge" style={{ background: 'rgba(15, 23, 42, 0.85)', color: '#ffffff', fontSize: '0.72rem', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
                     {dish.aiScore}% AI Match
                   </span>
                 </div>

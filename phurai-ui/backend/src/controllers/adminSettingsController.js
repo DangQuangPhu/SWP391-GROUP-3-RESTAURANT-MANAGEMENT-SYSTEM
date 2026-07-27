@@ -31,12 +31,21 @@ export const updateSettings = async (req, res) => {
                     .input('key', setting_key)
                     .input('value', setting_value)
                     .query(`
-                        UPDATE dbo.RestaurantSettings 
-                        SET setting_value = @value, updated_at = SYSDATETIME()
-                        WHERE setting_key = @key
+                        MERGE dbo.RestaurantSettings AS target
+                        USING (SELECT @key AS setting_key, @value AS setting_value) AS src
+                        ON (target.setting_key = src.setting_key)
+                        WHEN MATCHED THEN
+                            UPDATE SET setting_value = src.setting_value, updated_at = SYSDATETIME()
+                        WHEN NOT MATCHED THEN
+                            INSERT (setting_key, setting_value, updated_at)
+                            VALUES (src.setting_key, src.setting_value, SYSDATETIME());
                     `);
             }
             await transaction.commit();
+            const io = req.app.get('io');
+            if (io) {
+              io.emit('settings:updated');
+            }
             return res.json({ success: true, message: 'Settings updated successfully' });
         } catch (txnError) {
             await transaction.rollback();

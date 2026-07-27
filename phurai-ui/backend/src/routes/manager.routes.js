@@ -146,6 +146,7 @@ import {
   createEmployee,
   updateEmployee,
   deleteEmployee,
+  deactivateEmployee,
   grantSystemAccess,
   revokeSystemAccess,
   addPerformanceReview,
@@ -160,6 +161,7 @@ router.get('/employees',     requireManagerOrAdmin, listEmployees);
 router.post('/employees',    requireManagerOrAdmin, createEmployee);
 router.patch('/employees/:id', requireManagerOrAdmin, updateEmployee);
 router.delete('/employees/:id', requireManagerOrAdmin, deleteEmployee);
+router.post('/employees/:id/deactivate', requireManagerOrAdmin, deactivateEmployee);
 
 // System Account Management
 router.post('/employees/:id/grant-access',  requireManagerOrAdmin, grantSystemAccess);

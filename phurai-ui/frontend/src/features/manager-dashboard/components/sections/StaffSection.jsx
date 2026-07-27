@@ -21,6 +21,8 @@ import {
   EmptyState,
 } from "../ManagerUI.jsx";
 import { useManagerPortal } from "../../context/ManagerPortalContext.jsx";
+import StatusFilterDropdown from "@/features/admin-accounts/components/StatusFilterDropdown.jsx";
+import AccountsSectionHeader from "@/features/admin-accounts/components/AccountsSectionHeader.jsx";
 import {
   getEmployees,
   getJobTitles,
@@ -382,7 +384,7 @@ function StaffSection({ toast, hideHeader = false }) {
         />
       )}
 
-      <div className="sfx-kpis mb-2" aria-label="Staff summary">
+      <div className="sfx-kpis mb-6" aria-label="Staff summary">
         {staffKpis.map((kpi, idx) => (
           <article key={idx} className={`sfx-kpi sfx-kpi--${kpi.color}`}>
             <div className="sfx-kpi__top">
@@ -395,13 +397,6 @@ function StaffSection({ toast, hideHeader = false }) {
       </div>
 
       <div className="sfx-card sfx-card--overflow-visible sfx-card--featured-dashboard">
-        <header className="sfx-card__head sfx-card__head--dashboard">
-          <div>
-            <h3 className="sfx-card__title sfx-card__title--dashboard">Staff Registry</h3>
-            <p className="sfx-muted sfx-card__subtitle--dashboard">Active employees and roles</p>
-          </div>
-          <span className="sfx-muted sfx-card__counter--dashboard">{employees.length} employees</span>
-        </header>
 
         {/* Redesigned Search & Filter Dropdown Row */}
         <div className="sfx-staff__toolbar">
@@ -413,43 +408,29 @@ function StaffSection({ toast, hideHeader = false }) {
             />
           </div>
           <div className="sfx-staff__actions">
-            <div className="sfx-picker__container">
-              <select
-                value={filterTab}
-                onChange={(e) => setFilterTab(e.target.value)}
-                className="sfx-staff__select"
-                style={{
-                  padding: "9px 34px 9px 16px",
-                  borderRadius: "10px",
-                  border: "1px solid rgba(0,0,0,0.08)",
-                  background: "#f9fafb",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  color: "#111",
-                  outline: "none",
-                  cursor: "pointer",
-                  appearance: "none",
-                  transition: "all 0.2s ease",
-                  boxShadow: "inset 0 2px 4px rgba(0,0,0,0.02)"
-                }}
-                onMouseOver={e => e.currentTarget.style.background = "#fff"}
-                onMouseOut={e => e.currentTarget.style.background = "#f9fafb"}
-              >
-                <option value="all">All Statuses</option>
-                <option value="with">With Account</option>
-                <option value="without">Without Account</option>
-              </select>
-              <span className="sfx-staff__select-arrow">
-                <Icon name="chevron-down" size={14} />
-              </span>
-            </div>
-            <Button 
-              variant="primary" 
-              onClick={openNew} 
-              className="sfx-tablemap__add-btn"
+            <StatusFilterDropdown
+              options={[
+                { value: "all", label: "All Statuses" },
+                { value: "with", label: "With Account" },
+                { value: "without", label: "Without Account" },
+              ]}
+              value={filterTab}
+              onChange={(val) => setFilterTab(val)}
+            />
+            <motion.button
+              type="button"
+              whileHover={{
+                scale: 1.04,
+                boxShadow: "0 6px 20px rgba(159, 134, 85, 0.45)",
+                filter: "brightness(1.06)"
+              }}
+              whileTap={{ scale: 0.96 }}
+              transition={{ type: "spring", stiffness: 400, damping: 25 }}
+              onClick={openNew}
+              className="sfx-tablemap__add-btn adm-btn-gold"
             >
               + Add Staff
-            </Button>
+            </motion.button>
           </div>
         </div>
 
@@ -463,7 +444,7 @@ function StaffSection({ toast, hideHeader = false }) {
               <thead>
                 <tr className="sfx-staff__tr-head-bg">
                   <th className="sfx-staff__th sfx-staff__th--index">#</th>
-                  <th className="sfx-staff__th">Name</th>
+                  <th className="sfx-staff__th">NAME / CONTACT</th>
                   <th className="sfx-staff__th">Role</th>
                   {showSalary && <th className="sfx-staff__th">Salary</th>}
                   <th className="sfx-staff__th">Account Status</th>

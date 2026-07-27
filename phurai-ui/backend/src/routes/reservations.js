@@ -91,6 +91,14 @@ const SETTING_KEYS = [
   "table_hold_min",
   "cancel_deadline_h",
   "restaurant_name",
+  "restaurant_address",
+  "restaurant_phone",
+  "restaurant_email",
+  "hours_mon_thu",
+  "hours_fri_sat",
+  "hours_sunday",
+  "hours_happy",
+  "closed_days",
 ];
 
 async function loadSettings() {
@@ -116,6 +124,14 @@ async function loadSettings() {
     table_hold_min: Number(map.table_hold_min) || 15,
     cancel_deadline_h: Number(map.cancel_deadline_h) || 2,
     restaurant_name: map.restaurant_name || "Phūrai Premium Restaurant",
+    restaurant_address: map.restaurant_address || "",
+    restaurant_phone: map.restaurant_phone || "",
+    restaurant_email: map.restaurant_email || "",
+    hours_mon_thu: map.hours_mon_thu || "7:00 AM — 12:00 AM",
+    hours_fri_sat: map.hours_fri_sat || "7:00 AM — 12:00 AM",
+    hours_sunday: map.hours_sunday || "7:00 PM — 10:00 PM",
+    hours_happy: map.hours_happy || "4:00 PM — 7:00 PM Daily",
+    closed_days: map.closed_days || "",
   };
 }
 

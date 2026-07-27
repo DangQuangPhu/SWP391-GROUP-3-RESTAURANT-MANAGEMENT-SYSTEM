@@ -98,8 +98,7 @@ function buildKpis(stats) {
 }
 
 const QUICK_ACTIONS = [
-  { label: "Create account",   icon: "users",   path: "/admin/accounts" },
-  { label: "Configure roles",  icon: "shield",  path: "/admin/roles" },
+  { label: "Manage accounts",  icon: "users",   path: "/admin/accounts" },
   { label: "View audit logs",  icon: "report",  path: "/admin/audit-logs" },
   { label: "System settings",  icon: "settings",path: "/admin/settings/system" },
 ];

@@ -1,37 +1,15 @@
 import express from 'express';
 import pool from '../db.js';
-import { analyzeDishImageWithGemini, analyzeDishTextWithGemini } from '../services/aiService.js';
+import { analyzeDishImageWithGemini } from '../services/aiService.js';
 
 const router = express.Router();
 
 router.post('/visual-search', async (req, res) => {
   try {
-    const { imageBase64, imageUrl, textPrompt, mimeType = 'image/jpeg', clientMenuList } = req.body;
+    const { imageBase64, mimeType = 'image/jpeg', clientMenuList } = req.body;
 
-    let finalBase64 = imageBase64;
-    let finalMimeType = mimeType;
-
-    if (!finalBase64 && imageUrl) {
-      try {
-        const imgRes = await fetch(imageUrl);
-        if (!imgRes.ok) {
-          return res.status(400).json({ success: false, message: 'Could not download image from the provided URL.' });
-        }
-        const arrayBuffer = await imgRes.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        finalBase64 = buffer.toString('base64');
-        const contentType = imgRes.headers.get('content-type');
-        if (contentType && contentType.startsWith('image/')) {
-          finalMimeType = contentType.split(';')[0];
-        }
-      } catch (fetchErr) {
-        console.error('Failed to download image URL on backend:', fetchErr.message);
-        return res.status(400).json({ success: false, message: 'Failed to download image from URL. Please check if the URL is publicly accessible.' });
-      }
-    }
-
-    if (!finalBase64 && !textPrompt) {
-      return res.status(400).json({ success: false, message: 'Image data (imageBase64/imageUrl) or textPrompt is required.' });
+    if (!imageBase64) {
+      return res.status(400).json({ success: false, message: 'Image data (imageBase64) is required.' });
     }
 
     let menuList = clientMenuList;
@@ -55,19 +33,11 @@ router.post('/visual-search', async (req, res) => {
       }
     }
 
-    let aiResult;
-    if (textPrompt) {
-      aiResult = await analyzeDishTextWithGemini({
-        textPrompt,
-        menuList
-      });
-    } else {
-      aiResult = await analyzeDishImageWithGemini({
-        imageBase64: finalBase64,
-        mimeType: finalMimeType,
-        menuList
-      });
-    }
+    const aiResult = await analyzeDishImageWithGemini({
+      imageBase64,
+      mimeType,
+      menuList
+    });
 
     res.json({
       success: true,

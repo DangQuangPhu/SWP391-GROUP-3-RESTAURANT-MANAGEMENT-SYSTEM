@@ -10,7 +10,7 @@ export const getFloorPlanData = async (req, res) => {
                 CAST(CASE WHEN t.table_status = 'Inactive' THEN 0 ELSE 1 END AS BIT) as table_active, 
                 t.table_status, t.position_x, t.position_y
             FROM dbo.RestaurantAreas a
-            LEFT JOIN dbo.RestaurantTables t ON a.area_id = t.area_id AND t.table_status != 'Inactive'
+            LEFT JOIN dbo.RestaurantTables t ON a.area_id = t.area_id AND (t.table_status IS NULL OR t.table_status != 'Deleted')
             WHERE a.is_active = 1
             ORDER BY a.area_id, LEN(t.table_number), t.table_number
         `);

@@ -214,12 +214,23 @@ function getPool() {
             )
         );
 
-        -- 11. RestaurantSettings cleaning_buffer_min
+        -- 11. RestaurantSettings cleaning_buffer_min & Opening Hours defaults
         IF NOT EXISTS (SELECT 1 FROM dbo.RestaurantSettings WHERE setting_key = N'cleaning_buffer_min')
         BEGIN
             INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description, updated_by)
             VALUES (N'cleaning_buffer_min', N'15', N'Buffer minutes added to EstimatedDuration to calculate EstimatedReleaseTime', 1);
         END;
+
+        IF NOT EXISTS (SELECT 1 FROM dbo.RestaurantSettings WHERE setting_key = N'hours_mon_thu')
+            INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description, updated_by) VALUES (N'hours_mon_thu', N'7:00 AM — 12:00 AM', N'Opening hours: Monday to Thursday', 1);
+        IF NOT EXISTS (SELECT 1 FROM dbo.RestaurantSettings WHERE setting_key = N'hours_fri_sat')
+            INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description, updated_by) VALUES (N'hours_fri_sat', N'7:00 AM — 12:00 AM', N'Opening hours: Friday to Saturday', 1);
+        IF NOT EXISTS (SELECT 1 FROM dbo.RestaurantSettings WHERE setting_key = N'hours_sunday')
+            INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description, updated_by) VALUES (N'hours_sunday', N'7:00 PM — 10:00 PM', N'Opening hours: Sunday', 1);
+        IF NOT EXISTS (SELECT 1 FROM dbo.RestaurantSettings WHERE setting_key = N'hours_happy')
+            INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description, updated_by) VALUES (N'hours_happy', N'4:00 PM — 7:00 PM Daily', N'Happy Hour timing', 1);
+        IF NOT EXISTS (SELECT 1 FROM dbo.RestaurantSettings WHERE setting_key = N'closed_days')
+            INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description, updated_by) VALUES (N'closed_days', N'', N'Closed days or dates (e.g. Sunday or 2026-07-27)', 1);
 
       `).then(() => console.log("[DB] Schema synchronized."))
         .catch((err) => console.error("[DB] Schema sync error:", err.message));
