@@ -61,7 +61,18 @@ export const menuCategories = [
     subtitle: 'COASTAL TREASURES',
     iconKey: 'seafood',
     iconClass: 'icon-seafood',
-    items: [] },
+    items: [
+      { id: 'black-cod-miso', name: 'BLACK COD WITH MISO', price: 450000, description: 'Saikyo miso-marinated Alaskan black cod, broiled to perfection with sweet ginger sprout', image: '/src/assets/images/menu/menu-black-cod-miso.jpg' },
+      { id: 'chilean-sea-bass-miso', name: 'CHILEAN SEA BASS MISO', price: 480000, description: 'pan-seared Chilean sea bass in savory yuzu miso reduction', image: '/src/assets/images/menu/dish-sea-bass-chilean-miso.jpg' },
+      { id: 'rock-shrimp-tempura', name: 'ROCK SHRIMP TEMPURA', price: 290000, description: 'crispy rock shrimp tempura tossed in creamy spicy mayo or ponzu butter sauce', image: '/src/assets/images/menu/menu-rock-shrimp-tempura.jpg' },
+      { id: 'alaskan-king-crab-leg', name: 'ALASKAN KING CRAB LEG', price: 620000, description: 'chargrilled Alaskan king crab leg brushed with garlic shiso butter', image: '/src/assets/images/menu/dish-alaskan-king-crab-leg.jpg' },
+      { id: 'lobster-wasabi-pepper', name: 'LOBSTER WASABI PEPPER', price: 680000, description: 'whole Maine lobster sautéed with shishito peppers and spicy wasabi sauce', image: '/src/assets/images/menu/menu-lobster-wasabi-pepper.jpg' },
+      { id: 'jumbo-prawns-garlic-butter', name: 'JUMBO PRAWNS GARLIC BUTTER', price: 320000, description: 'pan-roasted tiger prawns with crushed garlic, Japanese butter, and sea salt', image: '/src/assets/images/menu/dish-jumbo-prawns-garlic-butter.jpg' },
+      { id: 'soft-shell-crab-ponzu', name: 'SOFT SHELL CRAB PONZU', price: 280000, description: 'crispy whole soft shell crab served with momiji oroshi and citrus ponzu', image: '/src/assets/images/menu/dish-soft-shell-crab-ponzu.jpg' },
+      { id: 'scallop-toban-yaki', name: 'HOTATE SCALLOP TOBAN-YAKI', price: 340000, description: 'Hokkaido sea scallops roasted on ceramic hot plate with sake, butter, and wild enoki', image: '/src/assets/images/menu/dish-scallop-toban-yaki.jpg' },
+      { id: 'charcoal-squid-shio-yaki', name: 'CHARCOAL SQUID SHIO-YAKI', price: 220000, description: 'whole Japanese flying squid grilled over binchotan charcoal with sea salt and lemon', image: '/src/assets/images/menu/dish-charcoal-squid-shio-yaki.jpg' },
+      { id: 'gambas-al-ajillo', name: 'GAMBAS AL AJILLO', price: 190000, description: 'Spanish sizzling garlic butter prawns cooked in olive oil and served in a hot clay tapas dish', image: '/src/assets/images/menu/dish-gambas-al-ajillo.jpg' }
+    ] },
   { id: 'barbecue-grill', name: 'Barbecue & Grill',
     subtitle: 'THE ART OF FIRE',
     iconKey: 'barbecueGrill',
@@ -74,7 +85,6 @@ export const menuCategories = [
       { id: 'eringi-mushroom-skewers', name: 'KING OYSTER MUSHROOM GRILL', price: 110000, description: 'thickly sliced king oyster mushrooms brushed with garlic butter soy', image: '/src/assets/images/menu/dish-eringi-mushroom-skewers.jpg' },
       { id: 'chicken-wings-tebasaki', name: 'TEBASAKI CRISPY CHICKEN WINGS', price: 140000, description: 'crispy grilled chicken wings coated in sweet garlic pepper glaze', image: '/src/assets/images/menu/dish-chicken-wings-tebasaki.jpg' },
       { id: 'garlic-butter-corn-grill', name: 'JAPANESE SWEET CORN GRILL', price: 85000, description: 'sweet corn cob roasted with soy sauce and Hokkaido butter', image: '/src/assets/images/menu/dish-garlic-butter-corn-grill.jpg' },
-      { id: 'gambas-al-ajillo', name: 'GAMBAS AL AJILLO', price: 190000, description: 'Spanish sizzling garlic butter prawns cooked in olive oil and served in a hot clay tapas dish', image: '/src/assets/images/menu/dish-gambas-al-ajillo.jpg' },
       { id: 'texas-bbq-ribs', name: 'TEXAS SMOKED BBQ RIBS', price: 350000, description: 'Tender Texas-style smoked baby back pork ribs heavily glazed in a rich barbecue sauce', image: '/src/assets/images/menu/dish-texas-bbq-ribs.jpg' }
     ] },
   { id: 'desserts', name: 'Desserts',
