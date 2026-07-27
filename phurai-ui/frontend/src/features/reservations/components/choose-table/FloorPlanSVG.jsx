@@ -5,16 +5,23 @@ import TableUnit from './TableUnit';
 import { TABLES } from '../../config/floorPlanConfig';
 import { validateTableCapacity } from '../../utils/validateTableCapacity';
 
-// Normalize status based on backend API data
-function normalizeStatus(apiTable) {
+// Normalize status based on backend API data and guest capacity
+export function normalizeStatus(apiTable, guestCount) {
+  if (!apiTable) return "Occupied";
   if (apiTable.is_bookable === false) {
-    const avail = apiTable.availability_at_slot || "";
-    const lowerAvail = avail.toLowerCase();
-    if (lowerAvail === "occupied") return "Occupied";
-    if (lowerAvail === "cleaning") return "Cleaning";
-    if (lowerAvail === "inactive") return "Occupied";
+    const avail = (apiTable.availability_at_slot || apiTable.table_status || "").toLowerCase();
+    if (avail === "occupied") return "Occupied";
+    if (avail === "cleaning") return "Cleaning";
+    if (avail === "inactive") return "Occupied";
     return "Reserved";
   }
+
+  // Capacity validation
+  if (guestCount && apiTable.capacity) {
+    const isCapacityValid = validateTableCapacity(guestCount, apiTable.capacity);
+    if (!isCapacityValid) return "Occupied";
+  }
+
   return "Available";
 }
 
@@ -158,17 +165,17 @@ export default function FloorPlanSVG({
     if (isDragging) return;
     let text = "";
     if (status === 'Occupied' && apiTable?.estimated_release_at) {
-      const releaseTime = new Date(apiTable.estimated_release_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-      text = `Bàn đang có khách, dự kiến trống lúc ${releaseTime}`;
+      const releaseTime = new Date(apiTable.estimated_release_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      text = `Table occupied, expected release at ${releaseTime}`;
     } else if (status === 'Occupied') {
-      text = "Bàn đang có khách";
+      text = "Table currently occupied";
     } else if (status === 'Reserved') {
-      text = "Bàn đã được đặt trước";
+      text = "Table currently reserved";
     } else if (status === 'Cleaning') {
-      text = "Bàn đang được dọn dẹp";
+      text = "Table currently being cleaned";
     } else {
       const cap = apiTable?.capacity || tableConfig.capacity || 2;
-      text = `Bàn ${tableConfig.id} (${cap} chỗ)`;
+      text = `Table ${tableConfig.id} (${cap} seats)`;
     }
 
     const rect = e.currentTarget.getBoundingClientRect();
@@ -235,85 +242,64 @@ export default function FloorPlanSVG({
         <rect x="18" y="18" width="1294" height="884" fill="#fffdf9" rx="8" />
         <rect x="18" y="18" width="1294" height="884" fill="url(#grid)" stroke="rgba(142, 128, 106, 0.25)" strokeWidth="3" rx="8" />
 
-        <rect className="zone-rect" x="20" y="20" width="240" height="170" rx="6" />
+        <rect className="zone-rect" x="20" y="20" width="240" height="170" rx="6" fill="rgba(250, 249, 246, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="zone-label" x="140" y="45">WINDOW ZONE A</text>
-        <ZoneViewButton x={18} y={48} label="Window Zone A" img={IMAGES.window} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="280" y="20" width="240" height="170" rx="6" />
+        <rect className="zone-rect" x="280" y="20" width="240" height="170" rx="6" fill="rgba(250, 249, 246, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="zone-label" x="400" y="45">WINDOW ZONE B</text>
-        <ZoneViewButton x={276} y={48} label="Window Zone B" img={IMAGES.window} onViewZone={onViewZone} />
 
-        <rect className="zone-rect alt" x="540" y="20" width="200" height="170" rx="6" />
+        <rect className="zone-rect alt" x="540" y="20" width="200" height="170" rx="6" fill="transparent" stroke="none" />
         <text className="zone-label" x="640" y="45">RECEPTION</text>
         <circle cx="640" cy="115" r="30" fill="#f5e9d6" stroke="#cdb27e" strokeWidth="1.5" />
 
-        <rect className="zone-rect" x="760" y="20" width="240" height="170" rx="6" />
+        <rect className="zone-rect" x="760" y="20" width="240" height="170" rx="6" fill="rgba(250, 249, 246, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="zone-label" x="880" y="45">WINDOW ZONE C</text>
-        <ZoneViewButton x={756} y={48} label="Window Zone C" img={IMAGES.window} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="1020" y="20" width="290" height="170" rx="6" />
+        <rect className="zone-rect" x="1020" y="20" width="290" height="170" rx="6" fill="rgba(250, 249, 246, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="zone-label" x="1165" y="45">WINDOW ZONE D</text>
-        <ZoneViewButton x={1019} y={48} label="Window Zone D" img={IMAGES.window} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="20" y="210" width="240" height="150" rx="6" fill="rgba(253, 244, 244, 0.45)" />
+        <rect className="zone-rect" x="20" y="210" width="240" height="150" rx="6" fill="rgba(253, 244, 244, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="zone-label" x="140" y="225">VIP ROOM 1</text>
-        <ZoneViewButton x={26} y={216} label="VIP Room 1" img={IMAGES.vip} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="20" y="380" width="240" height="150" rx="6" fill="rgba(253, 244, 244, 0.45)" />
+        <rect className="zone-rect" x="20" y="380" width="240" height="150" rx="6" fill="rgba(253, 244, 244, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="zone-label" x="140" y="395">VIP ROOM 2</text>
-        <ZoneViewButton x={26} y={386} label="VIP Room 2" img={IMAGES.vip} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="20" y="550" width="240" height="150" rx="6" fill="rgba(253, 244, 244, 0.45)" />
+        <rect className="zone-rect" x="20" y="550" width="240" height="150" rx="6" fill="rgba(253, 244, 244, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="zone-label" x="140" y="565">VIP ROOM 3</text>
-        <ZoneViewButton x={26} y={556} label="VIP Room 3" img={IMAGES.vip} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="20" y="720" width="240" height="80" rx="6" />
+        <rect className="zone-rect" x="20" y="720" width="240" height="80" rx="6" fill="rgba(250, 249, 246, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="sub-label" x="140" y="765">LADIES RESTROOM</text>
-        <rect className="zone-rect" x="20" y="820" width="240" height="80" rx="6" />
+        <rect className="zone-rect" x="20" y="820" width="240" height="80" rx="6" fill="rgba(250, 249, 246, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="sub-label" x="140" y="865">MEN RESTROOM</text>
 
-        <rect className="zone-rect" x="280" y="210" width="560" height="490" rx="6" />
+        <rect className="zone-rect" x="280" y="210" width="560" height="490" rx="6" fill="rgba(250, 249, 246, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="zone-label" x="560" y="235">STANDARD DINING AREA</text>
-        <ZoneViewButton x={286} y={216} label="Standard Dining Area" img={IMAGES.standard} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="860" y="210" width="140" height="490" rx="6" fill="rgba(253, 248, 240, 0.45)" />
+        <rect className="zone-rect" x="860" y="210" width="140" height="490" rx="6" fill="rgba(253, 248, 240, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="zone-label" x="930" y="235">PREMIUM</text>
-        <ZoneViewButton x={816} y={216} label="Premium Dining Area" img={IMAGES.premium} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="1020" y="210" width="290" height="155" rx="6" fill="rgba(249, 245, 250, 0.45)" />
+        <rect className="zone-rect" x="1020" y="210" width="290" height="155" rx="6" fill="rgba(249, 245, 250, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="zone-label" x="1165" y="235">PRIVATE ROOM 1</text>
-        <ZoneViewButton x={1026} y={216} label="Private Room 1" img={IMAGES.private} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="1020" y="380" width="290" height="155" rx="6" fill="rgba(249, 245, 250, 0.45)" />
+        <rect className="zone-rect" x="1020" y="380" width="290" height="155" rx="6" fill="rgba(249, 245, 250, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="zone-label" x="1165" y="405">PRIVATE ROOM 2</text>
-        <ZoneViewButton x={1026} y={386} label="Private Room 2" img={IMAGES.private} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="1020" y="550" width="290" height="155" rx="6" fill="rgba(249, 245, 250, 0.45)" />
+        <rect className="zone-rect" x="1020" y="550" width="290" height="155" rx="6" fill="rgba(249, 245, 250, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="zone-label" x="1165" y="575">PRIVATE ROOM 3</text>
-        <ZoneViewButton x={1026} y={556} label="Private Room 3" img={IMAGES.private} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="1020" y="720" width="290" height="180" rx="6" fill="rgba(249, 245, 250, 0.45)" />
+        <rect className="zone-rect" x="1020" y="720" width="290" height="180" rx="6" fill="rgba(249, 245, 250, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="zone-label" x="1165" y="745">PRIVATE ROOM 4</text>
-        <ZoneViewButton x={1026} y={726} label="Private Room 4" img={IMAGES.private} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" rx="6" height="180" width="420" y="720" x="280" />
+        <rect className="zone-rect" rx="6" height="180" width="420" y="720" x="280" fill="rgba(250, 249, 246, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="zone-label" x="490" y="745">KITCHEN VIEW AREA</text>
-        <ZoneViewButton x={288} y={726} label="Kitchen View Area" img={IMAGES.kitchen} onViewZone={onViewZone} />
 
-        <rect className="zone-rect" x="710" y="720" width="300" height="180" rx="6" />
+        <rect className="zone-rect" x="710" y="720" width="300" height="180" rx="6" fill="rgba(250, 249, 246, 0.45)" stroke="#cdb27e" strokeWidth="1.5" strokeDasharray="6 3" />
         <text className="zone-label" x="860" y="810">KITCHEN AREA</text>
 
         <g id="tables-layer">
           {TABLES.map((tableConfig) => {
             const apiTable = apiTableMap.get(tableConfig.id);
-            let status = apiTable ? normalizeStatus(apiTable) : 'Occupied';
-
-            const tableCapacity = apiTable?.capacity || tableConfig.capacity || 2;
-            const isCapacityValid = validateTableCapacity(guestCount, tableCapacity);
-
-            if (status === 'Available' && !isCapacityValid) {
-              status = 'Occupied';
-            }
+            const status = normalizeStatus(apiTable, guestCount);
 
             const isSelected = apiTable && selectedTableId === apiTable.table_id;
 

@@ -1,14 +1,11 @@
 import React, { useMemo } from 'react';
 import { SHAPES, getChairPositions } from '../../config/floorPlanConfig';
+import '../../styles/table-board.css';
 
 export default function TableUnit({ tableData, status, isSelected, isDimmed, onClick, onShowTooltip, onHideTooltip }) {
   const profile = SHAPES[tableData.type];
 
   const handleTableClick = (e) => {
-    if (status === 'Occupied' || status === 'Reserved' || status === 'Cleaning') {
-      onShowTooltip(e);
-      return;
-    }
     onHideTooltip();
     onClick(tableData.id);
   };
@@ -20,9 +17,9 @@ export default function TableUnit({ tableData, status, isSelected, isDimmed, onC
 
   let shapeSVG = null;
   if (profile.shape === 'circle') {
-    shapeSVG = <circle className="table-shape" r={profile.r} />;
+    shapeSVG = <circle className="table-shape" r={profile.r} fill={tableData.fill || "#dceaf5"} stroke="#2f7d4f" strokeWidth="2" />;
   } else if (profile.shape === 'ellipse') {
-    shapeSVG = <ellipse className="table-shape" rx={profile.rx} ry={profile.ry} />;
+    shapeSVG = <ellipse className="table-shape" rx={profile.rx} ry={profile.ry} fill={tableData.fill || "#dceaf5"} stroke="#2f7d4f" strokeWidth="2" />;
   } else if (profile.shape === 'rect') {
     shapeSVG = (
       <rect
@@ -33,6 +30,9 @@ export default function TableUnit({ tableData, status, isSelected, isDimmed, onC
         height={profile.h}
         rx={profile.rx}
         ry={profile.ry}
+        fill={tableData.fill || "#dceaf5"}
+        stroke="#2f7d4f"
+        strokeWidth="2"
       />
     );
   }
@@ -51,8 +51,9 @@ export default function TableUnit({ tableData, status, isSelected, isDimmed, onC
   const style = {
     '--table-fill': tableData.fill || '#dceaf5',
     '--chair-fill': tableData.chair || '#cfe3da',
-    opacity: isDimmed ? 0.25 : 1,
-    pointerEvents: isDimmed ? 'none' : 'auto',
+    opacity: isDimmed ? 0.35 : 1,
+    cursor: 'pointer',
+    pointerEvents: 'auto',
     transition: 'opacity 0.2s ease'
   };
 

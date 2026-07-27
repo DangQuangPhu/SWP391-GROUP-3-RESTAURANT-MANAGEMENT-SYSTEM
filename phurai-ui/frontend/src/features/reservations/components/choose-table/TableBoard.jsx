@@ -1,21 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Filter, ChevronDown, Check, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
-import FloorPlanSVG from './FloorPlanSVG';
-import { validateTableCapacity } from '../../utils/validateTableCapacity';
-import '../../styles/table-board.css';
-
-// Normalize status based on backend API data
-function normalizeStatus(apiTable) {
-  if (apiTable.is_bookable === false) {
-    const avail = apiTable.availability_at_slot || "";
-    const lowerAvail = avail.toLowerCase();
-    if (lowerAvail === "occupied") return "Occupied";
-    if (lowerAvail === "cleaning") return "Cleaning"; 
-    if (lowerAvail === "inactive") return "Occupied"; 
-    return "Reserved"; 
-  }
-  return "Available"; 
-}
+import FloorPlanSVG, { normalizeStatus } from './FloorPlanSVG';
+import TablePreviewModal from './TablePreviewModal';
 
 export default function TableBoard({
   tables = [],
@@ -26,6 +12,7 @@ export default function TableBoard({
   const [activeFilter, setActiveFilter] = useState(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [viewZoneImage, setViewZoneImage] = useState(null);
+  const [previewTable, setPreviewTable] = useState(null); // Table object for preview modal
   const dropdownRef = useRef(null);
 
   // Lifted Zoom & Pan states
@@ -60,23 +47,14 @@ export default function TableBoard({
 
   const handleTableClick = (configId) => {
     const apiTable = apiTableMap.get(configId);
-    if (!apiTable) return; // if not found in API, can't select
+    const status = normalizeStatus(apiTable, guestCount);
 
-    // Enforce capacity validation
-    const isCapacityValid = validateTableCapacity(guestCount, apiTable.capacity);
-    if (!isCapacityValid) return;
-
-    const status = normalizeStatus(apiTable);
-    if (status === 'Occupied' || status === 'Reserved' || status === 'Cleaning') {
-      return;
-    }
-
-    const actualTableId = apiTable.table_id;
-    const newSelected = selectedTableId === actualTableId ? null : actualTableId;
-    
-    if (onSelectTable) {
-      onSelectTable(newSelected);
-    }
+    // Open Apple-style Table Preview Modal for confirmation / view
+    setPreviewTable({
+      code: configId,
+      apiTable: apiTable || { table_number: configId, capacity: 2 },
+      status
+    });
   };
 
   const selectedApiTable = useMemo(() => tables.find(t => t.table_id === selectedTableId), [tables, selectedTableId]);
@@ -224,6 +202,21 @@ export default function TableBoard({
           </div>
         </div>
       )}
+
+      {/* Apple-style Table Preview Modal */}
+      <TablePreviewModal
+        table={previewTable?.code}
+        apiTable={previewTable?.apiTable}
+        tableStatus={previewTable?.status}
+        isOpen={Boolean(previewTable)}
+        onClose={() => setPreviewTable(null)}
+        onSelect={(selectedId) => {
+          if (onSelectTable) {
+            onSelectTable(selectedId);
+          }
+          setPreviewTable(null);
+        }}
+      />
     </div>
   );
 }
