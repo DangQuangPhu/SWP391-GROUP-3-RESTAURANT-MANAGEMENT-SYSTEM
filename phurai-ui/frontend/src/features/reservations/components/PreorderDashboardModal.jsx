@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { formatVND } from "@/core/utils/formatCurrency.js";
-import { imagePathMap, menuImages } from "@/features/menu/data/menuAssets.js";
-import { Search, Filter, ArrowUpDown } from "lucide-react";
+import { menuImages, resolveDishImage } from "@/features/menu/data/menuAssets.js";
+import { Search, Filter, ArrowUpDown, Bookmark } from "lucide-react";
 import { Skeleton } from "@/components/ui/Skeleton.jsx";
 import { useFavoritesStore } from "@/features/menu/context/MenuFavoritesContext.jsx";
 import "@/components/ui/styles/sfx.css";
@@ -148,14 +148,26 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave, curren
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [sortOrder, setSortOrder] = useState("default");
+  const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
   
   // Local cart state for the modal
   const [cart, setCart] = useState({});
 
   const { favorites, toggleFavorite } = useFavoritesStore(currentUser);
   
-  const isFavorite = useCallback((dishId) => {
-    return favorites.some((f) => String(f.id) === String(dishId) || String(f.dish_id) === String(dishId));
+  const isFavorite = useCallback((dish) => {
+    if (!dish) return false;
+    const dishIdStr = String(dish.dish_id || dish.id || "").toLowerCase();
+    const dishNameStr = String(dish.dish_name || dish.name || "").toLowerCase().trim();
+
+    return favorites.some((f) => {
+      const fIdStr = String(f.dish_id || f.id || "").toLowerCase();
+      const fNameStr = String(f.dish_name || f.name || "").toLowerCase().trim();
+      return (
+        (Boolean(dishIdStr) && Boolean(fIdStr) && dishIdStr === fIdStr) ||
+        (Boolean(dishNameStr) && Boolean(fNameStr) && dishNameStr === fNameStr)
+      );
+    });
   }, [favorites]);
 
   useEffect(() => {
@@ -164,6 +176,7 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave, curren
       setSearchTerm("");
       setSelectedCategory("All");
       setSortOrder("default");
+      setBookmarkedOnly(false);
     }
   }, [isOpen, preorderItems]);
 
@@ -199,7 +212,7 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave, curren
       if (newQty <= 0) {
         delete next[dish.dish_id];
       } else {
-        const imageUrl = dish.image_url || dish.image || null;
+        const imageUrl = resolveDishImage(dish, dish.dish_name || dish.name) || null;
         next[dish.dish_id] = {
           dish_id: dish.dish_id,
           name: dish.dish_name || dish.name,
@@ -221,11 +234,11 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave, curren
   if (!isOpen) return null;
 
   // Filter and Sort Logic
-  const categories = ["All", ...(currentUser ? ["Bookmarks"] : []), ...new Set(dishes.map(d => d.category).filter(Boolean))];
+  const categories = ["All", ...new Set(dishes.map(d => d.category).filter(Boolean))];
   
   const filteredDishes = dishes.filter(d => {
-    if (selectedCategory === "Bookmarks") {
-      return isFavorite(d.dish_id || d.id);
+    if (bookmarkedOnly) {
+      return isFavorite(d);
     }
     if (selectedCategory !== "All" && d.category !== selectedCategory) return false;
     const name = d.dish_name || d.name || "";
@@ -304,9 +317,36 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave, curren
             />
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => currentUser && setBookmarkedOnly((prev) => !prev)}
+              disabled={!currentUser}
+              title={currentUser ? "Show saved dishes" : "Sign in to view saved dishes"}
+              aria-pressed={bookmarkedOnly}
+              aria-label="Show saved dishes"
+              style={{
+                width: '46px',
+                height: '46px',
+                border: bookmarkedOnly ? '1px solid rgba(255, 208, 100, 0.75)' : '1px solid rgba(255,255,255,0.16)',
+                borderRadius: '8px',
+                background: bookmarkedOnly ? 'rgba(255, 208, 100, 0.16)' : 'rgba(0,0,0,0.2)',
+                color: bookmarkedOnly ? '#ffd064' : 'rgba(255,255,255,0.82)',
+                cursor: currentUser ? 'pointer' : 'not-allowed',
+                opacity: currentUser ? 1 : 0.45,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.18s ease'
+              }}
+            >
+              <Bookmark size={18} fill={bookmarkedOnly ? 'currentColor' : 'none'} />
+            </button>
             <CustomSelect 
               value={selectedCategory} 
-              onChange={setSelectedCategory}
+              onChange={(value) => {
+                setSelectedCategory(value);
+                setBookmarkedOnly(false);
+              }}
               options={categoryOptions}
               icon={Filter}
             />
@@ -348,17 +388,7 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave, curren
                 const dishId = dish.dish_id;
                 const dishName = dish.dish_name || dish.name || "";
                 const qty = cart[dishId]?.quantity || 0;
-                // Safely handle "null" strings
-                const rawUrl = dish.image_url || dish.image;
-                let imageUrl = menuImages.hero;
-                if (rawUrl && String(rawUrl).trim() !== "null" && String(rawUrl).trim() !== "undefined" && String(rawUrl).trim() !== "") {
-                  const trimmedUrl = String(rawUrl).trim();
-                  if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://') || trimmedUrl.startsWith('/uploads') || trimmedUrl.startsWith('/api')) {
-                    imageUrl = trimmedUrl;
-                  } else if (imagePathMap[trimmedUrl]) {
-                    imageUrl = imagePathMap[trimmedUrl];
-                  }
-                }
+                const imageUrl = resolveDishImage(dish, dishName) || menuImages.hero;
                 
                 const isAvailable = dish.is_available !== false && dish.is_available !== 0;
                 
@@ -379,7 +409,7 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave, curren
                         src={imageUrl} 
                         alt={dishName} 
                         style={{ width: '100%', height: '100%', objectFit: 'cover', filter: isAvailable ? 'none' : 'grayscale(100%)' }} 
-                        onError={(e) => { e.target.src = menuImages.hero; }}
+                        onError={(e) => { e.currentTarget.src = menuImages.hero; }}
                       />
                       {currentUser && isAvailable && (
                         <button

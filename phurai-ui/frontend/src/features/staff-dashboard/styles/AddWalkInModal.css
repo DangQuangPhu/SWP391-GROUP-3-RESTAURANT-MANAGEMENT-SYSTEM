@@ -234,6 +234,13 @@
   font-weight: 500;
 }
 
+.walkin-form__hint {
+  margin: 0;
+  font-size: 11.5px;
+  color: #64748b;
+  font-weight: 500;
+}
+
 /* Narrow number input for guest count */
 .walkin-form__input--sm {
   max-width: 120px;
@@ -477,4 +484,3 @@
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 16px;
 }
-

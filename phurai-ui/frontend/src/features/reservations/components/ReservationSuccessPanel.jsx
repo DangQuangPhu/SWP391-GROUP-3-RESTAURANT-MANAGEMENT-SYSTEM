@@ -12,7 +12,7 @@ const QUICK_NOTES = [
 ];
 
 function ReservationSuccessPanel({ reservation, onReturnHome, onViewReservation }) {
-  const [countdown, setCountdown] = useState(5);
+  const [countdown, setCountdown] = useState(3);
   const [hasRated, setHasRated] = useState(true);
   
   // Rating states
@@ -66,6 +66,8 @@ function ReservationSuccessPanel({ reservation, onReturnHome, onViewReservation 
   };
 
   if (!reservation) return null;
+  const isPreferredAssignment =
+    String(reservation.table_assignment_status || "").toLowerCase() === "preferred";
 
   return (
     <div className="rd-card" style={{ textAlign: "center" }}>
@@ -81,7 +83,9 @@ function ReservationSuccessPanel({ reservation, onReturnHome, onViewReservation 
         Reservation Confirmed!
       </h1>
       <p className="rzv-success__msg" style={{ fontSize: "0.875rem", marginBottom: "16px", color: "rgba(255, 255, 255, 0.6)" }}>
-        Thank you for choosing Phūrai. Your table is reserved — a confirmation email will be sent to you shortly.
+        {isPreferredAssignment
+          ? "Thank you for choosing Phūrai. Your preferred table has been recorded and staff will confirm the final table closer to your visit."
+          : "Thank you for choosing Phūrai. Your table is reserved — a confirmation email will be sent to you shortly."}
       </p>
 
       {/* RATING SECTION */}

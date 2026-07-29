@@ -29,7 +29,11 @@ function HeroSection({ isRevealReady = true, isVideoPlaying = true }) {
     }
 
     if (isVideoPlaying) {
-      video.play().catch(e => console.log('Video autoplay prevented:', e));
+      video.play().catch(e => {
+        if (e.name !== 'AbortError') {
+          console.log('Video autoplay prevented:', e);
+        }
+      });
     } else {
       video.pause();
     }

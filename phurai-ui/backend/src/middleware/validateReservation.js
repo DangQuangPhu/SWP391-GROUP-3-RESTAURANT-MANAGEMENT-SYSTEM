@@ -1,4 +1,6 @@
 import pool from "../db.js";
+import { getDefaultErtDurationMin } from "../constants/ertConfig.js";
+import { getAssignmentMode, TABLE_ASSIGNMENT_STATUS } from "../utils/tableAssignmentPolicy.js";
 
 const ALLOWED_STATUSES = new Set([
   'Pending Request', 'Pending Payment', 'Reserved', 'Confirmed',
@@ -7,6 +9,18 @@ const ALLOWED_STATUSES = new Set([
   'Paid', 'PaymentFailed', 'Pending', 'Await Check-in', 'Check-in',
   'Complete Paid', 'Overdue', 'Awaiting Deposit'
 ]);
+
+const ACTIVE_RESERVATION_STATUS_SQL = `
+  N'Pending Request',
+  N'Awaiting Deposit',
+  N'Await Check-in',
+  N'Reserved',
+  N'Confirmed',
+  N'Paid',
+  N'Check-in',
+  N'Dining',
+  N'Overdue'
+`;
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -112,20 +126,32 @@ export const validateReservationCreate = async (req, res, next) => {
       ? new Date(body.reservation_start_at)
       : buildLocalDate(body.date, body.time);
       
-    // slotEnd: honour explicit reservation_end_at if provided.
-    // Fallback: start + durationMinutes (customer's explicit pick) or party-size default.
-    let diningDuration = 120;
-    const count = Number(body.guest_count) || 1;
-    if (count <= 2) diningDuration = 60;
-    else if (count <= 4) diningDuration = 90;
-    else if (count <= 6) diningDuration = 105;
-    else diningDuration = 120;
+    let preferredAreaName = "";
+    const preferredAreaIdForDuration = Number(body.preferred_area_id);
+    if (preferredAreaIdForDuration) {
+      const [durationAreaRows] = await pool.query(
+        `SELECT area_name FROM dbo.RestaurantAreas WHERE area_id = ?`,
+        [preferredAreaIdForDuration]
+      );
+      preferredAreaName = durationAreaRows[0]?.area_name || "";
+    } else if (Array.isArray(body.table_ids) && body.table_ids.length > 0) {
+      const firstTableId = Number(body.table_ids[0]);
+      if (Number.isFinite(firstTableId) && firstTableId > 0) {
+        const [durationTableRows] = await pool.query(
+          `SELECT TOP 1 a.area_name
+           FROM dbo.RestaurantTables t
+           INNER JOIN dbo.RestaurantAreas a ON a.area_id = t.area_id
+           WHERE t.table_id = ?`,
+          [firstTableId]
+        );
+        preferredAreaName = durationTableRows[0]?.area_name || "";
+      }
+    }
 
-    let slotEnd = body.reservation_end_at
-      ? new Date(body.reservation_end_at)
-      : slotStart
-        ? new Date(slotStart.getTime() + (Number(body.durationMinutes) || diningDuration) * 60000)
-        : null;
+    const diningDuration = getDefaultErtDurationMin(body.guest_count, preferredAreaName);
+    const slotEnd = slotStart
+      ? new Date(slotStart.getTime() + diningDuration * 60000)
+      : null;
         
     if (!slotStart || Number.isNaN(slotStart.getTime()) || !slotEnd || Number.isNaN(slotEnd.getTime())) {
       return res.status(400).json({
@@ -185,10 +211,15 @@ export const validateReservationCreate = async (req, res, next) => {
       });
     }
 
-    // Duration validation — minimum 60 min, no hard upper cap (removed 90-min limit).
-    // reservation_end_at is now used only as EstimatedDuration for slot-planning;
-    // the table is released by real-world events (payment / staff confirm), not by this timestamp.
+    body.reservation_start_at = slotStart.toISOString();
+    body.reservation_end_at = slotEnd.toISOString();
+    body.durationMinutes = diningDuration;
+
+    // reservation_end_at is ERT for slot planning and alerts only.
+    // Table release still requires payment success or staff confirmation.
     const durationMinutes = Math.round((slotEnd - slotStart) / 60000);
+    const tableAssignmentMode = getAssignmentMode(slotStart);
+    body.table_assignment_status = tableAssignmentMode;
 
     if (durationMinutes < 60) {
       return res.status(400).json({
@@ -231,12 +262,15 @@ export const validateReservationCreate = async (req, res, next) => {
       // 1. Verify tables exist
       const [tableRows] = await pool.query(
         `SELECT t.table_id,
+                t.area_id,
+                a.area_name,
                 (t.capacity + ISNULL((
                   SELECT SUM(c.capacity)
                   FROM dbo.RestaurantTables c
                   WHERE c.merged_into_table_id = t.table_id
                 ), 0)) AS capacity
          FROM dbo.RestaurantTables t
+         LEFT JOIN dbo.RestaurantAreas a ON a.area_id = t.area_id
          WHERE t.table_id IN (${tableIds.join(',')})`
       );
       
@@ -257,58 +291,98 @@ export const validateReservationCreate = async (req, res, next) => {
           message: `Selected tables capacity (${totalCapacity}) cannot seat your party size (${guestCount}).`
         });
       }
-      
-      // 3a. Reservation-overlap check (existing bookings)
-      const [overlaps] = await pool.query(
-        `SELECT TOP 1 r.reservation_id, rt.table_id
-         FROM dbo.Reservations r
-         JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
-         WHERE rt.table_id IN (${tableIds.join(',')})
-           AND (
-             r.reservation_status IN (N'Await Check-in', N'Dining')
-             OR
-             (r.reservation_status IN (N'Pending Request', N'Awaiting Deposit') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
-           )
-           AND r.reservation_start_at < ?
-           AND r.reservation_end_at > ?`,
-        [slotEnd.toISOString(), slotStart.toISOString()]
-      );
 
-      if (overlaps.length > 0) {
+      const distinctAreaIds = [...new Set(tableRows.map((r) => Number(r.area_id)).filter(Boolean))];
+      if (distinctAreaIds.length > 1) {
         return res.status(400).json({
           success: false,
-          error: "SLOT_CONFLICT",
-          message: "Collision detected: One or more selected tables are already booked during this time."
+          error: "VALIDATION_FAILED",
+          message: "Selected tables must belong to the same area."
         });
       }
 
-      // 3b. EstimatedReleaseTime check — block slots blocked by currently Occupied tables.
-      // Uses UPDLOCK to prevent race condition: two simultaneous bookings can't both read
-      // the same unreleased session and both consider the slot free.
-      const tableIdStr = tableIds.join(',');
-      const [occupancyBlocks] = await pool.query(
-        `SELECT TOP 1
-           tos.session_id,
-           tos.table_id,
-           tos.estimated_release_at
-         FROM dbo.TableOccupancySessions tos WITH (NOLOCK)
-         WHERE tos.table_id IN (${tableIdStr})
-           AND tos.released_at IS NULL
-           AND tos.estimated_release_at > ?`,
-        [slotStart.toISOString()]
-      );
+      if (!body.preferred_area_id && distinctAreaIds[0]) {
+        body.preferred_area_id = distinctAreaIds[0];
+      }
 
-      if (occupancyBlocks.length > 0) {
-        const block = occupancyBlocks[0];
-        const releaseTime = new Date(block.estimated_release_at).toLocaleString('vi-VN', {
-          hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric'
-        });
-        return res.status(409).json({
-          success: false,
-          error: "TABLE_OCCUPIED",
-          message: `Table is currently occupied. Estimated available after ${releaseTime}. Please choose a later time or a different table.`,
-          estimatedReleaseAt: block.estimated_release_at
-        });
+      if (distinctAreaIds[0]) {
+        const areaId = distinctAreaIds[0];
+        const [areaCapacityRows] = await pool.query(
+          `SELECT ISNULL(SUM(capacity), 0) AS total_capacity
+           FROM dbo.RestaurantTables
+           WHERE area_id = ?
+             AND table_status <> N'Inactive'`,
+          [areaId]
+        );
+        const areaTotalCapacity = Number(areaCapacityRows[0]?.total_capacity || 0);
+
+        const [areaOverlapRows] = await pool.query(
+          `SELECT ISNULL(SUM(guest_count), 0) AS total_overlapping_guests
+           FROM dbo.Reservations
+           WHERE preferred_area_id = ?
+             AND reservation_status IN (${ACTIVE_RESERVATION_STATUS_SQL})
+             AND reservation_start_at < ?
+             AND reservation_end_at > ?`,
+          [areaId, slotEnd.toISOString(), slotStart.toISOString()]
+        );
+        const overlappingGuests = Number(areaOverlapRows[0]?.total_overlapping_guests || 0);
+
+        if (areaTotalCapacity > 0 && overlappingGuests + guestCount > areaTotalCapacity) {
+          return res.status(409).json({
+            success: false,
+            error: "AREA_FULL",
+            message: "This area is fully booked for the selected time. Please choose another time or area."
+          });
+        }
+      }
+
+      if (tableAssignmentMode === TABLE_ASSIGNMENT_STATUS.CONFIRMED) {
+        // 3a. Reservation-overlap check (existing bookings)
+        const [overlaps] = await pool.query(
+          `SELECT TOP 1 r.reservation_id, rt.table_id
+           FROM dbo.Reservations r
+           JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
+           WHERE rt.table_id IN (${tableIds.join(',')})
+             AND r.reservation_status IN (${ACTIVE_RESERVATION_STATUS_SQL})
+             AND r.reservation_start_at < ?
+             AND r.reservation_end_at > ?`,
+          [slotEnd.toISOString(), slotStart.toISOString()]
+        );
+
+        if (overlaps.length > 0) {
+          return res.status(400).json({
+            success: false,
+            error: "SLOT_CONFLICT",
+            message: "Collision detected: One or more selected tables are already booked during this time."
+          });
+        }
+
+        // 3b. EstimatedReleaseTime check — block slots blocked by currently Occupied tables.
+        const tableIdStr = tableIds.join(',');
+        const [occupancyBlocks] = await pool.query(
+          `SELECT TOP 1
+             tos.session_id,
+             tos.table_id,
+             tos.estimated_release_at
+           FROM dbo.TableOccupancySessions tos WITH (NOLOCK)
+           WHERE tos.table_id IN (${tableIdStr})
+             AND tos.released_at IS NULL
+             AND tos.estimated_release_at > ?`,
+          [slotStart.toISOString()]
+        );
+
+        if (occupancyBlocks.length > 0) {
+          const block = occupancyBlocks[0];
+          const releaseTime = new Date(block.estimated_release_at).toLocaleString('vi-VN', {
+            hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric'
+          });
+          return res.status(409).json({
+            success: false,
+            error: "TABLE_OCCUPIED",
+            message: `Table is currently occupied. Estimated available after ${releaseTime}. Please choose a later time or a different table.`,
+            estimatedReleaseAt: block.estimated_release_at
+          });
+        }
       }
     }
     
@@ -661,11 +735,7 @@ export const validateReservationUpdate = async (req, res, next) => {
            JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
            WHERE rt.table_id IN (${activeTableIds.join(',')})
              AND r.reservation_id != ?
-             AND (
-               r.reservation_status IN (N'Await Check-in', N'Dining')
-               OR
-               (r.reservation_status IN (N'Pending Request', N'Awaiting Deposit') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
-             )
+             AND r.reservation_status IN (${ACTIVE_RESERVATION_STATUS_SQL})
              AND DATEADD(minute, -60, r.reservation_start_at) < ?
              AND DATEADD(minute, 60, r.reservation_end_at) > ?`,
           [reservationId, activeSlotEnd.toISOString(), activeSlotStart.toISOString()]
@@ -683,7 +753,9 @@ export const validateReservationUpdate = async (req, res, next) => {
 
     // Stage 4: Pre-order Pricing Integrity (Optional)
     const preorderItemsRaw = target.preorder_items || target.pre_order_items || target.preorderItems;
-    if (preorderItemsRaw !== undefined) {
+    const shouldPricePreorderItems = Array.isArray(preorderItemsRaw)
+      && preorderItemsRaw.every((item) => item && typeof item === "object" && !Array.isArray(item));
+    if (preorderItemsRaw !== undefined && shouldPricePreorderItems) {
       let preorderItemsTotal = 0;
       const validPreorderItems = [];
 

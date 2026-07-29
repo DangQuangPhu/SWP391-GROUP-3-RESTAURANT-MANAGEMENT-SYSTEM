@@ -10,7 +10,7 @@ function getTableStatus(apiTable) {
     const avail = (apiTable.availability_at_slot || "").toLowerCase();
     if (avail === "occupied") return "Occupied";
     if (avail === "cleaning") return "Cleaning";
-    if (avail === "inactive") return "Occupied";
+    if (avail === "inactive") return "Inactive";
     return "Reserved";
   }
   return "Available";
@@ -30,6 +30,12 @@ export default function TablePreviewModal({
   const tableInfo = getTableInfo(tableCode, apiTable);
   const status = tableStatus || getTableStatus(apiTable);
   const isAvailable = status === 'Available';
+  const unavailableText = (() => {
+    if (status === 'InvalidCapacity') {
+      return `This table has ${tableInfo.capacity} seats and is not suitable for the selected guest count. Please choose a better-matched table.`;
+    }
+    return `This table is currently unavailable (${status}). Please select another table.`;
+  })();
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Escape') {
@@ -108,7 +114,7 @@ export default function TablePreviewModal({
             {!isAvailable && (
               <div className="tpm-alert-banner">
                 <AlertTriangle size={18} className="tpm-alert-icon" />
-                <span>This table is currently unavailable ({status}). Please select another table.</span>
+                <span>{unavailableText}</span>
               </div>
             )}
           </div>

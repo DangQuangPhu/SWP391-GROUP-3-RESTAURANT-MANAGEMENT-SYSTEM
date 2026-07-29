@@ -290,6 +290,40 @@ export async function getMyPromotions(req, res) {
   }
 }
 
+/**
+ * GET /api/loyalty/history
+ * Returns the customer's point history ledger (+/- transactions).
+ */
+export async function getHistory(req, res) {
+  try {
+    const customerId = req.userId;
+    if (!customerId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized.' });
+    }
+
+    const pool = await getRawPool();
+    const result = await pool.request()
+      .input('customerId', sql.Int, customerId)
+      .query(`
+        SELECT 
+          transaction_id,
+          points,
+          transaction_type,
+          reference_type,
+          reference_id,
+          description,
+          created_at
+        FROM dbo.LoyaltyTransactions
+        WHERE customer_id = @customerId
+        ORDER BY created_at DESC
+      `);
+
+    return res.json({ success: true, history: result.recordset });
+  } catch (err) {
+    console.error('[LoyaltyController] getHistory error:', err);
+    return res.status(500).json({ success: false, message: 'Internal server error.' });
+  }
+}
 
 /**
  * POST /api/loyalty/apply-promotion

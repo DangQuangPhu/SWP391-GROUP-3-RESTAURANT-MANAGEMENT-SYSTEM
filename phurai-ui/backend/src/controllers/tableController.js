@@ -1,6 +1,8 @@
 import sql from "mssql";
 import { createDbRequest } from "../db.js";
 import crypto from "crypto";
+import { sweepNoShows } from "../services/noShowSweeper.js";
+import { sweepTableAssignmentFinalization } from "../services/tableAssignmentFinalizer.js";
 
 const TABLE_STATUSES = new Set([
   "Available",
@@ -90,17 +92,43 @@ function slugStatus(value) {
 }
 
 function mapFilteredTableRow(row) {
+  const rawStatus = row.table_status || "Available";
+  let displayStatus = rawStatus;
+
+  if (rawStatus === "Reserved" && !row.active_reservation_id) {
+    displayStatus = "Available";
+  } else if (rawStatus === "Available" && row.active_reservation_id) {
+    displayStatus = "Reserved";
+  }
+
   return {
     table_id: row.table_id,
     table_number: row.table_number,
     area_id: row.area_id,
     area_name: row.area_name,
     capacity: row.capacity,
-    status: slugStatus(row.table_status),
-    table_status: row.table_status,
+    status: slugStatus(displayStatus),
+    table_status: displayStatus,
+    raw_table_status: rawStatus,
     qr_code: row.static_qr_code || null,
     merged_into_table_id: row.merged_into_table_id || null,
     is_counter: Boolean(row.is_counter),
+    active_reservation_id: row.active_reservation_id ?? null,
+    active_reservation_customer_name: row.active_reservation_customer_name ?? null,
+    next_reservation_guest_count: row.next_reservation_guest_count ?? null,
+    next_reservation_start_at: row.next_reservation_start_at ?? null,
+    active_occupancy_reservation_id: row.active_occupancy_reservation_id ?? null,
+    occupied_since: row.occupied_since ?? null,
+    estimated_duration_min: row.estimated_duration_min ?? null,
+    buffer_min: row.buffer_min ?? null,
+    estimated_release_at: row.estimated_release_at ?? null,
+    overrun_alerted: Boolean(row.overrun_alerted),
+    upcoming_count: Number(row.upcoming_count ?? 0),
+    active_order_id: row.active_order_id ?? null,
+    active_order_status: row.active_order_status ?? null,
+    active_order_item_count: Number(row.active_order_item_count ?? 0),
+    course_stage: row.course_stage ?? null,
+    course_stage_detail: row.course_stage_detail ?? null,
   };
 }
 
@@ -203,6 +231,9 @@ export async function getNextTableNumber(req, res) {
 
 export async function listFilteredTables(req, res) {
   try {
+    await sweepNoShows().catch((err) => console.error("[listFilteredTables] Auto sweep failed:", err.message));
+    await sweepTableAssignmentFinalization().catch((err) => console.error("[listFilteredTables] Assignment sweep failed:", err.message));
+
     const search = String(req.query.search ?? "").trim();
     const areaIdRaw = req.query.area_id;
     const statuses = parseStatusFilter(req.query.statuses);
@@ -249,9 +280,167 @@ export async function listFilteredTables(req, res) {
          t.static_qr_code,
          t.merged_into_table_id,
          t.is_counter,
-         a.area_name
+         a.area_name,
+         (
+           SELECT TOP 1 r.reservation_id
+           FROM dbo.Reservations AS r
+           INNER JOIN dbo.ReservationTables AS rt ON r.reservation_id = rt.reservation_id
+           WHERE rt.table_id = t.table_id
+             AND r.reservation_status IN (N'Await Check-in')
+             AND CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
+           ORDER BY r.reservation_start_at ASC
+         ) AS active_reservation_id,
+         (
+           SELECT TOP 1 COALESCE(ua.full_name, r.contact_name, N'Guest')
+           FROM dbo.Reservations AS r
+           LEFT JOIN dbo.UserAccounts AS ua ON r.customer_id = ua.user_id
+           INNER JOIN dbo.ReservationTables AS rt ON r.reservation_id = rt.reservation_id
+           WHERE rt.table_id = t.table_id
+             AND r.reservation_status IN (N'Confirmed', N'Await Check-in', N'Pending')
+             AND r.reservation_start_at >= SYSDATETIME()
+             AND CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
+           ORDER BY r.reservation_start_at ASC
+         ) AS active_reservation_customer_name,
+         (
+           SELECT TOP 1 r.guest_count
+           FROM dbo.Reservations AS r
+           INNER JOIN dbo.ReservationTables AS rt ON r.reservation_id = rt.reservation_id
+           WHERE rt.table_id = t.table_id
+             AND r.reservation_status IN (N'Confirmed', N'Await Check-in', N'Pending')
+             AND r.reservation_start_at >= SYSDATETIME()
+             AND CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
+           ORDER BY r.reservation_start_at ASC
+         ) AS next_reservation_guest_count,
+         (
+           SELECT TOP 1 r.reservation_start_at
+           FROM dbo.Reservations AS r
+           INNER JOIN dbo.ReservationTables AS rt ON r.reservation_id = rt.reservation_id
+           WHERE rt.table_id = t.table_id
+             AND r.reservation_status IN (N'Confirmed', N'Await Check-in', N'Pending')
+             AND r.reservation_start_at >= SYSDATETIME()
+             AND CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
+           ORDER BY r.reservation_start_at ASC
+         ) AS next_reservation_start_at,
+         (
+           SELECT TOP 1 tos.reservation_id
+           FROM dbo.TableOccupancySessions AS tos
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS active_occupancy_reservation_id,
+         (
+           SELECT TOP 1 COALESCE(r.seated_at, r.checked_in_at, tos.check_in_at)
+           FROM dbo.TableOccupancySessions AS tos
+           LEFT JOIN dbo.Reservations AS r ON r.reservation_id = tos.reservation_id
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS occupied_since,
+         (
+           SELECT TOP 1 tos.estimated_duration_min
+           FROM dbo.TableOccupancySessions AS tos
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS estimated_duration_min,
+         (
+           SELECT TOP 1 tos.buffer_min
+           FROM dbo.TableOccupancySessions AS tos
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS buffer_min,
+         (
+           SELECT TOP 1 COALESCE(r.reservation_end_at, tos.estimated_release_at)
+           FROM dbo.TableOccupancySessions AS tos
+           LEFT JOIN dbo.Reservations AS r ON r.reservation_id = tos.reservation_id
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS estimated_release_at,
+         (
+           SELECT TOP 1 tos.overrun_alerted
+           FROM dbo.TableOccupancySessions AS tos
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS overrun_alerted,
+         (
+           SELECT COUNT(1)
+           FROM dbo.Reservations AS r_up
+           INNER JOIN dbo.ReservationTables AS rt_up ON r_up.reservation_id = rt_up.reservation_id
+           WHERE rt_up.table_id = t.table_id
+             AND r_up.reservation_status IN (N'Confirmed', N'Await Check-in', N'Pending')
+             AND r_up.reservation_start_at >= SYSDATETIME()
+             AND CAST(DATEADD(hour, 7, r_up.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
+         ) AS upcoming_count,
+         active_order.order_id AS active_order_id,
+         active_order.order_status AS active_order_status,
+         ISNULL(order_stage.item_count, 0) AS active_order_item_count,
+         CASE
+           WHEN t.table_status <> N'Occupied' THEN NULL
+           WHEN active_order.order_id IS NULL THEN N'Dining'
+           WHEN active_order.order_status = N'Billed' THEN N'Bill Requested'
+           WHEN ISNULL(order_stage.item_count, 0) = 0 THEN N'Dining'
+           WHEN active_order.order_status = N'Served'
+             OR ISNULL(order_stage.item_count, 0) = ISNULL(order_stage.served_count, 0) THEN N'Served'
+           WHEN ISNULL(order_stage.ready_count, 0) > 0
+             OR ISNULL(order_stage.kitchen_ready_count, 0) > 0 THEN N'Ready'
+           WHEN ISNULL(order_stage.preparing_count, 0) > 0
+             OR ISNULL(order_stage.kitchen_preparing_count, 0) > 0 THEN N'Preparing'
+           WHEN ISNULL(order_stage.sent_count, 0) > 0
+             OR active_order.order_status = N'Sent To Kitchen' THEN N'Sent to Kitchen'
+           WHEN ISNULL(order_stage.pending_count, 0) > 0
+             OR active_order.order_status = N'Open' THEN N'Order Placed'
+           ELSE N'Dining'
+         END AS course_stage,
+         CASE
+           WHEN t.table_status <> N'Occupied' THEN NULL
+           WHEN active_order.order_id IS NULL THEN N'Waiting for order'
+           WHEN active_order.order_status = N'Billed' THEN N'Bill requested; awaiting payment'
+           WHEN ISNULL(order_stage.item_count, 0) = 0 THEN N'Waiting for order'
+           WHEN active_order.order_status = N'Served'
+             OR ISNULL(order_stage.item_count, 0) = ISNULL(order_stage.served_count, 0) THEN N'All active items served'
+           WHEN ISNULL(order_stage.ready_count, 0) > 0
+             OR ISNULL(order_stage.kitchen_ready_count, 0) > 0 THEN N'Kitchen item ready for service'
+           WHEN ISNULL(order_stage.preparing_count, 0) > 0
+             OR ISNULL(order_stage.kitchen_preparing_count, 0) > 0 THEN N'Kitchen is preparing items'
+           WHEN ISNULL(order_stage.sent_count, 0) > 0
+             OR active_order.order_status = N'Sent To Kitchen' THEN N'Order sent to kitchen'
+           WHEN ISNULL(order_stage.pending_count, 0) > 0
+             OR active_order.order_status = N'Open' THEN N'Order placed; not yet cooking'
+           ELSE N'Dining'
+         END AS course_stage_detail
        FROM dbo.RestaurantTables AS t
        INNER JOIN dbo.RestaurantAreas AS a ON a.area_id = t.area_id
+       OUTER APPLY (
+         SELECT TOP 1
+           o.order_id,
+           o.order_status,
+           o.reservation_id,
+           o.customer_id,
+           o.created_by_staff_id,
+           o.created_at
+         FROM dbo.Orders AS o
+         WHERE o.table_id = t.table_id
+           AND o.order_status NOT IN (N'Paid', N'Cancelled')
+         ORDER BY o.updated_at DESC, o.created_at DESC
+       ) AS active_order
+       OUTER APPLY (
+         SELECT
+           COUNT(1) AS item_count,
+           SUM(CASE WHEN oi.item_status = N'Pending' THEN 1 ELSE 0 END) AS pending_count,
+           SUM(CASE WHEN oi.item_status = N'Sent To Kitchen' THEN 1 ELSE 0 END) AS sent_count,
+           SUM(CASE WHEN oi.item_status = N'Preparing' THEN 1 ELSE 0 END) AS preparing_count,
+           SUM(CASE WHEN oi.item_status = N'Ready' THEN 1 ELSE 0 END) AS ready_count,
+           SUM(CASE WHEN oi.item_status = N'Served' THEN 1 ELSE 0 END) AS served_count,
+           SUM(CASE WHEN kt.kitchen_status = N'Preparing' THEN 1 ELSE 0 END) AS kitchen_preparing_count,
+           SUM(CASE WHEN kt.kitchen_status = N'Ready' THEN 1 ELSE 0 END) AS kitchen_ready_count
+         FROM dbo.OrderItems AS oi
+         LEFT JOIN dbo.KitchenTickets AS kt ON kt.order_item_id = oi.order_item_id
+         WHERE oi.order_id = active_order.order_id
+           AND oi.item_status <> N'Cancelled'
+       ) AS order_stage
        WHERE ${where.join(" AND ")}
        ORDER BY a.area_name ASC, t.table_number ASC;`
     );

@@ -1,4 +1,6 @@
 import express from 'express';
+import { sendEditConfirmedEmail } from "../email.js";
+import { getTableUpcomingReservations, getStaffFullTimeline } from '../controllers/staffController.js';
 import { 
     forceSettleOrder, 
     getAreas, 
@@ -47,6 +49,7 @@ import { validateReservationUpdate } from '../middleware/validateReservation.js'
 import { createArea, updateArea, deactivateArea } from '../controllers/areaController.js';
 import { processRefund, emitRefundNotification } from '../services/refundService.js';
 import { resolveUserId, requireUserId } from '../middleware/authMiddleware.js';
+import { getAccountabilityAudit } from '../controllers/managerAuditController.js';
 
 
 const router = express.Router();
@@ -94,9 +97,13 @@ router.post('/tables/virtual', requireManagerOrAdmin, createVirtualTable);
 router.get('/next-table-number', requireManagerOrAdmin, getNextTableNumber);
 router.post('/tables/merge', resolveUserId, requireUserId, requireManagerOrAdmin, mergeTables);
 router.post('/tables/unmerge', resolveUserId, requireUserId, requireManagerOrAdmin, unmergeTable);
+router.get('/tables/full-timeline', resolveUserId, requireManagerOrAdmin, getStaffFullTimeline);
 router.get('/tables/:id/timeline', resolveUserId, requireManagerOrAdmin, getTableTimeline);
+router.get('/tables/:tableId/upcoming-reservations', resolveUserId, requireManagerOrAdmin, getTableUpcomingReservations);
+router.get('/tables/:tableId/queue', resolveUserId, requireManagerOrAdmin, getTableUpcomingReservations);
 router.patch('/tables/:id', requireManagerOrAdmin, updateTable);
 router.delete('/tables/:id', requireManagerOrAdmin, deleteTable);
+router.get('/accountability-audit', resolveUserId, requireUserId, requireManagerOrAdmin, getAccountabilityAudit);
 
 import { 
     createStaffAccount, 
@@ -212,15 +219,27 @@ router.get('/reservation-requests', requireManagerOrAdmin, async (req, res) => {
        JOIN dbo.Reservations r ON rcr.reservation_id = r.reservation_id
        LEFT JOIN dbo.UserAccounts ua ON ua.user_id = rcr.requested_by_customer_id
        LEFT JOIN dbo.RestaurantTables rt_new ON rt_new.table_id = rcr.requested_table_id
-       WHERE rcr.request_status = ?
+       WHERE (
+         rcr.request_status = ?
+         OR (? = N'PendingManagerApproval'
+             AND rcr.request_status = N'Pending'
+             AND rcr.requires_financial_approval = 1)
+       )
        ORDER BY rcr.created_at ASC
        OFFSET ? ROWS FETCH NEXT ? ROWS ONLY`,
-      [status, offset, limit]
+      [status, status, offset, limit]
     );
 
     const [[{ total }]] = await pool.query(
-      `SELECT COUNT(*) AS total FROM dbo.ReservationChangeRequests WHERE request_status = ?`,
-      [status]
+      `SELECT COUNT(*) AS total
+       FROM dbo.ReservationChangeRequests
+       WHERE (
+         request_status = ?
+         OR (? = N'PendingManagerApproval'
+             AND request_status = N'Pending'
+             AND requires_financial_approval = 1)
+       )`,
+      [status, status]
     );
 
     return res.json({ success: true, data: { requests: rows, totalCount: total, totalPages: Math.ceil(total / limit), currentPage: page } });
@@ -251,7 +270,8 @@ router.post('/reservation-requests/:id/approve', requireManagerOrAdmin, async (r
 
     const [reqRows] = await connection.query(
       `SELECT rcr.*, r.deposit_amount, r.deposit_required, r.reservation_status,
-              r.customer_id,
+              r.customer_id, r.reservation_start_at, r.reservation_end_at,
+              r.guest_count, r.contact_phone, r.special_request, r.dining_purpose,
               COALESCE(ua.email, r.contact_email, '') AS recipient_email,
               COALESCE(ua.full_name, r.contact_name, N'Guest') AS recipient_name
        FROM dbo.ReservationChangeRequests rcr WITH (UPDLOCK, ROWLOCK)
@@ -267,7 +287,7 @@ router.post('/reservation-requests/:id/approve', requireManagerOrAdmin, async (r
     }
 
     const rcr = reqRows[0];
-    if (rcr.request_status !== 'PendingManagerApproval') {
+    if (rcr.request_status !== 'PendingManagerApproval' && !(rcr.request_status === 'Pending' && rcr.requires_financial_approval)) {
       await connection.rollback(); connection.release();
       return res.status(409).json({ success: false, code: 'WRONG_STATE', message: `Request is in status '${rcr.request_status}', cannot approve.` });
     }
@@ -302,9 +322,29 @@ router.post('/reservation-requests/:id/approve', requireManagerOrAdmin, async (r
       }
     } else if (rcr.request_type === 'TableChange' && rcr.requested_table_id) {
       await connection.query(
-        `UPDATE dbo.ReservationTables SET table_id = ?, assigned_by_staff_id = ?
-         WHERE reservation_id = ?`,
-        [rcr.requested_table_id, managerId, rcr.reservation_id]
+        `UPDATE dbo.RestaurantTables
+         SET table_status = N'Available', updated_at = SYSDATETIME()
+         WHERE table_id IN (
+           SELECT table_id FROM dbo.ReservationTables WHERE reservation_id = ?
+         )
+           AND table_status = N'Reserved'`,
+        [rcr.reservation_id]
+      );
+      await connection.query(
+        `DELETE FROM dbo.ReservationTables WHERE reservation_id = ?`,
+        [rcr.reservation_id]
+      );
+      await connection.query(
+        `INSERT INTO dbo.ReservationTables (reservation_id, table_id, assigned_by_staff_id, assigned_at)
+         VALUES (?, ?, ?, SYSDATETIME())`,
+        [rcr.reservation_id, rcr.requested_table_id, managerId]
+      );
+      await connection.query(
+        `UPDATE dbo.RestaurantTables
+         SET table_status = N'Reserved', updated_at = SYSDATETIME()
+         WHERE table_id = ?
+           AND table_status NOT IN (N'Occupied', N'Cleaning', N'Inactive')`,
+        [rcr.requested_table_id]
       );
     } else {
       // TimeChange / PartySizeChange
@@ -313,11 +353,27 @@ router.post('/reservation-requests/:id/approve', requireManagerOrAdmin, async (r
       if (rcr.requested_start_at) { resUpdates.push('reservation_start_at = ?'); resParams.push(rcr.requested_start_at); }
       if (rcr.requested_end_at)   { resUpdates.push('reservation_end_at = ?');   resParams.push(rcr.requested_end_at); }
       if (rcr.requested_party_size) { resUpdates.push('guest_count = ?'); resParams.push(rcr.requested_party_size); }
-      if (resUpdates.length > 0) {
-        resUpdates.push('updated_at = SYSDATETIME()');
-        resParams.push(rcr.reservation_id);
-        await connection.query(`UPDATE dbo.Reservations SET ${resUpdates.join(', ')} WHERE reservation_id = ?`, resParams);
-      }
+      resUpdates.push('pending_changes_json = NULL');
+      resUpdates.push('request_type = NULL');
+      resUpdates.push('resolved_at = SYSDATETIME()');
+      resUpdates.push('resolved_by = ?');
+      resParams.push(managerId);
+      resUpdates.push('updated_at = SYSDATETIME()');
+      resParams.push(rcr.reservation_id);
+      await connection.query(`UPDATE dbo.Reservations SET ${resUpdates.join(', ')} WHERE reservation_id = ?`, resParams);
+    }
+
+    if (rcr.request_type === 'Cancel' || rcr.request_type === 'TableChange') {
+      await connection.query(
+        `UPDATE dbo.Reservations
+         SET pending_changes_json = NULL,
+             request_type = NULL,
+             resolved_at = SYSDATETIME(),
+             resolved_by = ?,
+             updated_at = SYSDATETIME()
+         WHERE reservation_id = ?`,
+        [managerId, rcr.reservation_id]
+      );
     }
 
     // Mark request as ManagerApproved
@@ -339,6 +395,35 @@ router.post('/reservation-requests/:id/approve', requireManagerOrAdmin, async (r
 
     await connection.commit();
     connection.release();
+
+    if (rcr.request_type !== 'Cancel' && rcr.recipient_email) {
+      let parsedReason = {};
+      try { parsedReason = rcr.reason ? JSON.parse(rcr.reason) : {}; } catch { parsedReason = {}; }
+      const requestedChanges = parsedReason?.changes || {};
+
+      const fmtDt = (iso) => {
+        if (!iso) return "—";
+        try {
+          const d = new Date(iso);
+          return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} ${d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`;
+        } catch { return String(iso); }
+      };
+
+      sendEditConfirmedEmail({
+        toEmail: rcr.recipient_email,
+        customerName: rcr.recipient_name,
+        reservationId: rcr.reservation_id,
+        updatedDetails: {
+          phone: requestedChanges.contact_phone || rcr.contact_phone || "Not provided",
+          time: rcr.requested_start_at ? fmtDt(rcr.requested_start_at) : fmtDt(rcr.reservation_start_at),
+          guests: rcr.requested_party_size ? `${rcr.requested_party_size} Guests` : `${rcr.guest_count || 1} Guests`,
+          area: "Main Dining Area",
+          table: rcr.requested_table_id ? `Table #${rcr.requested_table_id}` : "Not assigned",
+          purpose: requestedChanges.dining_purpose || rcr.dining_purpose || "Casual Dinner",
+          notes: requestedChanges.special_request || rcr.special_request || null,
+        },
+      }).catch((e) => console.error("[manager/approve] Email failed:", e?.message));
+    }
 
     // Fire-and-forget notifications (all 3 emitted)
     emitRefundNotification({ customerId: rcr.customer_id, reservationId: rcr.reservation_id, amount: refund_amount || rcr.deposit_amount, decision: 'ManagerApproved' });
@@ -372,6 +457,7 @@ router.post('/reservation-requests/:id/reject', requireManagerOrAdmin, async (re
 
     const [reqRows] = await connection.query(
       `SELECT rcr.request_id, rcr.reservation_id, rcr.request_type, rcr.request_status,
+              rcr.requires_financial_approval,
               rcr.requested_by_customer_id, r.customer_id
        FROM dbo.ReservationChangeRequests rcr WITH (UPDLOCK, ROWLOCK)
        JOIN dbo.Reservations r ON rcr.reservation_id = r.reservation_id
@@ -385,10 +471,21 @@ router.post('/reservation-requests/:id/reject', requireManagerOrAdmin, async (re
     }
 
     const rcr = reqRows[0];
-    if (rcr.request_status !== 'PendingManagerApproval') {
+    if (rcr.request_status !== 'PendingManagerApproval' && !(rcr.request_status === 'Pending' && rcr.requires_financial_approval)) {
       await connection.rollback(); connection.release();
       return res.status(409).json({ success: false, code: 'WRONG_STATE', message: `Request is in status '${rcr.request_status}', cannot reject.` });
     }
+
+    await connection.query(
+      `UPDATE dbo.Reservations
+       SET pending_changes_json = NULL,
+           request_type = NULL,
+           rejected_at = SYSDATETIME(),
+           rejected_by = ?,
+           updated_at = SYSDATETIME()
+       WHERE reservation_id = ?`,
+      [managerId, rcr.reservation_id]
+    );
 
     await connection.query(
       `UPDATE dbo.ReservationChangeRequests
@@ -440,4 +537,3 @@ router.post('/reservation-requests/:id/reject', requireManagerOrAdmin, async (re
 });
 
 export default router;
-

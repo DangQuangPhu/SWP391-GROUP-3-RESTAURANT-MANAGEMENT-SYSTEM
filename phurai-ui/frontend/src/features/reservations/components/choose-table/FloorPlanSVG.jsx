@@ -5,21 +5,27 @@ import TableUnit from './TableUnit';
 import { TABLES } from '../../config/floorPlanConfig';
 import { validateTableCapacity } from '../../utils/validateTableCapacity';
 
-// Normalize status based on backend API data and guest capacity
+// Normalize status based on backend API data and restaurant seating policy.
 export function normalizeStatus(apiTable, guestCount) {
-  if (!apiTable) return "Occupied";
+  if (!apiTable) return "Inactive";
+
+  const statusStr = (apiTable.availability_at_slot || apiTable.table_status || apiTable.status || "").toLowerCase().trim();
+
+  if (statusStr === "occupied") return "Occupied";
+  if (statusStr === "cleaning") return "Cleaning";
+  if (statusStr === "reserved" || statusStr === "await check-in" || statusStr === "booked") return "Reserved";
+  if (statusStr === "inactive") return "Inactive";
+
   if (apiTable.is_bookable === false) {
-    const avail = (apiTable.availability_at_slot || apiTable.table_status || "").toLowerCase();
-    if (avail === "occupied") return "Occupied";
-    if (avail === "cleaning") return "Cleaning";
-    if (avail === "inactive") return "Occupied";
     return "Reserved";
   }
 
-  // Capacity validation
-  if (guestCount && apiTable.capacity) {
-    const isCapacityValid = validateTableCapacity(guestCount, apiTable.capacity);
-    if (!isCapacityValid) return "Occupied";
+  const guests = Number(guestCount);
+  const capacity = Number(apiTable.capacity);
+  if (Number.isFinite(guests) && Number.isFinite(capacity) && guests > 0 && capacity > 0) {
+    if (!validateTableCapacity(guests, capacity)) {
+      return "InvalidCapacity";
+    }
   }
 
   return "Available";
@@ -173,6 +179,9 @@ export default function FloorPlanSVG({
       text = "Table currently reserved";
     } else if (status === 'Cleaning') {
       text = "Table currently being cleaned";
+    } else if (status === 'InvalidCapacity') {
+      const cap = apiTable?.capacity || tableConfig.capacity || 2;
+      text = `Table ${tableConfig.id} has ${cap} seats and does not fit ${guestCount || 0} guest(s)`;
     } else {
       const cap = apiTable?.capacity || tableConfig.capacity || 2;
       text = `Table ${tableConfig.id} (${cap} seats)`;
@@ -301,7 +310,7 @@ export default function FloorPlanSVG({
             const apiTable = apiTableMap.get(tableConfig.id);
             const status = normalizeStatus(apiTable, guestCount);
 
-            const isSelected = apiTable && selectedTableId === apiTable.table_id;
+            const isSelected = apiTable && String(selectedTableId) === String(apiTable.table_id);
 
             let visualStatus = status;
             if (isSelected) {

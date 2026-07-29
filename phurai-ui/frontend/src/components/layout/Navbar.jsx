@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { UserAvatar } from "@/features/auth";
 import { isMenuCustomer } from "@/features/menu/utils/menuCustomer.js";
 import { ProfileDropdown } from "@/features/profile";
+import { getPortalInfo } from "@/features/profile/components/ProfileDropdown.jsx";
 import CustomerNotificationBell from "@/components/notifications/CustomerNotificationBell.jsx";
 import { ViewQrTableModal, useTableSession } from "@/features/table-session";
 import "@/features/table-session/styles/table-session.css";
@@ -54,6 +56,7 @@ function Navbar({
     setProfileOpen(false);
     onOpenProfile?.(view);
   };
+  const navigate = useNavigate();
   const [navState, setNavState] = useState("top");
   const [isScrolled, setIsScrolled] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -63,6 +66,7 @@ function Navbar({
   const { hasActiveSession = false } = useTableSession() || {};
   const isMenuCustomerUser = isMenuCustomer(isAuthenticated, currentUser);
   const showQrTableAction = isMenuCustomerUser && hasActiveSession;
+  const portalInfo = getPortalInfo(currentUser);
 
   const isDarkTopPage = darkTopPages.includes(activePage);
   const pageClass = pageClassMap[activePage] || activePage;
@@ -238,6 +242,28 @@ function Navbar({
         >
           RESERVATIONS
         </a>
+        {portalInfo ? (
+          <button
+            type="button"
+            className="phurai-navbar__cta phurai-navbar__cta--portal"
+            style={{
+              background: "linear-gradient(135deg, #b8a379 0%, #9f8655 100%)",
+              color: "#0f172a",
+              fontWeight: "700",
+              letterSpacing: "0.04em",
+              borderRadius: "8px",
+              padding: "8px 16px",
+              fontSize: "13px",
+              cursor: "pointer",
+              border: "none",
+              boxShadow: "0 2px 8px rgba(184, 163, 121, 0.4)",
+              transition: "transform 0.2s, opacity 0.2s"
+            }}
+            onClick={() => navigate(portalInfo.path)}
+          >
+            {portalInfo.label.toUpperCase()}
+          </button>
+        ) : null}
         {isAuthenticated ? (
           <div className="phurai-navbar__profile-wrap">
             <button

@@ -412,20 +412,20 @@
   stroke-width: 2.2px !important;
 }
 
-/* Reserved Status (Vibrant Purple Stroke & Fill) */
+/* Reserved Status (Vibrant Blue Stroke & Fill - Matches Manager/Staff Portal Reserved Badge) */
 .table-unit.reserved {
   cursor: not-allowed;
-  opacity: 0.85;
+  opacity: 0.9;
 }
 .table-unit.reserved .table-shape {
-  fill: #f3e8ff !important;
-  stroke: #8b5cf6 !important;
+  fill: #dbeafe !important;
+  stroke: #2563eb !important;
   stroke-width: 3.5px !important;
-  filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.35));
+  filter: drop-shadow(0 0 6px rgba(37, 99, 235, 0.4));
 }
 .table-unit.reserved .chair {
-  fill: #ddd6fe !important;
-  stroke: #8b5cf6 !important;
+  fill: #bfdbfe !important;
+  stroke: #2563eb !important;
   stroke-width: 2.2px !important;
 }
 
@@ -443,6 +443,23 @@
 .table-unit.cleaning .chair {
   fill: #a5f3fc !important;
   stroke: #06b6d4 !important;
+  stroke-width: 2.2px !important;
+}
+
+/* Inactive Status (Spec gray) */
+.table-unit.inactive {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+.table-unit.inactive .table-shape {
+  fill: #f3f4f6 !important;
+  stroke: #6b7280 !important;
+  stroke-width: 3.5px !important;
+  filter: drop-shadow(0 0 5px rgba(107, 114, 128, 0.28));
+}
+.table-unit.inactive .chair {
+  fill: #e5e7eb !important;
+  stroke: #6b7280 !important;
   stroke-width: 2.2px !important;
 }
 

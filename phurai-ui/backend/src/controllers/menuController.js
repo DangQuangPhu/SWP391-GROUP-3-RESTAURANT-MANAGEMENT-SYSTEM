@@ -24,7 +24,7 @@ export async function getMenu(req, res) {
       success: true, 
       data: dishes.map(d => ({
         ...d,
-        image_url: `/api/dishes/${d.dish_id}/image`,
+        image_url: d.image_url || "",
         is_available: !!d.is_available,
         is_recommended: !!d.is_recommended,
         is_preorderable: !!d.is_preorderable

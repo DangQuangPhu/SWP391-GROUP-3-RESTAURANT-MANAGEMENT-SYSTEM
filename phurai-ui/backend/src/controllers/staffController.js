@@ -8,6 +8,8 @@ import { getIO } from "../socket.js";
 import { updateReservationStatus } from "../services/reservationStateService.js";
 import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
 import { handlePostCheckoutSuccess } from "../services/checkoutHelper.js";
+import { sweepNoShows } from "../services/noShowSweeper.js";
+import { sweepTableAssignmentFinalization } from "../services/tableAssignmentFinalizer.js";
 
 function jsonOk(res, data, status = 200) {
   return res.status(status).json({ success: true, data });
@@ -44,6 +46,7 @@ function mapTodayReservationRow(row, tablesByReservation, preordersByReservation
   const end = parseDbDate(row.reservation_end_at);
   const assigned = tablesByReservation[row.reservation_id] || [];
   const primary = assigned[0] || null;
+  const assignedAreaName = primary?.area_name || assigned.find((table) => table.area_name)?.area_name || null;
   const specialRequest = row.special_request || "";
   const holdMatch = String(specialRequest).match(/\[Hold:\s*(\d+)m\]/i);
   const holdDurationMinutes = holdMatch ? Number(holdMatch[1]) : null;
@@ -67,7 +70,9 @@ function mapTodayReservationRow(row, tablesByReservation, preordersByReservation
     start_time: formatTimePart(start),
     party_size: row.guest_count,
     guest_count: row.guest_count,
-    area_name: row.area_name || "Unassigned",
+    assigned_area_name: assignedAreaName,
+    preferred_area: row.area_name || null,
+    area_name: assignedAreaName || row.area_name || "Unassigned",
     table_id: primary?.table_id ?? null,
     table_number: primary?.table_number ?? null,
     table_label: assigned.map((t) => t.table_number).join(", ") || "—",
@@ -83,22 +88,45 @@ function mapTodayReservationRow(row, tablesByReservation, preordersByReservation
 }
 
 function mapTableRow(row) {
+  const rawStatus = row.table_status || "Available";
+  let displayStatus = rawStatus;
+
+  if (rawStatus === "Reserved" && !row.active_reservation_id) {
+    displayStatus = "Available";
+  } else if (rawStatus === "Available" && row.active_reservation_id) {
+    displayStatus = "Reserved";
+  }
+
   return {
     table_id: row.table_id,
     table_number: row.table_number,
     area_id: row.area_id ?? null,
     area_name: row.area_name,
     capacity: row.capacity,
-    table_status: row.table_status,
-    status: row.table_status,
+    table_status: displayStatus,
+    status: displayStatus,
+    raw_table_status: rawStatus,
     qr_code: row.static_qr_code || null,
     merged_into_table_id: row.merged_into_table_id ?? null,
     is_counter: Boolean(row.is_counter),
     active_session_id: row.active_session_id ?? null,
     active_reservation_id: row.active_reservation_id ?? null,
     active_reservation_customer_name: row.active_reservation_customer_name ?? null,
+    next_reservation_guest_count: row.next_reservation_guest_count ?? null,
+    next_reservation_start_at: row.next_reservation_start_at ?? null,
+    active_occupancy_reservation_id: row.active_occupancy_reservation_id ?? null,
+    occupied_since: row.occupied_since ?? null,
+    estimated_duration_min: row.estimated_duration_min ?? null,
+    buffer_min: row.buffer_min ?? null,
     // EstimatedReleaseTime from TableOccupancySessions (null when table is not Occupied)
     estimated_release_at: row.estimated_release_at ?? null,
+    overrun_alerted: Boolean(row.overrun_alerted),
+    upcoming_count: Number(row.upcoming_count ?? 0),
+    active_order_id: row.active_order_id ?? null,
+    active_order_status: row.active_order_status ?? null,
+    active_order_item_count: Number(row.active_order_item_count ?? 0),
+    course_stage: row.course_stage ?? null,
+    course_stage_detail: row.course_stage_detail ?? null,
   };
 }
 
@@ -117,6 +145,9 @@ function buildSessionToken(tableNumber, tableId) {
  */
 export async function listStaffTables(_req, res) {
   try {
+    await sweepNoShows().catch((err) => console.error("[listStaffTables] Auto sweep failed:", err.message));
+    await sweepTableAssignmentFinalization().catch((err) => console.error("[listStaffTables] Assignment sweep failed:", err.message));
+
     const [rows] = await pool.query(
       `SELECT
          t.table_id,
@@ -151,19 +182,151 @@ export async function listStaffTables(_req, res) {
            LEFT JOIN dbo.UserAccounts AS ua ON r.customer_id = ua.user_id
            INNER JOIN dbo.ReservationTables AS rt ON r.reservation_id = rt.reservation_id
            WHERE rt.table_id = t.table_id
-             AND r.reservation_status IN (N'Await Check-in')
+             AND r.reservation_status IN (N'Confirmed', N'Await Check-in', N'Pending')
+             AND r.reservation_start_at >= SYSDATETIME()
              AND CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
            ORDER BY r.reservation_start_at ASC
          ) AS active_reservation_customer_name,
          (
-           SELECT TOP 1 tos.estimated_release_at
+           SELECT TOP 1 r.guest_count
+           FROM dbo.Reservations AS r
+           INNER JOIN dbo.ReservationTables AS rt ON r.reservation_id = rt.reservation_id
+           WHERE rt.table_id = t.table_id
+             AND r.reservation_status IN (N'Confirmed', N'Await Check-in', N'Pending')
+             AND r.reservation_start_at >= SYSDATETIME()
+             AND CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
+           ORDER BY r.reservation_start_at ASC
+         ) AS next_reservation_guest_count,
+         (
+           SELECT TOP 1 r.reservation_start_at
+           FROM dbo.Reservations AS r
+           INNER JOIN dbo.ReservationTables AS rt ON r.reservation_id = rt.reservation_id
+           WHERE rt.table_id = t.table_id
+             AND r.reservation_status IN (N'Confirmed', N'Await Check-in', N'Pending')
+             AND r.reservation_start_at >= SYSDATETIME()
+             AND CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
+           ORDER BY r.reservation_start_at ASC
+         ) AS next_reservation_start_at,
+         (
+           SELECT TOP 1 tos.reservation_id
            FROM dbo.TableOccupancySessions AS tos
            WHERE tos.table_id = t.table_id
              AND tos.released_at IS NULL
            ORDER BY tos.check_in_at DESC
-         ) AS estimated_release_at
+         ) AS active_occupancy_reservation_id,
+         (
+           SELECT TOP 1 COALESCE(r.seated_at, r.checked_in_at, tos.check_in_at)
+           FROM dbo.TableOccupancySessions AS tos
+           LEFT JOIN dbo.Reservations AS r ON r.reservation_id = tos.reservation_id
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS occupied_since,
+         (
+           SELECT TOP 1 tos.estimated_duration_min
+           FROM dbo.TableOccupancySessions AS tos
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS estimated_duration_min,
+         (
+           SELECT TOP 1 tos.buffer_min
+           FROM dbo.TableOccupancySessions AS tos
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS buffer_min,
+         (
+           SELECT TOP 1 COALESCE(r.reservation_end_at, tos.estimated_release_at)
+           FROM dbo.TableOccupancySessions AS tos
+           LEFT JOIN dbo.Reservations AS r ON r.reservation_id = tos.reservation_id
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS estimated_release_at,
+         (
+           SELECT TOP 1 tos.overrun_alerted
+           FROM dbo.TableOccupancySessions AS tos
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS overrun_alerted,
+         (
+           SELECT COUNT(1)
+           FROM dbo.Reservations AS r_up
+           INNER JOIN dbo.ReservationTables AS rt_up ON r_up.reservation_id = rt_up.reservation_id
+           WHERE rt_up.table_id = t.table_id
+             AND r_up.reservation_status IN (N'Confirmed', N'Await Check-in', N'Pending')
+             AND r_up.reservation_start_at >= SYSDATETIME()
+             AND CAST(DATEADD(hour, 7, r_up.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
+         ) AS upcoming_count,
+         active_order.order_id AS active_order_id,
+         active_order.order_status AS active_order_status,
+         ISNULL(order_stage.item_count, 0) AS active_order_item_count,
+         CASE
+           WHEN t.table_status <> N'Occupied' THEN NULL
+           WHEN active_order.order_id IS NULL THEN N'Dining'
+           WHEN active_order.order_status = N'Billed' THEN N'Bill Requested'
+           WHEN ISNULL(order_stage.item_count, 0) = 0 THEN N'Dining'
+           WHEN active_order.order_status = N'Served'
+             OR ISNULL(order_stage.item_count, 0) = ISNULL(order_stage.served_count, 0) THEN N'Served'
+           WHEN ISNULL(order_stage.ready_count, 0) > 0
+             OR ISNULL(order_stage.kitchen_ready_count, 0) > 0 THEN N'Ready'
+           WHEN ISNULL(order_stage.preparing_count, 0) > 0
+             OR ISNULL(order_stage.kitchen_preparing_count, 0) > 0 THEN N'Preparing'
+           WHEN ISNULL(order_stage.sent_count, 0) > 0
+             OR active_order.order_status = N'Sent To Kitchen' THEN N'Sent to Kitchen'
+           WHEN ISNULL(order_stage.pending_count, 0) > 0
+             OR active_order.order_status = N'Open' THEN N'Order Placed'
+           ELSE N'Dining'
+         END AS course_stage,
+         CASE
+           WHEN t.table_status <> N'Occupied' THEN NULL
+           WHEN active_order.order_id IS NULL THEN N'Waiting for order'
+           WHEN active_order.order_status = N'Billed' THEN N'Bill requested; awaiting payment'
+           WHEN ISNULL(order_stage.item_count, 0) = 0 THEN N'Waiting for order'
+           WHEN active_order.order_status = N'Served'
+             OR ISNULL(order_stage.item_count, 0) = ISNULL(order_stage.served_count, 0) THEN N'All active items served'
+           WHEN ISNULL(order_stage.ready_count, 0) > 0
+             OR ISNULL(order_stage.kitchen_ready_count, 0) > 0 THEN N'Kitchen item ready for service'
+           WHEN ISNULL(order_stage.preparing_count, 0) > 0
+             OR ISNULL(order_stage.kitchen_preparing_count, 0) > 0 THEN N'Kitchen is preparing items'
+           WHEN ISNULL(order_stage.sent_count, 0) > 0
+             OR active_order.order_status = N'Sent To Kitchen' THEN N'Order sent to kitchen'
+           WHEN ISNULL(order_stage.pending_count, 0) > 0
+             OR active_order.order_status = N'Open' THEN N'Order placed; not yet cooking'
+           ELSE N'Dining'
+         END AS course_stage_detail
        FROM dbo.RestaurantTables AS t
        INNER JOIN dbo.RestaurantAreas AS a ON a.area_id = t.area_id
+       OUTER APPLY (
+         SELECT TOP 1
+           o.order_id,
+           o.order_status,
+           o.reservation_id,
+           o.customer_id,
+           o.created_by_staff_id,
+           o.created_at
+         FROM dbo.Orders AS o
+         WHERE o.table_id = t.table_id
+           AND o.order_status NOT IN (N'Paid', N'Cancelled')
+         ORDER BY o.updated_at DESC, o.created_at DESC
+       ) AS active_order
+       OUTER APPLY (
+         SELECT
+           COUNT(1) AS item_count,
+           SUM(CASE WHEN oi.item_status = N'Pending' THEN 1 ELSE 0 END) AS pending_count,
+           SUM(CASE WHEN oi.item_status = N'Sent To Kitchen' THEN 1 ELSE 0 END) AS sent_count,
+           SUM(CASE WHEN oi.item_status = N'Preparing' THEN 1 ELSE 0 END) AS preparing_count,
+           SUM(CASE WHEN oi.item_status = N'Ready' THEN 1 ELSE 0 END) AS ready_count,
+           SUM(CASE WHEN oi.item_status = N'Served' THEN 1 ELSE 0 END) AS served_count,
+           SUM(CASE WHEN kt.kitchen_status = N'Preparing' THEN 1 ELSE 0 END) AS kitchen_preparing_count,
+           SUM(CASE WHEN kt.kitchen_status = N'Ready' THEN 1 ELSE 0 END) AS kitchen_ready_count
+         FROM dbo.OrderItems AS oi
+         LEFT JOIN dbo.KitchenTickets AS kt ON kt.order_item_id = oi.order_item_id
+         WHERE oi.order_id = active_order.order_id
+           AND oi.item_status <> N'Cancelled'
+       ) AS order_stage
        WHERE a.is_active = 1
        ORDER BY a.area_name ASC, t.table_number ASC;`
     );
@@ -241,9 +404,12 @@ export async function listTodayReservations(req, res) {
            rt.reservation_id,
            rt.table_id,
            t.table_number,
-           t.capacity
+           t.capacity,
+           t.area_id,
+           a.area_name
          FROM dbo.ReservationTables rt
          INNER JOIN dbo.RestaurantTables t ON rt.table_id = t.table_id
+         LEFT JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id
          WHERE rt.reservation_id IN (${placeholders});`,
         ids
       );
@@ -254,6 +420,8 @@ export async function listTodayReservations(req, res) {
           table_id: row.table_id,
           table_number: row.table_number,
           capacity: row.capacity,
+          area_id: row.area_id ?? null,
+          area_name: row.area_name ?? null,
         });
         return acc;
       }, {});
@@ -420,7 +588,7 @@ export async function checkInReservation(req, res) {
     await updateReservationStatus({
       connection,
       reservationId,
-      toStatus: RESERVATION_STATUS.SEATED,
+      toStatus: RESERVATION_STATUS.DINING,
       staffId,
       auditAction: "STAFF_CHECK_IN_RESERVATION",
       extraUpdates: ", checked_in_at = SYSDATETIME()"
@@ -492,7 +660,7 @@ export async function checkInReservation(req, res) {
         table_number: table.table_number,
         area_name: table.area_name,
         table_status: "Occupied",
-        reservation_status: RESERVATION_STATUS.SEATED,
+        reservation_status: RESERVATION_STATUS.DINING,
         session_id: session.session_id,
         token: session.token,
         session_status: session.session_status,
@@ -796,7 +964,7 @@ export async function resetTable(req, res) {
     for (const row of affectedRes) {
       let currentStatus = row.reservation_status;
       
-      if (currentStatus === RESERVATION_STATUS.SEATED) {
+      if (currentStatus === RESERVATION_STATUS.DINING || currentStatus === 'Dining' || currentStatus === 'Cleaning') {
         await updateReservationStatus({
           connection,
           reservationId: row.reservation_id,
@@ -970,6 +1138,119 @@ async function recalculateOrderTotals(executor, orderId) {
   );
 }
 
+async function logOperationalAudit(
+  executor,
+  { userId, actionName, targetTable, targetId, oldValue = null, newValue = null, ipAddress = null }
+) {
+  await executor.query(
+    `INSERT INTO dbo.AuditLogs
+       (user_id, action_name, target_table, target_id, old_value_json, new_value_json, ip_address)
+     VALUES
+       (?, ?, ?, ?, ?, ?, ?);`,
+    [
+      userId,
+      actionName,
+      targetTable,
+      targetId,
+      oldValue ? JSON.stringify(oldValue) : null,
+      newValue ? JSON.stringify(newValue) : null,
+      ipAddress,
+    ]
+  );
+}
+
+function deriveCourseStage(row) {
+  if (!row || row.table_status !== "Occupied") {
+    return { course_stage: null, course_stage_detail: null };
+  }
+
+  const itemCount = Number(row.item_count ?? 0);
+  const servedCount = Number(row.served_count ?? 0);
+  const readyCount = Number(row.ready_count ?? 0) + Number(row.kitchen_ready_count ?? 0);
+  const preparingCount = Number(row.preparing_count ?? 0) + Number(row.kitchen_preparing_count ?? 0);
+  const sentCount = Number(row.sent_count ?? 0);
+  const pendingCount = Number(row.pending_count ?? 0);
+
+  if (!row.order_id || itemCount === 0) {
+    return { course_stage: "Dining", course_stage_detail: "Waiting for order" };
+  }
+  if (row.order_status === "Billed") {
+    return { course_stage: "Bill Requested", course_stage_detail: "Bill requested; awaiting payment" };
+  }
+  if (row.order_status === "Served" || itemCount === servedCount) {
+    return { course_stage: "Served", course_stage_detail: "All active items served" };
+  }
+  if (readyCount > 0) {
+    return { course_stage: "Ready", course_stage_detail: "Kitchen item ready for service" };
+  }
+  if (preparingCount > 0) {
+    return { course_stage: "Preparing", course_stage_detail: "Kitchen is preparing items" };
+  }
+  if (sentCount > 0 || row.order_status === "Sent To Kitchen") {
+    return { course_stage: "Sent to Kitchen", course_stage_detail: "Order sent to kitchen" };
+  }
+  if (pendingCount > 0 || row.order_status === "Open") {
+    return { course_stage: "Order Placed", course_stage_detail: "Order placed; not yet cooking" };
+  }
+  return { course_stage: "Dining", course_stage_detail: "Waiting for order" };
+}
+
+async function fetchActiveTableOrderStage(executor, tableId) {
+  const [rows] = await executor.query(
+    `SELECT TOP 1
+       t.table_id,
+       t.table_status,
+       o.order_id,
+       o.order_status,
+       o.reservation_id,
+       o.customer_id,
+       o.created_by_staff_id,
+       ISNULL(stage.item_count, 0) AS item_count,
+       ISNULL(stage.pending_count, 0) AS pending_count,
+       ISNULL(stage.sent_count, 0) AS sent_count,
+       ISNULL(stage.preparing_count, 0) AS preparing_count,
+       ISNULL(stage.ready_count, 0) AS ready_count,
+       ISNULL(stage.served_count, 0) AS served_count,
+       ISNULL(stage.kitchen_preparing_count, 0) AS kitchen_preparing_count,
+       ISNULL(stage.kitchen_ready_count, 0) AS kitchen_ready_count
+     FROM dbo.RestaurantTables AS t
+     OUTER APPLY (
+       SELECT TOP 1
+         o.order_id,
+         o.order_status,
+         o.reservation_id,
+         o.customer_id,
+         o.created_by_staff_id,
+         o.updated_at,
+         o.created_at
+       FROM dbo.Orders AS o
+       WHERE o.table_id = t.table_id
+         AND o.order_status NOT IN (N'Paid', N'Cancelled')
+       ORDER BY o.updated_at DESC, o.created_at DESC
+     ) AS o
+     OUTER APPLY (
+       SELECT
+         COUNT(1) AS item_count,
+         SUM(CASE WHEN oi.item_status = N'Pending' THEN 1 ELSE 0 END) AS pending_count,
+         SUM(CASE WHEN oi.item_status = N'Sent To Kitchen' THEN 1 ELSE 0 END) AS sent_count,
+         SUM(CASE WHEN oi.item_status = N'Preparing' THEN 1 ELSE 0 END) AS preparing_count,
+         SUM(CASE WHEN oi.item_status = N'Ready' THEN 1 ELSE 0 END) AS ready_count,
+         SUM(CASE WHEN oi.item_status = N'Served' THEN 1 ELSE 0 END) AS served_count,
+         SUM(CASE WHEN kt.kitchen_status = N'Preparing' THEN 1 ELSE 0 END) AS kitchen_preparing_count,
+         SUM(CASE WHEN kt.kitchen_status = N'Ready' THEN 1 ELSE 0 END) AS kitchen_ready_count
+       FROM dbo.OrderItems AS oi
+       LEFT JOIN dbo.KitchenTickets AS kt ON kt.order_item_id = oi.order_item_id
+       WHERE oi.order_id = o.order_id
+         AND oi.item_status <> N'Cancelled'
+     ) AS stage
+     WHERE t.table_id = ?;`,
+    [tableId]
+  );
+
+  const row = rows[0] ?? null;
+  return row ? { ...row, ...deriveCourseStage(row) } : null;
+}
+
 async function findOrCreateActiveOrder(executor, tableId, staffId) {
   const [tableRows] = await executor.query(
     `SELECT TOP 1 table_id, table_status
@@ -1016,16 +1297,35 @@ async function findOrCreateActiveOrder(executor, tableId, staffId) {
 
   const qrSessionId = sessionRows[0]?.qr_session_id ?? null;
 
+  const [reservationRows] = await executor.query(
+    `SELECT TOP 1
+       tos.reservation_id,
+       r.customer_id
+     FROM dbo.TableOccupancySessions AS tos
+     LEFT JOIN dbo.Reservations AS r ON r.reservation_id = tos.reservation_id
+     WHERE tos.table_id = ?
+       AND tos.released_at IS NULL
+     ORDER BY tos.check_in_at DESC;`,
+    [tableId]
+  );
+  const activeReservation = reservationRows[0] ?? {};
+
   const [insertRows] = await executor.query(
     `DECLARE @OutputTbl TABLE (order_id INT);
      INSERT INTO dbo.Orders
-       (table_id, created_by_staff_id, qr_session_id, order_type, order_status,
+       (reservation_id, table_id, customer_id, created_by_staff_id, qr_session_id, order_type, order_status,
         subtotal, discount_amount, service_charge, total_amount)
      OUTPUT INSERTED.order_id INTO @OutputTbl
      VALUES
-       (?, ?, ?, N'Dine In', N'Open', 0, 0, 0, 0);
+       (?, ?, ?, ?, ?, N'Dine In', N'Open', 0, 0, 0, 0);
      SELECT order_id FROM @OutputTbl;`,
-    [tableId, staffId, qrSessionId]
+    [
+      activeReservation.reservation_id ?? null,
+      tableId,
+      activeReservation.customer_id ?? null,
+      staffId,
+      qrSessionId,
+    ]
   );
 
   return insertRows[0].order_id;
@@ -1225,6 +1525,49 @@ export async function addOrderItem(req, res) {
       [orderId]
     );
 
+    const [orderRows] = await connection.query(
+      `SELECT TOP 1
+         order_id,
+         table_id,
+         reservation_id,
+         customer_id,
+         order_status
+       FROM dbo.Orders
+       WHERE order_id = ?;`,
+      [orderId]
+    );
+    const order = orderRows[0] ?? {};
+    const auditPayload = {
+      actor_user_id: staffId,
+      table_id: tableId,
+      reservation_id: order.reservation_id ?? null,
+      customer_id: order.customer_id ?? null,
+      order_id: orderId,
+      order_item_id: createdItem.order_item_id,
+      dish_id: dishId,
+      dish_name: dish.dish_name,
+      quantity,
+      course_stage: "Sent to Kitchen",
+    };
+
+    await logOperationalAudit(connection, {
+      userId: staffId,
+      actionName: "ORDER_PLACED",
+      targetTable: "OrderItems",
+      targetId: createdItem.order_item_id,
+      newValue: auditPayload,
+      ipAddress: req.ip,
+    });
+
+    await logOperationalAudit(connection, {
+      userId: staffId,
+      actionName: "TICKET_SENT_TO_KITCHEN",
+      targetTable: "KitchenTickets",
+      targetId: createdItem.order_item_id,
+      newValue: auditPayload,
+      ipAddress: req.ip,
+    });
+
     await connection.commit();
 
     const [tableRows] = await pool.query(
@@ -1232,6 +1575,17 @@ export async function addOrderItem(req, res) {
       [tableId]
     );
     const tableNumber = tableRows[0]?.table_number ?? tableId;
+
+    try {
+      const io = getIO();
+      io.to("room:staff").to("room:manager").emit("table:sync", {
+        table_id: tableId,
+        order_id: orderId,
+        course_stage: "Sent to Kitchen",
+      });
+    } catch (emitError) {
+      console.warn("[addOrderItem] table sync emit failed:", emitError?.message);
+    }
 
     notifyStaffNewCustomerAction({
       actionType: "order",
@@ -1273,6 +1627,7 @@ export async function addOrderItem(req, res) {
  */
 export async function updateOrderItemStatus(req, res) {
   const itemId = Number(req.params.itemId);
+  const staffId = req.userId ?? null;
   const nextStatus = String(req.body?.item_status ?? req.body?.status ?? "").trim();
   const notes =
     req.body?.notes === undefined
@@ -1297,9 +1652,13 @@ export async function updateOrderItemStatus(req, res) {
          oi.notes,
          oi.unit_price,
          oi.item_status,
-         d.dish_name
+         d.dish_name,
+         o.table_id,
+         o.reservation_id,
+         o.customer_id
        FROM dbo.OrderItems AS oi
        INNER JOIN dbo.Dishes AS d ON d.dish_id = oi.dish_id
+       INNER JOIN dbo.Orders AS o ON o.order_id = oi.order_id
        WHERE oi.order_item_id = ?;`,
       [itemId]
     );
@@ -1348,6 +1707,56 @@ export async function updateOrderItemStatus(req, res) {
          WHERE order_item_id = ?;`,
         [itemId]
       );
+      await connection.query(
+        `UPDATE dbo.KitchenTickets
+         SET kitchen_status = N'Served',
+             updated_at = SYSDATETIME()
+         WHERE order_item_id = ?
+           AND kitchen_status = N'Ready';`,
+        [itemId]
+      );
+      await connection.query(
+        `UPDATE dbo.Orders
+         SET order_status = CASE
+               WHEN NOT EXISTS (
+                 SELECT 1
+                 FROM dbo.OrderItems
+                 WHERE order_id = ?
+                   AND item_status NOT IN (N'Served', N'Cancelled')
+               ) THEN N'Served'
+               ELSE N'Partially Served'
+             END,
+             updated_at = SYSDATETIME()
+         WHERE order_id = ?
+           AND order_status NOT IN (N'Billed', N'Paid', N'Cancelled');`,
+        [item.order_id, item.order_id]
+      );
+      await logOperationalAudit(connection, {
+        userId: staffId,
+        actionName: "ORDER_SERVED",
+        targetTable: "OrderItems",
+        targetId: itemId,
+        oldValue: {
+          actor_user_id: staffId,
+          table_id: item.table_id,
+          reservation_id: item.reservation_id ?? null,
+          customer_id: item.customer_id ?? null,
+          order_id: item.order_id,
+          order_item_id: itemId,
+          item_status: item.item_status,
+        },
+        newValue: {
+          actor_user_id: staffId,
+          table_id: item.table_id,
+          reservation_id: item.reservation_id ?? null,
+          customer_id: item.customer_id ?? null,
+          order_id: item.order_id,
+          order_item_id: itemId,
+          item_status: "Served",
+          course_stage: "Served",
+        },
+        ipAddress: req.ip,
+      });
       item.item_status = "Served";
     }
 
@@ -1372,6 +1781,17 @@ export async function updateOrderItemStatus(req, res) {
         [item.order_id]
       );
       const order = orderRows[0];
+
+      try {
+        const io = getIO();
+        io.to("room:staff").to("room:manager").emit("table:sync", {
+          table_id: order?.table_id ?? item.table_id,
+          order_id: item.order_id,
+          course_stage: "Served",
+        });
+      } catch (emitError) {
+        console.warn("[updateOrderItemStatus] table sync emit failed:", emitError?.message);
+      }
 
       if (order?.customer_id) {
         notifyCustomerStaffAction({
@@ -1399,6 +1819,183 @@ export async function updateOrderItemStatus(req, res) {
     await connection.rollback();
     console.error("PATCH /api/staff/orders/items/:itemId/status failed:", error);
     return jsonError(res, "Could not update order item.");
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * PATCH /api/staff/tables/:tableId/stage/advance
+ * Staff-scoped operational stage advance for occupied tables.
+ */
+export async function advanceTableCourseStage(req, res) {
+  const tableId = Number(req.params.tableId);
+  const staffId = req.userId ?? null;
+
+  if (!Number.isFinite(tableId) || tableId <= 0) {
+    return jsonError(res, "Invalid table id.", 400);
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const before = await fetchActiveTableOrderStage(connection, tableId);
+    if (!before) {
+      await connection.rollback();
+      return jsonError(res, "Table not found.", 404);
+    }
+    if (before.table_status !== "Occupied") {
+      await connection.rollback();
+      return jsonError(res, "Only occupied tables have an active course stage.", 409);
+    }
+    if (!before.order_id) {
+      await connection.rollback();
+      return jsonError(res, "Add order items before advancing the table stage.", 409);
+    }
+
+    let actionName = null;
+    let targetTable = "Orders";
+    let targetId = before.order_id;
+
+    if (before.course_stage === "Order Placed") {
+      await connection.query(
+        `UPDATE dbo.OrderItems
+         SET item_status = N'Sent To Kitchen',
+             updated_at = SYSDATETIME()
+         WHERE order_id = ?
+           AND item_status = N'Pending';`,
+        [before.order_id]
+      );
+      await connection.query(
+        `UPDATE kt
+         SET kt.kitchen_status = N'Sent To Kitchen',
+             kt.updated_at = SYSDATETIME()
+         FROM dbo.KitchenTickets AS kt
+         INNER JOIN dbo.OrderItems AS oi ON oi.order_item_id = kt.order_item_id
+         WHERE oi.order_id = ?
+           AND kt.kitchen_status = N'Pending';`,
+        [before.order_id]
+      );
+      await connection.query(
+        `UPDATE dbo.Orders
+         SET order_status = N'Sent To Kitchen',
+             updated_at = SYSDATETIME()
+         WHERE order_id = ?;`,
+        [before.order_id]
+      );
+      actionName = "TICKET_SENT_TO_KITCHEN";
+      targetTable = "Orders";
+    } else if (before.course_stage === "Ready") {
+      await connection.query(
+        `UPDATE dbo.OrderItems
+         SET item_status = N'Served',
+             updated_at = SYSDATETIME()
+         WHERE order_id = ?
+           AND item_status = N'Ready';`,
+        [before.order_id]
+      );
+      await connection.query(
+        `UPDATE kt
+         SET kt.kitchen_status = N'Served',
+             kt.updated_at = SYSDATETIME()
+         FROM dbo.KitchenTickets AS kt
+         INNER JOIN dbo.OrderItems AS oi ON oi.order_item_id = kt.order_item_id
+         WHERE oi.order_id = ?
+           AND kt.kitchen_status = N'Ready';`,
+        [before.order_id]
+      );
+      await connection.query(
+        `UPDATE dbo.Orders
+         SET order_status = CASE
+               WHEN NOT EXISTS (
+                 SELECT 1
+                 FROM dbo.OrderItems
+                 WHERE order_id = ?
+                   AND item_status NOT IN (N'Served', N'Cancelled')
+               ) THEN N'Served'
+               ELSE N'Partially Served'
+             END,
+             updated_at = SYSDATETIME()
+         WHERE order_id = ?;`,
+        [before.order_id, before.order_id]
+      );
+      actionName = "ORDER_SERVED";
+    } else if (before.course_stage === "Served") {
+      await connection.query(
+        `UPDATE dbo.Orders
+         SET order_status = N'Billed',
+             updated_at = SYSDATETIME()
+         WHERE order_id = ?
+           AND order_status = N'Served';`,
+        [before.order_id]
+      );
+      actionName = "BILL_REQUESTED";
+    } else {
+      await connection.rollback();
+      return jsonError(
+        res,
+        before.course_stage === "Preparing" || before.course_stage === "Sent to Kitchen"
+          ? "Kitchen must advance this order before staff can serve it."
+          : "This table stage cannot be advanced from the staff drawer.",
+        409
+      );
+    }
+
+    const after = await fetchActiveTableOrderStage(connection, tableId);
+
+    await logOperationalAudit(connection, {
+      userId: staffId,
+      actionName,
+      targetTable,
+      targetId,
+      oldValue: {
+        actor_user_id: staffId,
+        table_id: tableId,
+        reservation_id: before.reservation_id ?? null,
+        customer_id: before.customer_id ?? null,
+        order_id: before.order_id,
+        course_stage: before.course_stage,
+        order_status: before.order_status,
+      },
+      newValue: {
+        actor_user_id: staffId,
+        table_id: tableId,
+        reservation_id: after?.reservation_id ?? before.reservation_id ?? null,
+        customer_id: after?.customer_id ?? before.customer_id ?? null,
+        order_id: before.order_id,
+        course_stage: after?.course_stage ?? null,
+        order_status: after?.order_status ?? null,
+      },
+      ipAddress: req.ip,
+    });
+
+    await connection.commit();
+
+    try {
+      const io = getIO();
+      io.to("room:staff").to("room:manager").emit("table:sync", {
+        table_id: tableId,
+        order_id: before.order_id,
+        course_stage: after?.course_stage ?? null,
+      });
+    } catch (emitError) {
+      console.warn("[advanceTableCourseStage] socket emit failed:", emitError?.message);
+    }
+
+    return jsonOk(res, {
+      table_id: tableId,
+      order_id: before.order_id,
+      previous_stage: before.course_stage,
+      course_stage: after?.course_stage ?? null,
+      course_stage_detail: after?.course_stage_detail ?? null,
+      active_order_status: after?.order_status ?? null,
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error("PATCH /api/staff/tables/:tableId/stage/advance failed:", error);
+    return jsonError(res, "Could not advance table stage.");
   } finally {
     connection.release();
   }
@@ -1599,6 +2196,8 @@ async function loadOccupiedTableContext(executor, tableId) {
   const [orderRows] = await executor.query(
     `SELECT TOP 1
        order_id,
+       reservation_id,
+       customer_id,
        order_status,
        discount_amount,
        service_charge,
@@ -2072,84 +2671,159 @@ export async function checkoutTablePayment(req, res) {
       [tableId]
     );
 
-    if (order && customerEmail) {
-      const [userRows] = await connection.query(
-        `SELECT TOP 1 user_id FROM dbo.UserAccounts WHERE LOWER(email) = ?;`,
-        [customerEmail]
-      );
-      const matchedUserId = userRows[0]?.user_id || null;
-      await connection.query(
-        `UPDATE dbo.Orders
-         SET customer_id = ISNULL(?, customer_id),
-             updated_at = SYSDATETIME()
-         WHERE order_id = ?;`,
-        [matchedUserId, order.order_id]
-      );
-      if (reservation) {
-        await connection.query(
-          `UPDATE dbo.Reservations
-           SET contact_email = ?,
-               customer_id = ISNULL(?, customer_id),
-               updated_at = SYSDATETIME()
-           WHERE reservation_id = ?;`,
-          [customerEmail, matchedUserId, reservation.reservation_id]
+    // Auto-link Customer account to Order & Reservation if matched in UserAccounts
+    let effectiveEmail = customerEmail;
+    if (order) {
+      let matchedUserId = null;
+      if (customerEmail) {
+        const [userRows] = await connection.query(
+          `SELECT TOP 1 user_id, email FROM dbo.UserAccounts WHERE LOWER(email) = ?;`,
+          [customerEmail]
         );
+        matchedUserId = userRows[0]?.user_id || null;
+        if (userRows[0]?.email) effectiveEmail = userRows[0].email;
+      }
+
+      // If no customerEmail input, check if reservation contact_email or contact_phone matches a UserAccount
+      if (!matchedUserId && reservation) {
+        const resEmail = (reservation.contact_email || "").trim().toLowerCase();
+        if (resEmail) {
+          const [resUserRows] = await connection.query(
+            `SELECT TOP 1 user_id, email FROM dbo.UserAccounts WHERE LOWER(email) = ?;`,
+            [resEmail]
+          );
+          if (resUserRows[0]) {
+            matchedUserId = resUserRows[0].user_id;
+            effectiveEmail = resUserRows[0].email;
+          }
+        }
+      }
+
+      if (matchedUserId) {
+        await connection.query(
+          `UPDATE dbo.Orders
+           SET customer_id = ISNULL(customer_id, ?),
+               updated_at = SYSDATETIME()
+           WHERE order_id = ?;`,
+          [matchedUserId, order.order_id]
+        );
+        if (reservation) {
+          await connection.query(
+            `UPDATE dbo.Reservations
+             SET customer_id = ISNULL(customer_id, ?),
+                 contact_email = ISNULL(?, contact_email),
+                 updated_at = SYSDATETIME()
+             WHERE reservation_id = ?;`,
+            [matchedUserId, effectiveEmail, reservation.reservation_id]
+          );
+        }
       }
     }
 
+    // Auto-complete any active reservation associated with this order or table
+    const [resRowsToComplete] = await connection.query(
+      `SELECT r.reservation_id, r.reservation_status
+       FROM dbo.Reservations r
+       LEFT JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
+       WHERE (r.reservation_id = ? OR rt.table_id = ?)
+         AND r.reservation_status IN (N'Dining', N'Await Check-in', N'Confirmed', N'Cleaning');`,
+      [order?.reservation_id || 0, tableId]
+    );
+
+    const completedResIds = [];
+    for (const rRow of resRowsToComplete) {
+      try {
+        await updateReservationStatus({
+          connection,
+          reservationId: rRow.reservation_id,
+          toStatus: RESERVATION_STATUS.COMPLETED,
+          staffId,
+          auditAction: "STAFF_CHECKOUT_RESERVATION",
+          extraUpdates: ", checked_out_at = SYSDATETIME(), reservation_end_at = SYSDATETIME()"
+        });
+        completedResIds.push(rRow.reservation_id);
+      } catch (errRes) {
+        console.warn(`[checkoutTablePayment] auto-complete reservation #${rRow.reservation_id} warning:`, errRes?.message);
+        await connection.query(
+          `UPDATE dbo.Reservations
+           SET reservation_status = N'Completed',
+               checked_out_at = SYSDATETIME(),
+               updated_at = SYSDATETIME()
+           WHERE reservation_id = ?;`,
+          [rRow.reservation_id]
+        );
+        completedResIds.push(rRow.reservation_id);
+      }
+    }
+
+    const checkoutAuditPayload = {
+      actor_user_id: staffId,
+      table_id: tableId,
+      reservation_id: reservation?.reservation_id ?? order?.reservation_id ?? null,
+      customer_id: order?.customer_id ?? null,
+      order_id: order?.order_id ?? null,
+      payment_id: paymentId,
+      amount_paid: amountPaid,
+      payment_method_id: paymentMethodId,
+      course_stage: "Payment Confirmed",
+    };
+
+    await logOperationalAudit(connection, {
+      userId: staffId,
+      actionName: "PAYMENT_CONFIRMED",
+      targetTable: "Payments",
+      targetId: paymentId,
+      newValue: checkoutAuditPayload,
+      ipAddress: req.ip,
+    });
+
+    await logOperationalAudit(connection, {
+      userId: staffId,
+      actionName: "TABLE_RELEASED",
+      targetTable: "RestaurantTables",
+      targetId: tableId,
+      oldValue: {
+        actor_user_id: staffId,
+        table_id: tableId,
+        reservation_id: reservation?.reservation_id ?? order?.reservation_id ?? null,
+        customer_id: order?.customer_id ?? null,
+        order_id: order?.order_id ?? null,
+        table_status: "Occupied",
+      },
+      newValue: {
+        ...checkoutAuditPayload,
+        table_status: "Cleaning",
+      },
+      ipAddress: req.ip,
+    });
+
     await connection.commit();
 
-    // If customer email was specified for receipt & loyalty, fire post-checkout tasks (awards points & sends receipt email)
-    if (customerEmail && order) {
+    // Fire post-checkout tasks: Awards loyalty points, sends notification bell & emails receipt
+    if (order) {
       handlePostCheckoutSuccess(order.order_id, amountPaid).catch((err) => {
         console.error("[checkoutTablePayment] post-checkout email/loyalty error:", err?.message);
       });
     }
 
-    // ── Auto-checkout: if this table had an Occupied reservation, mark it Completed ──
-    // Fire-and-forget after commit — does not affect payment success
-    pool.getConnection().then(async (checkoutConn) => {
-      try {
-        await checkoutConn.beginTransaction();
-        const [occupiedRows] = await checkoutConn.query(
-          `SELECT TOP 1 r.reservation_id, r.reservation_status
-           FROM dbo.Reservations r
-           INNER JOIN dbo.ReservationTables rt ON rt.reservation_id = r.reservation_id
-           WHERE rt.table_id = ? AND r.reservation_status IN (N'Dining', N'Cleaning')`,
-          [tableId]
-        );
-        if (occupiedRows.length > 0) {
-          const resId = occupiedRows[0].reservation_id;
-          let currentStatus = occupiedRows[0].reservation_status;
+    try {
+      const io = getIO();
+      if (io) {
+        io.to("room:staff").to("room:manager").emit("table:sync", {
+          table_id: tableId,
+          order_id: order?.order_id ?? null,
+          table_status: "Cleaning",
+          course_stage: "Payment Confirmed",
+        });
 
-          // Transition directly from Dining -> Completed (which is RESERVATION_STATUS.COMPLETED)
-          if (currentStatus === RESERVATION_STATUS.DINING) {
-            await updateReservationStatus({
-              connection: checkoutConn,
-              reservationId: resId,
-              toStatus: RESERVATION_STATUS.COMPLETED,
-              staffId,
-              auditAction: "STAFF_CHECKOUT_RESERVATION",
-              extraUpdates: ", checked_out_at = SYSDATETIME(), reservation_end_at = SYSDATETIME()"
-            });
-          }
-
-          await checkoutConn.commit();
-          const io = getIO();
-          if (io) {
-            io.to('room:staff').emit('reservation:checkout_ready', { reservation_id: resId });
-            io.to('room:manager').emit('reservation:status_changed', { reservation_id: resId, new_status: RESERVATION_STATUS.COMPLETED });
-          }
-        } else {
-          await checkoutConn.rollback();
+        for (const resId of completedResIds) {
+          io.to('room:staff').emit('reservation:checkout_ready', { reservation_id: resId });
+          io.to('room:manager').emit('reservation:status_changed', { reservation_id: resId, new_status: RESERVATION_STATUS.COMPLETED });
         }
-      } catch (autoErr) {
-        await checkoutConn.rollback();
-        console.error('[auto-checkout] failed:', autoErr?.message);
-      } finally {
-        checkoutConn.release();
       }
-    }).catch(e => console.error('[auto-checkout] connection error:', e?.message));
+    } catch (emitError) {
+      console.warn("[checkoutTablePayment] table sync emit failed:", emitError?.message);
+    }
 
     return jsonOk(
       res,
@@ -2818,5 +3492,291 @@ export async function verifyCustomerEmail(req, res) {
   } catch (error) {
     console.error("GET /api/staff/customers/verify failed:", error);
     return res.json({ success: false, exists: false, message: "Email lookup error" });
+  }
+}
+
+/**
+ * GET /api/staff/tables/:tableId/upcoming-reservations
+ * GET /api/manager/tables/:tableId/queue
+ * Fetch all reservations assigned to a table for a given day.
+ * ?date=YYYY-MM-DD (default: today UTC+7)
+ * Returns ALL statuses so client can render 3-group view.
+ */
+export async function getTableUpcomingReservations(req, res) {
+  const tableId = Number(req.params.tableId);
+  if (!Number.isFinite(tableId) || tableId <= 0) {
+    return jsonError(res, "Invalid table ID", 400);
+  }
+
+  // Parse optional ?date=YYYY-MM-DD (UTC+7)
+  let targetDate = null;
+  if (req.query.date) {
+    const parsed = new Date(req.query.date + "T00:00:00+07:00");
+    if (!Number.isNaN(parsed.getTime())) {
+      targetDate = req.query.date; // keep as 'YYYY-MM-DD' string for SQL
+    } else {
+      return jsonError(res, "Invalid date format. Use YYYY-MM-DD.", 400);
+    }
+  }
+
+  const dateFilter = targetDate
+    ? `CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(? AS DATE)`
+    : `CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)`;
+  const dateParams = targetDate ? [targetDate] : [];
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT
+         q.reservation_id,
+         q.customer_id,
+         q.contact_name,
+         q.contact_phone,
+         q.guest_count,
+         q.reservation_start_at,
+         q.reservation_end_at,
+         q.reservation_status,
+         q.dining_purpose,
+         q.special_request,
+         q.area_name,
+         q.table_number,
+         q.is_preference
+       FROM (
+         SELECT
+           r.reservation_id,
+           r.customer_id,
+           COALESCE(ua.full_name, r.contact_name, N'Guest') AS contact_name,
+           COALESCE(ua.phone, r.contact_phone) AS contact_phone,
+           r.guest_count,
+           r.reservation_start_at,
+           r.reservation_end_at,
+           r.reservation_status,
+           r.dining_purpose,
+           r.special_request,
+           COALESCE(a.area_name, ta.area_name) AS area_name,
+           t.table_number,
+           CAST(0 AS BIT) AS is_preference
+         FROM dbo.Reservations r
+         INNER JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
+         INNER JOIN dbo.RestaurantTables t ON t.table_id = rt.table_id
+         LEFT JOIN dbo.RestaurantAreas a ON a.area_id = t.area_id
+         LEFT JOIN dbo.RestaurantAreas ta ON ta.area_id = r.preferred_area_id
+         LEFT JOIN dbo.UserAccounts ua ON ua.user_id = r.customer_id
+         WHERE rt.table_id = ?
+           AND r.reservation_status IN (
+                 N'Confirmed', N'Await Check-in', N'Pending', N'Dining',
+                 N'Completed', N'No Show', N'Cancelled'
+               )
+           AND ${dateFilter}
+
+         UNION ALL
+
+         SELECT
+           r.reservation_id,
+           r.customer_id,
+           COALESCE(ua.full_name, r.contact_name, N'Guest') AS contact_name,
+           COALESCE(ua.phone, r.contact_phone) AS contact_phone,
+           r.guest_count,
+           r.reservation_start_at,
+           r.reservation_end_at,
+           r.reservation_status,
+           r.dining_purpose,
+           r.special_request,
+           COALESCE(a.area_name, ta.area_name) AS area_name,
+           t.table_number,
+           CAST(1 AS BIT) AS is_preference
+         FROM dbo.Reservations r
+         INNER JOIN dbo.RestaurantTables t ON t.table_id = ?
+         LEFT JOIN dbo.RestaurantAreas a ON a.area_id = t.area_id
+         LEFT JOIN dbo.RestaurantAreas ta ON ta.area_id = r.preferred_area_id
+         LEFT JOIN dbo.UserAccounts ua ON ua.user_id = r.customer_id
+         WHERE CHARINDEX(CONCAT(N'[PreferredTableId: ', CAST(t.table_id AS NVARCHAR(20)), N']'), ISNULL(r.special_request, N'')) > 0
+           AND NOT EXISTS (SELECT 1 FROM dbo.ReservationTables rt_existing WHERE rt_existing.reservation_id = r.reservation_id)
+           AND r.reservation_status IN (N'Confirmed', N'Await Check-in', N'Pending')
+           AND ${dateFilter}
+       ) q
+       ORDER BY q.reservation_start_at ASC;`,
+      [tableId, ...dateParams, tableId, ...dateParams]
+    );
+
+    const items = rows.map((r) => {
+      const start = parseDbDate(r.reservation_start_at);
+      const end   = parseDbDate(r.reservation_end_at);
+      let durationMins = 60;
+      if (start && end) {
+        durationMins = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
+      }
+      return {
+        reservation_id:      r.reservation_id,
+        customer_id:         r.customer_id,
+        contact_name:        r.contact_name,
+        contact_phone:       r.contact_phone,
+        guest_count:         r.guest_count,
+        reservation_start_at: start ? start.toISOString() : null,
+        start_time:          formatTimePart(start),
+        reservation_end_at:  end ? end.toISOString() : null,
+        end_time:            formatTimePart(end),
+        duration_minutes:    durationMins,
+        reservation_status:  r.reservation_status,
+        is_preference:       Boolean(r.is_preference),
+        table_assignment_status: r.is_preference ? "Preferred" : "Confirmed",
+        dining_purpose:      r.dining_purpose  || "Casual Dining",
+        special_request:     r.special_request || "",
+        area_name:           r.area_name       || "Standard Area",
+        table_number:        r.table_number    || "",
+      };
+    });
+
+    return jsonOk(res, items);
+  } catch (error) {
+    console.error("GET /api/staff/tables/:tableId/upcoming-reservations failed:", error);
+    return jsonError(res, "Could not fetch upcoming reservations for table.");
+  }
+}
+
+/**
+ * GET /api/staff/tables/timeline?date=YYYY-MM-DD
+ * Full day timeline grid with operating hours, grouped tables, reservations, unassigned bench, and conflict detection.
+ */
+export async function getStaffFullTimeline(req, res) {
+  try {
+    const targetDateStr = String(req.query.date || "").trim();
+    let dateFilter = "CAST(r.reservation_start_at AS DATE) = CAST(SYSDATETIME() AS DATE)";
+    let dateParams = [];
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(targetDateStr)) {
+      dateFilter = "CAST(r.reservation_start_at AS DATE) = ?";
+      dateParams = [targetDateStr];
+    }
+
+    // 1. Fetch operating hours from settings
+    let openTime = "11:00";
+    let closeTime = "23:00";
+    try {
+      const [settings] = await pool.query(
+        `SELECT setting_key, setting_value FROM dbo.SystemSettings WHERE setting_key IN ('open_time', 'close_time')`
+      );
+      settings.forEach(s => {
+        if (s.setting_key === 'open_time' && s.setting_value) openTime = s.setting_value;
+        if (s.setting_key === 'close_time' && s.setting_value) closeTime = s.setting_value;
+      });
+    } catch {}
+
+    // 2. Fetch all active tables grouped by area
+    const [tables] = await pool.query(
+      `SELECT t.table_id, t.table_number, t.capacity, t.is_counter, t.table_status,
+              COALESCE(a.area_name, N'Standard Area') AS area_name
+       FROM dbo.RestaurantTables t
+       LEFT JOIN dbo.RestaurantAreas a ON a.area_id = t.area_id
+       ORDER BY a.area_id ASC, t.table_number ASC;`
+    );
+
+    // 3. Fetch all reservations for the date
+    const [reservations] = await pool.query(
+      `SELECT
+         r.reservation_id,
+         r.customer_id,
+         COALESCE(ua.full_name, r.contact_name, N'Guest') AS contact_name,
+         COALESCE(ua.phone, r.contact_phone) AS contact_phone,
+         r.guest_count,
+         r.reservation_start_at,
+         r.reservation_end_at,
+         r.reservation_status,
+         r.dining_purpose,
+         r.special_request,
+         COALESCE(a.area_name, N'Unassigned') AS area_name,
+         rt.table_id,
+         t.table_number
+       FROM dbo.Reservations r
+       LEFT JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
+       LEFT JOIN dbo.RestaurantTables t ON t.table_id = rt.table_id
+       LEFT JOIN dbo.RestaurantAreas a ON a.area_id = t.area_id
+       LEFT JOIN dbo.UserAccounts ua ON ua.user_id = r.customer_id
+       WHERE ${dateFilter}
+         AND r.reservation_status NOT IN (N'Cancelled')
+       ORDER BY r.reservation_start_at ASC;`,
+      dateParams
+    );
+
+    // 4. Map & calculate reservation start/end times & conflicts
+    const parsedReservations = reservations.map(r => {
+      const start = parseDbDate(r.reservation_start_at);
+      const end = parseDbDate(r.reservation_end_at);
+      const startTimeMs = start ? start.getTime() : 0;
+      // If no end_at stored, estimate from party size (same logic as booking creation)
+      let endTimeMs;
+      if (end) {
+        endTimeMs = end.getTime();
+      } else {
+        const count = Number(r.guest_count) || 1;
+        let fallbackMins = count <= 2 ? 60 : count <= 4 ? 90 : count <= 6 ? 105 : 120;
+        endTimeMs = startTimeMs + fallbackMins * 60 * 1000;
+      }
+      const durationMinutes = Math.round((endTimeMs - startTimeMs) / 60000);
+      const computedEnd = end || new Date(endTimeMs);
+      return {
+        reservation_id: r.reservation_id,
+        customer_id: r.customer_id,
+        contact_name: r.contact_name,
+        contact_phone: r.contact_phone,
+        guest_count: r.guest_count,
+        reservation_start_at: start ? start.toISOString() : null,
+        reservation_end_at: computedEnd ? computedEnd.toISOString() : null,
+        start_time: formatTimePart(start),
+        end_time: formatTimePart(computedEnd),
+        startTimeMs,
+        endTimeMs,
+        durationMinutes,
+        reservation_status: r.reservation_status,
+        dining_purpose: r.dining_purpose || "Casual Dining",
+        special_request: r.special_request || "",
+        table_id: r.table_id ? Number(r.table_id) : null,
+        table_number: r.table_number || null,
+        area_name: r.area_name,
+        is_conflict: false,
+      };
+    });
+
+    // Conflict detection: 2 reservations on the same table with overlapping time intervals
+    let conflictCount = 0;
+    const tableResMap = {};
+    const unassignedBench = [];
+
+    parsedReservations.forEach(r => {
+      if (!r.table_id) {
+        unassignedBench.push(r);
+      } else {
+        if (!tableResMap[r.table_id]) tableResMap[r.table_id] = [];
+        tableResMap[r.table_id].push(r);
+      }
+    });
+
+    Object.values(tableResMap).forEach(list => {
+      for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const a = list[i];
+          const b = list[j];
+          if (a.startTimeMs < b.endTimeMs && b.startTimeMs < a.endTimeMs) {
+            a.is_conflict = true;
+            b.is_conflict = true;
+          }
+        }
+      }
+    });
+
+    let conflictsFound = 0;
+    parsedReservations.forEach(r => {
+      if (r.is_conflict) conflictsFound++;
+    });
+
+    return jsonOk(res, {
+      operating_hours: { open_time: openTime, close_time: closeTime },
+      tables,
+      reservations: parsedReservations,
+      unassigned_bench: unassignedBench,
+      conflict_count: Math.ceil(conflictsFound / 2),
+    });
+  } catch (error) {
+    console.error("GET /api/staff/tables/timeline failed:", error);
+    return jsonError(res, "Could not load timeline view data.");
   }
 }

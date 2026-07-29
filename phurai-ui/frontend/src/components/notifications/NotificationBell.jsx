@@ -382,7 +382,12 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
     };
 
     socket.on("NEW_CUSTOMER_ACTION", handleIncoming);
-    socket.on("notification:new", handleSystemAlert);
+    socket.on("notification:new", handleIncoming);
+    socket.on("reservation:new", handleIncoming);
+    socket.on("reservation:edit_requested", handleIncoming);
+    socket.on("reservation:cancel_requested", handleIncoming);
+    socket.on("reservation:request_pending", handleIncoming);
+    socket.on("NEW_RESERVATION_REQUEST", handleIncoming);
     socket.on("NEW_QR_SESSION_PENDING", handleQrRequest);
     socket.on("payment:cash_pending", handleCashPending);
     socket.on("table:cash_payment_requested", handleCashPending);
@@ -391,7 +396,12 @@ function NotificationBell({ user, listenForStaffEvents = false, className = "" }
     socket.on("QR_SESSION_PAYMENT_COMPLETED", handlePaymentConfirmed);
     return () => {
       socket.off("NEW_CUSTOMER_ACTION", handleIncoming);
-      socket.off("notification:new", handleSystemAlert);
+      socket.off("notification:new", handleIncoming);
+      socket.off("reservation:new", handleIncoming);
+      socket.off("reservation:edit_requested", handleIncoming);
+      socket.off("reservation:cancel_requested", handleIncoming);
+      socket.off("reservation:request_pending", handleIncoming);
+      socket.off("NEW_RESERVATION_REQUEST", handleIncoming);
       socket.off("NEW_QR_SESSION_PENDING", handleQrRequest);
       socket.off("payment:cash_pending", handleCashPending);
       socket.off("table:cash_payment_requested", handleCashPending);

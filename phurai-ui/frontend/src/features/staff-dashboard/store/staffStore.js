@@ -17,6 +17,12 @@ export const useStaffStore = create((set, get) => ({
   selectedTableIdForModal: null,
 
   // Actions
+  setTables: (tables) => set((state) => ({
+    tables: typeof tables === 'function' ? asArray(tables(state.tables)) : asArray(tables),
+  })),
+  setOrderTables: (orderTables) => set((state) => ({
+    orderTables: typeof orderTables === 'function' ? asArray(orderTables(state.orderTables)) : asArray(orderTables),
+  })),
   setStaffRole: (role) => set({ staffRole: role }),
   openTableModal: (tableId) => set({ selectedTableIdForModal: tableId }),
   closeTableModal: () => set({ selectedTableIdForModal: null }),
@@ -98,13 +104,31 @@ export const useStaffStore = create((set, get) => ({
       get().refreshAll(false);
     });
 
-    socket.on('table:status_changed', (data) => {
-      const { table_id, table_status } = data;
+    socket.on('table:status_changed', (data = {}) => {
+      const table_id = data.table_id ?? data.tableId;
+      const table_status = data.table_status ?? data.status;
+      if (!table_id || !table_status) {
+        get().refreshAll(false);
+        return;
+      }
+
       set((state) => ({
         tables: state.tables.map(t => 
-          t.table_id === table_id ? { ...t, table_status, status: table_status } : t
+          t.table_id === table_id
+            ? {
+                ...t,
+                ...data,
+                table_id,
+                table_status,
+                status: table_status,
+              }
+            : t
         )
       }));
+
+      if (!data.estimated_release_at) {
+        get().refetchTables(false);
+      }
     });
   },
 

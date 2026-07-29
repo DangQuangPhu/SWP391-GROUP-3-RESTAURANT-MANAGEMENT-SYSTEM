@@ -12,10 +12,10 @@ async function run() {
          r.guest_count,
          r.special_request,
          r.reservation_status,
-         CASE WHEN r.has_pending_request = 1
-              THEN N'Request'
-              ELSE r.reservation_status
-         END AS display_status,
+          CASE WHEN r.has_pending_request = 1
+               THEN N'Pending Request'
+               ELSE r.reservation_status
+          END AS display_status,
          r.has_pending_request,
          r.request_type,
          r.edit_used_count,

@@ -830,3 +830,92 @@ Sau đợt test sẽ bàn giao: Test Scripts, Test Logs, Bug Reports (Hình ch�
 ## 13. Phê Duyệt (Approvals)
 - **Người phê duyệt**: [Tên Quản lý / Giảng viên]
 - **Ký nhận**: __________________________________
+
+---
+
+# PROJECT STATUS — CẬP NHẬT TIẾN ĐỘ
+> **Cập nhật lần cuối**: 2026-07-28
+
+## ✅ Đã Hoàn Thành
+
+### 🔐 Auth & Profile
+- [x] Đăng nhập / Đăng ký (Email + Google OAuth)
+- [x] OTP Verify email
+- [x] JWT Token, Role-based routing (Customer / Staff / Manager / Admin)
+- [x] Trang Profile cá nhân, đổi avatar, đổi mật khẩu
+
+### 🍽️ Menu (Customer Portal)
+- [x] Trang menu hiển thị theo category với filter, search
+- [x] **AI Visual Dish Search Modal** — upload ảnh món ăn → AI (Gemini) gợi ý món phù hợp
+  - CSS Liquid Glass `backdrop-filter: blur(28px) saturate(220%)` qua class `.liquid-modal-overlay`
+  - Đã fix lỗi Framer Motion `<motion.div>` block stacking context; outer card dùng `<div className="ai-modal-card">` + CSS animation thuần
+  - `@keyframes aiModalCardIn` trong `liquidGlass.css`
+- [x] Image lightbox fullscreen cho ảnh món
+- [x] Menu page blur background khi mở modal (`.menu-page--modal-open`)
+
+### 📅 Reservations (Customer Portal)
+- [x] Stepper form đặt bàn: Details → Choose Table → Summary → Payment
+- [x] **Interactive Floor Plan SVG** với bản đồ bàn theo zone
+  - Explicit SVG `fill`/`stroke` attributes trực tiếp trên `<rect>`, `<circle>` để tránh black-box khi CSS chưa load
+  - Import `table-board.css` trực tiếp vào `FloorPlanSVG.jsx` và `TableUnit.jsx`
+- [x] **TablePreviewModal** — click bàn bất kỳ để xem ảnh AI-generated + thông tin bàn
+  - Dùng `createPortal(…, document.body)` — không bị ảnh hưởng bởi stacking context
+  - CSS animation thuần `@keyframes tpmModalScaleUp` (không Framer Motion)
+  - Blur overlay `backdrop-filter: blur(28px) saturate(220%) !important` qua CSS class `.tpm-overlay`
+  - **Trạng thái Occupied / Reserved / Cleaning**: nút Select bị mờ + disabled, hiển thị badge cảnh báo đỏ
+  - **Trạng thái Available**: cho phép click Select bình thường
+  - Image lightbox fullscreen (Maximize2 icon)
+- [x] Glassmorphism `.rd-card` với `backdrop-filter: blur(28px)` hoạt động đúng (dùng CSS `@keyframes` thuần, không phụ thuộc Framer Motion transform)
+- [x] Reservation background image fixed (`background-attachment: fixed`)
+- [x] Payment flow: QR SePay, xác nhận thực thời gian
+- [x] Trang lịch sử đặt bàn, chi tiết đặt bàn, hủy đặt bàn
+
+### 👨‍💼 Manager Dashboard
+- [x] Tổng quan (Overview): Stats cards, Revenue chart, Reservation summary
+- [x] Quản lý thực đơn (Menu Management): CRUD món ăn, upload ảnh
+- [x] Quản lý nhân sự (Staff Management): Danh sách nhân viên, ca làm việc
+- [x] Quản lý đặt bàn: Duyệt / Từ chối reservation
+- [x] Quản lý khuyến mãi (Promotions & Vouchers)
+- [x] Floor Plan Setup (Admin): Cấu hình sơ đồ bàn
+
+### 🍳 Staff Dashboard
+- [x] Xem danh sách đặt bàn hôm nay
+- [x] Check-in khách
+- [x] Tạo order, gửi bếp
+- [x] KDS (Kitchen Display System) — màn hình bếp real-time
+
+### ⚙️ Infrastructure & DevOps
+- [x] Docker multi-stage build (platform=$BUILDPLATFORM cho CI cross-compile)
+- [x] Express phục vụ static frontend từ `/dist`
+- [x] Socket.IO realtime (reservation updates, kitchen tickets)
+- [x] nginx.conf với `Cross-Origin-Opener-Policy` header
+- [x] Auto-seed dữ liệu mẫu (`autoSeeder.js`)
+- [x] Cron jobs: OTP cleanup, reservation reminders, no-show sweeper
+
+---
+
+## 🔧 Known Issues / Technical Debt
+
+| # | Vấn đề | Mức độ | Ghi chú |
+|---|--------|--------|---------|
+| 1 | `backdrop-filter` trên server cần verify sau deploy | ⚠️ Medium | Đã fix qua CSS class + `!important`; cần test thực tế |
+| 2 | `App.jsx` vẫn còn ôm đồm | 🔵 Low | Cần tách Provider ra riêng |
+| 3 | Bundle size >2MB (index.js) | ⚠️ Medium | Cần code-split động (`dynamic import`) |
+| 4 | `preload` warning từ Google Fonts | 🔵 Low | Browser warning, không ảnh hưởng chức năng |
+| 5 | Một số Dashboard chart vẫn dùng mock data | ⚠️ Medium | Cần nối `ReportSnapshots` thật |
+
+---
+
+## 📁 Files Quan Trọng Đã Thay Đổi Gần Đây
+
+| File | Thay đổi |
+|------|----------|
+| `frontend/src/features/menu/components/AIVisualSearchModal.jsx` | Outer card → `<div className="liquid-modal-card ai-modal-card">` (bỏ Framer Motion outer wrapper) |
+| `frontend/src/features/menu/styles/liquidGlass.css` | Thêm `.liquid-modal-overlay`, `.liquid-modal-card`, `@keyframes aiModalCardIn`, `.ai-modal-card` |
+| `frontend/src/features/reservations/components/choose-table/TablePreviewModal.jsx` | Modal xem ảnh bàn, disable Select khi Occupied/Reserved/Cleaning |
+| `frontend/src/features/reservations/styles/table-preview-modal.css` | Blur overlay, CSS animation card entry, lightbox |
+| `frontend/src/features/reservations/components/choose-table/FloorPlanSVG.jsx` | Explicit SVG fill/stroke attributes, import table-board.css |
+| `frontend/src/features/reservations/components/choose-table/TableUnit.jsx` | Import table-board.css |
+| `frontend/src/features/reservations/styles/ReservationDetails.css` | `.rd-card` glassmorphism blur pattern chuẩn |
+| `nginx.conf` | Thêm `Cross-Origin-Opener-Policy: same-origin-allow-popups` |
+| `backend/src/index.js` | Header `Cross-Origin-Opener-Policy` cho Express static |

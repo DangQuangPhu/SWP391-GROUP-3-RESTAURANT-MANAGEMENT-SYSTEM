@@ -75,24 +75,29 @@ export async function getActiveSession(req, res) {
 export async function validateSession(req, res) {
   try {
     const tableId = Number(req.query.table_id);
-    const sessionId = Number(req.query.session_id);
+    const rawSession = req.query.session_id || req.query.session_token || req.query.sessionId;
+    const sessionId = Number(rawSession);
+    const sessionToken = typeof rawSession === "string" && !Number.isFinite(sessionId) ? rawSession.trim() : null;
 
-    if (!Number.isFinite(tableId) || tableId <= 0 || !Number.isFinite(sessionId) || sessionId <= 0) {
+    if (!Number.isFinite(tableId) || tableId <= 0 || (!Number.isFinite(sessionId) && !sessionToken)) {
       return res.status(400).json({
         success: false,
-        message: "table_id and session_id are required.",
+        message: "table_id and session_id or session_token are required.",
       });
     }
 
-    const [rows] = await pool.query(
-      `${SESSION_SELECT}
-       WHERE qs.qr_session_id = ?
-         AND qs.table_id = ?
-         AND qs.session_status = N'Active'
-         AND (qs.expires_at IS NULL OR qs.expires_at > SYSUTCDATETIME());`,
-      [sessionId, tableId]
-    );
+    let query = `${SESSION_SELECT} WHERE qs.table_id = ? AND qs.session_status = N'Active' AND (qs.expires_at IS NULL OR qs.expires_at > SYSUTCDATETIME())`;
+    let params = [tableId];
 
+    if (Number.isFinite(sessionId) && sessionId > 0) {
+      query += ` AND (qs.qr_session_id = ? OR qs.session_token = ?)`;
+      params.push(sessionId, String(sessionId));
+    } else if (sessionToken) {
+      query += ` AND (qs.session_token = ? OR CAST(qs.qr_session_id AS VARCHAR) = ?)`;
+      params.push(sessionToken, sessionToken);
+    }
+
+    const [rows] = await pool.query(query, params);
     const session = mapSessionRow(rows[0]);
     if (!session) {
       return res.status(404).json({

@@ -211,7 +211,7 @@ function renderChart(type, data) {
       return (
         <motion.div style={{ ...chartCard, height: 360 }} variants={fadeScaleVariants} initial="hidden" animate="visible">
           <h3 className="adp-chart-title">Daily Revenue (VND)</h3>
-          <ResponsiveContainer width="100%" height="90%">
+          <ResponsiveContainer width="100%" height="90%" minWidth={1} minHeight={1}>
             <AreaChart data={data}>
               <defs>
                 <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
@@ -233,7 +233,7 @@ function renderChart(type, data) {
       return (
         <motion.div style={{ ...chartCard, height: 360 }} variants={fadeScaleVariants} initial="hidden" animate="visible">
           <h3 className="adp-chart-title">Reservations by Status</h3>
-          <ResponsiveContainer width="100%" height="90%">
+          <ResponsiveContainer width="100%" height="90%" minWidth={1} minHeight={1}>
             <BarChart data={data} barSize={36}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
               <XAxis dataKey="reservation_status" tick={{ fontSize: 12 }} stroke="#c9c0b2" />
@@ -253,7 +253,7 @@ function renderChart(type, data) {
         >
           <div style={{ ...chartCard, height: 360 }}>
             <h3 className="adp-chart-title">Orders by Status</h3>
-            <ResponsiveContainer width="100%" height="88%">
+            <ResponsiveContainer width="100%" height="88%" minWidth={1} minHeight={1}>
               <PieChart>
                 <Pie data={data} dataKey="count" nameKey="order_status" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                   {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
@@ -264,7 +264,7 @@ function renderChart(type, data) {
           </div>
           <div style={{ ...chartCard, height: 360 }}>
             <h3 className="adp-chart-title">Avg Order Value by Status (VND)</h3>
-            <ResponsiveContainer width="100%" height="88%">
+            <ResponsiveContainer width="100%" height="88%" minWidth={1} minHeight={1}>
               <BarChart data={data} barSize={36}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                 <XAxis dataKey="order_status" tick={{ fontSize: 11 }} stroke="#c9c0b2" />
@@ -281,7 +281,7 @@ function renderChart(type, data) {
       return (
         <motion.div style={{ ...chartCard, height: 360 }} variants={fadeScaleVariants} initial="hidden" animate="visible">
           <h3 className="adp-chart-title">Reviews by Rating</h3>
-          <ResponsiveContainer width="100%" height="88%">
+          <ResponsiveContainer width="100%" height="88%" minWidth={1} minHeight={1}>
             <BarChart data={data} layout="vertical" barSize={28}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
               <XAxis type="number" tick={{ fontSize: 12 }} stroke="#c9c0b2" />
@@ -297,7 +297,7 @@ function renderChart(type, data) {
       return (
         <motion.div style={{ ...chartCard, height: 360 }} variants={fadeScaleVariants} initial="hidden" animate="visible">
           <h3 className="adp-chart-title">Shifts Handled per Staff</h3>
-          <ResponsiveContainer width="100%" height="88%">
+          <ResponsiveContainer width="100%" height="88%" minWidth={1} minHeight={1}>
             <BarChart data={data} barSize={32}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
               <XAxis dataKey="staff_code" tick={{ fontSize: 11 }} stroke="#c9c0b2" />

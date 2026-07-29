@@ -39,21 +39,44 @@ export async function handlePostCheckoutSuccess(orderId, receivedAmount) {
     if (resId) {
       const resQuery = await pool.request()
         .input('resId', sql.Int, resId)
-        .query('SELECT contact_email, contact_name, deposit_amount, final_total, special_request FROM dbo.Reservations WHERE reservation_id = @resId');
+        .query('SELECT customer_id, contact_email, contact_name, deposit_amount, final_total, special_request FROM dbo.Reservations WHERE reservation_id = @resId');
       if (resQuery.recordset.length > 0) {
-        emailTo = resQuery.recordset[0].contact_email;
-        customerName = resQuery.recordset[0].contact_name || 'Guest';
-        preorderDeposit = resQuery.recordset[0].deposit_amount || 0;
-        preorderTotal = resQuery.recordset[0].final_total || 0;
-        reservationNote = resQuery.recordset[0].special_request || '';
+        const resRow = resQuery.recordset[0];
+        emailTo = resRow.contact_email;
+        customerName = resRow.contact_name || 'Guest';
+        preorderDeposit = resRow.deposit_amount || 0;
+        preorderTotal = resRow.final_total || 0;
+        reservationNote = resRow.special_request || '';
+        if (!customerId && resRow.customer_id) {
+          customerId = resRow.customer_id;
+        }
       }
-    } else if (customerId) {
+    }
+    
+    if (customerId && !emailTo) {
       const userQuery = await pool.request()
         .input('cId', sql.Int, customerId)
         .query('SELECT email, full_name FROM dbo.UserAccounts WHERE user_id = @cId');
       if (userQuery.recordset.length > 0) {
         emailTo = userQuery.recordset[0].email;
         customerName = userQuery.recordset[0].full_name || 'Guest';
+      }
+    }
+
+    // Auto-match customerId from emailTo if customerId was missing
+    if (!customerId && emailTo) {
+      const matchUser = await pool.request()
+        .input('email', sql.NVarChar(255), emailTo.trim().toLowerCase())
+        .query('SELECT user_id, full_name FROM dbo.UserAccounts WHERE LOWER(email) = @email');
+      if (matchUser.recordset.length > 0) {
+        customerId = matchUser.recordset[0].user_id;
+        if (!customerName || customerName === 'Guest') {
+          customerName = matchUser.recordset[0].full_name || 'Guest';
+        }
+        await pool.request()
+          .input('cId', sql.Int, customerId)
+          .input('oId', sql.Int, orderId)
+          .query('UPDATE dbo.Orders SET customer_id = @cId WHERE order_id = @oId AND customer_id IS NULL');
       }
     }
 
@@ -71,11 +94,10 @@ export async function handlePostCheckoutSuccess(orderId, receivedAmount) {
         .input('amount', sql.Decimal(12, 2), Number(receivedAmount))
         .query(`
           INSERT INTO dbo.LoyaltyTransactions (customer_id, points, transaction_type, reference_type, reference_id, description, created_at)
-          VALUES (@customerId, @points, N'Earn', N'Payment', @orderId, N'Tích điểm từ thanh toán đơn hàng', SYSDATETIME());
+          VALUES (@customerId, @points, N'Earn', N'Payment', @orderId, N'Loyalty points earned from bill payment', SYSDATETIME());
 
           UPDATE dbo.CustomerProfiles
           SET loyalty_points = (SELECT ISNULL(SUM(points), 0) FROM dbo.LoyaltyTransactions WHERE customer_id = @customerId),
-              total_spent = ISNULL(total_spent, 0) + @amount,
               updated_at = SYSDATETIME()
           WHERE user_id = @customerId;
         `);
@@ -83,12 +105,13 @@ export async function handlePostCheckoutSuccess(orderId, receivedAmount) {
 
     // 4. Send Notification Bell Updates
     if (customerId) {
+      const formattedAmount = `${Number(receivedAmount).toLocaleString('en-US')} VND`;
       console.log(`[checkoutHelper] Sending payment receipt notification for Customer #${customerId}`);
       await notifyCustomerStaffAction({
         customerId,
         notificationType: 'Payment Receipt',
-        title: 'Thanh toán thành công & Tích điểm! 🍽️',
-        message: `Bạn đã thanh toán ${Number(receivedAmount).toLocaleString('vi-VN')}₫ cho Bàn ${order.table_number || 'N/A'}. Tài khoản ${customerName} được cộng +${pointsToAward} điểm thưởng loyalty!`,
+        title: 'Payment Completed & Points Earned! 🌟',
+        message: `You successfully paid ${formattedAmount} for Table #${order.table_number || 'N/A'}. Earned +${pointsToAward} Loyalty Points! Click to view your balance.`,
         payload: { orderId, amount: receivedAmount, points: pointsToAward }
       });
     }

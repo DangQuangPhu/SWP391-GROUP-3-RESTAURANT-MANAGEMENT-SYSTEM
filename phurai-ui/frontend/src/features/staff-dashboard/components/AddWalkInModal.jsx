@@ -15,6 +15,7 @@ import { createPortal } from "react-dom";
 import { LayoutGrid, X, Check, ChevronRight } from "lucide-react";
 import TableBoard from "@/features/reservations/components/choose-table/TableBoard.jsx";
 import { createWalkInReservation } from "../services/staffApi.js";
+import { formatTimeForInput, getDefaultErtDurationMin } from "../utils/ertConfig.js";
 import "../styles/AddWalkInModal.css";
 
 // ─── Field config ────────────────────────────────────────────────────────────
@@ -55,11 +56,6 @@ function validate(fields) {
   if (!fields.start_time) {
     errors.start_time = "Start time is required.";
   }
-  if (!fields.end_time) {
-    errors.end_time = "End time is required.";
-  } else if (fields.start_time && fields.end_time <= fields.start_time) {
-    errors.end_time = "End time must be after start time.";
-  }
   if (!fields.table_id) {
     errors.table_id = "Please select a table using the floor plan.";
   }
@@ -67,18 +63,14 @@ function validate(fields) {
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
-export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
+export default function AddWalkInModal({ user, toast, onClose, onCreated, initialTableId = "" }) {
   const userId = user?.userId ?? user?.user_id ?? user?.id;
   const modalRef = useRef(null);
 
+  const getNowDate = () => new Date();
+
   const getNowTimeString = () => {
     const d = new Date();
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  };
-
-  const getEndTimeString = (hoursAhead = 2) => {
-    const d = new Date();
-    d.setHours(d.getHours() + hoursAhead);
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
 
@@ -87,10 +79,10 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
     contact_phone: "",
     contact_email: "",
     guest_count:   "2",
-    table_id:      "",
+    table_id:      initialTableId ? String(initialTableId) : "",
     start_time:    getNowTimeString(),
-    end_time:      getEndTimeString(2),
   });
+  const [seatedAt, setSeatedAt] = useState(() => getNowDate());
   const [errors,        setErrors]        = useState({});
   const [allTables,     setAllTables]     = useState([]);
   const [loadingTables, setLoadingTables] = useState(true);
@@ -106,19 +98,7 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
       if (active) setLoadingTables(true);
     }, 0);
 
-    const [sh, sm] = fields.start_time.split(':').map(Number);
-    const [eh, em] = fields.end_time.split(':').map(Number);
-    let duration = (eh * 60 + em) - (sh * 60 + sm);
-    if (isNaN(duration) || duration <= 0) {
-      clearTimeout(timer);
-      Promise.resolve().then(() => {
-        if (active) {
-          setAllTables([]);
-          setLoadingTables(false);
-        }
-      });
-      return;
-    }
+    const duration = getDefaultErtDurationMin(fields.guest_count);
 
     const todayStr = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD
     const url = `/api/reservations/availability?date=${todayStr}&time=${fields.start_time}&durationMinutes=${duration}&guestCount=${parseInt(fields.guest_count, 10) || 1}`;
@@ -152,7 +132,7 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
       active = false;
       clearTimeout(timer);
     };
-  }, [fields.start_time, fields.end_time, fields.guest_count]);
+  }, [fields.start_time, fields.guest_count]);
 
   // Trap focus + Escape
   useEffect(() => {
@@ -183,6 +163,11 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
   const selectedTableData = allTables.find(
     (t) => String(t.table_id) === String(fields.table_id)
   );
+  const estimatedDurationMin = getDefaultErtDurationMin(
+    fields.guest_count,
+    selectedTableData?.area_name
+  );
+  const estimatedReleaseAt = new Date(seatedAt.getTime() + estimatedDurationMin * 60000);
 
   // TableBoard-adapted table list
   const adaptedTables = allTables.map(adaptForTableBoard);
@@ -199,14 +184,14 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
 
     setSubmitting(true);
     try {
+      const now = getNowDate();
+      setSeatedAt(now);
       const result = await createWalkInReservation(userId, {
         contact_name:  fields.contact_name.trim(),
         contact_phone: fields.contact_phone.trim() || null,
         contact_email: fields.contact_email.trim(),
         guest_count:   parseInt(fields.guest_count, 10),
         table_id:      parseInt(fields.table_id, 10),
-        start_time:    fields.start_time,
-        end_time:      fields.end_time,
       });
       toast(result.message || "Walk-in created successfully.", "success");
       onCreated?.(result);
@@ -322,22 +307,22 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated }) {
                     className="walkin-form__input"
                     type="time"
                     value={fields.start_time}
-                    onChange={(e) => setField("start_time", e.target.value)}
+                    readOnly
                   />
                   {errors.start_time && <p className="walkin-form__error">{errors.start_time}</p>}
                 </div>
 
                 <div className={`walkin-form__field${errors.end_time ? " is-error" : ""}`}>
                   <label className="walkin-form__label">
-                    End Time <span className="walkin-form__required">*</span>
+                    Estimated Release
                   </label>
                   <input
                     className="walkin-form__input"
                     type="time"
-                    value={fields.end_time}
-                    onChange={(e) => setField("end_time", e.target.value)}
+                    value={formatTimeForInput(estimatedReleaseAt)}
+                    readOnly
                   />
-                  {errors.end_time && <p className="walkin-form__error">{errors.end_time}</p>}
+                  <p className="walkin-form__hint">{estimatedDurationMin} min service estimate</p>
                 </div>
               </div>
             </div>

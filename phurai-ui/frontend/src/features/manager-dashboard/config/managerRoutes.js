@@ -11,6 +11,7 @@ const CONSOLIDATED_VIEWS = new Set([
   "tables",
   "staff",
   "promotions",
+  "audit",
   "ratings",
 ]);
 
@@ -30,6 +31,7 @@ const SEGMENT_TO_VIEW = {
   staff: "staff",
   promotions: "promotions",
   reports: "reports",
+  audit: "audit",
   ratings: "ratings",
   settings: "settings",
 };

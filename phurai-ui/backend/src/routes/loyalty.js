@@ -6,7 +6,8 @@ import {
   getCatalog,
   redeemPromotion,
   getMyPromotions,
-  applyPromotion
+  applyPromotion,
+  getHistory
 } from '../controllers/loyaltyController.js';
 
 const router = express.Router();
@@ -19,6 +20,12 @@ router.use(resolveUserId, requireUserId, requireCustomer);
  * Securely retrieves point balance and summary statistics.
  */
 router.get('/balance', getBalance);
+
+/**
+ * GET /api/loyalty/history
+ * Securely retrieves customer point transaction history ledger.
+ */
+router.get('/history', getHistory);
 
 /**
  * GET /api/loyalty/catalog

@@ -1,5 +1,6 @@
 import sql from 'mssql';
 import { getRawPool } from '../db.js';
+import { sweepTableAssignmentFinalization } from './tableAssignmentFinalizer.js';
 
 let cronInterval = null;
 let sepayInterval = null;
@@ -54,6 +55,15 @@ export const startCronJobs = () => {
       `);
 
       const expiredReservations = selectResult.recordset;
+
+      try {
+        const assignmentSweep = await sweepTableAssignmentFinalization();
+        if (assignmentSweep.processed > 0) {
+          console.log(`[CronService] Flagged ${assignmentSweep.processed} reservation(s) for table assignment finalization.`);
+        }
+      } catch (assignmentErr) {
+        console.error('[CronService] Table assignment finalization sweep error:', assignmentErr.message);
+      }
       
       if (expiredReservations.length === 0) {
         isRunning = false;
@@ -71,7 +81,7 @@ export const startCronJobs = () => {
 
         await transaction.request().query(`
           UPDATE dbo.Reservations
-          SET reservation_status = 'No Show',
+          SET reservation_status = 'Cancelled',
               cancel_reason = 'Payment Expired',
               cancelled_at = SYSDATETIME(),
               updated_at = SYSDATETIME()
@@ -83,7 +93,7 @@ export const startCronJobs = () => {
              .input('actionName', sql.VarChar, 'PAYMENT_EXPIRED - Created by: System (Automated Cleanup)')
              .input('targetTable', sql.VarChar, 'Reservations')
              .input('targetId', sql.Int, res.reservation_id)
-             .input('newValue', sql.VarChar, JSON.stringify({ reservation_status: 'No Show', order_code: res.order_code }))
+             .input('newValue', sql.VarChar, JSON.stringify({ reservation_status: 'Cancelled', order_code: res.order_code }))
              .query(`
                INSERT INTO dbo.AuditLogs (action_name, target_table, target_id, new_value_json, created_at)
                VALUES (@actionName, @targetTable, @targetId, @newValue, SYSDATETIME())
@@ -347,4 +357,3 @@ export const stopCronJobs = () => {
   }
   console.log('[CronService] Background jobs stopped.');
 };
-

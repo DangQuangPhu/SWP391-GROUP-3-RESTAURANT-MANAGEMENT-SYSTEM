@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { listContainerVariants, listItemVariants } from "@/components/ui/Skeleton.jsx";
 import { ManagerModal } from "../ManagerOverlay.jsx";
 import {
   SectionHead,
@@ -19,6 +21,135 @@ import { formatVND } from "@/core/utils/formatCurrency.js";
 import { getMenuTabFromSearch } from "../../config/managerRoutes.js";
 import { addDish, updateDish, deleteDish } from "../../services/managerApi.js";
 import { loadAuthUser } from "@/core/api/httpClient.js";
+import { resolveDishImage } from "@/features/menu/data/menuAssets.js";
+
+function AnimatedSelect({ value, onChange, options, minWidth = "160px" }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find((opt) => opt.value === value) || options[0];
+
+  return (
+    <div ref={containerRef} style={{ position: "relative", minWidth, display: "inline-block" }}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          width: "100%",
+          padding: "8px 14px",
+          background: "#ffffff",
+          border: isOpen ? "1.5px solid #9f8655" : "1px solid #e5e7eb",
+          borderRadius: "10px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "10px",
+          cursor: "pointer",
+          fontSize: "13px",
+          fontWeight: "500",
+          color: "#1f2937",
+          boxShadow: isOpen
+            ? "0 0 0 3px rgba(159,134,85,0.15), 0 4px 12px rgba(0,0,0,0.05)"
+            : "0 1px 2px rgba(0,0,0,0.04)",
+          transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+          outline: "none",
+        }}
+      >
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {selectedOption?.label || value}
+        </span>
+        <motion.svg
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#6b7280"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ flexShrink: 0 }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </motion.svg>
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 4, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.97 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: 0,
+              right: 0,
+              zIndex: 999,
+              background: "#ffffff",
+              border: "1px solid rgba(159,134,85,0.25)",
+              borderRadius: "12px",
+              boxShadow: "0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.05)",
+              padding: "5px",
+              overflow: "hidden",
+              maxHeight: "260px",
+              overflowY: "auto",
+            }}
+          >
+            {options.map((opt) => {
+              const isSelected = opt.value === value;
+              return (
+                <div
+                  key={opt.value}
+                  onClick={() => {
+                    onChange(opt.value);
+                    setIsOpen(false);
+                  }}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    fontWeight: isSelected ? "600" : "400",
+                    color: isSelected ? "#9f8655" : "#374151",
+                    background: isSelected ? "#fcf9f2" : "transparent",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    transition: "background 0.15s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = "#f9fafb";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = "transparent";
+                  }}
+                >
+                  <span>{opt.label}</span>
+                  {isSelected && (
+                    <span style={{ color: "#9f8655", fontSize: "14px", fontWeight: "bold" }}>✓</span>
+                  )}
+                </div>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 const EMPTY = {
   dish_name: "",
@@ -47,6 +178,7 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
 
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [editing, setEditing] = useState(null);
   const [isNew, setIsNew] = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
@@ -65,7 +197,7 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, cat, tab]);
+  }, [search, cat, statusFilter, tab]);
   const currentUser = loadAuthUser();
   const isManager = role === "manager";
 
@@ -87,6 +219,8 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
   const filtered = useMemo(() => {
     let list = dishList;
     if (cat !== "all") list = list.filter((d) => d.category_name === cat);
+    if (statusFilter === "available") list = list.filter((d) => Boolean(d.is_available));
+    if (statusFilter === "unavailable") list = list.filter((d) => !d.is_available);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -96,7 +230,7 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
       );
     }
     return list;
-  }, [dishList, cat, search]);
+  }, [dishList, cat, statusFilter, search]);
 
   const totalResults = filtered.length;
   const totalPages = Math.ceil(totalResults / ITEMS_PER_PAGE) || 1;
@@ -173,6 +307,24 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
 
   const totalDishesCount = dishList.length;
   const availableDishesCount = useMemo(() => dishList.filter((d) => d.is_available).length, [dishList]);
+  const unavailableDishesCount = totalDishesCount - availableDishesCount;
+
+  const categoryOptions = useMemo(
+    () => [
+      { value: "all", label: "All categories" },
+      ...DISH_CATEGORIES.map((c) => ({ value: c, label: c })),
+    ],
+    []
+  );
+
+  const statusOptions = useMemo(
+    () => [
+      { value: "all", label: "All status" },
+      { value: "available", label: `Available (${availableDishesCount})` },
+      { value: "unavailable", label: `Unavailable (${unavailableDishesCount})` },
+    ],
+    [availableDishesCount, unavailableDishesCount]
+  );
 
   const kpis = [
     {
@@ -194,14 +346,29 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
       accent: "green",
       trend: { dir: "up", text: "Ready to Serve" },
     },
+    {
+      id: "unavailable_dishes",
+      label: "Unavailable Dishes",
+      value: unavailableDishesCount,
+      format: "number",
+      icon: "close",
+      accent: "rose",
+      trend: { dir: unavailableDishesCount > 0 ? "down" : "up", text: unavailableDishesCount > 0 ? "Off-menu / Sold Out" : "All Active" },
+    },
   ];
 
   return (
     <div className="sfx-stack">
-      {/* 2 KPI Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(240px, 1fr))", gap: "16px", marginBottom: "20px" }}>
+      {/* 3 KPI Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(200px, 1fr))", gap: "16px", marginBottom: "20px" }}>
         {kpis.map((c, i) => (
-          <KpiCard key={c.id} card={c} index={i} />
+          <div key={c.id} onClick={() => {
+            if (c.id === "total_dishes") setStatusFilter("all");
+            if (c.id === "available_dishes") setStatusFilter("available");
+            if (c.id === "unavailable_dishes") setStatusFilter("unavailable");
+          }} style={{ cursor: "pointer" }}>
+            <KpiCard card={c} index={i} />
+          </div>
         ))}
       </div>
 
@@ -235,12 +402,18 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
                 <div style={{ width: "220px" }}>
                   <SearchField value={search} onChange={setSearch} placeholder="Search dishes…" />
                 </div>
-                <select className="sfx-select" value={cat} onChange={(e) => setCat(e.target.value)} style={{ minWidth: "150px" }}>
-                  <option value="all">All categories</option>
-                  {DISH_CATEGORIES.map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
+                <AnimatedSelect
+                  value={cat}
+                  onChange={setCat}
+                  options={categoryOptions}
+                  minWidth="165px"
+                />
+                <AnimatedSelect
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  options={statusOptions}
+                  minWidth="150px"
+                />
               </>
             )}
 
@@ -267,23 +440,33 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
                       {isManager ? <th className="sfx-table__right">Actions</th> : null}
                     </tr>
                   </thead>
-                  <tbody>
-                    {paginatedDishes.map((d) => (
-                      <tr key={d.dish_id}>
-                        <td>
-                          <div className="sfx-dishcell" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                            {d.image_url ? (
-                              <img
-                                src={d.image_url}
-                                alt={d.dish_name}
-                                style={{ width: "38px", height: "38px", borderRadius: "8px", objectFit: "cover", border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 2px 6px rgba(0,0,0,0.05)" }}
-                                onError={(e) => { e.target.style.display = "none"; }}
-                              />
-                            ) : (
-                              <span className="sfx-thumb" style={{ width: "38px", height: "38px", borderRadius: "8px", background: "#f4efe6", color: "#9f8655", fontWeight: "700", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px" }}>
-                                {d.dish_name[0]}
-                              </span>
-                            )}
+                  <motion.tbody
+                    key={currentPage}
+                    variants={listContainerVariants}
+                    initial="hidden"
+                    animate="visible"
+                  >
+                    {paginatedDishes.map((d) => {
+                      const imgSrc = resolveDishImage(d, d.dish_name);
+                      return (
+                        <motion.tr
+                          key={d.dish_id}
+                          variants={listItemVariants}
+                        >
+                          <td>
+                            <div className="sfx-dishcell" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                              {imgSrc ? (
+                                <img
+                                  src={imgSrc}
+                                  alt={d.dish_name}
+                                  style={{ width: "38px", height: "38px", borderRadius: "8px", objectFit: "cover", border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 2px 6px rgba(0,0,0,0.05)" }}
+                                  onError={(e) => { e.target.style.display = "none"; }}
+                                />
+                              ) : (
+                                <span className="sfx-thumb" style={{ width: "38px", height: "38px", borderRadius: "8px", background: "#f4efe6", color: "#9f8655", fontWeight: "700", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px" }}>
+                                  {d.dish_name ? d.dish_name[0] : "D"}
+                                </span>
+                              )}
                             <div style={{ display: "flex", flexDirection: "column" }}>
                               <strong style={{ fontSize: "13.5px", color: "#111827", fontWeight: "600" }}>{d.dish_name}</strong>
                               {d.is_recommended ? (
@@ -312,8 +495,9 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
                             </div>
                           </td>
                         ) : null}
-                      </tr>
-                    ))}
+                      </motion.tr>
+                      );
+                    })}
 
                     {!filtered.length ? (
                       <tr>
@@ -326,7 +510,7 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
                         </td>
                       </tr>
                     ) : null}
-                  </tbody>
+                  </motion.tbody>
                 </table>
               </div>
 
@@ -487,48 +671,53 @@ function DishesSection({ dishes, setDishes, bestSellers, pendingAction, role, to
                 <span>Dish Image (URL or Drag & Drop File)</span>
 
                 {/* Live Image Preview & Validation Status */}
-                {editing.image_url ? (
-                  <div style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    background: imageError ? "#fff5f5" : "#f9fafb",
-                    padding: "10px",
-                    borderRadius: "8px",
-                    border: imageError ? "1px solid #fca5a5" : "1px solid #e5e7eb",
-                    marginTop: "6px"
-                  }}>
-                    <img
-                      src={editing.image_url}
-                      alt="Dish preview"
-                      style={{ width: "54px", height: "54px", objectFit: "cover", borderRadius: "6px", border: "1px solid #ddd" }}
-                      onLoad={() => setImageError(false)}
-                      onError={() => setImageError(true)}
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: "12px", fontWeight: "bold", margin: 0, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {editing.image_url.startsWith("data:") ? "Uploaded Image File" : editing.image_url}
-                      </p>
-                      {imageError ? (
-                        <span style={{ fontSize: "11px", color: "#dc2626", fontWeight: "bold" }}>⚠️ Không thể tải ảnh (URL không tồn tại hoặc lỗi đường dẫn)</span>
-                      ) : (
-                        <span style={{ fontSize: "11px", color: "#16a34a" }}>✓ Ảnh đã tải thành công</span>
-                      )}
+                {(() => {
+                  const currentPreviewSrc = resolveDishImage(editing, editing.dish_name);
+                  return currentPreviewSrc ? (
+                    <div style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      background: imageError ? "#fff5f5" : "#f9fafb",
+                      padding: "10px",
+                      borderRadius: "8px",
+                      border: imageError ? "1px solid #fca5a5" : "1px solid #e5e7eb",
+                      marginTop: "6px"
+                    }}>
+                      <img
+                        src={currentPreviewSrc}
+                        alt={editing.dish_name || "Dish preview"}
+                        style={{ width: "54px", height: "54px", objectFit: "cover", borderRadius: "6px", border: "1px solid #ddd" }}
+                        onLoad={() => setImageError(false)}
+                        onError={() => setImageError(true)}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: "12px", fontWeight: "bold", margin: 0, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {editing.image_url ? (editing.image_url.startsWith("data:") ? "Uploaded Image File" : editing.image_url) : `Matched Photo (${editing.dish_name})`}
+                        </p>
+                        {imageError ? (
+                          <span style={{ fontSize: "11px", color: "#dc2626", fontWeight: "bold" }}>⚠️ Không thể tải ảnh</span>
+                        ) : (
+                          <span style={{ fontSize: "11px", color: "#16a34a" }}>✓ Ảnh đã tải thành công</span>
+                        )}
+                      </div>
+                      {editing.image_url ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon="close"
+                          onClick={() => {
+                            setEditing({ ...editing, image_url: "" });
+                            setImageError(false);
+                          }}
+                          title="Remove custom image URL"
+                        >
+                          Remove
+                        </Button>
+                      ) : null}
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      icon="close"
-                      onClick={() => {
-                        setEditing({ ...editing, image_url: "" });
-                        setImageError(false);
-                      }}
-                      title="Remove image"
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                ) : null}
+                  ) : null;
+                })()}
 
                 {/* Dual Image Controls: URL Input + File Drag & Drop */}
                 <div style={{ display: "flex", gap: "10px", marginTop: "8px", alignItems: "center" }}>

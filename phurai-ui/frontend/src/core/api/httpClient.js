@@ -144,7 +144,7 @@ export async function request(path, options = {}) {
   return data;
 }
 
-function getAuthToken() {
+export function getAuthToken() {
   return (
     localStorage.getItem("phurai_token") ||
     localStorage.getItem("token") ||

@@ -207,16 +207,6 @@ export default function StaffEditReservationModal({ reservation, userId, onClose
                 style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
               />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>End Time</label>
-              <input
-                type="time"
-                max="23:59"
-                value={form.endTime}
-                onChange={e => handleUpdate('endTime', e.target.value)}
-                style={{ padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }}
-              />
-            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>

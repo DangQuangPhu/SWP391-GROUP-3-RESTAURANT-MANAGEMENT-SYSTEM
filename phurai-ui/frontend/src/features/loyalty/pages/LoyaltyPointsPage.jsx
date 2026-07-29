@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Gem, Clock, Ticket, TrendingUp, CheckCircle2, AlertTriangle, Loader2, Star } from 'lucide-react';
-import { getLoyaltyBalance, getLoyaltyCatalog, redeemPromotion, getMyPromotions } from '../services/loyaltyApi.js';
+import { getLoyaltyBalance, getLoyaltyCatalog, redeemPromotion, getMyPromotions, getLoyaltyHistory } from '../services/loyaltyApi.js';
 import { format } from 'date-fns';
 import { useAuth } from '@/features/auth/context/AuthContext';
 import '../styles/loyalty.css';
@@ -95,6 +95,7 @@ export default function LoyaltyPointsPage() {
   const [balanceData, setBalanceData] = useState({ balance: 0, totalEarned: 0, totalRedeemed: 0 });
   const [catalog, setCatalog] = useState([]);
   const [myPromotions, setMyPromotions] = useState([]);
+  const [pointHistory, setPointHistory] = useState([]);
   const [activeTab, setActiveTab] = useState('active');
   const [loading, setLoading] = useState(true);
   const [exchanging, setExchanging] = useState(false);
@@ -109,14 +110,16 @@ export default function LoyaltyPointsPage() {
     if (!userId) { setLoading(false); return; }
     setLoading(true);
     try {
-      const [balRes, catRes, vouchRes] = await Promise.all([
+      const [balRes, catRes, vouchRes, histRes] = await Promise.all([
         getLoyaltyBalance(userId),
         getLoyaltyCatalog(userId),
         getMyPromotions(userId),
+        getLoyaltyHistory(userId),
       ]);
       if (balRes?.success) setBalanceData(balRes);
       if (catRes?.success) setCatalog(catRes.catalog || []);
       if (vouchRes?.success) setMyPromotions(vouchRes.promotions || []);
+      if (histRes?.success) setPointHistory(histRes.history || []);
     } catch (err) {
       console.error('[LoyaltyPointsPage] load error:', err);
     } finally {
@@ -342,6 +345,81 @@ export default function LoyaltyPointsPage() {
           </div>
         )}
       </section>
+
+      {/* ── Point History ── */}
+      <section style={{ marginTop: '32px' }}>
+        <SectionHeader icon={Clock} title="Point Transaction History" />
+
+        {pointHistory.length === 0 ? (
+          <p className="loyalty-catalog__empty">No point transactions yet. Pay bills at Phūrai to earn loyalty points!</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {pointHistory.map((item) => {
+              const isEarn = (item.points || 0) > 0 || (item.transaction_type || '').toLowerCase() === 'earn';
+              const dateFormatted = item.created_at ? format(new Date(item.created_at), 'MMM d, yyyy · HH:mm') : 'Recent';
+
+              return (
+                <div
+                  key={item.transaction_id}
+                  style={{
+                    background: '#FFFFFF',
+                    border: '1px solid #ECE5DA',
+                    borderRadius: '12px',
+                    padding: '14px 18px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    boxShadow: '0 2px 6px rgba(43,33,24,0.03)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        background: isEarn ? '#F0FDF4' : '#FEF2F2',
+                        color: isEarn ? '#15803D' : '#DC2626',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 'bold',
+                        fontSize: '14px',
+                      }}
+                    >
+                      {isEarn ? <TrendingUp size={18} /> : <Gem size={18} />}
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: '#2B2118' }}>
+                        {item.description || (isEarn ? 'Earned Loyalty Points' : 'Redeemed Voucher')}
+                      </p>
+                      <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#8A7F73' }}>
+                        {dateFormatted} {item.reference_id ? `· Ref #${item.reference_id}` : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'right' }}>
+                    <span
+                      style={{
+                        fontWeight: 800,
+                        fontSize: '15px',
+                        color: isEarn ? '#15803D' : '#DC2626',
+                      }}
+                    >
+                      {isEarn ? `+${item.points.toLocaleString()}` : `${item.points.toLocaleString()}`} pts
+                    </span>
+                    <span style={{ display: 'block', fontSize: '11px', color: '#8A7F73', textTransform: 'uppercase', fontWeight: 600, marginTop: '1px' }}>
+                      {item.transaction_type}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
 
       {/* ── Confirmation Modal ── */}
       {selectedPromo && createPortal(

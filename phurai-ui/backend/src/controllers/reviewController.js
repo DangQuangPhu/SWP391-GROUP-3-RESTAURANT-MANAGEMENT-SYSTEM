@@ -16,29 +16,59 @@ export async function submitReview(req, res) {
 
     const overall = Math.round((Number(food_rating) + Number(service_rating) + Number(ambiance_rating)) / 3);
 
-    // Insert into DB
-    const [result] = await pool.query(
-      `INSERT INTO dbo.CustomerReviews 
-       (customer_id, reservation_id, order_id, food_rating, service_rating, ambiance_rating, overall_rating, comment, is_visible, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, SYSDATETIME())`,
-      [
-        customer_id || null, 
-        reservation_id || null, 
-        orderId, 
-        food_rating, 
-        service_rating, 
-        ambiance_rating, 
-        overall,
-        comment || null
-      ]
+    // Check if a review already exists for this order_id to prevent duplicate key constraint violation
+    const [existing] = await pool.query(
+      `SELECT review_id FROM dbo.CustomerReviews WHERE order_id = ?`,
+      [orderId]
     );
+
+    let reviewId;
+    if (existing && existing.length > 0) {
+      reviewId = existing[0].review_id;
+      await pool.query(
+        `UPDATE dbo.CustomerReviews
+         SET food_rating = ?,
+             service_rating = ?,
+             ambiance_rating = ?,
+             comment = ?,
+             customer_id = COALESCE(?, customer_id),
+             reservation_id = COALESCE(?, reservation_id),
+             created_at = SYSDATETIME()
+         WHERE order_id = ?`,
+        [
+          food_rating,
+          service_rating,
+          ambiance_rating,
+          comment || null,
+          customer_id || null,
+          reservation_id || null,
+          orderId
+        ]
+      );
+    } else {
+      const [result] = await pool.query(
+        `INSERT INTO dbo.CustomerReviews 
+         (customer_id, reservation_id, order_id, food_rating, service_rating, ambiance_rating, comment, is_visible, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1, SYSDATETIME())`,
+        [
+          customer_id || null, 
+          reservation_id || null, 
+          orderId, 
+          food_rating, 
+          service_rating, 
+          ambiance_rating, 
+          comment || null
+        ]
+      );
+      reviewId = result?.insertId;
+    }
 
     // Emit Socket.IO event to Manager and Admin Portals in real-time
     try {
       const io = req.app?.get?.("io");
       if (io) {
         const payload = {
-          review_id: result.insertId,
+          review_id: reviewId,
           order_id: orderId,
           customer_id,
           food_rating,

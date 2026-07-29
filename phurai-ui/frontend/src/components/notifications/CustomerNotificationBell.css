@@ -22,9 +22,20 @@
   80%       { transform: rotate(2deg); }
 }
 
+/* Continuous bounce animation for unread indicator below scroll container */
+@keyframes sfx-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(4px); }
+}
+
 .notification-bell-icon.has-promotion {
   animation: bell-shake 1.5s ease-in-out infinite;
   transform-origin: 50% 4px; /* pivot at bell top */
+}
+
+.notif-bounce-arrow {
+  animation: sfx-bounce 1.2s infinite ease-in-out;
+  display: inline-block;
 }
 
 /* Dynamic Navbar Bell Button Styling */
@@ -55,4 +66,19 @@
 /* Dark hero top navbar -> white icon */
 .phurai-navbar.phurai-navbar--dark-top-page.phurai-navbar--top .phurai-navbar__bell-btn {
   color: #ffffff !important;
+}
+
+/* Custom scrollbar for notification dropdown list */
+.notif-dropdown-list::-webkit-scrollbar {
+  width: 5px;
+}
+.notif-dropdown-list::-webkit-scrollbar-track {
+  background: rgba(140, 118, 75, 0.05);
+}
+.notif-dropdown-list::-webkit-scrollbar-thumb {
+  background: rgba(140, 118, 75, 0.25);
+  border-radius: 4px;
+}
+.notif-dropdown-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 118, 75, 0.45);
 }

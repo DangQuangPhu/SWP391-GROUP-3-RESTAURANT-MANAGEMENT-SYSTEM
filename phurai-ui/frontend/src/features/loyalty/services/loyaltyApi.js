@@ -66,3 +66,14 @@ export async function applyPromotion(userId, payload) {
     body: JSON.stringify(payload),
   });
 }
+
+/**
+ * Retrieves the ledger history of point transactions (+/- points).
+ * @param {string|number} userId 
+ */
+export async function getLoyaltyHistory(userId) {
+  return await request('/loyalty/history', {
+    headers: profileRequestHeaders(userId),
+  });
+}
+

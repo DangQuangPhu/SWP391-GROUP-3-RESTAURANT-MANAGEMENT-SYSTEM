@@ -42,8 +42,8 @@ function FloatingActionButtons() {
         className="floating-actions__button floating-actions__scroll-top"
         onClick={scrollToTop}
         aria-label="Scroll to top"
-        aria-hidden={!isScrolled}
         tabIndex={isScrolled ? 0 : -1}
+        inert={!isScrolled || undefined}
       >
         <img src={scrollTopAltIcon} alt="" className="floating-actions__icon" />
       </button>

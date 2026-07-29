@@ -48,7 +48,7 @@ function ReservationFormPanel({
   const isKitchenView = form.selectedArea === KITCHEN_VIEW_AREA_NAME;
   const counterCapacity = KITCHEN_VIEW_COUNTER_CAPACITY;
 
-  const selectedTableData = tables?.find((t) => t.table_id === selectedTableId);
+  const selectedTableData = tables?.find((t) => String(t.table_id) === String(selectedTableId));
 
   return (
     <div className="rzv-card">

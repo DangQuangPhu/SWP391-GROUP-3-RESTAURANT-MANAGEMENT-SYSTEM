@@ -5,6 +5,13 @@ import { sendBookingCheckedInEmail, sendBookingRejectedEmail } from "../email.js
 import { processPreordersToKds } from "../services/kdsIntegrationService.js";
 import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
 import { openOccupancySession, openOccupancySessionDirect } from '../services/tableReleaseService.js';
+import { getDefaultErtDurationMin } from '../constants/ertConfig.js';
+import { sweepTableAssignmentFinalization } from "../services/tableAssignmentFinalizer.js";
+import {
+  appendPreferredTableTags,
+  parsePreferredTableTags,
+  TABLE_ASSIGNMENT_STATUS,
+} from "../utils/tableAssignmentPolicy.js";
 
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -22,7 +29,7 @@ export const createWalkInReservation = async (req, res) => {
     return res.status(401).json({ success: false, message: 'Unauthorized.' });
   }
 
-  const { contact_name, contact_phone, contact_email, guest_count, table_id, start_time, end_time } = req.body;
+  const { contact_name, contact_phone, contact_email, guest_count, table_id } = req.body;
 
   // ── Input validation ──────────────────────────────────────────────────────
   if (!contact_name || typeof contact_name !== 'string' || contact_name.trim().length < 2) {
@@ -59,9 +66,10 @@ export const createWalkInReservation = async (req, res) => {
     const req1 = new sql.Request(transaction);
     req1.input('tableId', sql.Int, parsedTableId);
     const tableCheck = await req1.query(`
-      SELECT table_status, table_number, capacity
-      FROM dbo.RestaurantTables WITH (UPDLOCK, ROWLOCK)
-      WHERE table_id = @tableId
+      SELECT t.table_status, t.table_number, t.capacity, a.area_name
+      FROM dbo.RestaurantTables t WITH (UPDLOCK, ROWLOCK)
+      INNER JOIN dbo.RestaurantAreas a ON a.area_id = t.area_id
+      WHERE t.table_id = @tableId
     `);
 
     if (!tableCheck.recordset.length) {
@@ -94,33 +102,9 @@ export const createWalkInReservation = async (req, res) => {
 
     // ── Step 1: INSERT Reservation (Walk-in, Dining, no deposit, no voucher) ──
     const now = new Date();
-    let startAt = now;
-    
-    let diningDuration = 120;
-    const count = Number(parsedGuestCount) || 1;
-    if (count <= 2) diningDuration = 60;
-    else if (count <= 4) diningDuration = 90;
-    else if (count <= 6) diningDuration = 105;
-    else diningDuration = 120;
-    
+    const startAt = now;
+    const diningDuration = getDefaultErtDurationMin(parsedGuestCount, tableRow.area_name);
     let endAt = new Date(now.getTime() + diningDuration * 60 * 1000);
-
-    const getLocalDateWithTime = (timeStr) => {
-      if (!timeStr) return null;
-      const [hh, mm] = timeStr.split(':').map(Number);
-      if (isNaN(hh) || isNaN(mm)) return null;
-      const d = new Date();
-      return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm, 0, 0);
-    };
-
-    if (start_time) {
-      const parsedStart = getLocalDateWithTime(start_time);
-      if (parsedStart) startAt = parsedStart;
-    }
-    if (end_time) {
-      const parsedEnd = getLocalDateWithTime(end_time);
-      if (parsedEnd) endAt = parsedEnd;
-    }
 
     if (endAt <= startAt) {
       await transaction.rollback();
@@ -176,11 +160,6 @@ export const createWalkInReservation = async (req, res) => {
     `);
 
     // ── Step 3b: Open TableOccupancySession ──────────────────────────────
-    // Walk-in: use guest_count to determine default EstimatedDuration.
-    // end_time from request body used as explicit override if provided.
-    const walkInDurationMin = req.body.end_time && start_time
-      ? Math.round((new Date(req.body.end_time) - new Date(start_time || Date.now())) / 60000)
-      : null;
     try {
       await openOccupancySession({
         transaction,
@@ -188,7 +167,7 @@ export const createWalkInReservation = async (req, res) => {
         reservationId: newReservationId,
         orderId: null,
         guestCount: parsedGuestCount,
-        inputDurationMin: walkInDurationMin,
+        inputDurationMin: diningDuration,
         checkInAt: now,
       });
     } catch (sessionErr) {
@@ -205,11 +184,11 @@ export const createWalkInReservation = async (req, res) => {
         (reservation_id, event_type, performed_by, notes)
       VALUES
         (@reservationId, N'WALK_IN_CREATED', @staffId,
-         N'Walk-in reservation created by staff. No deposit required.');
+         N'Walk-in guest seated by staff. ERT is stored in reservation_end_at.');
       INSERT INTO dbo.AuditLogs
         (user_id, action_name, target_table, target_id, new_value_json, ip_address)
       VALUES
-        (@staffId, N'WALK_IN_CREATED', N'Reservations', @reservationId,
+        (@staffId, N'WALKIN_SEATED', N'Reservations', @reservationId,
          N'{"reservation_source":"Walk-in","reservation_status":"Dining"}', NULL);
     `);
 
@@ -262,6 +241,8 @@ export const createWalkInReservation = async (req, res) => {
           contact_phone:      safePhone,
           reservation_status: 'Dining',
           reservation_source: 'Walk-in',
+          reservation_start_at: startAt.toISOString(),
+          reservation_end_at: endAt.toISOString(),
           table_id:           parsedTableId,
           table_number:       tableRow.table_number,
         };
@@ -274,7 +255,11 @@ export const createWalkInReservation = async (req, res) => {
           });
           io.to(room).emit('table:status_changed', {
             table_id:   parsedTableId,
-            new_status: 'Occupied',
+            table_status: 'Occupied',
+            status: 'Occupied',
+            active_occupancy_reservation_id: newReservationId,
+            occupied_since: startAt.toISOString(),
+            estimated_release_at: endAt.toISOString(),
           });
         });
       }
@@ -306,6 +291,8 @@ export const createWalkInReservation = async (req, res) => {
       reservation_id: newReservationId,
       table_id:       parsedTableId,
       table_number:   tableRow.table_number,
+      reservation_start_at: startAt.toISOString(),
+      reservation_end_at: endAt.toISOString(),
     });
 
 
@@ -326,6 +313,25 @@ export const createWalkInReservation = async (req, res) => {
 // if the staff member has no schedule today, zero rows are returned — no data
 // leaks to unscheduled staff members.
 // ──────────────────────────────────────────────────────────────────────────────
+import { sweepNoShows } from "../services/noShowSweeper.js";
+
+function enrichAssignmentFields(row) {
+  const parsed = parsePreferredTableTags(row.special_request);
+  const hasAssignedTable = Boolean(row.assigned_tables);
+  return {
+    ...row,
+    table_assignment_status: hasAssignedTable
+      ? TABLE_ASSIGNMENT_STATUS.CONFIRMED
+      : parsed.table_assignment_status || TABLE_ASSIGNMENT_STATUS.PREFERRED,
+    needs_table_finalization: !hasAssignedTable,
+    preferred_table_id: parsed.preferred_table_id,
+    preferred_table_number: parsed.preferred_table_number,
+    preferred_table_label: parsed.preferred_table_number
+      ? `${parsed.preferred_table_number} (preference)`
+      : null,
+  };
+}
+
 export const getTodayShiftReservations = async (req, res) => {
   const staffId = req.userId;
 
@@ -337,6 +343,10 @@ export const getTodayShiftReservations = async (req, res) => {
   }
 
   try {
+    // Automatically sweep expired Await Check-in reservations to No Show before returning list
+    await sweepNoShows().catch((err) => console.error("[getTodayShiftReservations] Auto sweep failed:", err.message));
+    await sweepTableAssignmentFinalization().catch((err) => console.error("[getTodayShiftReservations] Assignment sweep failed:", err.message));
+
     const { page = 1, limit = 20, search = "", status = "all" } = req.query;
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 20;
@@ -408,20 +418,25 @@ export const getTodayShiftReservations = async (req, res) => {
                 r.dining_purpose,
                 r.reservation_status,
                 CASE WHEN r.has_pending_request = 1
-                     THEN N'Request'
+                     THEN N'Pending Request'
                      ELSE r.reservation_status
                 END AS display_status,
                 r.created_at,
                 r.checked_in_at,
                 STRING_AGG(t.table_number, ', ') AS assigned_tables,
+                COALESCE(MAX(ta.area_name), MAX(pa.area_name)) AS area_name,
+                MAX(ta.area_name) AS assigned_area_name,
+                MAX(pa.area_name) AS preferred_area,
                 N'Morning' AS shift_name,
                 '06:30:00' AS shift_start_time,
                 '14:30:00' AS shift_end_time
              FROM dbo.Reservations r
              LEFT JOIN dbo.UserAccounts ua ON r.customer_id = ua.user_id
              LEFT JOIN dbo.CustomerProfiles cp ON r.customer_id = cp.user_id
+             LEFT JOIN dbo.RestaurantAreas pa ON r.preferred_area_id = pa.area_id
              LEFT JOIN dbo.ReservationTables res_t ON r.reservation_id = res_t.reservation_id
              LEFT JOIN dbo.RestaurantTables t ON res_t.table_id = t.table_id
+             LEFT JOIN dbo.RestaurantAreas ta ON t.area_id = ta.area_id
              WHERE ${whereClause}
              GROUP BY
                  r.reservation_id, ua.full_name, r.contact_name, ua.phone, r.contact_phone,
@@ -447,7 +462,7 @@ export const getTodayShiftReservations = async (req, res) => {
 
     return res.json({
       success: true,
-      reservations: rows,
+      reservations: rows.map(enrichAssignmentFields),
       totalCount,
       totalPages,
       currentPage: pageNum
@@ -493,7 +508,49 @@ export const assignTable = async (req, res) => {
         return res.status(409).json({ success: false, message: `Conflict: Table is currently ${currentTableStatus}.` });
       }
 
-      // Step 1: Base Assignment (Idempotent to avoid PK violation if already assigned)
+      const reservationCheck = await request.query(`
+        SELECT TOP 1 special_request
+        FROM dbo.Reservations
+        WHERE reservation_id = @id
+      `);
+      if (!reservationCheck.recordset.length) {
+        await transaction.rollback();
+        return res.status(404).json({ success: false, message: "Reservation not found." });
+      }
+
+      const tableNumberRows = await request.query(`
+        SELECT TOP 1 table_number
+        FROM dbo.RestaurantTables
+        WHERE table_id = @tableId
+      `);
+      const assignedTableNumber = tableNumberRows.recordset[0]?.table_number || null;
+      const confirmedSpecialRequest = appendPreferredTableTags(
+        reservationCheck.recordset[0]?.special_request,
+        {
+          tableId,
+          tableNumber: assignedTableNumber,
+          assignmentMode: TABLE_ASSIGNMENT_STATUS.CONFIRMED,
+        }
+      );
+
+      // Step 1: Base Assignment. Replace any previous tentative assignment.
+      await request.query(`
+        UPDATE dbo.RestaurantTables
+        SET table_status = N'Available', updated_at = SYSDATETIME()
+        WHERE table_status = N'Reserved'
+          AND table_id IN (
+            SELECT table_id
+            FROM dbo.ReservationTables
+            WHERE reservation_id = @id
+              AND table_id <> @tableId
+          )
+      `);
+      await request.query(`
+        DELETE FROM dbo.ReservationTables
+        WHERE reservation_id = @id
+          AND table_id <> @tableId
+      `);
+
       await request.query(`
         IF NOT EXISTS (SELECT 1 FROM dbo.ReservationTables WHERE reservation_id = @id AND table_id = @tableId)
         BEGIN
@@ -503,7 +560,15 @@ export const assignTable = async (req, res) => {
       `);
       
       // Step 2: Force Reservation Status Update (Relaxed validation)
-      await request.query(`UPDATE dbo.Reservations SET reservation_status = N'Dining', checked_in_at = COALESCE(checked_in_at, SYSDATETIME()), updated_at = SYSDATETIME() WHERE reservation_id = @id`);
+      request.input('confirmedSpecialRequest', sql.NVarChar(1000), confirmedSpecialRequest);
+      await request.query(`
+        UPDATE dbo.Reservations
+        SET reservation_status = N'Dining',
+            checked_in_at = COALESCE(checked_in_at, SYSDATETIME()),
+            special_request = @confirmedSpecialRequest,
+            updated_at = SYSDATETIME()
+        WHERE reservation_id = @id
+      `);
       
       await request.query(`UPDATE dbo.RestaurantTables SET table_status = N'Occupied' WHERE table_id = @tableId`);
 
@@ -541,7 +606,15 @@ export const assignTable = async (req, res) => {
       }
 
       await request.query(`INSERT INTO dbo.ReservationTimelines (reservation_id, event_type, performed_by, notes) VALUES (@id, N'TABLE_ASSIGNED', @staffId, N'Staff assigned table.')`);
-      await request.query(`INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id) VALUES (@staffId, N'ASSIGN_TABLE', N'Reservations', @id)`);
+      request.input('assignAuditJson', sql.NVarChar(sql.MAX), JSON.stringify({
+        table_assignment_status: TABLE_ASSIGNMENT_STATUS.CONFIRMED,
+        table_id: tableId,
+        table_number: assignedTableNumber,
+      }));
+      await request.query(`
+        INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, new_value_json)
+        VALUES (@staffId, N'ASSIGN_TABLE', N'Reservations', @id, @assignAuditJson)
+      `);
 
       // Step 2: Auto-Fire Preorders Check
       const preorderCheck = await request.query(`SELECT * FROM dbo.PreorderItems WHERE reservation_id = @id`);
@@ -606,8 +679,8 @@ export const assignTable = async (req, res) => {
       try {
         const io = req.app.get("io");
         if (io) {
-          io.to('room:manager').emit('reservation:status_changed', { reservation_id: reservationId, new_status: 'Dining', table_id: tableId });
-          io.to('room:staff').emit('reservation:status_changed', { reservation_id: reservationId, new_status: 'Dining', table_id: tableId });
+          io.to('room:manager').emit('reservation:status_changed', { reservation_id: reservationId, new_status: 'Dining', table_id: tableId, table_assignment_status: TABLE_ASSIGNMENT_STATUS.CONFIRMED });
+          io.to('room:staff').emit('reservation:status_changed', { reservation_id: reservationId, new_status: 'Dining', table_id: tableId, table_assignment_status: TABLE_ASSIGNMENT_STATUS.CONFIRMED });
 
           io.to('room:manager').emit('table:status_changed', { table_id: tableId, new_status: 'Occupied' });
           io.to('room:staff').emit('table:status_changed', { table_id: tableId, new_status: 'Occupied' });
@@ -620,7 +693,13 @@ export const assignTable = async (req, res) => {
         console.error("[Socket.IO] Error emitting assign-table status:", socketErr);
       }
 
-      return res.status(200).json({ success: true, message: "Table assigned successfully." });
+      return res.status(200).json({
+        success: true,
+        message: "Table assigned successfully.",
+        table_assignment_status: TABLE_ASSIGNMENT_STATUS.CONFIRMED,
+        table_id: tableId,
+        table_number: assignedTableNumber,
+      });
     } catch (error) {
       await transaction.rollback();
       console.error("🚨 SQL TRANSACTION FAILED - assignTable:", error);
@@ -647,7 +726,8 @@ export const getStaffReservationDetail = async (req, res) => {
           r.special_request, r.dining_purpose, r.reservation_status, r.reservation_source,
           r.created_at, r.checked_in_at,
           STRING_AGG(t.table_number, ', ') AS assigned_tables,
-          MAX(a.area_name) AS area_name
+          MAX(a.area_name) AS area_name,
+          MAX(a.area_name) AS assigned_area_name
        FROM dbo.Reservations r
        LEFT JOIN dbo.UserAccounts ua ON r.customer_id = ua.user_id
        LEFT JOIN dbo.CustomerProfiles cp ON r.customer_id = cp.user_id
@@ -682,7 +762,7 @@ export const getStaffReservationDetail = async (req, res) => {
     return res.json({
       success: true,
       reservation: {
-        ...rows[0],
+        ...enrichAssignmentFields(rows[0]),
         preorders: preorderRows,
       },
     });
@@ -1096,7 +1176,8 @@ export const staffCheckIn = async (req, res) => {
 
       // Ensure reservation exists and is ready for check-in
       const [resRows] = await connection.query(
-        `SELECT customer_id, reservation_status, table_ids = STUFF((SELECT ',' + CAST(table_id AS VARCHAR) FROM dbo.ReservationTables WHERE reservation_id = r.reservation_id FOR XML PATH('')), 1, 1, '')
+        `SELECT customer_id, reservation_status, reservation_start_at, reservation_end_at, guest_count,
+                table_ids = STUFF((SELECT ',' + CAST(table_id AS VARCHAR) FROM dbo.ReservationTables WHERE reservation_id = r.reservation_id FOR XML PATH('')), 1, 1, '')
          FROM dbo.Reservations r
          WHERE r.reservation_id = ?`,
         [reservationId]
@@ -1227,9 +1308,10 @@ export const staffCheckIn = async (req, res) => {
 
       // Create QR Order Sessions for each table in tableIdList if none exists
       let firstSessionId = null;
+      let firstSessionToken = null;
       for (const tId of tableIdList) {
         const [activeSessionRows] = await connection.query(
-          `SELECT TOP 1 qr_session_id
+          `SELECT TOP 1 qr_session_id, token
            FROM dbo.QROrderSessions
            WHERE table_id = ?
              AND session_status = N'Active'
@@ -1259,9 +1341,13 @@ export const staffCheckIn = async (req, res) => {
 
           if (insRes?.[0]?.session_id && !firstSessionId) {
             firstSessionId = insRes[0].session_id;
+            firstSessionToken = token;
           }
         } else {
-          firstSessionId = activeSessionRows[0].qr_session_id;
+          if (!firstSessionId) {
+            firstSessionId = activeSessionRows[0].qr_session_id;
+            firstSessionToken = activeSessionRows[0].token || null;
+          }
         }
       }
 
@@ -1302,6 +1388,8 @@ export const staffCheckIn = async (req, res) => {
           io.emit('RESERVATION_STATUS_CHANGED', { id: reservationId, status: RESERVATION_STATUS.DINING });
           tableIdList.forEach(tId => {
             io.emit('TABLE_STATUS_CHANGED', { tableId: tId, newStatus: 'Occupied' });
+            io.to('room:manager').emit('table:status_changed', { table_id: tId, new_status: 'Occupied' });
+            io.to('room:staff').emit('table:status_changed', { table_id: tId, new_status: 'Occupied' });
           });
           if (kdsResult) {
             const kitchenPayload = {
@@ -1358,9 +1446,14 @@ export const staffCheckIn = async (req, res) => {
       connection.release();
       res.json({
         success: true,
-        message: 'Successfully checked in.',
+        message: 'Check-in successful! Table is now Occupied.',
+        session_id: firstSessionId,
+        qr_session_token: firstSessionToken,
+        kds_items_pushed: kdsResult?.itemCount || 0,
         data: {
-          session_id: firstSessionId
+          session_id: firstSessionId,
+          qr_session_token: firstSessionToken,
+          kds_items_pushed: kdsResult?.itemCount || 0,
         }
       });
 
@@ -1569,5 +1662,3 @@ export const transferReservationTable = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Internal server error.' });
   }
 };
-
-

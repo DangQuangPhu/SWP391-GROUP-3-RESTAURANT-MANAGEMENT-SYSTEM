@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiGet, apiPatch, request } from "@/core/api/httpClient.js";
+import { apiGet, apiPatch, request, getAuthToken } from "@/core/api/httpClient.js";
 import { useSocket } from "@/core/socket/SocketContext.jsx";
 import { toast } from "react-toastify";
 import { motion, AnimatePresence } from "framer-motion";
@@ -19,11 +19,31 @@ function timeAgo(dateStr) {
 }
 
 function resolveRoute(notif) {
-  const type = notif.notification_type;
-  if (type === 'Payment Receipt') return '/profile/payments';
-  if (type === 'Promotion') return '/profile/loyalty';
-  if (type === 'Order Ready') return '/profile/payments';
-  if (type === 'Booking Confirmed' || type === 'Booking Rejected' || type === 'Booking Reminder') return '/my-reservations';
+  const type = notif.notification_type || '';
+  const title = notif.title || '';
+  const body = notif.message_body || '';
+
+  if (
+    type === 'Payment Receipt' ||
+    type === 'Promotion' ||
+    title.includes('Loyalty') ||
+    title.includes('Points') ||
+    body.includes('Loyalty') ||
+    body.includes('Points') ||
+    body.includes('balance')
+  ) {
+    return '/profile/loyalty';
+  }
+
+  if (
+    type === 'Booking Confirmed' ||
+    type === 'Booking Rejected' ||
+    type === 'Booking Reminder' ||
+    type === 'Booking Changed'
+  ) {
+    return '/my-reservations';
+  }
+
   return '/my-reservations';
 }
 
@@ -32,8 +52,12 @@ export default function CustomerNotificationBell({ variant = "navbar" }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [readingAll, setReadingAll] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
   const [bellRinging, setBellRinging] = useState(false);
+  const [hasUnreadBelow, setHasUnreadBelow] = useState(false);
+
   const dropdownRef = useRef(null);
+  const scrollRef = useRef(null);
   const navigate = useNavigate();
   const { socket } = useSocket();
   const hasToasted = useRef(false);
@@ -41,13 +65,32 @@ export default function CustomerNotificationBell({ variant = "navbar" }) {
 
   const isProfile = variant === "profile";
 
+  const checkScrollUnread = useCallback(() => {
+    if (!scrollRef.current) return;
+    const el = scrollRef.current;
+    const scrollBottom = el.scrollTop + el.clientHeight;
+
+    const unreadElements = el.querySelectorAll('[data-unread="true"]');
+    let unreadHiddenBelow = false;
+
+    unreadElements.forEach((child) => {
+      const childBottom = child.offsetTop + child.clientHeight;
+      if (childBottom > scrollBottom + 10) {
+        unreadHiddenBelow = true;
+      }
+    });
+
+    setHasUnreadBelow(unreadHiddenBelow);
+  }, []);
+
   const loadNotifications = useCallback((showToast = false) => {
-    const token = localStorage.getItem("phurai_token") || localStorage.getItem("token");
+    const token = getAuthToken();
     if (!token) return;
     apiGet("/notifications?limit=20")
       .then((res) => {
         if (res?.success) {
-          setNotifications(res.data?.items || []);
+          const items = res.data?.items || [];
+          setNotifications(items);
           const unread = res.data?.unread || 0;
           setUnreadCount(unread);
           if (unread > 0) {
@@ -59,10 +102,11 @@ export default function CustomerNotificationBell({ variant = "navbar" }) {
             toast.info(`You have ${unread} unread notification(s).`, { autoClose: 4000 });
             hasToasted.current = true;
           }
+          setTimeout(checkScrollUnread, 150);
         }
       })
       .catch(() => {});
-  }, []);
+  }, [checkScrollUnread]);
 
   useEffect(() => {
     loadNotifications(true);
@@ -74,9 +118,15 @@ export default function CustomerNotificationBell({ variant = "navbar" }) {
     if (socket) {
       socket.on("reservation:processed", handleProcessed);
       socket.on("STAFF_ACTION_UPDATE", handleProcessed);
+      socket.on("reservation:request_resolved", handleProcessed);
+      socket.on("notification:new", handleProcessed);
+      socket.on("loyalty:earned", handleProcessed);
       return () => {
         socket.off("reservation:processed", handleProcessed);
         socket.off("STAFF_ACTION_UPDATE", handleProcessed);
+        socket.off("reservation:request_resolved", handleProcessed);
+        socket.off("notification:new", handleProcessed);
+        socket.off("loyalty:earned", handleProcessed);
       };
     }
   }, [socket, loadNotifications]);
@@ -88,6 +138,12 @@ export default function CustomerNotificationBell({ variant = "navbar" }) {
     if (open) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      setTimeout(checkScrollUnread, 150);
+    }
+  }, [open, checkScrollUnread]);
 
   useEffect(() => () => clearTimeout(bellAnimTimer.current), []);
 
@@ -110,10 +166,11 @@ export default function CustomerNotificationBell({ variant = "navbar" }) {
     try {
       await request(`/notifications/${notif.notification_id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${localStorage.getItem("phurai_token") || localStorage.getItem("token")}` }
+        headers: { Authorization: `Bearer ${getAuthToken()}` }
       });
       setNotifications((prev) => prev.filter((n) => n.notification_id !== notif.notification_id));
       if (!notif.is_read) setUnreadCount((c) => Math.max(0, c - 1));
+      setTimeout(checkScrollUnread, 100);
     } catch (err) { console.error("Failed to delete notification", err); }
   };
 
@@ -124,8 +181,29 @@ export default function CustomerNotificationBell({ variant = "navbar" }) {
       await apiPatch("/notifications/read-all");
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
       setUnreadCount(0);
+      setHasUnreadBelow(false);
     } catch (err) { console.error("Failed to mark all as read", err); }
     finally { setReadingAll(false); }
+  };
+
+  const handleClearAll = async () => {
+    if (clearingAll || notifications.length === 0) return;
+    setClearingAll(true);
+    try {
+      await request("/notifications/clear-all", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${getAuthToken()}` }
+      });
+      setNotifications([]);
+      setUnreadCount(0);
+      setHasUnreadBelow(false);
+      toast.success("All notifications cleared.", { autoClose: 3000 });
+    } catch (err) {
+      console.error("Failed to clear notifications", err);
+      toast.error("Could not clear notifications.", { autoClose: 3000 });
+    } finally {
+      setClearingAll(false);
+    }
   };
 
   return (
@@ -179,7 +257,7 @@ export default function CustomerNotificationBell({ variant = "navbar" }) {
               position: "absolute",
               top: "calc(100% + 10px)",
               right: 0,
-              width: "340px",
+              width: "350px",
               background: "#ffffff",
               border: "1px solid rgba(140, 118, 75, 0.18)",
               borderRadius: "16px",
@@ -207,6 +285,7 @@ export default function CustomerNotificationBell({ variant = "navbar" }) {
               </div>
               {unreadCount > 0 && (
                 <button
+                  type="button"
                   onClick={handleReadAll}
                   disabled={readingAll}
                   style={{
@@ -233,13 +312,24 @@ export default function CustomerNotificationBell({ variant = "navbar" }) {
               )}
             </div>
 
-            {/* Notification list */}
-            <div style={{ maxHeight: "360px", overflowY: "auto", padding: "8px" }}>
+            {/* Notification list — max 5 items visible height (310px max height) */}
+            <div
+              ref={scrollRef}
+              onScroll={checkScrollUnread}
+              className="notif-dropdown-list"
+              style={{
+                maxHeight: "310px",
+                overflowY: "auto",
+                padding: "8px",
+                position: "relative"
+              }}
+            >
               {notifications.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                   {notifications.map((notif, idx) => (
                     <motion.div
                       key={notif.notification_id}
+                      data-unread={!notif.is_read}
                       onClick={() => handleNotificationClick(notif)}
                       initial={{ opacity: 0, x: 12 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -249,7 +339,7 @@ export default function CustomerNotificationBell({ variant = "navbar" }) {
                         padding: "10px 12px", borderRadius: "10px",
                         cursor: "pointer", position: "relative",
                         background: notif.is_read ? "transparent" : "rgba(140, 118, 75, 0.05)",
-                        borderLeft: notif.is_read ? "2px solid transparent" : "2px solid #8c764b",
+                        borderLeft: notif.is_read ? "3px solid transparent" : "3px solid #8c764b",
                         transition: "background 0.2s ease",
                       }}
                       onMouseEnter={(e) => {
@@ -264,6 +354,7 @@ export default function CustomerNotificationBell({ variant = "navbar" }) {
                       }}
                     >
                       <button
+                        type="button"
                         className="notif-del-btn"
                         onClick={(e) => handleDeleteNotification(e, notif)}
                         style={{
@@ -290,16 +381,87 @@ export default function CustomerNotificationBell({ variant = "navbar" }) {
                   ))}
                 </div>
               ) : (
-                <p style={{ color: "#a89e90", fontSize: "13px", textAlign: "center", padding: "20px 0", margin: 0 }}>
+                <p style={{ color: "#a89e90", fontSize: "13px", textAlign: "center", padding: "24px 0", margin: 0 }}>
                   No notifications yet
                 </p>
               )}
             </div>
+
+            {/* Bouncing arrow indicator for unread notifications below scroll fold */}
+            {hasUnreadBelow && (
+              <div
+                style={{
+                  background: "linear-gradient(180deg, rgba(140, 118, 75, 0.12), rgba(140, 118, 75, 0.22))",
+                  color: "#594626",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  textAlign: "center",
+                  padding: "5px 0",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  borderTop: "1px solid rgba(140, 118, 75, 0.1)"
+                }}
+                onClick={() => {
+                  if (scrollRef.current) {
+                    scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+                  }
+                }}
+              >
+                <span className="notif-bounce-arrow">↓</span>
+                <span>Unread notifications below</span>
+              </div>
+            )}
+
+            {/* Sticky Footer with Delete All Button */}
+            {notifications.length > 0 && (
+              <div style={{
+                padding: "8px 14px",
+                borderTop: "1px solid rgba(140, 118, 75, 0.1)",
+                background: "#faf8f5",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between"
+              }}>
+                <span style={{ fontSize: "11px", color: "#8c764b", fontWeight: 500 }}>
+                  {notifications.length} notification{notifications.length > 1 ? "s" : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  disabled={clearingAll}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: clearingAll ? "#a3998e" : "#e06c6c",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: clearingAll ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    transition: "background 0.2s"
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!clearingAll) e.currentTarget.style.background = "rgba(224, 108, 108, 0.08)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "none";
+                  }}
+                >
+                  <span>🗑️</span>
+                  <span>{clearingAll ? "Clearing..." : "Delete All"}</span>
+                </button>
+              </div>
+            )}
+
           </motion.div>
         )}
       </AnimatePresence>
     </div>
   );
 }
-
-

@@ -170,8 +170,14 @@ function TableMapSection({ tables, setTables, dataSource, toast }) {
                       if (canMerge) e.preventDefault();
                     }}
                     onDrop={(e) => handleDrop(e, t)}
-                    className={`sfx-mtile sfx-mtile--${TABLE_STATUS_META[statusKey]?.tone || "muted"} ${canMerge ? "is-jiggling" : ""}`}
+                    className={`sfx-mtile sfx-mtile--${(t.upcoming_count > 0 && TABLE_STATUS_META[statusKey]?.tone === "green") ? "amber" : (TABLE_STATUS_META[statusKey]?.tone || "muted")} ${canMerge ? "is-jiggling" : ""}`}
                   >
+                    {t.upcoming_count > 0 && (
+                      <div className="sfx-mtile__notif-badge" title={`${t.upcoming_count} upcoming reservation(s) queued`}>
+                        <span>🔔</span>
+                        <span>{t.upcoming_count}</span>
+                      </div>
+                    )}
                     <span className="sfx-mtile__no">{displayNum}</span>
                     <span className="sfx-mtile__cap">{t.combined_capacity} seats</span>
                     <StatusBadge tone={TABLE_STATUS_META[statusKey]?.tone}>

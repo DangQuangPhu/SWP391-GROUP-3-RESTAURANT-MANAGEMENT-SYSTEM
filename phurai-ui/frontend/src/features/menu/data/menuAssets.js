@@ -33,6 +33,15 @@ import orangejuice from '@/assets/images/menu/Nuoccam.jpg';
 // Vite Eager Glob to bundle all downloaded dish images automatically
 const globImages = import.meta.glob('@/assets/images/menu/*.jpg', { eager: true, import: 'default' });
 
+function removeVietnameseTones(str) {
+  return String(str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'd')
+    .toLowerCase();
+}
+
 export function resolveDishImage(imagePath, dishName = '') {
   if (typeof imagePath === 'object' && imagePath !== null) {
     dishName = imagePath.dish_name || imagePath.name || dishName;
@@ -62,8 +71,8 @@ export function resolveDishImage(imagePath, dishName = '') {
   }
 
   // 3. Smart Token Scoring match on dishName & cleanPath against all globImages
-  const rawText = String(dishName || cleanPath || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
-  const tokens = rawText.split(/\s+/).filter(t => t.length > 2 && t !== 'with' && t !== 'and');
+  const rawText = removeVietnameseTones(dishName || cleanPath || '').replace(/[^a-z0-9\s]/g, ' ');
+  const tokens = rawText.split(/\s+/).filter(t => t.length >= 2 && t !== 'with' && t !== 'and');
 
   if (tokens.length > 0) {
     let bestMatch = null;

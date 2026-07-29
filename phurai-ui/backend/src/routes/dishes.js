@@ -100,7 +100,7 @@ router.get("/:id/image", (req, res) => {
   }
 
   // Fallback to static menu hero image
-  const fallbackPath = path.join(__dirname, "../../frontend/src/assets/images/menu/menu-hero.jpg");
+  const fallbackPath = path.resolve(__dirname, "../../../frontend/src/assets/images/menu/menu-hero.jpg");
   if (fs.existsSync(fallbackPath)) {
     return res.sendFile(fallbackPath);
   }

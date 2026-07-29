@@ -22,8 +22,17 @@ import {
   applyPromoCodeToReservation,
   submitReservationReview
 } from "../controllers/customerReservationController.js";
+import { getUpgradeQuote, verifyUpgradePayment } from "../controllers/upgradePaymentController.js";
 import { validateReservationCreate, validateReservationUpdate } from "../middleware/validateReservation.js";
+import { sweepNoShows } from "../services/noShowSweeper.js";
 import { getReservationTimeline } from "../utils/timelineLogger.js";
+import {
+  appendPreferredTableTags,
+  CONFIRMED_ASSIGNMENT_WINDOW_HOURS,
+  getAssignmentMode,
+  parsePreferredTableTags,
+  TABLE_ASSIGNMENT_STATUS,
+} from "../utils/tableAssignmentPolicy.js";
 
 const router = express.Router();
 
@@ -176,6 +185,18 @@ const UNAVAILABLE_REASON = {
   Inactive: "Not in service",
   Booked: "Already booked for this time",
 };
+
+const ACTIVE_RESERVATION_STATUS_SQL = `
+  N'Pending Request',
+  N'Awaiting Deposit',
+  N'Await Check-in',
+  N'Reserved',
+  N'Confirmed',
+  N'Paid',
+  N'Check-in',
+  N'Dining',
+  N'Overdue'
+`;
 
 /* ------------------------------------------------------------------ */
 /* Suggestion logic                                                    */
@@ -346,6 +367,7 @@ router.get("/menu", async (_req, res) => {
 router.get("/availability", async (req, res) => {
   try {
     await expireOldHolds();
+    await sweepNoShows().catch((err) => console.error("[availability] Auto sweep failed:", err.message));
 
     const { date, time } = req.query;
     const durationMinutes = Number(req.query.durationMinutes) || 120;
@@ -363,6 +385,8 @@ router.get("/availability", async (req, res) => {
 
     const slotEnd = new Date(slotStart.getTime() + durationMinutes * 60000);
     const settings = await loadSettings();
+    const bufferMinutes = Number(settings.table_hold_min) || 15;
+    const tableAssignmentStatus = getAssignmentMode(slotStart);
 
     const [rows] = await pool.query(
       `SELECT
@@ -384,8 +408,8 @@ router.get("/availability", async (req, res) => {
            ORDER BY tos.check_in_at DESC
          ) AS estimated_release_at,
          CASE
-            WHEN t.table_status = N'Inactive'
-              THEN N'Inactive'
+            WHEN t.table_status = N'Inactive' THEN N'Inactive'
+            WHEN t.table_status = N'Cleaning' THEN N'Cleaning'
             WHEN EXISTS (
               SELECT 1
               FROM dbo.TableOccupancySessions tos
@@ -399,12 +423,10 @@ router.get("/availability", async (req, res) => {
               JOIN dbo.Reservations r ON rt.reservation_id = r.reservation_id
               WHERE rt.table_id = t.table_id
                 AND (
-                   r.reservation_status IN (N'Await Check-in', N'Dining')
-                   OR
-                   (r.reservation_status IN (N'Pending Request', N'Awaiting Deposit') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
+                   r.reservation_status IN (${ACTIVE_RESERVATION_STATUS_SQL})
                 )
-                AND DATEADD(minute, -60, r.reservation_start_at) < ?
-                AND DATEADD(minute, 60, r.reservation_end_at) > ?
+                AND DATEADD(minute, -?, r.reservation_start_at) < ?
+                AND DATEADD(minute, ?, r.reservation_end_at) > ?
             ) THEN N'Booked'
             ELSE N'Available'
           END AS availability_at_slot
@@ -412,7 +434,7 @@ router.get("/availability", async (req, res) => {
         JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id
         WHERE a.is_active = 1
         ORDER BY a.area_type, t.table_number;`,
-      [slotStart, slotEnd, slotStart]
+      [slotStart, bufferMinutes, slotEnd, bufferMinutes, slotStart]
     );
 
     let tables = rows.map((row) => {
@@ -469,6 +491,13 @@ router.get("/availability", async (req, res) => {
       slotEnd: formatLocalIso(slotEnd),
       durationMinutes,
       guestCount,
+      tableAssignmentMode: tableAssignmentStatus,
+      table_assignment_status: tableAssignmentStatus,
+      confirmedAssignmentWindowHours: CONFIRMED_ASSIGNMENT_WINDOW_HOURS,
+      assignmentMessage:
+        tableAssignmentStatus === TABLE_ASSIGNMENT_STATUS.CONFIRMED
+          ? "Selected tables are confirmed for this near-term booking window."
+          : "Selected tables are recorded as preferences. Staff confirms the final table closer to the visit.",
       settings,
       tables,
       recommendedTableIds,
@@ -661,6 +690,13 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
     ? [...new Set(table_ids.map(Number).filter((n) => Number.isFinite(n) && n > 0))]
     : [];
 
+  if (tableIds.length > 1) {
+    return res.status(400).json({
+      success: false,
+      message: "Please select exactly one table for this reservation.",
+    });
+  }
+
   let effective_preferred_area_id = preferred_area_id;
 
   if (!effective_preferred_area_id && tableIds.length > 0) {
@@ -741,7 +777,9 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
     }
 
     const effectiveDiningPurpose = dining_purpose || null;
-    const finalSpecialRequest = special_request && special_request.trim() ? special_request.trim() : null;
+    const tableAssignmentStatus = getAssignmentMode(slotStart);
+    const isConfirmedAssignment = tableAssignmentStatus === TABLE_ASSIGNMENT_STATUS.CONFIRMED;
+    const finalSpecialRequestBase = special_request && special_request.trim() ? special_request.trim() : null;
 
     const connection = await pool.getConnection();
 
@@ -869,13 +907,9 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
                  JOIN dbo.Reservations r WITH (UPDLOCK, HOLDLOCK)
                    ON rt.reservation_id = r.reservation_id
                  WHERE rt.table_id = t.table_id
-                   AND (
-                      r.reservation_status IN (N'Await Check-in', N'Dining')
-                      OR
-                      (r.reservation_status IN (N'Pending Request', N'Awaiting Deposit') AND r.created_at >= DATEADD(minute, -15, SYSDATETIME()))
-                   )
-                    AND DATEADD(minute, -60, r.reservation_start_at) < ?
-                    AND DATEADD(minute, 60, r.reservation_end_at) > ?
+                   AND r.reservation_status IN (${ACTIVE_RESERVATION_STATUS_SQL})
+                   AND DATEADD(minute, -?, r.reservation_start_at) < ?
+                   AND DATEADD(minute, ?, r.reservation_end_at) > ?
                ) THEN N'Booked'
                ELSE N'Available'
              END AS availability_at_slot,
@@ -883,7 +917,7 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
            FROM dbo.RestaurantTables t
            LEFT JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id
            WHERE t.table_id IN (${inPlaceholders});`,
-          [slotEnd, slotStart, ...effectiveTableIds]
+          [bufferMinutes, slotEnd, bufferMinutes, slotStart, ...effectiveTableIds]
         );
 
         checkRows = tableRows;
@@ -919,7 +953,9 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
 
       const conflict = kitchenViewBooking
         ? null
-        : checkRows.find((r) => r.availability_at_slot !== "Available");
+        : isConfirmedAssignment
+          ? checkRows.find((r) => r.availability_at_slot !== "Available")
+          : checkRows.find((r) => r.table_status === "Inactive");
 
       if (conflict) {
         await connection.rollback();
@@ -949,6 +985,14 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
       }
 
       const initialStatus = "Awaiting Deposit";
+      const preferredTableForTags = checkRows[0] || null;
+      const finalSpecialRequest = kitchenViewBooking
+        ? finalSpecialRequestBase
+        : appendPreferredTableTags(finalSpecialRequestBase, {
+          tableId: preferredTableForTags?.table_id,
+          tableNumber: preferredTableForTags?.table_number,
+          assignmentMode: tableAssignmentStatus,
+        });
 
       // AUTO-CONFIRM: INSERT directly as 'Pending Request'
       const [scopeRows] = await connection.query(
@@ -984,7 +1028,7 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
       const created = { reservation_status: initialStatus, created_at: new Date() };
 
 
-      for (const tableId of effectiveTableIds) {
+      for (const tableId of isConfirmedAssignment ? effectiveTableIds : []) {
         await connection.query(
           `INSERT INTO dbo.ReservationTables (reservation_id, table_id)
            VALUES (?, ?);`,
@@ -1092,6 +1136,25 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
           `New reservation from ${guestName} for ${guestCount} guests on ${formatLocalIso(slotStart)} at ${startLabel}`
         ]
       );
+
+      // Notification for customer if authenticated
+      if (customerId) {
+        await connection.query(
+          `INSERT INTO dbo.Notifications (user_id, notification_type, title, message_body, is_read, sent_at)
+           VALUES (?, N'Booking Reminder', N'Reservation Submitted 📝', ?, 0, SYSDATETIME())`,
+          [
+            customerId,
+            `Your reservation request #${reservationId} for ${guestCount} guest(s) on ${formatLocalIso(slotStart)} at ${startLabel} has been received!`
+          ]
+        );
+
+        notifyCustomerStaffAction({
+          customerId,
+          notificationType: 'Booking Reminder',
+          title: 'Reservation Submitted 📝',
+          message: `Your reservation request #${reservationId} for ${guestCount} guest(s) on ${formatLocalIso(slotStart)} at ${startLabel} has been received!`
+        }).catch(() => {});
+      }
 
       await connection.commit();
       connection.release();
@@ -1238,10 +1301,26 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
           reservation_end_at: formatLocalIso(slotEnd),
           guest_count: guestCount,
           special_request: finalSpecialRequest,
+          table_assignment_status: kitchenViewBooking
+            ? TABLE_ASSIGNMENT_STATUS.CONFIRMED
+            : tableAssignmentStatus,
+          preferred_table_id: preferredTableForTags?.table_id || null,
+          preferred_table_number: preferredTableForTags?.table_number || null,
+          preferred_area_id: kitchenViewBooking
+            ? kitchenArea.area_id
+            : effective_preferred_area_id
+              ? Number(effective_preferred_area_id)
+              : null,
           tables: tableSummaries,
           is_guest: !customerId,
           preorderItems: savedPreorderItems,
         },
+        table_assignment_status: kitchenViewBooking
+          ? TABLE_ASSIGNMENT_STATUS.CONFIRMED
+          : tableAssignmentStatus,
+        table_assignment_message: isConfirmedAssignment || kitchenViewBooking
+          ? "Your table is confirmed for this reservation."
+          : "Your selected table is recorded as a preference. Staff will confirm the final table closer to your visit.",
       };
 
       if (typeof paymentUrl !== 'undefined' && paymentUrl) {
@@ -1311,6 +1390,23 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
 router.get("/my", resolveUserId, requireUserId, async (req, res) => {
   try {
     await expireOldHolds();
+    await sweepNoShows().catch((err) => console.error("[GET /reservations/my] Auto sweep failed:", err.message));
+
+    const selectedDate = String(req.query.date || "").trim();
+    if (selectedDate && !/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+      return res.status(400).json({
+        success: false,
+        code: "INVALID_DATE_FILTER",
+        message: "Date filter must use YYYY-MM-DD format.",
+      });
+    }
+
+    const queryParams = [req.userId, req.userId];
+    let dateFilterSql = "";
+    if (selectedDate) {
+      dateFilterSql = " AND CAST(r.reservation_start_at AS DATE) = CAST(? AS DATE)";
+      queryParams.push(selectedDate);
+    }
 
     const [rows] = await pool.query(
       `SELECT
@@ -1324,6 +1420,9 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
          r.special_request,
          r.dining_purpose,
          r.reservation_status AS status,
+         r.has_pending_request,
+         r.request_type,
+         r.edit_used_count,
          r.created_at AS created_time,
          r.cancelled_at,
          r.cancel_reason,
@@ -1332,9 +1431,21 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
        FROM dbo.Reservations r
        LEFT JOIN dbo.UserAccounts ua ON r.customer_id = ua.user_id
        LEFT JOIN dbo.RestaurantAreas a ON r.preferred_area_id = a.area_id
-       WHERE r.customer_id = ?
+       WHERE (
+          r.customer_id = ?
+          OR (
+            r.customer_id IS NULL
+            AND r.contact_email IS NOT NULL
+            AND LOWER(r.contact_email) = LOWER((
+              SELECT TOP 1 email
+              FROM dbo.UserAccounts
+              WHERE user_id = ?
+            ))
+          )
+       )
+          ${dateFilterSql}
        ORDER BY r.reservation_start_at DESC;`,
-      [req.userId]
+      queryParams
     );
 
     const ids = rows.map((r) => r.reservation_id);
@@ -1345,9 +1456,10 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
       const placeholders = ids.map(() => "?").join(", ");
 
       const [tableRows] = await pool.query(
-        `SELECT rt.reservation_id, t.table_number, t.capacity
+        `SELECT rt.reservation_id, t.table_number, t.capacity, t.area_id, a.area_name
          FROM dbo.ReservationTables rt
          JOIN dbo.RestaurantTables t ON rt.table_id = t.table_id
+         LEFT JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id
          WHERE rt.reservation_id IN (${placeholders});`,
         ids
       );
@@ -1363,6 +1475,8 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
           table_number: row.table_number,
           display_label: meta.displayLabel,
           capacity: row.capacity,
+          area_id: row.area_id ?? null,
+          area_name: row.area_name ?? null,
         });
 
         return acc;
@@ -1397,6 +1511,9 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
     const reservations = rows.map((r) => {
       const assignedTables = tablesByReservation[r.reservation_id] || [];
       const assigned_tables = assignedTables.map(t => t.table_number).join(", ");
+      const assignedAreaName = assignedTables.find(t => t.area_name)?.area_name || null;
+      const parsedPreference = parsePreferredTableTags(r.special_request);
+      const hasConfirmedTable = assignedTables.length > 0;
       return {
         reservation_id: r.reservation_id,
         customer_name: r.customer_name,
@@ -1409,15 +1526,28 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
         dining_purpose: r.dining_purpose,
         reservation_status: r.status,
         status: r.status,
+        has_pending_request: Boolean(r.has_pending_request),
+        request_type: r.request_type || null,
+        edit_used_count: Number(r.edit_used_count || 0),
         created_time: r.created_time,
         created_at: r.created_time,
         cancelled_at: r.cancelled_at,
         cancel_reason: r.cancel_reason,
         preferred_area: r.preferred_area,
-        area_name: r.preferred_area,
+        assigned_area_name: assignedAreaName,
+        area_name: assignedAreaName || r.preferred_area,
         area_type: r.area_type,
         assigned_tables: assigned_tables,
         tables: assignedTables,
+        table_assignment_status: hasConfirmedTable
+          ? TABLE_ASSIGNMENT_STATUS.CONFIRMED
+          : parsedPreference.table_assignment_status || TABLE_ASSIGNMENT_STATUS.PREFERRED,
+        needs_table_finalization: !hasConfirmedTable,
+        preferred_table_id: parsedPreference.preferred_table_id,
+        preferred_table_number: parsedPreference.preferred_table_number,
+        preferred_table_label: parsedPreference.preferred_table_number
+          ? `${parsedPreference.preferred_table_number} (preference)`
+          : null,
         preorders: preorderByReservation[r.reservation_id] || [],
       };
     });
@@ -1432,6 +1562,13 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
     });
   }
 });
+
+/* ------------------------------------------------------------------ */
+/* POST /api/reservations/:id/upgrade-quote                            */
+/* POST /api/reservations/:id/verify-upgrade                           */
+/* ------------------------------------------------------------------ */
+router.post("/:id/upgrade-quote", resolveUserId, requireUserId, getUpgradeQuote);
+router.post("/:id/verify-upgrade", resolveUserId, requireUserId, verifyUpgradePayment);
 
 /* ------------------------------------------------------------------ */
 /* PATCH /api/reservations/:id/cancel                                  */
@@ -1474,7 +1611,7 @@ router.patch("/:id/cancel", resolveUserId, requireUserId, async (req, res) => {
       });
     }
 
-    const blocked = [RESERVATION_STATUS.SEATED, RESERVATION_STATUS.COMPLETED, RESERVATION_STATUS.NO_SHOW, RESERVATION_STATUS.CANCELLED];
+    const blocked = [RESERVATION_STATUS.DINING, RESERVATION_STATUS.COMPLETED, RESERVATION_STATUS.NO_SHOW, RESERVATION_STATUS.CANCELLED];
 
     if (blocked.includes(reservation.reservation_status)) {
       return res.status(400).json({
@@ -1714,7 +1851,7 @@ router.post("/:id/request-edit", resolveUserId, validateReservationUpdate, async
       };
       return res.status(statusMap[result.code] || 400).json(result);
     }
-    return res.json({ success: true, message: "Edit request submitted successfully." });
+    return res.json({ success: true, request_id: result.request_id || null, message: "Edit request submitted successfully." });
   } catch (err) {
     console.error("[POST /:id/request-edit] Error:", err);
     return res.status(500).json({ success: false, message: "Internal server error." });
@@ -1751,7 +1888,7 @@ router.post("/:id/request-cancel", resolveUserId, async (req, res) => {
       };
       return res.status(statusMap[result.code] || 400).json(result);
     }
-    return res.json({ success: true, message: "Cancellation request submitted. Awaiting manager review." });
+    return res.json({ success: true, request_id: result.request_id || null, message: "Cancellation request submitted. Awaiting manager review." });
   } catch (err) {
     console.error("[POST /:id/request-cancel] Error:", err);
     return res.status(500).json({ success: false, message: "Internal server error." });
@@ -1770,24 +1907,31 @@ router.get("/:id/timeline", resolveUserId, async (req, res) => {
   }
 
   const ACTION_LABEL_MAP = {
+    CUSTOMER_INITIATED_RESERVATION:   "Reservation Created",
     RESERVATION_CREATED:              "Reservation Created",
-    MANAGER_CONFIRMED:                "Booking Confirmed by",
-    STAFF_CHECKIN_CONFIRMED:          "Checked in by",
-    CHECK_IN_RESERVATION:             "Checked in by",
-    PAYMENT_CHECKOUT_AUTO:            "Payment completed",
-    STAFF_CHECKOUT_CONFIRMED:         "Checked out by",
-    REJECT_RESERVATION:               "Check-in Rejected by",
-    REJECT_CHECKIN:                   "Check-in Rejected by",
-    MANAGER_APPROVED_EDIT:            "Edit Approved by",
-    MANAGER_EDIT_RESERVATION:         "Reservation Edited by",
-    MANAGER_RESOLVE_REQUEST:          "Edit Request Confirmed by",
-    MANAGER_DECLINE_REQUEST:          "Edit Request Rejected by",
-    MANAGER_CANCELLED_RESERVATION:    "Cancelled by",
-    CUSTOMER_EDIT_REQUEST:            "Edit Request Sent by",
-    CUSTOMER_CANCEL_REQUEST:          "Cancellation Requested by",
-    CANCEL_RESERVATION:               "Cancelled by",
-    STAFF_SEND_COOKING_QUEUE:         "Sent to Kitchen by",
-    "Staff Send Cooking Queue":       "Sent to Kitchen by",
+    SYSTEM_TABLE_STATUS_CONFLICT:     "Table Status Conflict",
+    AUTOMATED_PAYMENT_SUCCESS:        "Payment Successful",
+    CUSTOMER_EDIT_REQUEST:            "Change Request Submitted",
+    CUSTOMER_CANCEL_REQUEST:          "Cancellation Requested",
+    STAFF_RESOLVED_CHANGE_REQUEST:    "Change Request Approved",
+    MANAGER_APPROVED_CHANGE_REQUEST:  "Change Request Approved",
+    MANAGER_CONFIRMED:                "Reservation Confirmed",
+    STAFF_CHECKIN_CONFIRMED:          "Checked In",
+    CHECK_IN_RESERVATION:             "Checked In",
+    PAYMENT_CHECKOUT_AUTO:            "Payment Completed",
+    STAFF_CHECKOUT_CONFIRMED:         "Checked Out",
+    REJECT_RESERVATION:               "Check-in Rejected",
+    REJECT_CHECKIN:                   "Check-in Rejected",
+    MANAGER_APPROVED_EDIT:            "Edit Approved",
+    MANAGER_EDIT_RESERVATION:         "Reservation Edited",
+    MANAGER_RESOLVE_REQUEST:          "Edit Request Confirmed",
+    MANAGER_DECLINE_REQUEST:          "Edit Request Rejected",
+    MANAGER_CANCELLED_RESERVATION:    "Reservation Cancelled",
+    CUSTOMER_CANCELLED_RESERVATION:   "Reservation Cancelled",
+    CANCEL_RESERVATION:               "Reservation Cancelled",
+    STAFF_SEND_COOKING_QUEUE:         "Sent to Kitchen",
+    "Staff Send Cooking Queue":       "Sent to Kitchen",
+    SEED_TEST_RESERVATION:            "Seed Test Reservation",
   };
 
   try {
@@ -1811,19 +1955,26 @@ router.get("/:id/timeline", resolveUserId, async (req, res) => {
     );
 
     const timeline = rows.map((row) => {
-      const label = ACTION_LABEL_MAP[row.action_name] ?? row.action_name;
+      const rawAction = row.action_name || "";
+      const label = ACTION_LABEL_MAP[rawAction] ||
+        rawAction
+          .replace(/_/g, " ")
+          .toLowerCase()
+          .replace(/\b\w/g, (c) => c.toUpperCase())
+          .trim();
+
       const ts = row.created_at
-        ? new Date(row.created_at).toLocaleString("vi-VN", {
-            day: "2-digit", month: "2-digit", year: "numeric",
+        ? new Date(row.created_at).toLocaleString("en-US", {
+            month: "2-digit", day: "2-digit", year: "numeric",
             hour: "2-digit", minute: "2-digit", hour12: false,
           }).replace(",", "")
         : "—";
 
-      const noActorActions = ["PAYMENT_CHECKOUT_AUTO"];
+      const noActorActions = ["PAYMENT_CHECKOUT_AUTO", "AUTOMATED_PAYMENT_SUCCESS"];
       const showActor = !noActorActions.includes(row.action_name);
 
       let actorLabel = row.actor_name;
-      if (row.action_name === "RESERVATION_CREATED") {
+      if (["RESERVATION_CREATED", "CUSTOMER_INITIATED_RESERVATION"].includes(row.action_name)) {
         const isGuest = !row.customer_id;
         const prefix = isGuest ? "Guest" : "Customer";
         actorLabel = `${prefix}: ${row.actor_name !== "System" ? row.actor_name : "—"}`;

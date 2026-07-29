@@ -93,21 +93,51 @@ function ReservationPage({
     }
   });
   const [tables, setTables] = useState([]);
+  const [tableAssignmentInfo, setTableAssignmentInfo] = useState({
+    status: "Preferred",
+    message: "",
+    confirmedWindowHours: 3,
+  });
+  const availabilityRefreshTimerRef = useRef(null);
+  const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
   
   const { socket } = useSocket();
+
+  useEffect(() => {
+    const today = todayString();
+    if (!form.date || form.date < today) {
+      setForm((prev) => ({ ...prev, date: today }));
+    }
+  }, [form.date]);
+
   useEffect(() => {
     if (!socket) return;
     
     const handleTableStatusChanged = (data) => {
+      if (!data) return;
       const { table_id, table_status } = data;
+      const nextStatus = table_status || data.status;
+
       setTables(prevTables => prevTables.map(t => 
-        t.table_id === table_id ? { ...t, table_status, availability_at_slot: table_status } : t
+        String(t.table_id) === String(table_id)
+          ? { ...t, current_status: nextStatus || t.current_status, table_status: nextStatus || t.table_status }
+          : t
       ));
+
+      clearTimeout(availabilityRefreshTimerRef.current);
+      availabilityRefreshTimerRef.current = setTimeout(() => {
+        setAvailabilityRefreshKey((key) => key + 1);
+      }, 250);
     };
 
     socket.on("table:status_changed", handleTableStatusChanged);
+    socket.on("table:status_updated", handleTableStatusChanged);
+    socket.on("table:sync", handleTableStatusChanged);
     return () => {
+      clearTimeout(availabilityRefreshTimerRef.current);
       socket.off("table:status_changed", handleTableStatusChanged);
+      socket.off("table:status_updated", handleTableStatusChanged);
+      socket.off("table:sync", handleTableStatusChanged);
     };
   }, [socket]);
   const [selectedTableId, setSelectedTableId] = useState(() => {
@@ -379,15 +409,11 @@ function ReservationPage({
 
   /* Fetch availability whenever the key selection changes (debounced). */
   useEffect(() => {
-    if (!form.date || !form.time) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTables([]);
-      setSelectedTableId(null);
-      return undefined;
-    }
-
     let active = true;
     setLoadingAvailability(true);
+    const targetDate = form.date || todayString();
+    const targetTime = form.time || "19:00";
+
     const handle = setTimeout(() => {
       let calcDuration = 90 + (Number(form.holdDurationMinutes) || 30);
       if (form.time && form.endTime) {
@@ -401,8 +427,8 @@ function ReservationPage({
       }
 
       getAvailability({
-        date: form.date,
-        time: form.time,
+        date: targetDate,
+        time: targetTime,
         durationMinutes: calcDuration,
         guestCount: form.guestCount,
         areaType: null,
@@ -412,6 +438,11 @@ function ReservationPage({
           if (!active) return;
           const nextTables = res?.tables || [];
           setTables(nextTables);
+          setTableAssignmentInfo({
+            status: res?.table_assignment_status || res?.tableAssignmentMode || "Preferred",
+            message: res?.assignmentMessage || "",
+            confirmedWindowHours: res?.confirmedAssignmentWindowHours || 3,
+          });
           setSelectedTableId((prev) => {
             if (!prev) return null;
             const t = nextTables.find((x) => String(x.table_id) === String(prev));
@@ -424,17 +455,18 @@ function ReservationPage({
         .finally(() => {
           if (active) setLoadingAvailability(false);
         });
-    }, 250);
+    }, 200);
 
     return () => {
       active = false;
       clearTimeout(handle);
     };
-  }, [form.date, form.time, form.endTime, form.holdDurationMinutes, form.guestCount, form.diningPurpose, settings]);
+  }, [form.date, form.time, form.endTime, form.holdDurationMinutes, form.guestCount, form.diningPurpose, availabilityRefreshKey]);
 
   const selectedTables = useMemo(() => {
     if (!selectedTableId) return [];
-    return tables.filter((t) => String(t.table_id) === String(selectedTableId) || String(t.merged_into_table_id) === String(selectedTableId));
+    const selected = tables.find((t) => String(t.table_id) === String(selectedTableId));
+    return selected ? [selected] : [];
   }, [tables, selectedTableId]);
 
   const isKitchenView = useMemo(() => {
@@ -444,6 +476,7 @@ function ReservationPage({
   }, [selectedTables]);
 
   const totalCapacity = useMemo(() => selectedTables.reduce((sum, t) => sum + Number(t.capacity), 0), [selectedTables]);
+  const activeCustomerId = currentUser?.userId ?? currentUser?.user_id ?? currentUser?.id ?? null;
 
   const canSubmit = useMemo(() => {
     if (!form.date || !form.time || !form.guestCount || !form.fullName || !form.email || !form.phone || !selectedTableId) return false;
@@ -464,14 +497,14 @@ function ReservationPage({
     try {
       // API payload construction matching backend contract
       const payload = {
-        customer_id: currentUser?.id || null,
+        customer_id: activeCustomerId,
         guest_count: form.guestCount,
         reservation_start_at: `${form.date}T${form.time}:00`,
         durationMinutes: form.holdDurationMinutes || 30,
         reservation_end_at: form.endTime ? `${form.date}T${form.endTime}:00` : undefined,
         special_request: form.diningPurposeNote && form.diningPurposeNote.trim() ? form.diningPurposeNote.trim() : null,
         dining_purpose: form.diningPurpose,
-        table_ids: selectedTables.map((t) => t.table_id),
+        table_ids: [Number(selectedTableId)].filter((id) => Number.isFinite(id) && id > 0),
         contact_name: form.fullName,
         contact_phone: form.phone,
         contact_email: form.email,
@@ -483,7 +516,7 @@ function ReservationPage({
         promo_code: promoCode
       };
 
-      const res = await createPreSaveReservation(payload);
+      const res = await createPreSaveReservation(payload, activeCustomerId);
 
       if (res?.success) {
         const enrichedRes = { 
@@ -523,6 +556,7 @@ function ReservationPage({
     localStorage.removeItem("phurai_reservation_table");
     localStorage.removeItem("phurai_reservation_preorder_items");
     localStorage.removeItem("phurai_reservation_preorder_total");
+    toast.success("Reservation & Payment completed! Check your notifications.", { autoClose: 3000 });
     setIsPaymentSuccess(true);
     transitionTo("success");
   }, [transitionTo]);
@@ -667,6 +701,7 @@ function ReservationPage({
                       form={form}
                       setField={setField}
                       selectedTables={selectedTables}
+                      tableAssignmentInfo={tableAssignmentInfo}
                       isKitchenView={isKitchenView}
                       error={error}
                       submitting={submitting}

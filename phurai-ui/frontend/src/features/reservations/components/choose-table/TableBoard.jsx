@@ -57,7 +57,10 @@ export default function TableBoard({
     });
   };
 
-  const selectedApiTable = useMemo(() => tables.find(t => t.table_id === selectedTableId), [tables, selectedTableId]);
+  const selectedApiTable = useMemo(
+    () => tables.find((t) => String(t.table_id) === String(selectedTableId)),
+    [tables, selectedTableId]
+  );
 
   return (
     <div className="table-board-container">

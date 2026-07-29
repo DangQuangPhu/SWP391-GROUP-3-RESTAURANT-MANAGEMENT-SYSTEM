@@ -2,6 +2,13 @@ import { getRawPool } from "../db.js";
 import sql from "mssql";
 import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
 import { getIO } from "../socket.js";
+import { notifyStaffNewCustomerAction } from "../services/notificationService.js";
+import {
+  appendPreferredTableTags,
+  getAssignmentMode,
+  TABLE_ASSIGNMENT_STATUS,
+} from "../utils/tableAssignmentPolicy.js";
+import { getAreaSurcharge } from "../utils/areaDepositConfig.js";
 
 export const createPreSaveReservation = async (req, res) => {
   try {
@@ -26,6 +33,85 @@ export const createPreSaveReservation = async (req, res) => {
     }
 
     const pool = await getRawPool();
+    const normalizedTableIds = [...new Set(
+      (Array.isArray(table_ids) ? table_ids : [])
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id) && id > 0)
+    )];
+
+    if (normalizedTableIds.length !== 1) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select exactly one table for this reservation.",
+      });
+    }
+
+    const tableResult = await pool.request()
+      .input('tableId', sql.Int, normalizedTableIds[0])
+      .query(`
+        SELECT TOP 1
+          t.table_id,
+          t.table_number,
+          t.capacity,
+          t.table_status,
+          a.area_id,
+          a.area_name
+        FROM dbo.RestaurantTables t
+        INNER JOIN dbo.RestaurantAreas a ON a.area_id = t.area_id
+        WHERE t.table_id = @tableId
+          AND a.is_active = 1
+      `);
+
+    const selectedTable = tableResult.recordset[0];
+    if (!selectedTable) {
+      return res.status(400).json({
+        success: false,
+        message: "Selected table was not found.",
+      });
+    }
+
+    const tableAssignmentStatus = getAssignmentMode(reservation_start_at);
+    const isConfirmedAssignment = tableAssignmentStatus === TABLE_ASSIGNMENT_STATUS.CONFIRMED;
+    const areaSurchargeInfo = getAreaSurcharge(selectedTable.area_name, selectedTable.capacity);
+
+    let baseSpecialRequest = special_request || "";
+    if (areaSurchargeInfo.isLuxury) {
+      baseSpecialRequest = `[Area Surcharge: ${areaSurchargeInfo.description}] ${baseSpecialRequest}`.trim();
+    }
+
+    const finalSpecialRequest = appendPreferredTableTags(baseSpecialRequest, {
+      tableId: selectedTable.table_id,
+      tableNumber: selectedTable.table_number,
+      assignmentMode: tableAssignmentStatus,
+    });
+
+    let resolvedCustomerId = Number(req.userId) || Number(customer_id) || null;
+
+    if (!resolvedCustomerId && contact_email) {
+      const accountResult = await pool.request()
+        .input('email', sql.NVarChar(100), contact_email)
+        .query(`
+          SELECT TOP 1 user_id
+          FROM dbo.UserAccounts
+          WHERE email = @email AND is_active = 1
+          ORDER BY user_id DESC
+        `);
+
+      resolvedCustomerId = accountResult.recordset[0]?.user_id || null;
+    }
+
+    if (resolvedCustomerId) {
+      const activeAccount = await pool.request()
+        .input('customerId', sql.Int, resolvedCustomerId)
+        .query(`
+          SELECT TOP 1 user_id
+          FROM dbo.UserAccounts
+          WHERE user_id = @customerId AND is_active = 1
+        `);
+
+      resolvedCustomerId = activeAccount.recordset.length ? resolvedCustomerId : null;
+    }
+
     let items_total = 0;
     let discount_amount = 0;
     let final_total = 0;
@@ -66,7 +152,8 @@ export const createPreSaveReservation = async (req, res) => {
     }
 
     // 3. Deposit Amount & Final Total Calculation (30% deposit, 70% remaining)
-    const net_total = BASE_TABLE_DEPOSIT + Math.max(0, items_total - discount_amount);
+    // net_total includes base deposit (20,000) + area deposit surcharge + preorders minus promo discount
+    const net_total = BASE_TABLE_DEPOSIT + areaSurchargeInfo.surcharge + Math.max(0, items_total - discount_amount);
     const deposit_amount = Math.round(net_total * 0.3);
     final_total = net_total - deposit_amount;
 
@@ -96,14 +183,15 @@ export const createPreSaveReservation = async (req, res) => {
     try {
       const insertResult = await transaction.request()
         .input('order_code', sql.VarChar(50), order_code)
-        .input('customer_id', sql.Int, customer_id || null)
+        .input('customer_id', sql.Int, resolvedCustomerId || null)
         .input('contact_name', sql.NVarChar(100), contact_name || null)
         .input('contact_phone', sql.NVarChar(20), contact_phone || null)
         .input('contact_email', sql.NVarChar(100), contact_email || null)
         .input('reservation_start_at', sql.DateTime2, reservation_start_at)
         .input('reservation_end_at', sql.DateTime2, computed_end_at)
         .input('guest_count', sql.TinyInt, guest_count)
-        .input('special_request', sql.NVarChar(1000), special_request || null)
+        .input('preferred_area_id', sql.SmallInt, selectedTable.area_id || null)
+        .input('special_request', sql.NVarChar(1000), finalSpecialRequest)
         .input('dining_purpose', sql.NVarChar(100), dining_purpose || null)
         .input('deposit_amount', sql.Decimal(12, 2), deposit_amount)
         .input('final_total', sql.Decimal(12, 2), final_total)
@@ -113,7 +201,7 @@ export const createPreSaveReservation = async (req, res) => {
         .query(`
           INSERT INTO dbo.Reservations (
             order_code, customer_id, contact_name, contact_phone, contact_email,
-            reservation_start_at, reservation_end_at, guest_count, special_request, dining_purpose,
+            reservation_start_at, reservation_end_at, guest_count, preferred_area_id, special_request, dining_purpose,
             deposit_amount, final_total, applied_promo_code,
             reservation_status, reservation_source, created_at, updated_at,
             reminder_sent, edit_used_count
@@ -121,7 +209,7 @@ export const createPreSaveReservation = async (req, res) => {
           OUTPUT inserted.reservation_id
           VALUES (
             @order_code, @customer_id, @contact_name, @contact_phone, @contact_email,
-            @reservation_start_at, @reservation_end_at, @guest_count, @special_request, @dining_purpose,
+            @reservation_start_at, @reservation_end_at, @guest_count, @preferred_area_id, @special_request, @dining_purpose,
             @deposit_amount, @final_total, @applied_promo_code,
             @reservation_status, @reservation_source, SYSDATETIME(), SYSDATETIME(),
             0, 0
@@ -130,8 +218,9 @@ export const createPreSaveReservation = async (req, res) => {
 
       const reservation_id = insertResult.recordset[0].reservation_id;
 
-      // Insert into ReservationTables
-      for (const tableId of table_ids) {
+      // Only near-term reservations receive a confirmed physical table assignment.
+      // Far-out reservations keep a preferred table tag and area, then Staff finalizes later.
+      for (const tableId of isConfirmedAssignment ? normalizedTableIds : []) {
         await transaction.request()
           .input('resId', sql.Int, reservation_id)
           .input('tableId', sql.SmallInt, tableId)
@@ -157,11 +246,11 @@ export const createPreSaveReservation = async (req, res) => {
             `);
         }
 
-        const primaryTableId = table_ids.length > 0 ? table_ids[0] : null;
+        const primaryTableId = normalizedTableIds[0] || null;
         await transaction.request()
           .input('resId', sql.Int, reservation_id)
           .input('tableId', sql.SmallInt, primaryTableId)
-          .input('customerId', sql.Int, customer_id || null)
+          .input('customerId', sql.Int, resolvedCustomerId || null)
           .input('subtotal', sql.Decimal(12, 2), items_total)
           .input('totalAmount', sql.Decimal(12, 2), Math.max(0, items_total - discount_amount))
           .query(`
@@ -173,14 +262,19 @@ export const createPreSaveReservation = async (req, res) => {
       const safeValueJson = JSON.stringify({
         reservation_id,
         reservation_status: RESERVATION_STATUS.PENDING_PAYMENT,
+        table_assignment_status: tableAssignmentStatus,
+        preferred_table_id: selectedTable.table_id,
+        preferred_table_number: selectedTable.table_number,
+        preferred_area_id: selectedTable.area_id,
+        preferred_area_name: selectedTable.area_name,
         order_code,
         deposit_amount,
         final_total
       });
 
       await transaction.request()
-        .input('userId', sql.Int, customer_id || null)
-        .input('actionName', sql.VarChar(100), 'CUSTOMER_INITIATED_RESERVATION')
+        .input('userId', sql.Int, resolvedCustomerId || null)
+        .input('actionName', sql.VarChar(100), 'RESERVATION_CREATED')
         .input('targetTable', sql.VarChar(128), 'Reservations')
         .input('targetId', sql.Int, reservation_id)
         .input('newValue', sql.NVarChar(sql.MAX), safeValueJson)
@@ -198,21 +292,39 @@ export const createPreSaveReservation = async (req, res) => {
         io.emit("NEW_RESERVATION_REQUEST", {
           reservation_id,
           reservation_status: RESERVATION_STATUS.AWAITING_DEPOSIT,
+          table_assignment_status: tableAssignmentStatus,
+          preferred_table_id: selectedTable.table_id,
+          preferred_table_number: selectedTable.table_number,
+          preferred_area_id: selectedTable.area_id,
+          preferred_area_name: selectedTable.area_name,
           order_code,
           contact_name,
           guest_count,
           reservation_start_at,
-          customer_id
+          customer_id: resolvedCustomerId || null
         });
         io.to("room:manager").to("room:staff").emit("reservation:new", {
           reservation_id,
           reservation_status: RESERVATION_STATUS.AWAITING_DEPOSIT,
-          customer_id,
+          table_assignment_status: tableAssignmentStatus,
+          preferred_table_id: selectedTable.table_id,
+          preferred_table_number: selectedTable.table_number,
+          preferred_area_id: selectedTable.area_id,
+          preferred_area_name: selectedTable.area_name,
+          customer_id: resolvedCustomerId || null,
           reservation_start_at,
           guest_count,
           contact_name
         });
       }
+
+      // Persist notification for all Staff & Manager users
+      notifyStaffNewCustomerAction({
+        actionType: "reservation_created",
+        title: "New Reservation Created 📅",
+        message: `New reservation #${String(reservation_id).padStart(6, "0")} created by ${contact_name || "Guest"}.`,
+        payload: { reservation_id, customer_id: resolvedCustomerId || null }
+      }).catch((e) => console.error("[createPreSaveReservation] Notification dispatch failed:", e?.message));
     } catch (socketErr) {
       console.warn("Socket emit failed for NEW_RESERVATION_REQUEST", socketErr);
     }
@@ -231,6 +343,15 @@ export const createPreSaveReservation = async (req, res) => {
       deposit_amount,
       final_total,
       vietqr_url
+      , customer_id: resolvedCustomerId || null,
+      table_assignment_status: tableAssignmentStatus,
+      preferred_table_id: selectedTable.table_id,
+      preferred_table_number: selectedTable.table_number,
+      preferred_area_id: selectedTable.area_id,
+      preferred_area_name: selectedTable.area_name,
+      table_assignment_message: isConfirmedAssignment
+        ? `Table ${selectedTable.table_number} is confirmed for this reservation.`
+        : `Table ${selectedTable.table_number} is recorded as your preference. Staff will confirm the final table closer to your visit.`
     });
 
     } catch (transactionError) {
@@ -262,9 +383,15 @@ export const applyPromoCodeToReservation = async (req, res) => {
     const resResult = await pool.request()
       .input('resId', sql.Int, reservationId)
       .query(`
-        SELECT reservation_status, final_total, deposit_amount, applied_promo_code 
-        FROM dbo.Reservations 
-        WHERE reservation_id = @resId
+        SELECT r.reservation_status, r.final_total, r.deposit_amount, r.applied_promo_code,
+               COALESCE(a.area_name, pa.area_name) AS area_name,
+               COALESCE(t.capacity, 2) AS capacity 
+        FROM dbo.Reservations r
+        LEFT JOIN dbo.ReservationTables rt ON rt.reservation_id = r.reservation_id
+        LEFT JOIN dbo.RestaurantTables t ON t.table_id = rt.table_id
+        LEFT JOIN dbo.RestaurantAreas a ON a.area_id = t.area_id
+        LEFT JOIN dbo.RestaurantAreas pa ON pa.area_id = r.preferred_area_id
+        WHERE r.reservation_id = @resId
       `);
 
     if (resResult.recordset.length === 0) {
@@ -297,15 +424,15 @@ export const applyPromoCodeToReservation = async (req, res) => {
       .input('code', sql.NVarChar(50), promo_code)
       .input('userId', sql.Int, req.userId || 0)
       .query(`
-        SELECT cv.customer_promotion_id, cv.status, cv.expires_at, p.applicable_to, p.discount_type, p.discount_value, p.min_order_value, p.promotion_name
-        FROM dbo.CustomerPromotions cv
-        JOIN dbo.Promotions p ON cv.promotion_id = p.promotion_id
-        WHERE cv.promo_code = @code AND cv.customer_id = @userId
+        SELECT cp.customer_promotion_id, cp.status, p.discount_type, p.discount_value, p.applicable_to, p.min_order_value, p.promotion_name, p.expires_at
+        FROM dbo.CustomerPromotions cp
+        JOIN dbo.Promotions p ON cp.promotion_id = p.promotion_id
+        WHERE cp.redemption_code = @code AND cp.user_id = @userId
       `);
 
     let discount_amount = 0;
     let customerPromotionId = null;
-    let promoName = '';
+    let promoName = null;
 
     if (userPromoResult.recordset.length > 0) {
       const promotion = userPromoResult.recordset[0];
@@ -355,8 +482,9 @@ export const applyPromoCodeToReservation = async (req, res) => {
       promoName = result.promo.promotion_name;
     }
 
+    const areaSurchargeInfo = getAreaSurcharge(reservation.area_name, reservation.capacity);
     const BASE_TABLE_DEPOSIT = 20000;
-    const net_total = BASE_TABLE_DEPOSIT + Math.max(0, preorderItemsTotal - discount_amount);
+    const net_total = BASE_TABLE_DEPOSIT + areaSurchargeInfo.surcharge + Math.max(0, preorderItemsTotal - discount_amount);
     const new_deposit_amount = Math.round(net_total * 0.3);
     const new_final_total = net_total - new_deposit_amount;
 

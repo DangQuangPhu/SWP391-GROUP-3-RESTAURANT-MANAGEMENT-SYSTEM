@@ -46,6 +46,7 @@ function ReservationSummary({
   form,
   setField,
   selectedTables,
+  tableAssignmentInfo,
   error,
   submitting,
   canSubmit,
@@ -137,8 +138,10 @@ function ReservationSummary({
     : "Not selected";
 
   const areaLabels = selectedTables.length > 0
-    ? Array.from(new Set(selectedTables.map((t) => getAreaFromTable(t.display_label || t.table_number)))).join(", ")
+    ? Array.from(new Set(selectedTables.map((t) => t.area_name || getAreaFromTable(t.display_label || t.table_number)))).join(", ")
     : "—";
+  const isPreferredAssignment =
+    String(tableAssignmentInfo?.status || "").toLowerCase() === "preferred";
 
   let holdExpiresAt = "—";
   if (form.date && form.time) {
@@ -224,6 +227,34 @@ function ReservationSummary({
                   {selectedTables.length > 0 ? ` · ${totalCapacity} seats` : ""}
                 </span>
               </div>
+              {selectedTables.length > 0 ? (
+                <div
+                  style={{
+                    marginTop: "10px",
+                    padding: "10px 12px",
+                    borderRadius: "0.75rem",
+                    border: isPreferredAssignment
+                      ? "1px solid rgba(250, 204, 21, 0.32)"
+                      : "1px solid rgba(16, 185, 129, 0.28)",
+                    background: isPreferredAssignment
+                      ? "rgba(250, 204, 21, 0.09)"
+                      : "rgba(16, 185, 129, 0.08)",
+                    color: "rgba(255, 255, 255, 0.78)",
+                    fontSize: "0.82rem",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  <strong style={{ color: "#fff" }}>
+                    {isPreferredAssignment ? "Preferred table" : "Confirmed table"}
+                  </strong>
+                  <span>
+                    {" · "}
+                    {isPreferredAssignment
+                      ? `Your selected table is recorded as a preference. Staff confirms the final table within ${tableAssignmentInfo?.confirmedWindowHours || 3} hours of arrival.`
+                      : "This table is inside the near-term booking window and is confirmed for your arrival."}
+                  </span>
+                </div>
+              ) : null}
             </div>
           </div>
 

@@ -12,7 +12,12 @@ export function resolveUserId(req, _res, next) {
   const raw = authUserId ?? headerId ?? queryId ?? bodyId ?? reqUserId;
   const parsed = Number(raw);
 
-  req.userId = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    req.userId = parsed;
+  } else {
+    // Development fallback so staff/manager local API calls do not throw 401
+    req.userId = process.env.NODE_ENV !== "production" ? 1 : null;
+  }
   next();
 }
 

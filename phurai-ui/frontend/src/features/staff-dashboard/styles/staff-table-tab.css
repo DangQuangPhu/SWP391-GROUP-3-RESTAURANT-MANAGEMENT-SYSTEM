@@ -138,6 +138,95 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
+.table-release {
+  width: 100%;
+  display: grid;
+  gap: 2px;
+  margin-top: 2px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.72);
+  color: #475569;
+  font-size: 11px;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.table-release__source {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.table-release__main {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #1f2937;
+}
+
+.table-release__sub {
+  font-size: 10.5px;
+  color: #64748b;
+}
+
+.table-release--ok {
+  border-color: rgba(47, 125, 79, 0.26);
+  background: rgba(47, 125, 79, 0.08);
+}
+
+.table-release--risk {
+  border-color: rgba(183, 121, 31, 0.34);
+  background: rgba(183, 121, 31, 0.12);
+}
+
+.table-release--overdue {
+  border-color: rgba(185, 28, 28, 0.34);
+  background: rgba(185, 28, 28, 0.1);
+}
+
+.table-release--overdue .table-release__source,
+.table-release--overdue .table-release__main {
+  color: #b91c1c;
+}
+
+.table-release--reserved {
+  border-color: rgba(58, 110, 165, 0.24);
+  background: rgba(58, 110, 165, 0.08);
+}
+
+.table-release--unknown {
+  border-color: rgba(100, 116, 139, 0.28);
+  background: rgba(100, 116, 139, 0.08);
+}
+
+.staff-table-ert-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--sfx-border-soft);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.64);
+}
+
+.staff-table-ert-actions__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sfx-text);
+}
+
+.staff-table-ert-actions__buttons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 /* Today's Reservations queue */
 .staff-reservation-tab {
   position: relative;
@@ -170,6 +259,13 @@
   margin: 0 20px 16px;
 }
 
+.staff-reservations-card {
+  padding: 24px !important;
+  background: #ffffff !important;
+  border-radius: 16px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05) !important;
+}
+
 .staff-reservations-card.sfx-card--overflow-visible,
 .staff-reservations-card.sfx-card--overflow-visible .sfx-card__head,
 .staff-reservations-card.sfx-card--overflow-visible .staff-reservations-toolbar,
@@ -182,7 +278,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 12px 16px;
-  padding: 0 20px 16px;
+  padding: 0 0 18px 0 !important;
   border-bottom: 1px solid var(--sfx-border-soft);
   background: #ffffff;
   position: relative;
@@ -731,4 +827,72 @@
 
 .sfx-modal--lg {
   max-width: 620px;
+}
+
+.table-stage {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 8px;
+  border: 1px solid rgba(159, 134, 85, 0.26);
+  border-radius: 8px;
+  background: rgba(255, 251, 235, 0.82);
+  color: #43381f;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.table-stage--compact {
+  max-width: 150px;
+  margin-top: 6px;
+  padding: 5px 7px;
+}
+
+.table-stage__label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #8a6f36;
+}
+
+.table-stage__value {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-stage__detail {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  color: #6b5a30;
+}
+
+.staff-table-stage-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.staff-table-stage-actions .table-stage {
+  flex: 1;
+  align-items: flex-start;
+  text-align: left;
+}
+
+@media (max-width: 520px) {
+  .staff-table-stage-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }

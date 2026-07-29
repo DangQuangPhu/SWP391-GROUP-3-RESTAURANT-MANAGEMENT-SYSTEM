@@ -217,7 +217,7 @@ function StaffReservationDetail({ reservation, userId, checkedInAt: checkedInAtP
     start_time,
     guest_count,
     table_label, assigned_tables,
-    area_name, preferred_area,
+    area_name, preferred_area, assigned_area_name,
     special_request, notes,
     occasion, dining_purpose,
     checked_in_at,
@@ -232,60 +232,214 @@ function StaffReservationDetail({ reservation, userId, checkedInAt: checkedInAtP
   const noteText = special_request || notes || null;
   const holdMins = parseHoldMinutes(special_request);
   const duration = formatDuration(reservation_start_at, reservation_end_at, holdMins);
+  const tableList = Array.isArray(assigned_tables) ? assigned_tables : reservation.tables;
+  const tableAreaName = Array.isArray(tableList)
+    ? tableList.find((table) => table?.area_name)?.area_name
+    : null;
+  const displayAreaName = tableAreaName || assigned_area_name || area_name || preferred_area || null;
 
   const FadedUnassigned = <span style={{ color: "var(--sfx-muted, #9ca3af)", fontStyle: "italic", fontWeight: 400 }}>Unassigned</span>;
   const FadedAny = <span style={{ color: "var(--sfx-muted, #9ca3af)", fontStyle: "italic", fontWeight: 400 }}>Any</span>;
 
+  const cleanNotes = String(noteText || "")
+    .replace(/\[PreferredTable[^\]]*\]/gi, "")
+    .replace(/\[PreferredTableId[^\]]*\]/gi, "")
+    .replace(/\[Assignment[^\]]*\]/gi, "")
+    .replace(/\[[^\]]+\]/g, "")
+    .trim();
+
+  const isPendingRequest = Boolean(
+    reservation.has_pending_request === 1 ||
+    reservation.has_pending_request === true ||
+    reservation.reservation_status === "Pending Request" ||
+    reservation.status === "Pending Request" ||
+    reservation.reservation_status === "Request" ||
+    reservation.status === "Request" ||
+    (reservation.pending_changes_json && reservation.pending_changes_json !== "{}" && reservation.pending_changes_json !== "null") ||
+    (reservation.request_type && reservation.request_type !== "")
+  );
+
   return (
     <div className="sfx-detail" style={{ padding: "0 2px" }}>
       {/* ── Header ── */}
-      <div style={{ textAlign: "center", marginBottom: 24, marginTop: 8 }}>
-        <h2 style={{ fontSize: 28, margin: "0 0 12px", fontWeight: 700, letterSpacing: "0.05em" }}>
+      <div style={{ textAlign: "center", marginBottom: 20, marginTop: 8 }}>
+        <h2 style={{ fontSize: 28, margin: "0 0 10px", fontWeight: 700, letterSpacing: "0.05em" }}>
           #{String(reservation_id).padStart(6, "0")}
         </h2>
-        <ReservationStatusBadge status={reservation_status} size="md" />
+        {isPendingRequest ? (
+          <span style={{ display: "inline-flex", alignItems: "center", background: "rgba(245, 158, 11, 0.12)", color: "#b45309", fontSize: 12, fontWeight: 800, padding: "5px 16px", borderRadius: 24, letterSpacing: "0.08em", border: "1px solid rgba(245, 158, 11, 0.35)", textTransform: "uppercase" }}>
+            PENDING REQUEST
+          </span>
+        ) : (
+          <ReservationStatusBadge status={reservation_status} size="md" />
+        )}
         {diningPurpose && (
-          <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 10 }}>
             <span style={{ display: "inline-block", background: "rgba(201,169,110,0.15)", color: "#b09460", padding: "4px 10px", borderRadius: 6, fontSize: 13, fontWeight: 600, border: "1px solid rgba(201,169,110,0.3)" }}>
-              ★ {diningPurpose}
+              {diningPurpose}
             </span>
           </div>
         )}
       </div>
 
-      {/* ── Info grid ── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <DetailRow label="Request Time">
-          <span style={{ color: "var(--sfx-gold, #b09460)" }}>
-            {fmtDateTime(reservation.created_at || reservation.created_time)}
-          </span>
-        </DetailRow>
-        <DetailRow label="Customer Name"><EmptyVal val={customer_name} /></DetailRow>
-        <DetailRow label="Contact Phone"><EmptyVal val={customer_phone || phone} /></DetailRow>
-        <DetailRow label="Email Address">
-          <span style={{ wordBreak: "break-all" }}><EmptyVal val={customer_email || email} /></span>
-        </DetailRow>
-        <DetailRow label="Start Time">
-          <EmptyVal val={reservation_start_at ? format(new Date(reservation_start_at), "HH:mm (dd/MM/yyyy)") : (start_time ? `${start_time} (${reservation_date})` : null)} />
-        </DetailRow>
-        <DetailRow label="End Time">
-          <EmptyVal val={reservation_end_at ? format(new Date(reservation_end_at), "HH:mm (dd/MM/yyyy)") : "—"} />
-        </DetailRow>
-        <DetailRow label="Duration"><EmptyVal val={duration} fallback="None" /></DetailRow>
-        <DetailRow label="Guests"><EmptyVal val={guest_count} /></DetailRow>
-        <DetailRow label="Table">
-          <span style={{ fontWeight: 600 }}>{assigned_tables || table_label || FadedUnassigned}</span>
-        </DetailRow>
-        <DetailRow label="Area">{area_name || preferred_area || FadedAny}</DetailRow>
-        <DetailRow label="Dining Purpose"><EmptyVal val={diningPurpose} fallback="None" /></DetailRow>
-        <DetailRow label="Status"><EmptyVal val={reservation_status} /></DetailRow>
-        <DetailRow label="Notes">
-          {noteText
-            ? <span style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{noteText}</span>
-            : <EmptyVal val="" fallback="None" />
-          }
-        </DetailRow>
-      </div>
+      {/* ── 50-50 Split Layout for Pending Requests ── */}
+      {isPendingRequest ? (() => {
+        let pendingChanges = {};
+        try { pendingChanges = JSON.parse(reservation.pending_changes_json || "{}"); } catch (_) { }
+
+        const fmt = (iso) => {
+          try { return format(new Date(iso), "dd/MM/yyyy HH:mm"); } catch { return String(iso || "—"); }
+        };
+
+        let preferredTable = null;
+        const prefMatch = String(noteText || "").match(/\[PreferredTable:\s*([^\]]+)\]/i);
+        if (prefMatch && prefMatch[1]) {
+          preferredTable = prefMatch[1].trim();
+        }
+
+        const rawOrigTable = assigned_tables || table_label || null;
+        const origTable = rawOrigTable
+          ? rawOrigTable
+          : preferredTable
+            ? `${preferredTable} (Preferred)`
+            : "Not Assigned Yet";
+
+        const newTable = pendingChanges.table_ids
+          ? `Table #${pendingChanges.table_ids.join(", ")}`
+          : pendingChanges.table_label
+            ? pendingChanges.table_label
+            : origTable;
+
+        const origArea = displayAreaName || "Any Area";
+        const newArea = pendingChanges.area_name || pendingChanges.preferred_area || origArea;
+
+        const origStart = reservation_start_at ? fmt(reservation_start_at) : "—";
+        const newStart = pendingChanges.reservation_start_at ? fmt(pendingChanges.reservation_start_at) : origStart;
+
+        const origEnd = reservation_end_at ? fmt(reservation_end_at) : "—";
+        const newEnd = pendingChanges.reservation_end_at ? fmt(pendingChanges.reservation_end_at) : origEnd;
+
+        const origGuests = String(guest_count || "—") + " Guests";
+        const newGuests = (pendingChanges.guest_count != null ? String(pendingChanges.guest_count) : String(guest_count || "—")) + " Guests";
+
+        const origPhone = customer_phone || phone || "—";
+        const newPhone = pendingChanges.contact_phone || pendingChanges.phone || origPhone;
+
+        const origNotesVal = cleanNotes || "None";
+        const newNotesVal = pendingChanges.special_request || pendingChanges.notes || origNotesVal;
+
+        const origDining = diningPurpose || "None";
+        const newDining = pendingChanges.dining_purpose || pendingChanges.occasion || origDining;
+
+        const compareFields = [
+          { label: "Request Time", orig: fmtDateTime(reservation.created_at || reservation.created_time), new: fmtDateTime(reservation.created_at || reservation.created_time) },
+          { label: "Customer Name", orig: customer_name || "—", new: customer_name || "—" },
+          { label: "Contact Phone", orig: origPhone, new: newPhone },
+          { label: "Email Address", orig: customer_email || email || "—", new: customer_email || email || "—" },
+          { label: "Start Time", orig: origStart, new: newStart },
+          { label: "Est. Duration (ERT)", orig: duration, new: duration },
+          { label: "Guests", orig: origGuests, new: newGuests },
+          { label: "Table", orig: origTable, new: newTable },
+          { label: "Area", orig: origArea, new: newArea },
+          { label: "Dining Purpose", orig: origDining, new: newDining },
+          { label: "Notes", orig: origNotesVal, new: newNotesVal },
+        ];
+
+        return (
+          <div style={{ border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden", background: "#ffffff", boxShadow: "0 4px 14px rgba(0, 0, 0, 0.04)" }}>
+            {/* Card Header */}
+            <div style={{ background: "#f8fafc", padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #e2e8f0" }}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: "#334155", letterSpacing: "0.06em", textTransform: "uppercase" }}>CHANGE REQUEST COMPARISON</span>
+              <span style={{ fontSize: 11, fontWeight: 700, background: "#f59e0b", color: "#ffffff", padding: "3px 10px", borderRadius: 12, textTransform: "uppercase", letterSpacing: "0.04em" }}>AWAITING DECISION</span>
+            </div>
+
+            {/* Column Titles */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid #e2e8f0", background: "#f1f5f9" }}>
+              <div style={{ padding: "10px 16px", borderRight: "1px solid #e2e8f0", fontSize: 11, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                ORIGINAL BOOKING
+              </div>
+              <div style={{ padding: "10px 16px", fontSize: 11, fontWeight: 800, color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                REQUESTED CHANGES
+              </div>
+            </div>
+
+            {/* Row-by-Row 50-50 Grid */}
+            <div>
+              {compareFields.map((field, idx) => {
+                const isDiff = field.orig !== field.new;
+                return (
+                  <div
+                    key={field.label}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      borderBottom: idx < compareFields.length - 1 ? "1px solid #f1f5f9" : "none",
+                    }}
+                  >
+                    {/* Left Cell: Original */}
+                    <div style={{ padding: "11px 16px", borderRight: "1px solid #e2e8f0", background: "#ffffff" }}>
+                      <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600, display: "block", textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 3 }}>
+                        {field.label}
+                      </span>
+                      <span style={{ fontSize: 13, color: "#1e293b", fontWeight: 600, wordBreak: "break-word" }}>
+                        {field.orig}
+                      </span>
+                    </div>
+
+                    {/* Right Cell: Requested */}
+                    <div style={{ padding: "11px 16px", background: isDiff ? "#f0fdf4" : "#ffffff" }}>
+                      <span style={{ fontSize: 11, color: isDiff ? "#15803d" : "#64748b", fontWeight: 600, display: "block", textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 3 }}>
+                        {field.label}
+                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 13, color: isDiff ? "#15803d" : "#1e293b", fontWeight: isDiff ? 700 : 600, wordBreak: "break-word" }}>
+                          {field.new}
+                        </span>
+                        {isDiff && (
+                          <span style={{ fontSize: 10, background: "#dcfce7", color: "#15803d", border: "1px solid #86efac", fontWeight: 700, padding: "1px 6px", borderRadius: 4 }}>
+                            Changed
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })() : (
+        /* ── Standard Info Grid for Non-Pending Reservations ── */
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <DetailRow label="Request Time">
+            <span style={{ color: "var(--sfx-gold, #b09460)" }}>
+              {fmtDateTime(reservation.created_at || reservation.created_time)}
+            </span>
+          </DetailRow>
+          <DetailRow label="Customer Name"><EmptyVal val={customer_name} /></DetailRow>
+          <DetailRow label="Contact Phone"><EmptyVal val={customer_phone || phone} /></DetailRow>
+          <DetailRow label="Email Address">
+            <span style={{ wordBreak: "break-all" }}><EmptyVal val={customer_email || email} /></span>
+          </DetailRow>
+          <DetailRow label="Start Time">
+            <EmptyVal val={reservation_start_at ? format(new Date(reservation_start_at), "HH:mm (dd/MM/yyyy)") : (start_time ? `${start_time} (${reservation_date})` : null)} />
+          </DetailRow>
+          <DetailRow label="Est. Duration (ERT)"><EmptyVal val={duration} fallback="60 minutes" /></DetailRow>
+          <DetailRow label="Guests"><EmptyVal val={guest_count} /></DetailRow>
+          <DetailRow label="Table">
+            <span style={{ fontWeight: 600 }}>{assigned_tables || table_label || FadedUnassigned}</span>
+          </DetailRow>
+          <DetailRow label="Area">{displayAreaName || FadedAny}</DetailRow>
+          <DetailRow label="Dining Purpose"><EmptyVal val={diningPurpose} fallback="None" /></DetailRow>
+          <DetailRow label="Status"><EmptyVal val={reservation_status} /></DetailRow>
+          <DetailRow label="Notes">
+            {cleanNotes
+              ? <span style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{cleanNotes}</span>
+              : <EmptyVal val="" fallback="None" />
+            }
+          </DetailRow>
+        </div>
+      )}
 
       {/* ── Check-in / Check-out records ── */}
       {(checkedInAt || checked_out_at) && (

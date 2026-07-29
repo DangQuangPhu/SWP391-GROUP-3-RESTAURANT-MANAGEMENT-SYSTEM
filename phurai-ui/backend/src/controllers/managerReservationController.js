@@ -72,11 +72,15 @@ export const getPendingReservations = async (req, res) => {
   }
 };
 
+import { sweepNoShows } from "../services/noShowSweeper.js";
+
 // ============================================================================
 // GET /api/manager/reservations/all
 // ============================================================================
 export const getAllReservations = async (req, res) => {
   try {
+    await sweepNoShows().catch((err) => console.error("[getAllReservations] Auto sweep failed:", err.message));
+
     const { page = 1, limit = 20, search = "", status = "all", startDate, endDate } = req.query;
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 20;
@@ -158,7 +162,7 @@ export const getAllReservations = async (req, res) => {
          r.dining_purpose,
          r.reservation_status,
          CASE WHEN r.has_pending_request = 1
-              THEN N'Request'
+              THEN N'Pending Request'
               ELSE r.reservation_status
          END AS display_status,
          r.has_pending_request,
@@ -173,6 +177,8 @@ export const getAllReservations = async (req, res) => {
          r.cancel_reason,
          r.resolved_at,
          a.area_name AS preferred_area,
+         COALESCE(MAX(ta.area_name), a.area_name) AS area_name,
+         MAX(ta.area_name) AS assigned_area_name,
          STRING_AGG(t.table_number, ', ') AS assigned_tables
        FROM dbo.Reservations r
        LEFT JOIN dbo.UserAccounts ua ON r.customer_id = ua.user_id
@@ -180,6 +186,7 @@ export const getAllReservations = async (req, res) => {
        LEFT JOIN dbo.RestaurantAreas a ON r.preferred_area_id = a.area_id
        LEFT JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
        LEFT JOIN dbo.RestaurantTables t ON rt.table_id = t.table_id
+       LEFT JOIN dbo.RestaurantAreas ta ON t.area_id = ta.area_id
        WHERE ${whereClause}
        GROUP BY
          r.reservation_id, r.customer_id, ua.full_name, r.contact_name, ua.phone, r.contact_phone,
@@ -661,7 +668,8 @@ export const confirmReservation = async (req, res) => {
 // ============================================================================
 export const rejectReservation = async (req, res) => {
   const reservationId = req.params.id;
-  const { reason } = req.body;
+  const rawReason = req.body?.reason || req.body?.cancel_reason || req.body?.cancellation_reason || req.body?.reject_reason;
+  const reason = String(rawReason || "").trim() || "Rejected by manager";
   const managerId = req.userId;
 
   let transaction;
@@ -677,7 +685,7 @@ export const rejectReservation = async (req, res) => {
       toStatus: RESERVATION_STATUS.REJECT_REQUEST,
       staffId: managerId,
       auditAction: "REJECT_RESERVATION",
-      extraUpdates: `, cancelled_at = SYSDATETIME(), cancel_reason = @reason`
+      cancelReason: reason,
     });
 
     // 2. Fetch customer_id (separate SELECT — no OUTPUT INSERTED.*)
@@ -739,16 +747,9 @@ export const rejectReservation = async (req, res) => {
 // ============================================================================
 export const cancelReservation = async (req, res) => {
   const reservationId = req.params.id;
-  const { reason } = req.body || {};
+  const rawReason = req.body?.reason || req.body?.cancel_reason || req.body?.cancellation_reason || req.body?.reject_reason;
+  const reason = String(rawReason || "").trim() || "Cancelled by manager";
   const managerId = req.userId;
-
-  // Validation: cancel reason is required and must be meaningful
-  if (!reason || String(reason).trim().length < 5) {
-    return res.status(400).json({
-      success: false,
-      message: "cancel_reason is required (minimum 5 characters).",
-    });
-  }
 
   let transaction;
   try {
@@ -763,7 +764,7 @@ export const cancelReservation = async (req, res) => {
       toStatus: RESERVATION_STATUS.CANCELLED,
       staffId: managerId,
       auditAction: "CANCEL_RESERVATION",
-      extraUpdates: `, cancelled_at = SYSDATETIME(), cancel_reason = @reason`
+      cancelReason: reason,
     });
 
     // 2. Fetch customer_id
@@ -1458,25 +1459,27 @@ export const resolveEditRequest = async (req, res) => {
 
       // Email customer
       if (reservation.customer_email) {
-        const oldInfo = {
-          "Guest Count": reservation.guest_count,
-          "Date": reservation.reservation_start_at ? new Date(reservation.reservation_start_at).toLocaleDateString("vi-VN") : "—",
-          "Time": reservation.reservation_start_at ? new Date(reservation.reservation_start_at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—",
-          "Notes": reservation.special_request || "None",
+        const fmtDt = (iso) => {
+          if (!iso) return "—";
+          try {
+            const d = new Date(iso);
+            return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} ${d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`;
+          } catch { return String(iso); }
         };
-        const newInfo = {
-          "Guest Count": pendingChanges.guest_count || reservation.guest_count,
-          "Date": pendingChanges.reservation_start_at ? new Date(pendingChanges.reservation_start_at).toLocaleDateString("vi-VN") : (reservation.reservation_start_at ? new Date(reservation.reservation_start_at).toLocaleDateString("vi-VN") : "—"),
-          "Time": pendingChanges.reservation_start_at ? new Date(pendingChanges.reservation_start_at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : (reservation.reservation_start_at ? new Date(reservation.reservation_start_at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—"),
-          "Notes": pendingChanges.special_request || reservation.special_request || "None",
-          ...(newTableIds ? { "Tables": newTableIds.join(", ") } : {}),
-        };
+
         sendEditConfirmedEmail({
           toEmail: reservation.customer_email,
           customerName: reservation.customer_name,
           reservationId,
-          oldInfo,
-          newInfo,
+          updatedDetails: {
+            phone: pendingChanges.contact_phone || pendingChanges.phone || reservation.customer_phone || reservation.contact_phone || "Not provided",
+            time: pendingChanges.reservation_start_at ? fmtDt(pendingChanges.reservation_start_at) : fmtDt(reservation.reservation_start_at),
+            guests: pendingChanges.guest_count != null ? `${pendingChanges.guest_count} Guests` : `${reservation.guest_count || 1} Guests`,
+            area: reservation.area_name || "Main Dining Area",
+            table: newTableIds ? `Table #${newTableIds.join(", ")}` : (reservation.table_number ? `Table #${reservation.table_number}` : "Not assigned"),
+            purpose: pendingChanges.dining_purpose || pendingChanges.occasion || reservation.dining_purpose || "Casual Dinner",
+            notes: pendingChanges.special_request || pendingChanges.notes || reservation.special_request || null,
+          },
         }).catch(e => console.error("[resolveEditRequest] Email failed:", e.message));
       }
 

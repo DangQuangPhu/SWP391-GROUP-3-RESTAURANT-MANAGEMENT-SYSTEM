@@ -59,8 +59,12 @@ export function createPreSaveReservation(payload, userId) {
   });
 }
 
-export function getMyReservations(userId) {
-  return request("/reservations/my", {
+export function getMyReservations(userId, { date } = {}) {
+  const params = new URLSearchParams();
+  if (date) params.set("date", date);
+  const query = params.toString();
+
+  return request(`/reservations/my${query ? `?${query}` : ""}`, {
     method: "GET",
     headers: profileRequestHeaders(userId),
   });
@@ -103,6 +107,22 @@ export function requestEdit(reservationId, userId, changes) {
     method: "POST",
     headers: profileRequestHeaders(userId),
     body: JSON.stringify({ changes }),
+  });
+}
+
+export function getUpgradeQuoteApi(reservationId, userId, payload) {
+  return request(`/reservations/${reservationId}/upgrade-quote`, {
+    method: "POST",
+    headers: profileRequestHeaders(userId),
+    body: JSON.stringify(payload),
+  });
+}
+
+export function verifyUpgradePaymentApi(reservationId, userId, payload) {
+  return request(`/reservations/${reservationId}/verify-upgrade`, {
+    method: "POST",
+    headers: profileRequestHeaders(userId),
+    body: JSON.stringify(payload),
   });
 }
 

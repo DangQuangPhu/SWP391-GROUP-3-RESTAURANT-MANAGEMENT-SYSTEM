@@ -1,0 +1,279 @@
+/* ============================================================
+   Phūrai — Custom Date Picker Styles (Luxury Glassmorphism)
+   ============================================================ */
+
+.cdp-wrapper {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  font-family: inherit;
+}
+
+.cdp-input-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid var(--rzv-line, rgba(31, 26, 23, 0.15));
+  border-radius: 12px;
+  padding: 8px 14px;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.cdp-input-container:hover {
+  border-color: var(--rzv-gold, #9f8655);
+  box-shadow: 0 4px 12px rgba(159, 134, 85, 0.12);
+}
+
+.cdp-input-container:focus-within {
+  border-color: var(--rzv-gold, #9f8655);
+  box-shadow: 0 0 0 3px rgba(159, 134, 85, 0.2);
+}
+
+.cdp-input-container--error {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.2) !important;
+  animation: cdpShake 0.4s ease-in-out;
+}
+
+.cdp-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--rzv-text, #1f1a17);
+  width: 110px;
+  letter-spacing: 0.05em;
+  font-family: inherit;
+}
+
+.cdp-input::placeholder {
+  color: var(--rzv-muted, #8a8175);
+  opacity: 0.6;
+}
+
+.cdp-icon-btn {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--rzv-gold, #9f8655);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.cdp-icon-btn:hover {
+  background: rgba(159, 134, 85, 0.12);
+  transform: scale(1.08);
+}
+
+/* ── Error Toast (Red alert auto-disappearing after 5s) ── */
+.cdp-error-toast {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 1050;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 10px 25px rgba(220, 38, 38, 0.15);
+  white-space: nowrap;
+  animation: cdpFadeInDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cdp-error-toast__close {
+  background: transparent;
+  border: none;
+  color: #991b1b;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  opacity: 0.7;
+}
+
+.cdp-error-toast__close:hover {
+  opacity: 1;
+}
+
+/* ── Dropdown Popup Calendar ── */
+.cdp-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 1000;
+  width: 300px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(159, 134, 85, 0.25);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  animation: cdpPopScale 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top left;
+}
+
+.cdp-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.cdp-month-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--rzv-text, #1f1a17);
+  letter-spacing: 0.02em;
+}
+
+.cdp-nav-btn {
+  background: transparent;
+  border: 1px solid var(--rzv-line, rgba(31, 26, 23, 0.12));
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--rzv-text, #1f1a17);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cdp-nav-btn:hover {
+  background: var(--rzv-gold, #9f8655);
+  border-color: var(--rzv-gold, #9f8655);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+/* ── Calendar Grid ── */
+.cdp-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.cdp-weekday {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--rzv-muted, #8a8175);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cdp-days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.cdp-day-btn {
+  background: transparent;
+  border: none;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--rzv-text, #1f1a17);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cdp-day-btn:hover:not(.cdp-day-btn--empty) {
+  background: rgba(159, 134, 85, 0.15);
+  color: var(--rzv-gold, #9f8655);
+  transform: scale(1.1);
+}
+
+.cdp-day-btn--today {
+  font-weight: 700;
+  color: var(--rzv-gold, #9f8655);
+  border: 1px dashed var(--rzv-gold, #9f8655);
+}
+
+.cdp-day-btn--selected {
+  background: var(--rzv-gold, #9f8655) !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  box-shadow: 0 4px 10px rgba(159, 134, 85, 0.35);
+  transform: scale(1.05);
+}
+
+.cdp-day-btn--empty {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ── Popup Footer ── */
+.cdp-popup-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rzv-line, rgba(31, 26, 23, 0.1));
+}
+
+.cdp-action-btn {
+  background: transparent;
+  border: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--rzv-gold, #9f8655);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.cdp-action-btn:hover {
+  background: rgba(159, 134, 85, 0.1);
+}
+
+/* ── Animations ── */
+@keyframes cdpPopScale {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes cdpFadeInDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cdpShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}

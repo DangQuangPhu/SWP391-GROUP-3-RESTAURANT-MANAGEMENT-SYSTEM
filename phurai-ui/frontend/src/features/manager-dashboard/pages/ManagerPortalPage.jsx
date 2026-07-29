@@ -29,6 +29,7 @@ import StaffSection from "../components/sections/StaffSection.jsx";
 import PromotionsSection from "../components/sections/PromotionsSection.jsx";
 import ReportsSection from "../components/sections/ReportsSection.jsx";
 import RatingDashboard from "./RatingDashboard.jsx";
+import AccountabilityAuditPage from "../components/audit/AccountabilityAuditPage.jsx";
 import { ManagerChatbot } from "../components/ManagerChatbot.jsx";
 
 import {
@@ -71,7 +72,8 @@ function routeSkeleton(path) {
     path.includes("/manager/reservations") ||
     path.includes("/manager/orders") ||
     path.includes("/manager/staff") ||
-    path.includes("/manager/promotions")
+    path.includes("/manager/promotions") ||
+    path.includes("/manager/audit")
   ) return (
     <motion.div
       key="tbl-sk"
@@ -397,6 +399,27 @@ function ReportsRoute() {
   );
 }
 
+function AuditRoute() {
+  const { loading, currentUser, toast } = useSectionContext();
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait">
+      {loading
+        ? routeSkeleton(location.pathname)
+        : (
+          <motion.div
+            key="audit-content"
+            variants={fadeScaleVariants}
+            initial="hidden" animate="visible" exit="exit"
+          >
+            <AccountabilityAuditPage currentUser={currentUser} toast={toast} />
+          </motion.div>
+        )
+      }
+    </AnimatePresence>
+  );
+}
+
 function ManagerPortalPage({
   isAuthenticated,
   currentUser: propCurrentUser,
@@ -648,14 +671,19 @@ function ManagerPortalPage({
     socket.on("RESERVATION_PAYMENT_SUCCESS", handlePaymentSuccess);
 
     const handleTableMerged = (data) => {
-      toast(`[Table Update] ${data.child_table_number} was merged into ${data.parent_table_number} by ${data.staff_name}`, "info");
+      if (data?.child_table_number) {
+        toast(`[Table Update] ${data.child_table_number} was merged into ${data.parent_table_number} by ${data.staff_name}`, "info");
+      }
       window.dispatchEvent(new Event("phurai_manager_refresh"));
     };
-    const handleTableSync = (data) => {
+    const handleTableSync = () => {
       window.dispatchEvent(new Event("phurai_manager_refresh"));
     };
 
+    socket.on("table:status_changed", handleTableSync);
+    socket.on("table:status_updated", handleTableSync);
     socket.on("table:merged", handleTableMerged);
+    socket.on("table:unmerged", handleTableSync);
     socket.on("table:sync", handleTableSync);
 
     return () => {
@@ -666,7 +694,10 @@ function ManagerPortalPage({
       socket.off("reservation:status_updated", handleStatusChanged);
       socket.off("RESERVATION_STATUS_CHANGED", handleStatusChanged);
       socket.off("RESERVATION_PAYMENT_SUCCESS", handlePaymentSuccess);
+      socket.off("table:status_changed", handleTableSync);
+      socket.off("table:status_updated", handleTableSync);
       socket.off("table:merged", handleTableMerged);
+      socket.off("table:unmerged", handleTableSync);
       socket.off("table:sync", handleTableSync);
     };
   }, [hasAccess, toast, socket]);
@@ -731,6 +762,7 @@ function ManagerPortalPage({
           <Route path="staff" element={<StaffRoute />} />
           <Route path="promotions" element={<PromotionsRoute />} />
           <Route path="reports" element={<ReportsRoute />} />
+          <Route path="audit" element={<AuditRoute />} />
           <Route path="ratings" element={<RatingDashboard />} />
           <Route path="settings" element={<Navigate to="dashboard" replace />} />
           <Route path="*" element={<Navigate to="dashboard" replace />} />

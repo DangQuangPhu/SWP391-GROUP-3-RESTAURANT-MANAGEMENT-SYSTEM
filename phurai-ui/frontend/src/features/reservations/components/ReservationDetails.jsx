@@ -377,7 +377,7 @@ function CustomDatePicker({ value, onChange, minDate, maxDate, className }) {
 }
 
 // ─── Custom Time Picker (Apple iOS 26 Wheel style) ────────────────────────────
-function CustomTimePicker({ value, onChange, availableTimes, className }) {
+function CustomTimePicker({ value, onChange, availableTimes, className, getUnavailableMessage }) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
 
@@ -425,6 +425,14 @@ function CustomTimePicker({ value, onChange, availableTimes, className }) {
   const isSelectionAvailable = useMemo(() => {
     return availableTimes.includes(currentSelectionStr);
   }, [availableTimes, currentSelectionStr]);
+
+  const unavailableMessage = useMemo(() => {
+    if (isSelectionAvailable) return "";
+    if (typeof getUnavailableMessage === "function") {
+      return getUnavailableMessage(currentSelectionStr);
+    }
+    return "Time slot is unavailable";
+  }, [currentSelectionStr, getUnavailableMessage, isSelectionAvailable]);
 
   const handleDone = () => {
     if (isSelectionAvailable) {
@@ -596,7 +604,7 @@ function CustomTimePicker({ value, onChange, availableTimes, className }) {
           <div className="rd-timepicker-footer">
             {!isSelectionAvailable && (
               <span className="rd-timepicker-warning">
-                Time slot is unavailable
+                {unavailableMessage}
               </span>
             )}
             <button
@@ -717,6 +725,17 @@ export default function ReservationDetails({
     }
   }, [form.guests, selectedTableId, tables, onSelectTable]);
 
+  useEffect(() => {
+    const today = getTodayString();
+    if (!form.date || form.date < today) {
+      setForm((prev) => {
+        const next = { ...prev, date: today };
+        if (onUpdateForm) onUpdateForm(next);
+        return next;
+      });
+    }
+  }, [form.date, onUpdateForm]);
+
   const todayStr = getTodayString();
   const isToday = form.date === todayStr;
 
@@ -832,8 +851,23 @@ export default function ReservationDetails({
   const startHoursOptions = useMemo(() => {
     if (isClosedDay) return [];
     const all = generateTimeOptions(openHour, closeHour, 15);
-    return all.filter(time => !isTimeConflicting(time));
-  }, [openHour, closeHour, isClosedDay, tableBookings, isTimeConflicting]);
+    const now = new Date();
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    return all.filter(time => {
+      if (isToday && getMins(time) <= currentMins) return false;
+      return !isTimeConflicting(time);
+    });
+  }, [openHour, closeHour, isClosedDay, isToday, tableBookings, isTimeConflicting]);
+
+  const getTimeUnavailableMessage = useCallback((timeStr) => {
+    if (isClosedDay) return "Restaurant is closed on this date";
+    if (isToday && getMins(timeStr) <= (new Date().getHours() * 60 + new Date().getMinutes())) {
+      return "This time has already passed";
+    }
+    if (!form.guests) return "Select guests to continue";
+    if (!selectedTableId) return "Select a table to check live availability";
+    return "Time slot is unavailable for the selected table";
+  }, [form.guests, isClosedDay, isToday, selectedTableId]);
 
   const handleDurationChange = (newDurationStr) => {
     const newDuration = Number(newDurationStr);
@@ -936,6 +970,8 @@ export default function ReservationDetails({
       const [sh, sm] = form.startTime.split(':').map(Number);
       if ((sh * 60 + sm) < 600) {
         newErrors.startTime = "The restaurant opens at 10:00 AM. Please choose a valid time.";
+      } else if (isToday && (sh * 60 + sm) <= (new Date().getHours() * 60 + new Date().getMinutes())) {
+        newErrors.startTime = "Please choose a time later than the current time.";
       } else if (isTimeConflicting(form.startTime)) {
         newErrors.startTime = "This time slot is already booked, please select another time.";
       }
@@ -946,9 +982,9 @@ export default function ReservationDetails({
       newErrors.duration = "Please select a hold duration.";
     }
 
-    if (form.startTime && form.endTime) {
-      if (isTimeConflicting(form.startTime) || isTimeConflicting(form.endTime)) {
-        newErrors.startTime = "This time slot conflicts with an existing booking on the selected table. Please choose another time.";
+    if (form.startTime) {
+      if (isTimeConflicting(form.startTime)) {
+        newErrors.startTime = "This time slot conflicts with an existing reservation on the selected table. Please choose another time.";
       }
     }
 
@@ -956,6 +992,11 @@ export default function ReservationDetails({
     if (form.guests !== '' && Number(form.guests) >= 1 && Number(form.guests) <= 10) {
       if (!selectedTableId) {
         newErrors.selectedTable = "Please select a table on the floor plan.";
+      } else {
+        const selectedTable = tables?.find((t) => String(t.table_id) === String(selectedTableId));
+        if (selectedTable && !validateTableCapacity(form.guests, selectedTable.capacity)) {
+          newErrors.selectedTable = `Table ${selectedTable.table_number || selectedTable.display_label || selectedTableId} has ${selectedTable.capacity} seats and is not suitable for ${form.guests} guest(s).`;
+        }
       }
     }
 
@@ -1068,6 +1109,7 @@ export default function ReservationDetails({
                 value={form.startTime}
                 onChange={handleStartTimeChange}
                 availableTimes={startHoursOptions}
+                getUnavailableMessage={getTimeUnavailableMessage}
                 className={errors.startTime ? 'rd-select--error' : ''}
               />
               {errors.startTime && <p className="rd-error-message">{errors.startTime}</p>}

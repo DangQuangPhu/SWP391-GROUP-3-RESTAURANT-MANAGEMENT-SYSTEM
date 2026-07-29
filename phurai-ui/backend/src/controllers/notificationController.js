@@ -156,3 +156,25 @@ export async function deleteNotification(req, res) {
     return jsonError(res, "Could not delete notification.");
   }
 }
+
+/**
+ * DELETE /api/notifications/clear-all
+ * Delete all notifications for the authenticated user.
+ */
+export async function clearAllNotifications(req, res) {
+  const userId = req.userId;
+
+  try {
+    const [result] = await pool.query(
+      `DELETE FROM dbo.Notifications WHERE user_id = ?`,
+      [userId]
+    );
+
+    return jsonOk(res, {
+      deleted: Number(result?.affectedRows ?? result?.rowsAffected?.[0] ?? 0),
+    });
+  } catch (error) {
+    console.error("DELETE /api/notifications/clear-all failed:", error);
+    return jsonError(res, "Could not clear all notifications.");
+  }
+}

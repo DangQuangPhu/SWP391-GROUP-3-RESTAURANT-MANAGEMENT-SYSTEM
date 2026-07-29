@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSocket } from "@/core/socket/SocketContext.jsx";
 import { appToastSuccess, appToastClickableSuccess } from "@/core/notifications/appToast.js";
-import { apiGet, apiPatch } from "@/core/api/httpClient.js";
+import { apiGet, apiPatch, getAuthToken } from "@/core/api/httpClient.js";
 
 function isCustomerUser(user) {
   const roleId = Number(user?.roleId ?? user?.role_id);
@@ -23,7 +23,7 @@ export default function CustomerNotificationListener({ user, isAuthenticated }) 
 
   // Fetch unread notifications on mount
   useEffect(() => {
-    const token = localStorage.getItem("phurai_token") || localStorage.getItem("token");
+    const token = getAuthToken();
     if (!token || !isAuthenticated || !isCustomerUser(user)) return;
     apiGet("/notifications?limit=10")
       .then((res) => {
@@ -41,7 +41,7 @@ export default function CustomerNotificationListener({ user, isAuthenticated }) 
   }, [isAuthenticated, user, navigate]);
 
   useEffect(() => {
-    const token = localStorage.getItem("phurai_token") || localStorage.getItem("token");
+    const token = getAuthToken();
     if (!token || !socket || !isAuthenticated || !isCustomerUser(user)) {
       return undefined;
     }

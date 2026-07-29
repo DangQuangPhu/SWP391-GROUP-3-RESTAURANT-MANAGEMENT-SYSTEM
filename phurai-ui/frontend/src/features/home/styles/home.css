@@ -780,6 +780,8 @@ body.intro-running .phurai-navbar {
   width: 640px;
   height: 415px;
   overflow: hidden;
+  mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
 }
 
 .phurai-kitchen-rec__media img {

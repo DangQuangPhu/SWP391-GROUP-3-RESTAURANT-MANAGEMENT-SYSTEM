@@ -2302,7 +2302,7 @@ FROM dbo.Orders o JOIN @PhuUsers pu ON o.customer_id = pu.user_id WHERE DATEPART
 
 -- Upcoming Confirmed Reservation (No Order/Payment yet)
 INSERT INTO dbo.Reservations (customer_id, contact_name, contact_phone, contact_email, preferred_area_id, reservation_start_at, reservation_end_at, guest_count, special_request, deposit_amount, final_total, reservation_status, created_at)
-SELECT source.user_id, N'Dang Quang Phu', '0901000001', N'phuadmin@phurai.vn', @AreaId, DATEADD(day, 2, GETDATE()), DATEADD(day, 2, DATEADD(hour, 2, GETDATE())), 6, N'Private room', 500000.00, NULL, N'Await Check-in', DATEADD(day, -1, GETDATE())
+SELECT source.user_id, N'Dang Quang Phu', '0964813966', N'quagphu159@gmail.com', @AreaId, DATEADD(day, 2, GETDATE()), DATEADD(day, 2, DATEADD(hour, 2, GETDATE())), 6, NULL, 500000.00, NULL, N'Await Check-in', DATEADD(hour, -2, DATEADD(day, 2, GETDATE()))
 FROM @PhuUsers source;
 
 COMMIT TRANSACTION;

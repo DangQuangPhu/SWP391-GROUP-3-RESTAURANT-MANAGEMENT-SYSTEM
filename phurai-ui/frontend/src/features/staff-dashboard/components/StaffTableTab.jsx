@@ -3,8 +3,12 @@ import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { QRCodeSVG as QRCode } from "qrcode.react";
 import TableQrOrderLink from "@/components/common/TableQrOrderLink.jsx";
+import TableReleaseIndicator from "@/components/common/TableReleaseIndicator.jsx";
+import TableStageIndicator from "@/components/common/TableStageIndicator.jsx";
 
 import { ManagerModal } from "../../manager-dashboard/components/ManagerOverlay.jsx";
+import AddWalkInModal from "./AddWalkInModal.jsx";
+import TimelineGanttView from "./TimelineGanttView.jsx";
 import {
   TableCardSkeleton,
   SkeletonPresence,
@@ -30,11 +34,18 @@ import {
   updateStaffTableStatusApi,
   deleteStaffTableApi,
   fetchStaffReservationDetail,
+  extendReservationErt,
+  advanceTableStage,
+  fetchTableUpcomingReservations,
 } from "../services/staffApi.js";
 import { formatBookingId } from "@/features/reservations/utils/formatBookingId.js";
 import { TABLE_STATUS_META } from "@/shared/constants.js";
 import { useStaffStore } from "../store/staffStore.js";
+import ReservationQueueInvoiceModal from "./ReservationQueueInvoiceModal.jsx";
 import "../styles/staff-table-tab.css";
+import "../styles/reservation-queue.css";
+import "../styles/gantt-timeline.css";
+
 
 const FILTER_STATUS_SLUGS = ["available", "reserved", "occupied", "cleaning"];
 
@@ -74,6 +85,13 @@ function getTableStatusSlug(table) {
 
   const normalized = normalizeTableStatus(table);
   return STATUS_LABEL_TO_SLUG[normalized] || "available";
+}
+
+function getStageAdvanceLabel(stage) {
+  if (stage === "Order Placed") return "Send to Kitchen";
+  if (stage === "Ready") return "Mark Served";
+  if (stage === "Served") return "Request Bill";
+  return null;
 }
 
 function sameTableId(left, right) {
@@ -306,7 +324,7 @@ function TableManagementToolbar() {
 
 function TableManagementFloorMap() {
   const { state, actions } = useTableManagement();
-  const { groupedEntries, refreshing, isJiggling } = state;
+  const { groupedEntries, refreshing, isJiggling, clockNow } = state;
   const {
     handlePointerDown,
     handlePointerUpOrLeave,
@@ -356,39 +374,28 @@ function TableManagementFloorMap() {
                     onClick={() => {
                       if (!isJiggling) actions.setSelectedTable(table);
                     }}
-                    className={`sfx-mtile sfx-mtile--${meta.tone} ${canMerge ? "is-jiggling" : ""}`}
+                    className={`sfx-mtile sfx-mtile--${(table.upcoming_count > 0 && meta.tone === "green") ? "amber" : meta.tone} ${canMerge ? "is-jiggling" : ""}`}
                     style={{
                       cursor: isJiggling ? "grab" : "pointer"
                     }}
                   >
+                    {table.upcoming_count > 0 && (
+                      <div className="sfx-mtile__notif-badge" title={`${table.upcoming_count} upcoming reservation(s) queued`}>
+                        <span>🔔</span>
+                        <span>{table.upcoming_count}</span>
+                      </div>
+                    )}
                     <span className="sfx-mtile__no">{displayNum}</span>
                     <span className="sfx-mtile__cap">{table.combined_capacity} seats</span>
                     <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
+                    {table.active_reservation_customer_name && (
+                      <div className="sfx-mtile__next-preview" title={`Next: ${table.active_reservation_customer_name}`}>
+                        Next: {table.active_reservation_customer_name}
+                      </div>
+                    )}
+                    <TableReleaseIndicator table={table} now={clockNow} />
+                    <TableStageIndicator table={table} compact />
 
-                    {/* EstimatedReleaseTime badge — only for Occupied tables */}
-                    {slug === 'occupied' && table.estimated_release_at ? (() => {
-                      const releaseAt = new Date(table.estimated_release_at);
-                      const isOverdue = releaseAt < new Date();
-                      const timeStr = releaseAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-                      return (
-                        <div
-                          title={isOverdue ? `⚠️ Overdue since ${timeStr}` : `Estimated release: ${timeStr}`}
-                          style={{
-                            marginTop: '4px',
-                            fontSize: '10px',
-                            fontWeight: 600,
-                            letterSpacing: '0.03em',
-                            color: isOverdue ? '#ff6b6b' : '#a0aec0',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '3px',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          {isOverdue ? '⚠️' : '🕐'} {timeStr}
-                        </div>
-                      );
-                    })() : null}
 
                     <div
                       className="sfx-tabletile__actions"
@@ -430,20 +437,179 @@ function TableManagementFloorMap() {
   );
 }
 
+export function TableUpcomingQueueSection({ tableId, userId, showPhone = true, customFetcher = null }) {
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const now = new Date();
+    return now.toISOString().split("T")[0];
+  });
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedInvoiceItem, setSelectedInvoiceItem] = useState(null);
+
+  const fetcher = customFetcher || fetchTableUpcomingReservations;
+
+  const loadQueue = useCallback(() => {
+    if (!tableId) return;
+    let active = true;
+    setLoading(true);
+    fetcher(tableId, userId, selectedDate)
+      .then((data) => {
+        if (active) setItems(data || []);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [tableId, userId, selectedDate, fetcher]);
+
+  useEffect(() => {
+    return loadQueue();
+  }, [loadQueue]);
+
+  // Group items into 3 groups
+  const groups = useMemo(() => {
+    const history = [];
+    const seated = [];
+    const upcoming = [];
+
+    items.forEach((item) => {
+      const st = (item.reservation_status || "").toLowerCase();
+      if (st === "dining" || st === "seated") {
+        seated.push(item);
+      } else if (st === "completed" || st === "no show" || st === "noshow" || st === "cancelled") {
+        history.push(item);
+      } else {
+        upcoming.push(item);
+      }
+    });
+
+    return { history, seated, upcoming };
+  }, [items]);
+
+  const renderItem = (item) => {
+    const st = (item.reservation_status || "").toLowerCase().replace(/[^a-z]/g, "");
+    let itemModifier = "upcoming";
+    if (st === "dining" || st === "seated") itemModifier = "seated";
+    else if (st === "completed" || st === "noshow" || st === "cancelled") itemModifier = "history";
+
+    return (
+      <div
+        key={item.reservation_id}
+        className={`rq-item rq-item--${itemModifier}`}
+        onClick={() => setSelectedInvoiceItem(item)}
+      >
+        <div className="rq-item-left">
+          <div className="rq-item-top">
+            <span className="rq-res-id">#{item.reservation_id}</span>
+            <span className="rq-cust-name">{item.contact_name}</span>
+            <span className="rq-guest-badge">👥 {item.guest_count}</span>
+          </div>
+          <div className="rq-item-sub">
+            <span>{item.dining_purpose}</span>
+            {showPhone && item.contact_phone ? <span>• 📞 {item.contact_phone}</span> : null}
+          </div>
+        </div>
+
+        <div className="rq-item-right">
+          <span className="rq-time">{item.start_time}</span>
+          <span className={`rq-status-pill rq-status-pill--${st}`}>
+            {item.reservation_status}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="rq-section">
+      <div className="rq-header">
+        <div className="rq-title-wrap">
+          <span className="rq-title">
+            <span>📅</span> Table Reservation Queue
+          </span>
+          <span className="rq-count-badge">{items.length}</span>
+        </div>
+
+        <div className="rq-date-picker">
+          <input
+            type="date"
+            className="rq-date-input"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {loading ? (
+        <p style={{ fontSize: "12px", color: "#64748b" }}>Loading queue...</p>
+      ) : items.length > 0 ? (
+        <div>
+          {/* Seated / Dining Group */}
+          {groups.seated.length > 0 && (
+            <div className="rq-group">
+              <div className="rq-group-title rq-group-title--seated">
+                🔴 Currently Dining ({groups.seated.length})
+              </div>
+              <div className="rq-list">{groups.seated.map(renderItem)}</div>
+            </div>
+          )}
+
+          {/* Upcoming Group */}
+          {groups.upcoming.length > 0 && (
+            <div className="rq-group">
+              <div className="rq-group-title rq-group-title--upcoming">
+                🟡 Upcoming Reservations ({groups.upcoming.length})
+              </div>
+              <div className="rq-list">{groups.upcoming.map(renderItem)}</div>
+            </div>
+          )}
+
+          {/* History Group */}
+          {groups.history.length > 0 && (
+            <div className="rq-group">
+              <div className="rq-group-title rq-group-title--history">
+                ⚪ Past / Completed ({groups.history.length})
+              </div>
+              <div className="rq-list">{groups.history.map(renderItem)}</div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <p style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic", margin: 0 }}>
+          No reservations found for this table on {selectedDate}.
+        </p>
+      )}
+
+      {selectedInvoiceItem && (
+        <ReservationQueueInvoiceModal
+          item={selectedInvoiceItem}
+          showPhone={showPhone}
+          onClose={() => setSelectedInvoiceItem(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+
 function TableManagementTableModal() {
   const { state, actions } = useTableManagement();
   const { selectedTable: table, user, actionBusy: busy, toast, tables } = state;
-  const { setSelectedTable, handleUnmerge, handleRefreshAll, handleCheckIn, handleReset } = actions;
+  const {
+    setSelectedTable,
+    handleUnmerge,
+    handleRefreshAll,
+    handleCheckIn,
+    handleReset,
+    handleAdvanceStage,
+  } = actions;
 
   const [editingStatus, setEditingStatus] = useState(() => table ? normalizeTableStatus(table) : "");
+  const [walkInTable, setWalkInTable] = useState(null);
 
-  const handleCheckInAction = async () => {
-    try {
-      await handleCheckIn(table);
-      setSelectedTable(null);
-    } catch (err) {
-      toast(err.message || "Check-in failed", "error");
-    }
+  const handleCheckInAction = () => {
+    setWalkInTable(table);
   };
 
   const handleCheckOutAction = async () => {
@@ -512,16 +678,39 @@ function TableManagementTableModal() {
     }
   };
 
+  const handleExtendErt = async (minutes) => {
+    const reservationId =
+      table.active_occupancy_reservation_id ||
+      table.active_reservation_id ||
+      table.reservation_id;
+
+    if (!reservationId) {
+      toast("No active dining reservation found for this table.", "error");
+      return;
+    }
+
+    try {
+      const userId = Number(user?.userId ?? user?.id);
+      await extendReservationErt(reservationId, userId, minutes);
+      toast(`Estimated release extended by ${minutes} minutes`, "success");
+      handleRefreshAll();
+    } catch (err) {
+      toast(err.message || "Failed to extend estimated release time", "error");
+    }
+  };
+
   const lowerArea = (table.area_name || "").toLowerCase();
   const isRestricted = lowerArea.includes("premium") || lowerArea.includes("private") || lowerArea.includes("vip");
+  const stageAdvanceLabel = getStageAdvanceLabel(table.course_stage);
 
   return (
-    <ManagerModal
-      open={Boolean(table)}
-      title={`Edit ${table.combined_names?.join(" | ") || table.table_number || "Table"}`}
-      onClose={onClose}
-      size="lg"
-      footer={
+    <>
+      <ManagerModal
+        open={Boolean(table) && !walkInTable}
+        title={`Edit ${table.combined_names?.join(" | ") || table.table_number || "Table"}`}
+        onClose={onClose}
+        size="lg"
+        footer={
         <>
           <div style={{ display: "flex", gap: "8px" }}>
             {editingStatus === "Available" && (
@@ -582,8 +771,8 @@ function TableManagementTableModal() {
             </Button>
           </div>
         </>
-      }
-    >
+        }
+      >
       <div className="sfx-form">
         <div style={{ display: "flex", gap: "24px" }}>
           <div style={{ flex: 1 }}>
@@ -640,6 +829,35 @@ function TableManagementTableModal() {
             })}
           </div>
         </div>
+
+        {editingStatus === "Occupied" ? (
+          <>
+            <div className="staff-table-stage-actions">
+              <TableStageIndicator table={table} />
+              {stageAdvanceLabel ? (
+                <Button
+                  variant="gold"
+                  size="sm"
+                  onClick={() => handleAdvanceStage(table)}
+                  disabled={busy}
+                >
+                  {stageAdvanceLabel}
+                </Button>
+              ) : null}
+            </div>
+            <div className="staff-table-ert-actions">
+              <span className="staff-table-ert-actions__label">Extend Estimated Time</span>
+              <div className="staff-table-ert-actions__buttons">
+                <Button variant="soft" size="sm" onClick={() => handleExtendErt(30)} disabled={busy}>
+                  +30 min
+                </Button>
+                <Button variant="soft" size="sm" onClick={() => handleExtendErt(60)} disabled={busy}>
+                  +60 min
+                </Button>
+              </div>
+            </div>
+          </>
+        ) : null}
 
         {!isRestricted && (
           <div style={{ marginTop: "16px" }}>
@@ -711,8 +929,24 @@ function TableManagementTableModal() {
             </div>
           </div>
         )}
+
+        <TableUpcomingQueueSection tableId={table.table_id} userId={Number(user?.userId ?? user?.id)} />
       </div>
-    </ManagerModal>
+      </ManagerModal>
+      {walkInTable ? (
+        <AddWalkInModal
+          user={user}
+          toast={toast}
+          initialTableId={walkInTable.table_id}
+          onCreated={() => {
+            setWalkInTable(null);
+            setSelectedTable(null);
+            handleRefreshAll();
+          }}
+          onClose={() => setWalkInTable(null)}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -907,6 +1141,10 @@ function StaffTableTab({
   const [selectedTable, setSelectedTable] = useState(null);
   const [checkInReservation, setCheckInReservation] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
+  const [clockNow, setClockNow] = useState(() => new Date());
+  const [activeView, setActiveView] = useState("table");
+  const [ganttDate, setGanttDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [selectedTimelineReservation, setSelectedTimelineReservation] = useState(null);
 
   const [isJiggling, setIsJiggling] = useState(false);
   const pressTimer = useRef(null);
@@ -923,6 +1161,11 @@ function StaffTableTab({
       closeTableModal();
     }
   }, [selectedTableIdForModal, tables, closeTableModal]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(new Date()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const handleRefreshAll = useCallback(() => {
     onRefresh?.();
@@ -1253,6 +1496,33 @@ function StaffTableTab({
     }
   }, [user, toast, handleRefreshAll]);
 
+  const handleAdvanceStage = useCallback(
+    async (table) => {
+      const userId = Number(user?.userId ?? user?.id);
+      setActionBusy(true);
+      try {
+        const data = await advanceTableStage(table.table_id, userId);
+        updateTableInState(table.table_id, {
+          course_stage: data.course_stage,
+          course_stage_detail: data.course_stage_detail,
+          active_order_status: data.active_order_status,
+        });
+        toast(
+          data.course_stage
+            ? `Table ${table.table_number} stage advanced to ${data.course_stage}`
+            : `Table ${table.table_number} stage advanced`,
+          "success"
+        );
+        handleRefreshAll();
+      } catch (err) {
+        toast(err.message || "Failed to advance table stage", "error");
+      } finally {
+        setActionBusy(false);
+      }
+    },
+    [user, updateTableInState, toast, handleRefreshAll]
+  );
+
   if (!tables.length) {
     return (
       <div className="sfx-stack">
@@ -1282,6 +1552,7 @@ function StaffTableTab({
       checkInReservation,
       actionBusy,
       isJiggling,
+      clockNow,
       areas,
       groupedEntries,
       toast,
@@ -1305,6 +1576,7 @@ function StaffTableTab({
       handleConfirmReservationCheckIn,
       handleRejectReservation,
       handleAddVirtualTable,
+      handleAdvanceStage,
     },
   };
 
@@ -1324,11 +1596,78 @@ function StaffTableTab({
       >
         <TableManagementProvider value={contextValue}>
           <div className="sfx-stack">
-            <TableManagementHeader />
-            <TableManagementToolbar />
-            <TableManagementFloorMap />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: "22px", fontWeight: 700, color: "var(--sfx-heading, #0f172a)" }}>Table Management</h2>
+                <p style={{ margin: "4px 0 0", fontSize: "13px", color: "var(--sfx-muted, #64748b)" }}>
+                  {activeView === "table" ? "Live floor layout & real-time table status" : "Full-day Gantt timeline schedule & conflict detection"}
+                </p>
+              </div>
+
+              <div className="apple-toggle-container">
+                <div
+                  className="apple-toggle-thumb"
+                  style={{
+                    left: activeView === "table" ? "4px" : "calc(50% + 2px)",
+                    width: "calc(50% - 6px)"
+                  }}
+                />
+                <button
+                  type="button"
+                  className={`apple-toggle-btn ${activeView === "table" ? "is-active" : ""}`}
+                  onClick={() => setActiveView("table")}
+                >
+                  Table View (Live)
+                </button>
+                <button
+                  type="button"
+                  className={`apple-toggle-btn ${activeView === "timeline" ? "is-active" : ""}`}
+                  onClick={() => setActiveView("timeline")}
+                >
+                  Timeline View (Gantt)
+                </button>
+              </div>
+            </div>
+
+            {activeView === "timeline" ? (
+              <TimelineGanttView
+                date={ganttDate}
+                onDateChange={setGanttDate}
+                activeView={activeView}
+                onViewToggle={setActiveView}
+                onSelectReservation={async (resId) => {
+                  try {
+                    const data = await fetchStaffReservationDetail(resId);
+                    if (data?.reservation) {
+                      setSelectedTimelineReservation(data.reservation);
+                    }
+                  } catch (e) {
+                    console.error("Failed to load reservation detail:", e);
+                  }
+                }}
+                onQuickBookTable={(tableId) => {
+                  const targetTable = tables.find((t) => sameTableId(t.table_id, tableId));
+                  if (targetTable) {
+                    setSelectedTable(targetTable);
+                  }
+                }}
+                user={user}
+              />
+            ) : (
+              <>
+                <TableManagementToolbar />
+                <TableManagementFloorMap />
+              </>
+            )}
+
             <TableManagementTableModal key={selectedTable?.table_id} />
             <TableManagementReservationModal key={checkInReservation?.reservation_id} />
+            {selectedTimelineReservation ? (
+              <ReservationQueueInvoiceModal
+                item={selectedTimelineReservation}
+                onClose={() => setSelectedTimelineReservation(null)}
+              />
+            ) : null}
           </div>
         </TableManagementProvider>
       </motion.div>

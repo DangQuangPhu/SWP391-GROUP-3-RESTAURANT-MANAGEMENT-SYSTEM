@@ -1,0 +1,205 @@
+/* ==========================================================================
+   Apple-Style Motion System & Design Tokens for Gantt Timeline & View Toggle
+   ========================================================================== */
+
+:root {
+  --ease-apple-standard: cubic-bezier(0.4, 0.0, 0.2, 1);
+  --ease-apple-spring:   cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-apple-exit:     cubic-bezier(0.4, 0.0, 1, 1);
+
+  --duration-fast:   150ms;
+  --duration-base:   250ms;
+  --duration-modal:  350ms;
+
+  --hover-lift-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  --hover-scale: 1.02;
+  --active-scale: 0.97;
+}
+
+/* Reduced Motion Fallback */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Keyframes */
+@keyframes appleSpinOneTurn {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes conflictPulse {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.8), inset 0 0 4px rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.3), inset 0 0 1px rgba(239, 68, 68, 0.2);
+  }
+}
+
+@keyframes badgeBounce {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* Segmented Control Sliding Thumb Toggle (Light Restaurant Theme) */
+.apple-toggle-container {
+  position: relative;
+  display: inline-flex;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  user-select: none;
+}
+
+.apple-toggle-btn {
+  position: relative;
+  z-index: 2;
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: #64748b;
+  transition: color var(--duration-fast) var(--ease-apple-standard),
+              transform var(--duration-fast) var(--ease-apple-standard);
+}
+
+.apple-toggle-btn:hover {
+  color: #0f172a;
+}
+
+.apple-toggle-btn:active {
+  transform: scale(var(--active-scale));
+}
+
+.apple-toggle-btn.is-active {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.apple-toggle-thumb {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  z-index: 1;
+  transition: left var(--duration-modal) var(--ease-apple-spring),
+              width var(--duration-modal) var(--ease-apple-spring);
+}
+
+/* Header Action Buttons (Light Theme) */
+.apple-btn-interactive {
+  transition: transform var(--duration-fast) var(--ease-apple-standard),
+              background-color var(--duration-fast) var(--ease-apple-standard),
+              border-color var(--duration-fast) var(--ease-apple-standard),
+              box-shadow var(--duration-fast) var(--ease-apple-standard);
+}
+
+.apple-btn-interactive:hover {
+  transform: scale(var(--hover-scale));
+  background-color: #e2e8f0 !important;
+  border-color: #94a3b8 !important;
+}
+
+.apple-btn-interactive:active {
+  transform: scale(var(--active-scale));
+}
+
+.apple-spin-active {
+  animation: appleSpinOneTurn var(--duration-base) var(--ease-apple-standard) 1;
+}
+
+/* Badge Bounce Animation */
+.apple-badge-bounce {
+  animation: badgeBounce var(--duration-base) var(--ease-apple-spring) 1;
+}
+
+/* Gantt Matrix Rows (Light Theme) */
+.gantt-table-row {
+  transition: background-color var(--duration-fast) var(--ease-apple-standard);
+}
+
+.gantt-table-row:hover {
+  background-color: #f8fafc !important;
+}
+
+/* Gantt Reservation Blocks (Light Theme) */
+.gantt-reservation-block {
+  transition: transform var(--duration-base) var(--ease-apple-standard),
+              box-shadow var(--duration-base) var(--ease-apple-standard),
+              background-color var(--duration-base) var(--ease-apple-standard),
+              border-color var(--duration-base) var(--ease-apple-standard);
+}
+
+.gantt-reservation-block:hover {
+  transform: translateY(-2px) scale(var(--hover-scale));
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  z-index: 15 !important;
+}
+
+.gantt-reservation-block:active {
+  transform: translateY(0) scale(var(--active-scale));
+}
+
+.gantt-reservation-block.is-conflict {
+  animation: conflictPulse 2s ease-in-out infinite;
+}
+
+@keyframes conflictPulse {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow: 0 0 3px rgba(239, 68, 68, 0.2);
+  }
+}
+
+/* Apple Style Modal Backdrop & Card Entrance */
+.apple-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: appleFadeIn var(--duration-modal) var(--ease-apple-standard) forwards;
+}
+
+@keyframes appleFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes appleScaleEntrance {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.apple-modal-card {
+  animation: appleScaleEntrance var(--duration-modal) var(--ease-apple-spring) forwards;
+}

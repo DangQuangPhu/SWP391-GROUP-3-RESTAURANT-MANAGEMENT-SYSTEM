@@ -207,11 +207,12 @@ async function seedIfEmpty() {
   if ((await rowCount("RestaurantAreas")) === 0) {
     await exec(`SET IDENTITY_INSERT dbo.RestaurantAreas ON;
       INSERT INTO dbo.RestaurantAreas (area_id, area_name, area_type, description) VALUES
-      (1, N'Main Dining',    N'Regular', N'Ground floor open seating'),
-      (2, N'VIP Lounge',     N'VIP',     N'Private VIP booths with dedicated waiter'),
-      (3, N'Garden Terrace', N'Outdoor', N'Outdoor seating with garden view'),
-      (4, N'Wine Bar',       N'Bar',     N'Bar seating near the wine cellar'),
-      (5, N'Private Room A', N'Private', N'Bookable private room for events');
+      (1, N'Window Area',    N'Regular', N'Window-side seating for guests who prefer natural light'),
+      (2, N'Standard Area',  N'Regular', N'Primary dining area with regular restaurant tables'),
+      (3, N'Premium Area',   N'VIP',     N'Elevated premium seating with better spacing'),
+      (4, N'Private Room',   N'Private', N'Private dining room for business dinners and events'),
+      (5, N'VIP Lounge',     N'VIP',     N'VIP seating area for premium guests'),
+      (6, N'Kitchen View',   N'Bar',     N'Chef counter seating near open kitchen');
       SET IDENTITY_INSERT dbo.RestaurantAreas OFF`);
     console.log("  Seeded RestaurantAreas");
   }

@@ -1,0 +1,376 @@
+/* reservation-queue.css */
+
+.rq-section {
+  margin-top: 20px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 16px;
+  font-family: inherit;
+}
+
+.rq-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rq-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rq-title {
+  font-weight: 700;
+  font-size: 14px;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rq-count-badge {
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 99px;
+  border: 1px solid #cbd5e1;
+}
+
+.rq-date-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rq-date-input {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-weight: 500;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.rq-date-input:focus {
+  border-color: #0284c7;
+}
+
+.rq-group {
+  margin-bottom: 16px;
+}
+
+.rq-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rq-group-title--history { color: #64748b; }
+.rq-group-title--seated { color: #0284c7; }
+.rq-group-title--upcoming { color: #d97706; }
+
+.rq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rq-item {
+  padding: 12px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  display: block;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.rq-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07);
+  border-color: #cbd5e1;
+}
+
+.rq-item--seated {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+}
+
+.rq-item--upcoming {
+  background: #fffbeb;
+  border-color: #fef3c7;
+}
+
+.rq-item--history {
+  background: #f8fafc;
+  border-color: #f1f5f9;
+  opacity: 0.85;
+}
+
+.rq-item-sub {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.rq-item-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+}
+
+.rq-time {
+  font-weight: 700;
+  color: #0369a1;
+  font-size: 14px;
+}
+
+.rq-ert {
+  font-size: 10px;
+  color: #0284c7;
+  font-weight: 600;
+}
+
+/* Status Badge inside Queue Item */
+.rq-status-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.rq-status-pill--confirmed { background: #dcfce7; color: #15803d; }
+.rq-status-pill--awaitcheckin { background: #fef9c3; color: #a16207; }
+.rq-status-pill--dining { background: #e0f2fe; color: #0369a1; }
+.rq-status-pill--completed { background: #f1f5f9; color: #475569; }
+.rq-status-pill--noshow { background: #fee2e2; color: #b91c1c; }
+.rq-status-pill--cancelled { background: #f3f4f6; color: #6b7280; }
+.rq-status-pill--pending { background: #e0f2fe; color: #0369a1; }
+
+.rq-status-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rq-preference-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+}
+
+.rq-field-group--time,
+.rq-field-group--table {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .rq-item-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─── Reservation Queue Invoice Modal ─── */
+
+.rq-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.rq-modal-card {
+  background: #ffffff;
+  width: 100%;
+  max-width: 480px;
+  border-radius: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  animation: rqModalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes rqModalPop {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.rq-modal-header {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #ffffff;
+  padding: 20px;
+  position: relative;
+}
+
+.rq-modal-subhead {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: #fbbf24;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.rq-modal-title {
+  font-family: serif, var(--sfx-font-serif, Georgia);
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rq-modal-res-badge {
+  font-family: monospace;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 2px 8px;
+  border-radius: 6px;
+  color: #f3f4f6;
+}
+
+.rq-modal-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: #ffffff;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.rq-modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.rq-modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rq-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  background: #f8fafc;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.rq-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rq-field-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rq-field-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.rq-field-value--highlight {
+  color: #0284c7;
+  font-weight: 700;
+}
+
+.rq-table-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.rq-notes-box {
+  background: #fffbeb;
+  border: 1px solid #fef3c7;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #92400e;
+}
+
+.rq-modal-footer {
+  padding: 12px 20px 16px;
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid #f1f5f9;
+}
+
+/* Card Tile Preview (Top-Right Notification & Next Preview) */
+
+.sfx-mtile__next-preview {
+  font-size: 10px;
+  color: #d97706;
+  background: #fffbeb;
+  border: 1px solid #fef3c7;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-top: 4px;
+  font-weight: 600;
+  width: 100%;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sfx-mtile__more-today {
+  display: block;
+  margin-top: 2px;
+  color: #92400e;
+  font-size: 9px;
+  font-weight: 800;
+}

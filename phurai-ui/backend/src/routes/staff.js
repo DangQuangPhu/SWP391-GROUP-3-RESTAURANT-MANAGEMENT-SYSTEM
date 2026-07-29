@@ -1,8 +1,10 @@
 import express from "express";
 import pool from "../db.js";
 import { resolveUserId, requireUserId } from "../middleware/authMiddleware.js";
+import { getIO } from "../socket.js";
 import {
   listStaffTables,
+  getStaffFullTimeline,
   checkInTable,
   resetTable,
   markTableClean,
@@ -11,6 +13,7 @@ import {
   getActiveOccupiedOrders,
   addOrderItem,
   updateOrderItemStatus,
+  advanceTableCourseStage,
   voidOrderItem,
   listStaffMenuDishes,
   getTableBill,
@@ -27,6 +30,7 @@ import {
   shiftCheckOut,
   getOrderTimeline,
   verifyCustomerEmail,
+  getTableUpcomingReservations,
 } from "../controllers/staffController.js";
 
 import {
@@ -57,6 +61,7 @@ import {
   resolveTableRequest,
   cancelOrderItem
 } from "../controllers/tableRequestController.js";
+import { sendEditConfirmedEmail } from "../email.js";
 
 const router = express.Router();
 
@@ -64,6 +69,7 @@ router.patch("/qr-sessions/:id/approve", resolveUserId, requireUserId, approveQr
 router.patch("/qr-sessions/:id/reject", resolveUserId, requireUserId, rejectQrSession);
 
 router.get("/tables", listStaffTables);
+router.get("/tables/timeline", resolveUserId, getStaffFullTimeline);
 // Shift-scoped view removed
 router.get("/reservations/today-shift", resolveUserId, requireUserId, getTodayShiftReservations);
 router.get("/reservations/:id", resolveUserId, getStaffReservationDetail);
@@ -158,12 +164,14 @@ router.post(
 );
 router.post("/tables/unmerge", resolveUserId, requireUserId, unmergeTable);
 router.get("/tables/:tableId/timeline", resolveUserId, getTableTimeline);
+router.get("/tables/:tableId/upcoming-reservations", resolveUserId, getTableUpcomingReservations);
 router.post("/tables/:tableId/verify-clear", resolveUserId, requireUserId, verifyClearTable);
 
 router.get("/orders/active", getActiveOccupiedOrders);
-router.post("/orders/:tableId/items", resolveUserId, addOrderItem);
-router.patch("/orders/items/:itemId/status", resolveUserId, updateOrderItemStatus);
+router.post("/orders/:tableId/items", resolveUserId, requireUserId, addOrderItem);
+router.patch("/orders/items/:itemId/status", resolveUserId, requireUserId, updateOrderItemStatus);
 router.patch("/orders/items/:itemId/void", resolveUserId, voidOrderItem);
+router.patch("/tables/:tableId/stage/advance", resolveUserId, requireUserId, advanceTableCourseStage);
 router.post("/orders/:orderId/split-items", resolveUserId, requireUserId, splitOrderItems);
 router.get("/dishes/menu", listStaffMenuDishes);
 
@@ -174,7 +182,7 @@ router.patch("/payments/split/:splitId/pay", resolveUserId, requireUserId, payBi
 router.post("/payments/:orderId/split", resolveUserId, requireUserId, splitOrderBill);
 router.get("/payments/:tableId", getTableBill);
 router.post("/payments/:tableId/voucher", resolveUserId, applyTablePromoCode);
-router.post("/payments/:tableId/checkout", resolveUserId, checkoutTablePayment);
+router.post("/payments/:tableId/checkout", resolveUserId, requireUserId, checkoutTablePayment);
 router.post("/payments/:tableId/void", resolveUserId, voidTableBill);
 
 router.get("/orders/:orderId/timeline", resolveUserId, requireUserId, getOrderTimeline);
@@ -525,9 +533,136 @@ router.get("/tables/status", async (_req, res) => {
          t.static_qr_code,
          t.merged_into_table_id,
          t.is_counter,
-         a.area_name
+         a.area_name,
+         (
+           SELECT TOP 1 r.reservation_id
+           FROM dbo.Reservations AS r
+           INNER JOIN dbo.ReservationTables AS rt ON r.reservation_id = rt.reservation_id
+           WHERE rt.table_id = t.table_id
+             AND r.reservation_status IN (N'Await Check-in')
+             AND CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
+           ORDER BY r.reservation_start_at ASC
+         ) AS active_reservation_id,
+         (
+           SELECT TOP 1 r.reservation_start_at
+           FROM dbo.Reservations AS r
+           INNER JOIN dbo.ReservationTables AS rt ON r.reservation_id = rt.reservation_id
+           WHERE rt.table_id = t.table_id
+             AND r.reservation_status IN (N'Await Check-in')
+             AND CAST(DATEADD(hour, 7, r.reservation_start_at) AS DATE) = CAST(DATEADD(hour, 7, SYSDATETIME()) AS DATE)
+           ORDER BY r.reservation_start_at ASC
+         ) AS next_reservation_start_at,
+         (
+           SELECT TOP 1 tos.reservation_id
+           FROM dbo.TableOccupancySessions AS tos
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS active_occupancy_reservation_id,
+         (
+           SELECT TOP 1 COALESCE(r.seated_at, r.checked_in_at, tos.check_in_at)
+           FROM dbo.TableOccupancySessions AS tos
+           LEFT JOIN dbo.Reservations AS r ON r.reservation_id = tos.reservation_id
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS occupied_since,
+         (
+           SELECT TOP 1 tos.estimated_duration_min
+           FROM dbo.TableOccupancySessions AS tos
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS estimated_duration_min,
+         (
+           SELECT TOP 1 tos.buffer_min
+           FROM dbo.TableOccupancySessions AS tos
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS buffer_min,
+         (
+           SELECT TOP 1 COALESCE(r.reservation_end_at, tos.estimated_release_at)
+           FROM dbo.TableOccupancySessions AS tos
+           LEFT JOIN dbo.Reservations AS r ON r.reservation_id = tos.reservation_id
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS estimated_release_at,
+         (
+           SELECT TOP 1 tos.overrun_alerted
+           FROM dbo.TableOccupancySessions AS tos
+           WHERE tos.table_id = t.table_id
+             AND tos.released_at IS NULL
+           ORDER BY tos.check_in_at DESC
+         ) AS overrun_alerted,
+         active_order.order_id AS active_order_id,
+         active_order.order_status AS active_order_status,
+         ISNULL(order_stage.item_count, 0) AS active_order_item_count,
+         CASE
+           WHEN t.table_status <> N'Occupied' THEN NULL
+           WHEN active_order.order_id IS NULL THEN N'Dining'
+           WHEN active_order.order_status = N'Billed' THEN N'Bill Requested'
+           WHEN ISNULL(order_stage.item_count, 0) = 0 THEN N'Dining'
+           WHEN active_order.order_status = N'Served'
+             OR ISNULL(order_stage.item_count, 0) = ISNULL(order_stage.served_count, 0) THEN N'Served'
+           WHEN ISNULL(order_stage.ready_count, 0) > 0
+             OR ISNULL(order_stage.kitchen_ready_count, 0) > 0 THEN N'Ready'
+           WHEN ISNULL(order_stage.preparing_count, 0) > 0
+             OR ISNULL(order_stage.kitchen_preparing_count, 0) > 0 THEN N'Preparing'
+           WHEN ISNULL(order_stage.sent_count, 0) > 0
+             OR active_order.order_status = N'Sent To Kitchen' THEN N'Sent to Kitchen'
+           WHEN ISNULL(order_stage.pending_count, 0) > 0
+             OR active_order.order_status = N'Open' THEN N'Order Placed'
+           ELSE N'Dining'
+         END AS course_stage,
+         CASE
+           WHEN t.table_status <> N'Occupied' THEN NULL
+           WHEN active_order.order_id IS NULL THEN N'Waiting for order'
+           WHEN active_order.order_status = N'Billed' THEN N'Bill requested; awaiting payment'
+           WHEN ISNULL(order_stage.item_count, 0) = 0 THEN N'Waiting for order'
+           WHEN active_order.order_status = N'Served'
+             OR ISNULL(order_stage.item_count, 0) = ISNULL(order_stage.served_count, 0) THEN N'All active items served'
+           WHEN ISNULL(order_stage.ready_count, 0) > 0
+             OR ISNULL(order_stage.kitchen_ready_count, 0) > 0 THEN N'Kitchen item ready for service'
+           WHEN ISNULL(order_stage.preparing_count, 0) > 0
+             OR ISNULL(order_stage.kitchen_preparing_count, 0) > 0 THEN N'Kitchen is preparing items'
+           WHEN ISNULL(order_stage.sent_count, 0) > 0
+             OR active_order.order_status = N'Sent To Kitchen' THEN N'Order sent to kitchen'
+           WHEN ISNULL(order_stage.pending_count, 0) > 0
+             OR active_order.order_status = N'Open' THEN N'Order placed; not yet cooking'
+           ELSE N'Dining'
+         END AS course_stage_detail
        FROM dbo.RestaurantTables t
        JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id
+       OUTER APPLY (
+         SELECT TOP 1
+           o.order_id,
+           o.order_status,
+           o.reservation_id,
+           o.customer_id,
+           o.created_by_staff_id,
+           o.created_at
+         FROM dbo.Orders AS o
+         WHERE o.table_id = t.table_id
+           AND o.order_status NOT IN (N'Paid', N'Cancelled')
+         ORDER BY o.updated_at DESC, o.created_at DESC
+       ) AS active_order
+       OUTER APPLY (
+         SELECT
+           COUNT(1) AS item_count,
+           SUM(CASE WHEN oi.item_status = N'Pending' THEN 1 ELSE 0 END) AS pending_count,
+           SUM(CASE WHEN oi.item_status = N'Sent To Kitchen' THEN 1 ELSE 0 END) AS sent_count,
+           SUM(CASE WHEN oi.item_status = N'Preparing' THEN 1 ELSE 0 END) AS preparing_count,
+           SUM(CASE WHEN oi.item_status = N'Ready' THEN 1 ELSE 0 END) AS ready_count,
+           SUM(CASE WHEN oi.item_status = N'Served' THEN 1 ELSE 0 END) AS served_count,
+           SUM(CASE WHEN kt.kitchen_status = N'Preparing' THEN 1 ELSE 0 END) AS kitchen_preparing_count,
+           SUM(CASE WHEN kt.kitchen_status = N'Ready' THEN 1 ELSE 0 END) AS kitchen_ready_count
+         FROM dbo.OrderItems AS oi
+         LEFT JOIN dbo.KitchenTickets AS kt ON kt.order_item_id = oi.order_item_id
+         WHERE oi.order_id = active_order.order_id
+           AND oi.item_status <> N'Cancelled'
+       ) AS order_stage
        WHERE a.is_active = 1
        ORDER BY a.area_name, t.table_number;`
     );
@@ -538,9 +673,23 @@ router.get("/tables/status", async (_req, res) => {
       area_name: row.area_name,
       capacity: row.capacity,
       status: slugStatus(row.table_status),
+      table_status: row.table_status,
       qr_code: row.static_qr_code || null,
       merged_into_table_id: row.merged_into_table_id || null,
       is_counter: Boolean(row.is_counter),
+      active_reservation_id: row.active_reservation_id ?? null,
+      next_reservation_start_at: row.next_reservation_start_at ?? null,
+      active_occupancy_reservation_id: row.active_occupancy_reservation_id ?? null,
+      occupied_since: row.occupied_since ?? null,
+      estimated_duration_min: row.estimated_duration_min ?? null,
+      buffer_min: row.buffer_min ?? null,
+      estimated_release_at: row.estimated_release_at ?? null,
+      overrun_alerted: Boolean(row.overrun_alerted),
+      active_order_id: row.active_order_id ?? null,
+      active_order_status: row.active_order_status ?? null,
+      active_order_item_count: Number(row.active_order_item_count ?? 0),
+      course_stage: row.course_stage ?? null,
+      course_stage_detail: row.course_stage_detail ?? null,
     }));
 
     return jsonOk(res, tables);
@@ -1064,6 +1213,107 @@ router.patch("/reservations/:id/direct-edit", resolveUserId, requireUserId, asyn
 });
 
 /**
+ * PATCH /api/staff/reservations/:id/extend-ert
+ * Extends the reservation_end_at ERT only. Table status is unchanged.
+ */
+router.patch("/reservations/:id/extend-ert", resolveUserId, requireUserId, async (req, res) => {
+  const reservationId = Number(req.params.id);
+  const staffId = req.userId;
+  const minutes = Number(req.body?.minutes);
+
+  if (!Number.isFinite(reservationId) || reservationId <= 0) {
+    return res.status(400).json({ success: false, message: "Invalid reservation id." });
+  }
+  if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 240) {
+    return res.status(400).json({ success: false, message: "Extension must be between 1 and 240 minutes." });
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query(
+      `SELECT r.reservation_id, r.reservation_end_at, r.reservation_status, rt.table_id
+       FROM dbo.Reservations r WITH (UPDLOCK, ROWLOCK)
+       LEFT JOIN dbo.ReservationTables rt ON rt.reservation_id = r.reservation_id
+       WHERE r.reservation_id = ?`,
+      [reservationId]
+    );
+
+    const current = rows[0];
+    if (!current) {
+      await connection.rollback();
+      connection.release();
+      return res.status(404).json({ success: false, message: "Reservation not found." });
+    }
+
+    if (!["Dining", "Pending Payment"].includes(current.reservation_status)) {
+      await connection.rollback();
+      connection.release();
+      return res.status(409).json({
+        success: false,
+        message: "ERT can only be extended while the table is actively dining.",
+      });
+    }
+
+    await connection.query(
+      `UPDATE dbo.Reservations
+       SET reservation_end_at = DATEADD(minute, ?, reservation_end_at),
+           updated_at = SYSDATETIME()
+       WHERE reservation_id = ?`,
+      [minutes, reservationId]
+    );
+
+    const [updatedRows] = await connection.query(
+      `SELECT reservation_end_at FROM dbo.Reservations WHERE reservation_id = ?`,
+      [reservationId]
+    );
+    const newEndAt = updatedRows[0]?.reservation_end_at;
+
+    await connection.query(
+      `INSERT INTO dbo.AuditLogs
+         (user_id, action_name, target_table, target_id, old_value_json, new_value_json, ip_address, created_at)
+       VALUES (?, N'ERT_EXTENDED', N'Reservations', ?, ?, ?, ?, SYSDATETIME())`,
+      [
+        staffId,
+        reservationId,
+        JSON.stringify({ reservation_end_at: current.reservation_end_at }),
+        JSON.stringify({ reservation_end_at: newEndAt, added_minutes: minutes }),
+        req.ip || null,
+      ]
+    );
+
+    await connection.commit();
+    connection.release();
+
+    try {
+      const io = getIO();
+      if (io) {
+        io.to("room:staff").to("room:manager").emit("table:sync", {
+          table_id: current.table_id,
+          reservation_id: reservationId,
+          estimated_release_at: newEndAt,
+        });
+      }
+    } catch (socketErr) {
+      console.error("[extend-ert] Socket.IO broadcast failed:", socketErr.message);
+    }
+
+    return jsonOk(res, {
+      reservation_id: reservationId,
+      reservation_end_at: newEndAt,
+      added_minutes: minutes,
+      message: "Estimated release time extended.",
+    });
+  } catch (err) {
+    try { await connection.rollback(); } catch { /* ignore */ }
+    connection.release();
+    console.error("[PATCH /staff/reservations/:id/extend-ert] Error:", err);
+    return jsonError(res, "Could not extend estimated release time.");
+  }
+});
+
+/**
  * POST /api/staff/reservation-requests/:id/resolve
  * Staff resolves a non-financial pending request by applying the change.
  * Blocked on requires_financial_approval=true requests (403).
@@ -1078,19 +1328,29 @@ router.post("/reservation-requests/:id/resolve", resolveUserId, requireUserId, a
   try {
     await connection.beginTransaction();
 
-    // Lock and load the request
+    // Lock and load the request (support lookup by request_id OR reservation_id)
     const [reqRows] = await connection.query(
       `SELECT
          rcr.request_id, rcr.reservation_id, rcr.request_type, rcr.request_status,
          rcr.requires_financial_approval,
          rcr.requested_table_id, rcr.requested_start_at, rcr.requested_end_at,
          rcr.requested_party_size,
+         rcr.reason,
          rcr.requested_by_customer_id,
-         r.reservation_status
+         r.reservation_status,
+         r.reservation_start_at,
+         r.reservation_end_at,
+         r.guest_count,
+         r.contact_phone,
+         r.special_request,
+         r.dining_purpose,
+         COALESCE(ua.email, r.contact_email, '') AS recipient_email,
+         COALESCE(ua.full_name, r.contact_name, N'Guest') AS recipient_name
        FROM dbo.ReservationChangeRequests rcr WITH (UPDLOCK, ROWLOCK)
-       JOIN dbo.Reservations r ON rcr.reservation_id = rcr.reservation_id
-       WHERE rcr.request_id = ?`,
-      [requestId]
+       JOIN dbo.Reservations r ON r.reservation_id = rcr.reservation_id
+       LEFT JOIN dbo.UserAccounts ua ON ua.user_id = r.customer_id
+       WHERE rcr.request_id = ? OR rcr.reservation_id = ?`,
+      [requestId, requestId]
     );
 
     if (reqRows.length === 0) {
@@ -1114,28 +1374,98 @@ router.post("/reservation-requests/:id/resolve", resolveUserId, requireUserId, a
       });
     }
 
+    let parsedReason = {};
+    try {
+      parsedReason = rcr.reason ? JSON.parse(rcr.reason) : {};
+    } catch {
+      parsedReason = {};
+    }
+    const requestedChanges = parsedReason?.changes || {};
+
     // Apply the requested changes to Reservations
     const resUpdates = [];
     const resParams  = [];
 
     if (rcr.request_type === "TableChange" && rcr.requested_table_id) {
       await connection.query(
-        `UPDATE dbo.ReservationTables SET table_id = ?, assigned_by_staff_id = ?
-         WHERE reservation_id = ?`,
-        [rcr.requested_table_id, staffId, rcr.reservation_id]
+        `UPDATE dbo.RestaurantTables
+         SET table_status = N'Available', updated_at = SYSDATETIME()
+         WHERE table_id IN (
+           SELECT table_id FROM dbo.ReservationTables WHERE reservation_id = ?
+         )
+           AND table_status = N'Reserved'`,
+        [rcr.reservation_id]
+      );
+      await connection.query(
+        `DELETE FROM dbo.ReservationTables WHERE reservation_id = ?`,
+        [rcr.reservation_id]
+      );
+      await connection.query(
+        `INSERT INTO dbo.ReservationTables (reservation_id, table_id, assigned_by_staff_id, assigned_at)
+         VALUES (?, ?, ?, SYSDATETIME())`,
+        [rcr.reservation_id, rcr.requested_table_id, staffId]
+      );
+      await connection.query(
+        `UPDATE dbo.RestaurantTables
+         SET table_status = N'Reserved', updated_at = SYSDATETIME()
+         WHERE table_id = ?
+           AND table_status NOT IN (N'Occupied', N'Cleaning', N'Inactive')`,
+        [rcr.requested_table_id]
       );
     }
     if (rcr.requested_start_at) { resUpdates.push("reservation_start_at = ?"); resParams.push(rcr.requested_start_at); }
     if (rcr.requested_end_at)   { resUpdates.push("reservation_end_at = ?");   resParams.push(rcr.requested_end_at); }
     if (rcr.requested_party_size) { resUpdates.push("guest_count = ?"); resParams.push(rcr.requested_party_size); }
+    if (Object.prototype.hasOwnProperty.call(requestedChanges, "contact_phone")) {
+      resUpdates.push("contact_phone = ?");
+      resParams.push(requestedChanges.contact_phone || null);
+    }
+    if (Object.prototype.hasOwnProperty.call(requestedChanges, "special_request")) {
+      resUpdates.push("special_request = ?");
+      resParams.push(requestedChanges.special_request || null);
+    }
+    if (Object.prototype.hasOwnProperty.call(requestedChanges, "dining_purpose")) {
+      resUpdates.push("dining_purpose = ?");
+      resParams.push(requestedChanges.dining_purpose || null);
+    }
 
-    if (resUpdates.length > 0) {
-      resUpdates.push("updated_at = SYSDATETIME()");
-      resParams.push(rcr.reservation_id);
+    // DO NOT SET has_pending_request directly because it is a computed column!
+    resUpdates.push("pending_changes_json = NULL");
+    resUpdates.push("request_type = NULL");
+    resUpdates.push("resolved_at = SYSDATETIME()");
+    resUpdates.push("resolved_by = ?");
+    resParams.push(staffId);
+    resUpdates.push("updated_at = SYSDATETIME()");
+    resParams.push(rcr.reservation_id);
+    await connection.query(
+      `UPDATE dbo.Reservations SET ${resUpdates.join(", ")} WHERE reservation_id = ?`,
+      resParams
+    );
+
+    const requestedPreorders = requestedChanges.preorder_items;
+    if (Array.isArray(requestedPreorders) && requestedPreorders.every((item) => item && typeof item === "object" && !Array.isArray(item))) {
       await connection.query(
-        `UPDATE dbo.Reservations SET ${resUpdates.join(", ")} WHERE reservation_id = ?`,
-        resParams
+        `DELETE FROM dbo.PreorderItems WHERE reservation_id = ?`,
+        [rcr.reservation_id]
       );
+
+      for (const item of requestedPreorders) {
+        const dishId = Number(item.dish_id || item.dishId || item.id);
+        const quantity = Math.max(1, Number(item.quantity || item.qty || 1));
+        if (!Number.isFinite(dishId) || dishId <= 0 || !Number.isFinite(quantity)) continue;
+
+        const [dishRows] = await connection.query(
+          `SELECT price FROM dbo.Dishes WHERE dish_id = ? AND is_available = 1`,
+          [dishId]
+        );
+        if (dishRows.length === 0) continue;
+
+        await connection.query(
+          `INSERT INTO dbo.PreorderItems (reservation_id, dish_id, quantity, unit_price, notes)
+           VALUES (?, ?, ?, ?, ?)`,
+          [rcr.reservation_id, dishId, quantity, Number(dishRows[0].price || 0), item.notes || null]
+        );
+      }
     }
 
     // Mark request as StaffResolved
@@ -1146,38 +1476,118 @@ router.post("/reservation-requests/:id/resolve", resolveUserId, requireUserId, a
            manager_reason = ?,
            resolved_at = SYSDATETIME()
        WHERE request_id = ?`,
-      [staffId, staff_note || null, requestId]
+      [staffId, staff_note || null, rcr.request_id]
     );
+
+    // Create in-app Notification for customer using valid notification_type 'Booking Changed'
+    if (rcr.requested_by_customer_id) {
+      await connection.query(
+        `INSERT INTO dbo.Notifications (user_id, notification_type, title, message_body, is_read, sent_at)
+         VALUES (?, N'Booking Changed', N'Change Request Approved', ?, 0, SYSDATETIME())`,
+        [
+          rcr.requested_by_customer_id,
+          `Your change request for reservation #${String(rcr.reservation_id).padStart(6, "0")} has been approved and updated successfully.`,
+        ]
+      );
+    }
 
     // Audit log
     await connection.query(
       `INSERT INTO dbo.AuditLogs
          (user_id, action_name, target_table, target_id, old_value_json, new_value_json, ip_address, created_at)
        VALUES (?, N'STAFF_RESOLVED_CHANGE_REQUEST', N'ReservationChangeRequests', ?, NULL, ?, ?, SYSDATETIME())`,
-      [staffId, requestId, JSON.stringify({ request_type: rcr.request_type, note: staff_note }), req.ip || null]
+      [staffId, rcr.request_id, JSON.stringify({ request_type: rcr.request_type, note: staff_note }), req.ip || null]
     );
 
     await connection.commit();
     connection.release();
 
-    // Fire-and-forget: notify customer
+    // Fire-and-forget: send updated reservation email to customer
+    if (rcr.recipient_email) {
+      const fmtDt = (iso) => {
+        if (!iso) return "—";
+        try {
+          const d = new Date(iso);
+          return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} ${d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`;
+        } catch { return String(iso); }
+      };
+
+      // Fetch area & table details from DB
+      let tableDisplay = "Not assigned";
+      let areaDisplay  = "Main Dining Area";
+
+      try {
+        const [tableInfoRows] = await connection.query(
+          `SELECT rt.table_id, rt.table_number, ra.area_name
+           FROM dbo.ReservationTables rtl
+           JOIN dbo.RestaurantTables rt ON rt.table_id = rtl.table_id
+           LEFT JOIN dbo.RestaurantAreas ra ON ra.area_id = rt.area_id
+           WHERE rtl.reservation_id = ?`,
+          [rcr.reservation_id]
+        );
+
+        if (tableInfoRows.length > 0) {
+          tableDisplay = tableInfoRows.map(t => `#${t.table_number}`).join(", ");
+          areaDisplay  = tableInfoRows[0].area_name || "Main Dining Area";
+        } else if (rcr.requested_table_id) {
+          const [reqTableRows] = await connection.query(
+            `SELECT rt.table_id, rt.table_number, ra.area_name
+             FROM dbo.RestaurantTables rt
+             LEFT JOIN dbo.RestaurantAreas ra ON ra.area_id = rt.area_id
+             WHERE rt.table_id = ?`,
+            [rcr.requested_table_id]
+          );
+          if (reqTableRows.length > 0) {
+            tableDisplay = `Table #${reqTableRows[0].table_number} (ID: ${reqTableRows[0].table_id})`;
+            areaDisplay  = reqTableRows[0].area_name || "Main Dining Area";
+          }
+        }
+      } catch (err) {
+        console.error("[staff/resolve] Failed to fetch table/area details for email:", err?.message);
+      }
+
+      sendEditConfirmedEmail({
+        toEmail: rcr.recipient_email,
+        customerName: rcr.recipient_name,
+        reservationId: rcr.reservation_id,
+        updatedDetails: {
+          phone: requestedChanges.contact_phone || rcr.contact_phone || "Not provided",
+          time: rcr.requested_start_at ? fmtDt(rcr.requested_start_at) : fmtDt(rcr.reservation_start_at),
+          guests: rcr.requested_party_size ? `${rcr.requested_party_size} Guests` : `${rcr.guest_count || 1} Guests`,
+          area: areaDisplay,
+          table: tableDisplay,
+          purpose: requestedChanges.dining_purpose || rcr.dining_purpose || "Casual Dinner",
+          notes: requestedChanges.special_request || rcr.special_request || null,
+        },
+      }).catch((e) => console.error("[staff/resolve] Email failed:", e?.message));
+    }
+
+    // Fire-and-forget: notify customer socket & bell
     try {
       const io = (await import("../socket.js")).getIO();
       if (io && rcr.requested_by_customer_id) {
-        io.to(`room:user:${rcr.requested_by_customer_id}`).emit("reservation:request_resolved", {
+        const notifPayload = {
           reservation_id: rcr.reservation_id,
-          request_id: requestId,
+          request_id: rcr.request_id,
           request_type: rcr.request_type,
           decision: "StaffResolved",
+          message: `Your change request for reservation #${String(rcr.reservation_id).padStart(6, "0")} has been approved.`,
           timestamp: new Date().toISOString(),
-        });
+        };
+        io.to(`room:user:${rcr.requested_by_customer_id}`).emit("reservation:request_resolved", notifPayload);
+        io.to(`room:user:${rcr.requested_by_customer_id}`).emit("notification:new", notifPayload);
+        io.to(`room:user:${rcr.requested_by_customer_id}`).emit("STAFF_ACTION_UPDATE", notifPayload);
       }
       if (io) {
-        io.to("room:manager").emit("reservation:request_resolved", {
+        const payload = {
           reservation_id: rcr.reservation_id,
-          request_id: requestId,
+          request_id: rcr.request_id,
           decision: "StaffResolved",
-        });
+        };
+        io.to("room:staff").emit("reservation:request_resolved", payload);
+        io.to("room:manager").emit("reservation:request_resolved", payload);
+        io.to("room:staff").emit("table:status_changed", { reservation_id: rcr.reservation_id });
+        io.to("room:manager").emit("table:status_changed", { reservation_id: rcr.reservation_id });
       }
     } catch { /* non-critical */ }
 

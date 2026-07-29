@@ -4,6 +4,7 @@ import {
   OTP_EXPIRES_IN_SECONDS,
   OTP_RESEND_COOLDOWN_SECONDS,
 } from "./utils/otpService.js";
+import { getAreaSurcharge } from "./utils/areaDepositConfig.js";
 
 export const RESEND_COOLDOWN_SECONDS = OTP_RESEND_COOLDOWN_SECONDS;
 export { OTP_EXPIRES_IN_SECONDS };
@@ -330,7 +331,7 @@ export async function sendBookingConfirmationEmail({
                       Reservation Details
                     </p>
                     <table width="100%" cellpadding="0" cellspacing="0">
-                      ${infoRow("Booking ID", `<strong style="color:#9f7c3a;font-size:15px;">${formattedId}</strong>`)}
+                      ${infoRow("Reservation ID", `<strong style="color:#9f7c3a;font-size:15px;">${formattedId}</strong>`)}
                       ${infoRow("Guest Name", safeName)}
                       ${infoRow("Phone Number", safePhone)}
                       ${infoRow("Date", reservationDate)}
@@ -632,8 +633,8 @@ export async function sendEditRequestDeclinedEmail({ toEmail, customerName, rese
       from: `"Phūrai Restaurant" <${getSmtpFrom()}>`,
       to: recipient,
       subject: `[Phūrai] Your Edit Request for Reservation #${reservationId} Was Declined`,
-      text: `Dear ${customerName || "Guest"},\n\nYour edit request for reservation #${reservationId} was declined. Your original booking remains Confirmed — no changes have been applied.\n\nView your reservation: ${primaryOrigin}/my-reservations\n\n© 2026 Phūrai Restaurant & Bar`,
-      html: `<p>Dear <strong>${customerName || "Guest"}</strong>,</p><p>Your edit request for reservation <strong>#${reservationId}</strong> has been <strong style="color:#c0392b;">declined</strong>. Your original booking remains <strong style="color:#27ae60;">Confirmed</strong> — no changes have been applied.</p><p><a href="${primaryOrigin}/my-reservations">View My Reservation →</a></p>`,
+      text: `Dear ${customerName || "Guest"},\n\nYour edit request for reservation #${reservationId} was declined. Your original reservation remains Confirmed — no changes have been applied.\n\nView your reservation: ${primaryOrigin}/my-reservations\n\n© 2026 Phūrai Restaurant & Bar`,
+      html: `<p>Dear <strong>${customerName || "Guest"}</strong>,</p><p>Your edit request for reservation <strong>#${reservationId}</strong> has been <strong style="color:#c0392b;">declined</strong>. Your original reservation remains <strong style="color:#27ae60;">Confirmed</strong> — no changes have been applied.</p><p><a href="${primaryOrigin}/my-reservations">View My Reservation →</a></p>`,
     });
     return { sent: true };
   } catch (err) {
@@ -677,8 +678,8 @@ export async function sendCancelRejectedEmail({ toEmail, customerName, reservati
       from: `"Phūrai Restaurant" <${getSmtpFrom()}>`,
       to: recipient,
       subject: `[Phūrai] Your Cancellation Request for Reservation #${reservationId} Was Not Approved`,
-      text: `Dear ${customerName || "Guest"},\n\nYour cancellation request for reservation #${reservationId} was not approved. Your booking remains Confirmed and your table is still reserved.\n\nPlease contact us if you have questions.\n\n© 2026 Phūrai Restaurant & Bar`,
-      html: `<p>Dear <strong>${customerName || "Guest"}</strong>,</p><p>Your cancellation request for reservation <strong>#${reservationId}</strong> was <strong style="color:#c0392b;">not approved</strong>. Your booking remains <strong style="color:#27ae60;">Confirmed</strong>.</p><p><a href="${primaryOrigin}/my-reservations">View My Reservation →</a></p>`,
+      text: `Dear ${customerName || "Guest"},\n\nYour cancellation request for reservation #${reservationId} was not approved. Your reservation remains Confirmed and your table is still reserved.\n\nPlease contact us if you have questions.\n\n© 2026 Phūrai Restaurant & Bar`,
+      html: `<p>Dear <strong>${customerName || "Guest"}</strong>,</p><p>Your cancellation request for reservation <strong>#${reservationId}</strong> was <strong style="color:#c0392b;">not approved</strong>. Your reservation remains <strong style="color:#27ae60;">Confirmed</strong>.</p><p><a href="${primaryOrigin}/my-reservations">View My Reservation →</a></p>`,
     });
     return { sent: true };
   } catch (err) {
@@ -718,7 +719,7 @@ export async function sendManagerCancelledEmail({ toEmail, customerName, reserva
 // sendEditConfirmedEmail — Manager confirmed customer's edit request
 // Shows old vs new info comparison table
 // ============================================================================
-export async function sendEditConfirmedEmail({ toEmail, customerName, reservationId, oldInfo = {}, newInfo = {} }) {
+export async function sendEditConfirmedEmail({ toEmail, customerName, reservationId, updatedDetails = {}, oldInfo = {}, newInfo = {} }) {
   const recipient = String(toEmail || "").trim().toLowerCase();
   if (!recipient) return { sent: false, reason: "no_recipient" };
   if (!isSmtpConfigured()) return { sent: false, devMode: true };
@@ -726,20 +727,33 @@ export async function sendEditConfirmedEmail({ toEmail, customerName, reservatio
   const formattedId = `#${String(reservationId).padStart(6, "0")}`;
   const safeName = customerName || "Guest";
 
-  // Build comparison rows
-  const allFields = new Set([...Object.keys(oldInfo), ...Object.keys(newInfo)]);
-  let comparisonRows = "";
-  for (const field of allFields) {
-    const oldVal = oldInfo[field] ?? "—";
-    const newVal = newInfo[field] ?? "—";
-    const changed = String(oldVal) !== String(newVal);
-    comparisonRows += `
-      <tr>
-        <td style="padding:7px 0;font-size:13px;color:#8a7a60;width:150px;">${field}</td>
-        <td style="padding:7px 0;font-size:13px;color:#888;text-decoration:${changed ? "line-through" : "none"}">${oldVal}</td>
-        <td style="padding:7px 0;font-size:14px;color:${changed ? "#27ae60" : "#2c1d0a"};font-weight:${changed ? "700" : "400"};">${newVal}${changed ? " ✓" : ""}</td>
-      </tr>`;
-  }
+  // Clean values from updatedDetails, fallback to newInfo/oldInfo
+  const cleanPhone = updatedDetails.phone || newInfo["Contact Phone"] || oldInfo["Contact Phone"] || "Not provided";
+  const cleanTime = updatedDetails.time || newInfo["Start Time"] || oldInfo["Start Time"] || "—";
+  const cleanGuests = updatedDetails.guests || newInfo["Guests"] || oldInfo["Guests"] || "—";
+  const cleanArea = updatedDetails.area || newInfo["Area"] || oldInfo["Area"] || "Main Dining Area";
+  const cleanTable = updatedDetails.table || newInfo["Table"] || oldInfo["Table"] || "Not assigned";
+  const cleanPurpose = updatedDetails.purpose || newInfo["Dining Purpose"] || oldInfo["Dining Purpose"] || "Casual Dinner";
+  const cleanNotes = updatedDetails.notes || newInfo["Notes"] || oldInfo["Notes"] || "None";
+
+  const infoRow = (label, value) => `
+    <tr>
+      <td style="padding:10px 0;font-size:13px;color:#8a7a60;width:170px;vertical-align:top;border-bottom:1px solid #f2eae0;">${label}</td>
+      <td style="padding:10px 0;font-size:14px;color:#2c1d0a;font-weight:600;border-bottom:1px solid #f2eae0;">${value}</td>
+    </tr>`;
+
+  const rowsHtml = [
+    infoRow("Reservation ID", `<strong style="color:#9f7c3a;font-size:15px;">${formattedId}</strong>`),
+    infoRow("Guest Name", safeName),
+    infoRow("Contact Phone", cleanPhone),
+    infoRow("Arrival Time", cleanTime),
+    infoRow("Guests", cleanGuests),
+    infoRow("Area", cleanArea),
+    infoRow("Selected Table", cleanTable),
+    infoRow("Dining Purpose", cleanPurpose),
+    cleanNotes && cleanNotes !== "None" ? infoRow("Notes / Request", cleanNotes) : "",
+    infoRow("Status", `<span style="background:#d4edda;color:#155724;font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;">✓ Approved &amp; Updated</span>`),
+  ].filter(Boolean).join("");
 
   const html = `
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/></head>
@@ -762,16 +776,11 @@ export async function sendEditConfirmedEmail({ toEmail, customerName, reservatio
             Dear <strong style="color:#2c1d0a;">${safeName}</strong>,<br/>
             Great news! Your change request for reservation <strong style="color:#9f7c3a;">${formattedId}</strong> has been <em>approved</em> by our management team.
           </p>
-          <p style="margin:0 0 12px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#a09080;font-weight:600;">What Changed</p>
+          <p style="margin:0 0 12px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#a09080;font-weight:600;">Updated Reservation Details</p>
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border:1px solid #e8dcc8;border-radius:10px;margin:0 0 24px;">
             <tr><td style="padding:20px 26px;">
-              <table width="100%">
-                <tr>
-                  <th style="text-align:left;font-size:11px;color:#a09080;padding-bottom:8px;">Field</th>
-                  <th style="text-align:left;font-size:11px;color:#a09080;padding-bottom:8px;">Before</th>
-                  <th style="text-align:left;font-size:11px;color:#a09080;padding-bottom:8px;">After</th>
-                </tr>
-                ${comparisonRows}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                ${rowsHtml}
               </table>
             </td></tr>
           </table>
@@ -849,12 +858,12 @@ export async function sendEditRejectedEmail({ toEmail, customerName, reservation
             <p style="margin:4px 0 0;font-size:14px;color:#6b5c50;">${safeReason}</p>
           </div>
           <p style="margin:0 0 16px;font-size:14px;color:#4a3f35;line-height:1.7;">
-            <strong>Your original booking remains confirmed.</strong> No changes have been applied. Your table is still reserved for you.
+            <strong>Your original reservation remains confirmed.</strong> No changes have been applied. Your table is still reserved for you.
           </p>
           ${currentInfoRows ? `
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border:1px solid #e8dcc8;border-radius:10px;margin:0 0 24px;">
             <tr><td style="padding:20px 26px;">
-              <p style="margin:0 0 10px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#a09080;font-weight:600;">Your Current Booking</p>
+              <p style="margin:0 0 10px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#a09080;font-weight:600;">Your Current Reservation</p>
               <table width="100%">${currentInfoRows}</table>
             </td></tr>
           </table>` : ""}
@@ -878,7 +887,7 @@ export async function sendEditRejectedEmail({ toEmail, customerName, reservation
       from: `"Phūrai Restaurant" <${getSmtpFrom()}>`,
       to: recipient,
       subject: `[Phūrai] Your Change Request for ${formattedId} Was Not Approved`,
-      text: `Dear ${safeName},\n\nYour change request for reservation ${formattedId} was declined.\n\nReason: ${safeReason}\n\nYour original booking remains confirmed. View your reservation: ${primaryOrigin}/my-reservations\n\n© 2026 Phūrai Restaurant & Bar`,
+      text: `Dear ${safeName},\n\nYour change request for reservation ${formattedId} was declined.\n\nReason: ${safeReason}\n\nYour original reservation remains confirmed. View your reservation: ${primaryOrigin}/my-reservations\n\n© 2026 Phūrai Restaurant & Bar`,
       html,
     });
     console.log(`[sendEditRejectedEmail] Sent to ${recipient} for ${formattedId}`);
@@ -905,8 +914,8 @@ export async function sendEditRequestReceivedEmail({ toEmail, customerName, rese
       from: `"Phūrai Restaurant" <${getSmtpFrom()}>`,
       to: recipient,
       subject: `[Phūrai] We've Received Your Change Request for ${formattedId}`,
-      text: `Dear ${safeName},\n\nWe have received your request to edit reservation ${formattedId}.\n\nOur management team will review your request shortly. Your current booking remains confirmed until the request is approved.\n\nView your reservation: ${primaryOrigin}/my-reservations\n\n© 2026 Phūrai Restaurant & Bar`,
-      html: `<p>Dear <strong>${safeName}</strong>,</p><p>We have received your request to edit reservation <strong>${formattedId}</strong>.</p><p>Our management team will review your request shortly. Your current booking remains confirmed until the request is approved.</p><p><a href="${primaryOrigin}/my-reservations">View My Reservation →</a></p>`,
+      text: `Dear ${safeName},\n\nWe have received your request to edit reservation ${formattedId}.\n\nOur management team will review your request shortly. Your current reservation remains confirmed until the request is approved.\n\nView your reservation: ${primaryOrigin}/my-reservations\n\n© 2026 Phūrai Restaurant & Bar`,
+      html: `<p>Dear <strong>${safeName}</strong>,</p><p>We have received your request to edit reservation <strong>${formattedId}</strong>.</p><p>Our management team will review your request shortly. Your current reservation remains confirmed until the request is approved.</p><p><a href="${primaryOrigin}/my-reservations">View My Reservation →</a></p>`,
     });
     console.log(`[sendEditRequestReceivedEmail] Sent to ${recipient} for ${formattedId}`);
     return { sent: true };
@@ -1094,14 +1103,14 @@ export async function sendReservationReminderEmail({ toEmail, customerName, rese
                           ${preorderItems.map(item => `
                             <tr>
                               <td style="padding: 8px 0; border-bottom: 1px solid #eee; color:#4a3f35;">${item.dish_name} x${item.quantity}</td>
-                              <td align="right" style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600; color:#2c1d0a;">${Number(item.price * item.quantity).toLocaleString('vi-VN')} đ</td>
+                              <td align="right" style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600; color:#2c1d0a;">${Number(item.price * item.quantity).toLocaleString('en-US')} VND</td>
                             </tr>
                           `).join('')}
                         ` : ''}
                         ${depositAmount > 0 ? `
                           <tr>
                             <td style="padding: 12px 0 0; font-weight: 600; color:#8a7a60;">Deposit Paid:</td>
-                            <td align="right" style="padding: 12px 0 0; font-weight: 700; color:#27ae60; font-size: 15px;">${depositAmount.toLocaleString('vi-VN')} đ</td>
+                            <td align="right" style="padding: 12px 0 0; font-weight: 700; color:#27ae60; font-size: 15px;">${depositAmount.toLocaleString('en-US')} VND</td>
                           </tr>
                         ` : ''}
                       </table>
@@ -1203,6 +1212,7 @@ export async function sendReservationInvoiceEmail({ to, reservation, preorderIte
       <td style="padding:8px 0;font-size:14px;color:#2c1d0a;font-weight:600;">${value}</td>
     </tr>`;
 
+  const areaSurchargeInfo = getAreaSurcharge(reservation.area_name, reservation.capacity || reservation.guest_count);
   const depositAmount = Number(reservation.deposit_amount || 0);
   const finalRemaining = Number(reservation.final_total || 0);
 
@@ -1267,6 +1277,7 @@ export async function sendReservationInvoiceEmail({ to, reservation, preorderIte
                       ${infoRow("Guest Count", `${reservation.guest_count} guests`)}
                       ${infoRow("Dining Area", reservation.area_name || "Standard area")}
                       ${infoRow("Assigned Table(s)", reservation.table_names ? `<strong>#${reservation.table_names}</strong>` : "Assigned on arrival")}
+                      ${reservation.special_request ? infoRow("Special Request / Notes", reservation.special_request) : ''}
                     </table>
                   </td>
                 </tr>
@@ -1287,21 +1298,27 @@ export async function sendReservationInvoiceEmail({ to, reservation, preorderIte
                         ${preorderItems.map(item => `
                           <tr>
                             <td style="padding: 8px 0; border-bottom: 1px solid #eee; color:#4a3f35;">${item.dish_name || item.name} x${item.quantity || item.qty}</td>
-                            <td align="right" style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600; color:#2c1d0a;">${Number(item.price || item.unit_price || 0).toLocaleString('vi-VN')} đ</td>
+                            <td align="right" style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: 600; color:#2c1d0a;">${Number(item.price || item.unit_price || 0).toLocaleString('en-US')} VND</td>
                           </tr>
                         `).join('')}
                       ` : ''}
                       <tr>
-                        <td style="padding: 8px 0; color:#4a3f35;">Table Charge:</td>
-                        <td align="right" style="padding: 8px 0; font-weight: 600; color:#2c1d0a;">20.000 đ</td>
+                        <td style="padding: 8px 0; color:#4a3f35;">Base Table Charge:</td>
+                        <td align="right" style="padding: 8px 0; font-weight: 600; color:#2c1d0a;">20,000 VND</td>
                       </tr>
+                      ${areaSurchargeInfo.isLuxury ? `
                       <tr>
-                        <td style="padding: 8px 0; color:#4a3f35; font-weight: 600;">Total Paid (30% Deposit):</td>
-                        <td align="right" style="padding: 8px 0; font-weight: 700; color:#27ae60; font-size: 16px;">${depositAmount.toLocaleString('vi-VN')} đ</td>
+                        <td style="padding: 8px 0; color:#4a3f35;">${areaSurchargeInfo.areaName} Surcharge (${areaSurchargeInfo.capacity} seats):</td>
+                        <td align="right" style="padding: 8px 0; font-weight: 600; color:#b45309;">+${areaSurchargeInfo.surcharge.toLocaleString('en-US')} VND</td>
+                      </tr>
+                      ` : ''}
+                      <tr>
+                        <td style="padding: 8px 0; color:#4a3f35; font-weight: 600;">Total Deposit Paid (30%):</td>
+                        <td align="right" style="padding: 8px 0; font-weight: 700; color:#27ae60; font-size: 16px;">${depositAmount.toLocaleString('en-US')} VND</td>
                       </tr>
                       <tr>
                         <td style="padding: 8px 0; color:#8a7a60; font-style: italic;">Remaining Balance (70%):</td>
-                        <td align="right" style="padding: 8px 0; font-weight: 600; color:#8a7a60; font-style: italic;">${finalRemaining.toLocaleString('vi-VN')} đ</td>
+                        <td align="right" style="padding: 8px 0; font-weight: 600; color:#8a7a60; font-style: italic;">${finalRemaining.toLocaleString('en-US')} VND</td>
                       </tr>
                     </table>
                   </td>
@@ -1379,7 +1396,7 @@ export async function sendCheckoutReceiptEmail({ toEmail, customerName, orderId,
     ? `
       <tr>
         <td style="padding: 8px 0; color:#4a3f35; font-weight: 500;">Preorder Deposit Paid:</td>
-        <td align="right" style="padding: 8px 0; font-weight: 600; color:#c0392b;">-${Number(preorderDeposit).toLocaleString('vi-VN')} đ</td>
+        <td align="right" style="padding: 8px 0; font-weight: 600; color:#c0392b;">-${Number(preorderDeposit).toLocaleString('en-US')} VND</td>
       </tr>
     ` : '';
 
@@ -1387,7 +1404,7 @@ export async function sendCheckoutReceiptEmail({ toEmail, customerName, orderId,
     ? `
       <tr>
         <td style="padding: 8px 0; color:#4a3f35; font-weight: 500;">Discount Applied:</td>
-        <td align="right" style="padding: 8px 0; font-weight: 600; color:#c0392b;">-${Number(discountAmount).toLocaleString('vi-VN')} đ</td>
+        <td align="right" style="padding: 8px 0; font-weight: 600; color:#c0392b;">-${Number(discountAmount).toLocaleString('en-US')} VND</td>
       </tr>
     ` : '';
 
@@ -1397,7 +1414,7 @@ export async function sendCheckoutReceiptEmail({ toEmail, customerName, orderId,
       ${preorders.map(item => `
         <tr>
           <td style="padding: 6px 0; border-bottom: 1px solid #eee; color:#4a3f35;">${item.name} x${item.quantity || item.qty}</td>
-          <td align="right" style="padding: 6px 0; border-bottom: 1px solid #eee; font-weight: 600; color:#2c1d0a;">${Number(item.price || item.unit_price || 0).toLocaleString('vi-VN')} đ</td>
+          <td align="right" style="padding: 6px 0; border-bottom: 1px solid #eee; font-weight: 600; color:#2c1d0a;">${Number(item.price || item.unit_price || 0).toLocaleString('en-US')} VND</td>
         </tr>
       `).join('')}
     </table>
@@ -1409,7 +1426,7 @@ export async function sendCheckoutReceiptEmail({ toEmail, customerName, orderId,
       ${sessionOrders.map(item => `
         <tr>
           <td style="padding: 6px 0; border-bottom: 1px solid #eee; color:#4a3f35;">${item.name} x${item.quantity || item.qty}</td>
-          <td align="right" style="padding: 6px 0; border-bottom: 1px solid #eee; font-weight: 600; color:#2c1d0a;">${Number(item.price || item.unit_price || 0).toLocaleString('vi-VN')} đ</td>
+          <td align="right" style="padding: 6px 0; border-bottom: 1px solid #eee; font-weight: 600; color:#2c1d0a;">${Number(item.price || item.unit_price || 0).toLocaleString('en-US')} VND</td>
         </tr>
       `).join('')}
     </table>
@@ -1494,13 +1511,13 @@ export async function sendCheckoutReceiptEmail({ toEmail, customerName, orderId,
                     <table width="100%" cellpadding="0" cellspacing="0" style="font-size:14px; line-height: 1.6; border-collapse: collapse; margin-top: 12px;">
                       <tr>
                         <td style="padding: 12px 0 8px; color:#4a3f35; font-weight: 500; border-top: 1px dashed #e8dcc8;">Subtotal:</td>
-                        <td align="right" style="padding: 12px 0 8px; font-weight: 600; color:#2c1d0a; border-top: 1px dashed #e8dcc8;">${Number(itemsSubtotal).toLocaleString('vi-VN')} đ</td>
+                        <td align="right" style="padding: 12px 0 8px; font-weight: 600; color:#2c1d0a; border-top: 1px dashed #e8dcc8;">${Number(itemsSubtotal).toLocaleString('en-US')} VND</td>
                       </tr>
                       ${preorderDepositHtml}
                       ${discountHtml}
                       <tr>
                         <td style="padding: 12px 0 0; color:#4a3f35; font-weight: 700; border-top: 1px solid #e8dcc8;">Net Paid Amount:</td>
-                        <td align="right" style="padding: 12px 0 0; font-weight: 700; color:#27ae60; font-size: 16px; border-top: 1px solid #e8dcc8;">${Number(totalPaid).toLocaleString('vi-VN')} đ</td>
+                        <td align="right" style="padding: 12px 0 0; font-weight: 700; color:#27ae60; font-size: 16px; border-top: 1px solid #e8dcc8;">${Number(totalPaid).toLocaleString('en-US')} VND</td>
                       </tr>
                     </table>
                     ${notesHtml}

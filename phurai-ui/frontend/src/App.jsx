@@ -290,7 +290,7 @@ function App() {
             element={
               <MyReservationsPage
                 isAuthenticated={isAuthenticated}
-                currentUser={currentUser}
+                currentUser={profile || currentUser}
                 onNavigate={handleNavigate}
                 onNavigateLogin={() => openAuthModal("login")}
               />

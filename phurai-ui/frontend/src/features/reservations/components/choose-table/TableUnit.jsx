@@ -38,14 +38,18 @@ export default function TableUnit({ tableData, status, isSelected, isDimmed, onC
   }
 
   let statusClass = 'available';
-  if (status === 'Occupied') {
+  if (isSelected) {
+    statusClass = 'selected';
+  } else if (status === 'Occupied') {
     statusClass = 'occupied';
   } else if (status === 'Reserved') {
     statusClass = 'reserved';
   } else if (status === 'Cleaning') {
     statusClass = 'cleaning';
-  } else if (isSelected) {
-    statusClass = 'selected';
+  } else if (status === 'InvalidCapacity') {
+    statusClass = 'inactive';
+  } else if (status === 'Inactive') {
+    statusClass = 'inactive';
   }
 
   const style = {

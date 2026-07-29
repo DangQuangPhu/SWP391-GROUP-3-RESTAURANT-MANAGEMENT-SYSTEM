@@ -199,6 +199,26 @@ export async function fetchStaffReservationDetail(reservationId, userId) {
   return res.data;
 }
 
+export async function extendReservationErt(reservationId, userId, minutes) {
+  const res = await staffPatch(
+    `/staff/reservations/${reservationId}/extend-ert`,
+    userId,
+    { minutes }
+  );
+  if (!res?.success) {
+    throw new Error(res?.message || "Failed to extend estimated release time");
+  }
+  return res.data;
+}
+
+export async function advanceTableStage(tableId, userId) {
+  const res = await staffPatch(`/staff/tables/${tableId}/stage/advance`, userId, {});
+  if (!res?.success) {
+    throw new Error(res?.message || "Failed to advance table stage");
+  }
+  return res.data;
+}
+
 export async function confirmCheckoutReservation(reservationId, userId) {
   const res = await staffPatch(
     `/staff/reservations/${reservationId}/checkout-confirm`,
@@ -443,3 +463,20 @@ export async function verifyCustomerEmailApi(email) {
     method: "GET",
   });
 }
+
+export async function fetchTableUpcomingReservations(tableId, userId, date) {
+  try {
+    const query = date ? `?date=${encodeURIComponent(date)}` : "";
+    const res = await request(`/staff/tables/${tableId}/upcoming-reservations${query}`, {
+      method: "GET",
+      headers: profileRequestHeaders(userId),
+    });
+    if (res?.success) {
+      return res.data ?? [];
+    }
+  } catch (err) {
+    console.error("fetchTableUpcomingReservations failed:", err);
+  }
+  return [];
+}
+

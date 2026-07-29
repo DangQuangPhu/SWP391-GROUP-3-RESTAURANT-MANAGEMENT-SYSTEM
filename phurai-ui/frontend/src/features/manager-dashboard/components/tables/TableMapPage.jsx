@@ -4,13 +4,17 @@ import { ManagerModal } from "../ManagerOverlay.jsx";
 import { SectionHead, ContentPanel, StatusBadge, Button } from "../ManagerUI.jsx";
 import { useManagerPortal } from "../../context/ManagerPortalContext.jsx";
 import { TABLE_STATUS_META, AREAS } from "@/shared/constants.js";
-import { fetchAreas, fetchFilteredTables, mergeTablesApi, unmergeTableApi, updateTableApi, deleteTableApi, fetchTableTimelineApi } from "../../services/managerApi.js";
+import { fetchAreas, fetchFilteredTables, mergeTablesApi, unmergeTableApi, updateTableApi, deleteTableApi, fetchTableTimelineApi, fetchTableQueueApi } from "../../services/managerApi.js";
+import { TableUpcomingQueueSection } from "@/features/staff-dashboard/components/StaffTableTab.jsx";
+
 import { asArray } from "@/core/utils/asArray.js";
 import AddTableModal from "./AddTableModal.jsx";
 import TableMapFilterBar from "./TableMapFilterBar.jsx";
 import { STATUS_KEYS, STATUS_SLUG_TO_API } from "./tableConstants.js";
 import { QRCodeSVG as QRCode } from "qrcode.react";
 import TableQrOrderLink from "@/components/common/TableQrOrderLink.jsx";
+import TableReleaseIndicator from "@/components/common/TableReleaseIndicator.jsx";
+import TableStageIndicator from "@/components/common/TableStageIndicator.jsx";
 
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -68,6 +72,7 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
   const [editing, setEditing] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [clockNow, setClockNow] = useState(() => new Date());
 
   const [isJiggling, setIsJiggling] = useState(false);
   const pressTimer = useRef(null);
@@ -80,6 +85,11 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
     }, SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [searchInput]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(new Date()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     setSearchParams(
@@ -379,14 +389,28 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
                           if (canMerge) e.preventDefault();
                         }}
                         onDrop={(e) => handleDrop(e, t)}
-                        className={`sfx-mtile sfx-mtile--${TABLE_STATUS_META[statusKey]?.tone} ${canMerge ? "is-jiggling" : ""}`}
+                        className={`sfx-mtile sfx-mtile--${(t.upcoming_count > 0 && TABLE_STATUS_META[statusKey]?.tone === "green") ? "amber" : TABLE_STATUS_META[statusKey]?.tone} ${canMerge ? "is-jiggling" : ""}`}
                         onClick={() => !isJiggling && setEditing({ ...t })}
                       >
+                        {t.upcoming_count > 0 && (
+                          <div className="sfx-mtile__notif-badge" title={`${t.upcoming_count} upcoming reservation(s) queued`}>
+                            <span>🔔</span>
+                            <span>{t.upcoming_count}</span>
+                          </div>
+                        )}
                         <span className="sfx-mtile__no">{displayNum}</span>
                         <span className="sfx-mtile__cap">{t.combined_capacity} seats</span>
                         <StatusBadge tone={TABLE_STATUS_META[statusKey]?.tone}>
                           {TABLE_STATUS_META[statusKey]?.label}
                         </StatusBadge>
+                        {t.active_reservation_customer_name && (
+                          <div className="sfx-mtile__next-preview" title={`Next: ${t.active_reservation_customer_name}`}>
+                            Next: {t.active_reservation_customer_name}
+                          </div>
+                        )}
+                        <TableReleaseIndicator table={t} now={clockNow} />
+                        <TableStageIndicator table={t} compact />
+
                       </button>
                     );
                   })}
@@ -510,6 +534,12 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
               </div>
             </div>
 
+            {String(editing.table_status || editing.status).toLowerCase() === "occupied" ? (
+              <div className="manager-table-stage-readout">
+                <TableStageIndicator table={editing} />
+              </div>
+            ) : null}
+
             {/* Timeline Section */}
             {timeline.length > 0 && (
               <div className="sfx-detail__block sfx-tablemap__detail-block">
@@ -544,7 +574,15 @@ function TableMapPage({ tables, setTables, pendingAction, role, toast }) {
                 </Button>
               ))}
             </div>
+
+            <TableUpcomingQueueSection
+              tableId={editing.table_id}
+              userId={managerUserId}
+              showPhone={false}
+              customFetcher={fetchTableQueueApi}
+            />
           </div>
+
         ) : null}
       </ManagerModal>
 

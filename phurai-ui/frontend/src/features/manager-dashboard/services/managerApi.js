@@ -150,11 +150,12 @@ export async function confirmReservation(reservationId, tableIds, userId) {
 }
 
 export async function rejectReservation(reservationId, reason, userId) {
+  const cleanReason = String(reason || "Rejected by manager").trim();
   const res = await managerAuthRequest(
     `/manager/reservations/${reservationId}/reject`,
     {
       method: "PATCH",
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify({ reason: cleanReason, cancel_reason: cleanReason, cancellation_reason: cleanReason }),
     },
     userId
   );
@@ -165,11 +166,12 @@ export async function rejectReservation(reservationId, reason, userId) {
 }
 
 export async function cancelReservation(reservationId, reason, userId) {
+  const cleanReason = String(reason || "Cancelled by manager").trim();
   const res = await managerAuthRequest(
     `/manager/reservations/${reservationId}/cancel`,
     {
       method: "PATCH",
-      body: JSON.stringify({ cancel_reason: reason }),
+      body: JSON.stringify({ reason: cleanReason, cancel_reason: cleanReason, cancellation_reason: cleanReason }),
     },
     userId
   );
@@ -606,6 +608,23 @@ export async function fetchFilteredTables(filters, userId) {
   return mock(list);
 }
 
+export async function fetchAccountabilityAudit(filters = {}, userId) {
+  const params = new URLSearchParams();
+  if (filters.table_id) params.append("table_id", filters.table_id);
+  if (filters.staff_id) params.append("staff_id", filters.staff_id);
+  if (filters.action) params.append("action", filters.action);
+  if (filters.date) params.append("date", filters.date);
+  if (filters.limit) params.append("limit", filters.limit);
+
+  const query = params.toString();
+  const path = `/manager/accountability-audit${query ? `?${query}` : ""}`;
+  const res = await managerAuthRequest(path, { method: "GET" }, userId);
+  if (!res?.success) {
+    throw createApiError(res?.message || "Could not load accountability audit.");
+  }
+  return res.data;
+}
+
 export async function mergeTablesApi(sourceId, targetId, userId) {
   const res = await managerAuthRequest(
     "/manager/tables/merge",
@@ -890,3 +909,15 @@ export async function fetchNoShowCandidates() {
   } catch (err) { console.error("[fetchNoShowCandidates]", err?.message); }
   return { source: "mock", data: { candidates: [], count: 0 } };
 }
+
+export async function fetchTableQueueApi(tableId, userId, date) {
+  try {
+    const query = date ? `?date=${encodeURIComponent(date)}` : "";
+    const res = await managerAuthRequest(`/manager/tables/${tableId}/queue${query}`, { method: "GET" }, userId);
+    if (res?.success) return res.data ?? [];
+  } catch (err) {
+    console.error("fetchTableQueueApi failed:", err);
+  }
+  return [];
+}
+

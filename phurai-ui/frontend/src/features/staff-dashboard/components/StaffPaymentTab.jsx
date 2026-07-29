@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   SectionHead,
   Button,
@@ -83,6 +84,7 @@ function StaffPaymentTab({
   refreshing,
   onRefresh,
 }) {
+  const navigate = useNavigate();
   const tables = propsTables || orderTables || [];
   const [selectedTableId, setSelectedTableId] = useState("");
   const [bill, setBill] = useState(null);
@@ -427,47 +429,106 @@ function StaffPaymentTab({
             borderRadius: "12px",
             padding: "14px 20px",
             display: "flex",
-            justify: "space-between",
+            justifyContent: "space-between",
             alignItems: "center",
+            gap: "12px",
+            flexWrap: "wrap",
           }}
         >
           <div className="staff-payment-success" role="status" style={{ color: "#15803d", fontWeight: "bold", fontSize: "14px" }}>
             🎉 Paid & Session Closed — Table {lastPaidBill?.table_number || checkoutSuccess?.table_number || ""} ({formatMoney(lastPaidBill?.total_amount || checkoutSuccess?.total_amount || 0)})
           </div>
-          <button
-            type="button"
-            className="staff-btn"
-            style={{
-              padding: "8px 16px",
-              background: "#15803d",
-              color: "#fff",
-              border: "none",
-              borderRadius: "8px",
-              fontWeight: "bold",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-            }}
-            onClick={() =>
-              printBill(lastPaidBill || bill, {
-                customerName: verifiedUser?.full_name || lastPaidBill?.contact_name,
-                customerEmail: lastPaidBill?.customer_email || customerEmail,
-              })
-            }
-          >
-            🖨 Print Closed Bill / Export PDF
-          </button>
+
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <button
+              type="button"
+              className="staff-btn"
+              style={{
+                padding: "8px 16px",
+                background: "#15803d",
+                color: "#fff",
+                border: "none",
+                borderRadius: "8px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+              onClick={() =>
+                printBill(lastPaidBill || bill, {
+                  customerName: verifiedUser?.full_name || lastPaidBill?.contact_name,
+                  customerEmail: lastPaidBill?.customer_email || customerEmail,
+                })
+              }
+            >
+              🖨 Print Closed Bill / Export PDF
+            </button>
+
+            <button
+              type="button"
+              className="staff-btn"
+              style={{
+                padding: "8px 16px",
+                background: "#0284c7",
+                color: "#fff",
+                border: "none",
+                borderRadius: "8px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+              onClick={() => {
+                setCheckoutSuccess(null);
+                setLastPaidBill(null);
+                const remainingTables = occupiedTables.filter(
+                  (t) => String(t.table_id) !== String(lastPaidBill?.table_id || checkoutSuccess?.table_id)
+                );
+                if (remainingTables.length > 0) {
+                  setSelectedTableId(String(remainingTables[0].table_id));
+                } else {
+                  navigate("/staff/tables");
+                }
+              }}
+            >
+              ← {occupiedTables.length > 1 ? "Check Remaining Tables" : "Back to Floor Plan"}
+            </button>
+          </div>
         </div>
       ) : null}
 
       {!occupiedTables.length ? (
-        <div className="staff-card">
+        <div className="staff-card" style={{ textAlign: "center", padding: "32px 16px" }}>
           <EmptyState
             icon="table"
-            title="No occupied tables"
+            title="No occupied tables needing payment"
             hint="Check in a table and serve items before collecting payment."
           />
+          <div style={{ display: "flex", justifyContent: "center", marginTop: "20px" }}>
+            <button
+              type="button"
+              className="staff-btn"
+              style={{
+                padding: "10px 22px",
+                background: "#0f172a",
+                color: "#fff",
+                border: "none",
+                borderRadius: "8px",
+                fontWeight: "bold",
+                fontSize: "14px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+              }}
+              onClick={() => navigate("/staff/tables")}
+            >
+              ← Return to Table Map (Sơ đồ bàn)
+            </button>
+          </div>
         </div>
       ) : (
         <>

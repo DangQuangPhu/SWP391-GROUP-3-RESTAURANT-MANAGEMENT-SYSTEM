@@ -7,7 +7,16 @@ import { getIO } from '../socket.js';
  * Also logs the action to AuditLogs.
  * Requires an existing transaction connection to be passed in.
  */
-export async function updateReservationStatus({ connection, reservationId, toStatus, staffId, auditAction, extraUpdates = "" }) {
+export async function updateReservationStatus({
+  connection,
+  reservationId,
+  toStatus,
+  staffId,
+  auditAction,
+  cancelReason = null,
+  notes = null,
+  extraUpdates = ""
+}) {
   // Determine if it's the custom db.js wrapper or a raw mssql Transaction
   const isWrapper = typeof connection.query === 'function';
 
@@ -46,22 +55,34 @@ export async function updateReservationStatus({ connection, reservationId, toSta
     throw new Error(`INVALID_TRANSITION: Cannot transition from '${fromStatus}' to '${toStatus}'`);
   }
 
-  // 3. Update the status (and any extra fields like checked_in_at)
-  await execQuery(
-    `UPDATE dbo.Reservations 
-     SET reservation_status = ?, updated_at = SYSDATETIME() ${extraUpdates}
-     WHERE reservation_id = ?`,
-    [toStatus, reservationId]
-  );
+  // Build params and query string for UPDATE
+  let updateSql = `UPDATE dbo.Reservations SET reservation_status = ?, updated_at = SYSDATETIME()`;
+  const updateParams = [toStatus];
+
+  if (cancelReason) {
+    updateSql += `, cancelled_at = SYSDATETIME(), cancel_reason = ?`;
+    updateParams.push(cancelReason);
+  }
+
+  if (extraUpdates) {
+    updateSql += ` ${extraUpdates}`;
+  }
+
+  updateSql += ` WHERE reservation_id = ?`;
+  updateParams.push(reservationId);
+
+  // 3. Execute update
+  await execQuery(updateSql, updateParams);
 
   // 4. Log the audit action and Reservation Timelines
+  const timelineNote = notes || cancelReason || `Status transitioned to ${toStatus} via system`;
   if (auditAction && staffId) {
     await execQuery(
       `INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, target_id, old_value_json, new_value_json)
        VALUES (?, ?, N'Reservations', ?, ?, ?);
        
        INSERT INTO dbo.ReservationTimelines (reservation_id, event_type, performed_by, notes, created_at)
-       VALUES (?, ?, ?, N'Status transitioned via system', SYSDATETIME());`,
+       VALUES (?, ?, ?, ?, SYSDATETIME());`,
       [
         staffId, 
         auditAction, 
@@ -70,7 +91,8 @@ export async function updateReservationStatus({ connection, reservationId, toSta
         JSON.stringify({ reservation_status: toStatus }),
         reservationId,
         auditAction,
-        staffId
+        staffId,
+        timelineNote
       ]
     );
   }

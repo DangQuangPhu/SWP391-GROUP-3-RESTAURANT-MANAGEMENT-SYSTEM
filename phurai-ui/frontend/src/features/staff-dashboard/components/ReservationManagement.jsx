@@ -120,6 +120,21 @@ const ID_DATE_CELL_STYLE = {
 
 /* ── Confirm dialog configs ── */
 const CONFIRM_ACTIONS = {
+  approve_request: {
+    title: "Confirm Change Request?",
+    desc: (r) =>
+      `Are you sure you want to confirm and apply the requested changes for ${r.customer_name} (Reservation #${String(r.reservation_id || r.id).padStart(6, "0")})? This action cannot be undone.`,
+    btnLabel: "Yes, Confirm Changes",
+    btnVariant: "gold",
+  },
+  reject_request: {
+    title: "Reject Change Request?",
+    desc: (r) =>
+      `Are you sure you want to reject the requested changes for ${r.customer_name} (Reservation #${String(r.reservation_id || r.id).padStart(6, "0")})? The booking will remain in its original state.`,
+    btnLabel: "Yes, Reject Request",
+    btnVariant: "danger",
+    needsReason: true,
+  },
   checkin: {
     title: "Confirm Check-in",
     desc: (r) =>
@@ -774,6 +789,53 @@ function ReservationManagement({ user, toast, refreshKey }) {
     }
   }, [confirmDialog, toast, loadReservations, user, actionSubmitting]);
 
+  const handleApproveChangeRequest = useCallback(async () => {
+    if (!confirmDialog?.target || actionSubmitting) return;
+    const resId = confirmDialog.target.reservation_id || confirmDialog.target.id;
+    setActionSubmitting(true);
+    try {
+      const resp = await fetch(`/api/staff/reservation-requests/${resId}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ decision: "confirm", staff_note: "Approved by Staff" }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.message || "Failed to confirm change request.");
+      toast("Change request approved successfully!", "success");
+      setConfirmDialog(null);
+      loadReservations();
+    } catch (err) {
+      toast(err.message || "Could not confirm change request.", "error");
+    } finally {
+      setActionSubmitting(false);
+    }
+  }, [confirmDialog, toast, loadReservations, actionSubmitting]);
+
+  const handleRejectChangeRequest = useCallback(async () => {
+    if (!confirmDialog?.target || actionSubmitting) return;
+    const resId = confirmDialog.target.reservation_id || confirmDialog.target.id;
+    const reason = confirmDialog.reason?.trim() || "Rejected by Staff";
+    setActionSubmitting(true);
+    try {
+      const resp = await fetch(`/api/staff/reservation-requests/${resId}/resolve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ decision: "reject", staff_note: reason }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) throw new Error(data.message || "Failed to reject change request.");
+      toast("Change request rejected.", "info");
+      setConfirmDialog(null);
+      loadReservations();
+    } catch (err) {
+      toast(err.message || "Could not reject change request.", "error");
+    } finally {
+      setActionSubmitting(false);
+    }
+  }, [confirmDialog, toast, loadReservations, actionSubmitting]);
+
   // Open table selection modal and fetch tables
   const openTableSelect = useCallback(async (reservation) => {
     setTableSelectDialog(reservation);
@@ -847,6 +909,20 @@ function ReservationManagement({ user, toast, refreshKey }) {
   }, [toast, userId, loadReservations]);
 
 
+  function isPendingRes(res) {
+    if (!res) return false;
+    return Boolean(
+      res.has_pending_request === 1 ||
+      res.has_pending_request === true ||
+      res.reservation_status === "Pending Request" ||
+      res.status === "Pending Request" ||
+      res.reservation_status === "Request" ||
+      res.status === "Request" ||
+      (res.pending_changes_json && res.pending_changes_json !== "{}" && res.pending_changes_json !== "null") ||
+      (res.request_type && res.request_type !== "")
+    );
+  }
+
   /* ── Per-row action buttons ── */
   function RowActions({ reservation }) {
     const resId = reservation.reservation_id;
@@ -854,6 +930,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
     const isOccupied = statusKey === "occupied" || statusKey === "dining" || checkedInIds.has(resId);
     const isCheckedOut = statusKey === "check-out" || checkoutDoneIds.has(resId);
     const isCheckoutReady = checkoutReadyIds.has(resId);
+    const isPending = isPendingRes(reservation);
 
     const viewBtn = (
       <Button
@@ -876,11 +953,18 @@ function ReservationManagement({ user, toast, refreshKey }) {
       </Button>
     );
 
+    if (isPending) {
+      return (
+        <div className="sfx-rowacts" style={{ justifyContent: "center", gap: 8, display: "flex", alignItems: "center" }}>
+          {viewBtn}
+        </div>
+      );
+    }
+
     if (isCheckedOut) {
       return (
         <div className="sfx-rowacts" style={{ justifyContent: "center", gap: 8, display: "flex", alignItems: "center" }}>
           {viewBtn}
-          {editBtn}
         </div>
       );
     }
@@ -902,7 +986,6 @@ function ReservationManagement({ user, toast, refreshKey }) {
             Check-in
           </Button>
           {viewBtn}
-          {editBtn}
         </div>
       );
     }
@@ -932,7 +1015,6 @@ function ReservationManagement({ user, toast, refreshKey }) {
             </button>
           )}
           {viewBtn}
-          {editBtn}
         </div>
       );
     }
@@ -954,12 +1036,11 @@ function ReservationManagement({ user, toast, refreshKey }) {
             Check-in
           </Button>
           {viewBtn}
-          {editBtn}
         </div>
       );
     }
 
-    return <div className="sfx-rowacts" style={{ justifyContent: "center", gap: 8, display: "flex", alignItems: "center" }}>{viewBtn}{editBtn}</div>;
+    return <div className="sfx-rowacts" style={{ justifyContent: "center", gap: 8, display: "flex", alignItems: "center" }}>{viewBtn}</div>;
   }
 
   /* ── Detail drawer content ── */
@@ -1189,15 +1270,6 @@ function ReservationManagement({ user, toast, refreshKey }) {
 
             {/* ── Table card ── */}
             <div className="staff-card sfx-card staff-reservations-card sfx-card--overflow-visible">
-              <header className="sfx-card__head">
-                <div>
-                  <h3 className="sfx-card__title" style={{ color: "#1a1a1a" }}>Reservations</h3>
-                  <p className="sfx-muted staff-reservations-card__subtitle">
-                    Reservations for {selectedDateLabel}
-                  </p>
-                </div>
-                <span className="sfx-muted">{totalCount} reservations</span>
-              </header>
 
               {/* Search + Filters + Date toolbar */}
               <div
@@ -1398,24 +1470,34 @@ function ReservationManagement({ user, toast, refreshKey }) {
 
                   return (
                     <div className="sfx-drawer__acts" style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                      {isConfirmedState && !isFutureDate && <>
-                        <Button variant="danger" onClick={() => setConfirmDialog({ action: "reject_checkin", target, reason: "" })}>
-                          Reject Check-in
-                        </Button>
-                        <Button variant="gold" onClick={() => handleCheckInClick(target)}>
-                          Confirm Check-in
-                        </Button>
-                        {isTargetLate && (
-                          <Button variant="danger" onClick={() => setConfirmDialog({ action: "no_show", target })}>
-                            Mark No Show
+                      {isPendingRes(target) ? (
+                        <>
+                          <Button variant="danger" onClick={() => setConfirmDialog({ action: "reject_request", target, reason: "" })}>
+                            Reject Request
                           </Button>
-                        )}
-                      </>}
-                      {isOccupiedState && !isFutureDate && checkoutReadyIds.has(target.reservation_id) && (
+                          <Button variant="gold" onClick={() => setConfirmDialog({ action: "approve_request", target })}>
+                            Confirm Changes
+                          </Button>
+                        </>
+                      ) : isConfirmedState && !isFutureDate ? (
+                        <>
+                          <Button variant="danger" onClick={() => setConfirmDialog({ action: "reject_checkin", target, reason: "" })}>
+                            Reject Check-in
+                          </Button>
+                          <Button variant="gold" onClick={() => handleCheckInClick(target)}>
+                            Confirm Check-in
+                          </Button>
+                          {isTargetLate && (
+                            <Button variant="danger" onClick={() => setConfirmDialog({ action: "no_show", target })}>
+                              Mark No Show
+                            </Button>
+                          )}
+                        </>
+                      ) : isOccupiedState && !isFutureDate && checkoutReadyIds.has(target.reservation_id) ? (
                         <Button variant="gold" onClick={() => setConfirmDialog({ action: "checkout", target })}>
                           Confirm Check-out
                         </Button>
-                      )}
+                      ) : null}
                     </div>
                   );
                 })()
@@ -1488,7 +1570,9 @@ function ReservationManagement({ user, toast, refreshKey }) {
                             variant={cfg.btnVariant}
                             disabled={actionSubmitting || (cfg.needsReason && !confirmDialog.reason?.trim())}
                             onClick={() => {
-                              if (confirmDialog.action === "checkin") handleCheckIn();
+                              if (confirmDialog.action === "approve_request") handleApproveChangeRequest();
+                              else if (confirmDialog.action === "reject_request") handleRejectChangeRequest();
+                              else if (confirmDialog.action === "checkin") handleCheckIn();
                               else if (confirmDialog.action === "noshow") handleRejectWalkin();
                               else if (confirmDialog.action === "reject_checkin") handleRejectCheckin();
                               else if (confirmDialog.action === "walkin_noshow") handleRejectWalkin();

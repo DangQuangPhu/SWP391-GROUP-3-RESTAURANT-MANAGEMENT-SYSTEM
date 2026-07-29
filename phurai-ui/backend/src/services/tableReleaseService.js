@@ -19,6 +19,7 @@
 
 import sql from 'mssql';
 import { getRawPool } from '../db.js';
+import { getDefaultErtDurationMin } from '../constants/ertConfig.js';
 
 // Default buffer if the setting is missing from DB
 const DEFAULT_BUFFER_MIN = 15;
@@ -30,11 +31,7 @@ const DEFAULT_BUFFER_MIN = 15;
  * @returns {number} minutes
  */
 export function getDefaultDurationMin(guestCount) {
-  const count = Number(guestCount) || 1;
-  if (count <= 2) return 60;
-  if (count <= 4) return 90;
-  if (count <= 6) return 105;
-  return 120;
+  return getDefaultErtDurationMin(guestCount);
 }
 
 /**

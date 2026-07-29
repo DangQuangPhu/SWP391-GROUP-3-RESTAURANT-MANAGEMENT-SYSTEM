@@ -288,70 +288,51 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
   }, [setReservations, toast, user]);
 
   const handleReject = useCallback(
-    async (reservation, skipConfirm = false) => {
+    (reservation) => {
       const rejectId = reservation.reservation_id || reservation.id;
-      const status = (reservation.status || reservation.reservation_status || "").toLowerCase();
-
-      // Double-confirmation: route through pendingAction modal unless bypassed
-      if (!skipConfirm) {
-        setPendingAction({ type: 'reject', reservation: { ...reservation, reservation_id: rejectId } });
-        return;
-      }
-
-      try {
-        if (status === "await check-in") {
-          await cancelReservation(rejectId, "Cancelled by manager", user?.userId || user?.user_id);
-        } else {
-          await rejectReservation(rejectId, "Rejected by manager", user?.userId || user?.user_id);
-        }
-
-        setReservations((prev) =>
-          prev.map((r) =>
-            r.reservation_id === rejectId || r.id === rejectId
-              ? { ...r, status: "cancelled", reservation_status: status === "await check-in" ? RESERVATION_STATUS.REJECT_CHECK_IN : RESERVATION_STATUS.REJECT_REQUEST }
-              : r
-          )
-        );
-
-        const tableId = reservation.table_id;
-        if (tableId && setTables) {
-          setTables((prev) =>
-            prev.map((t) =>
-              String(t.table_id) === String(tableId)
-                ? { ...t, status: "available", table_status: "Available" }
-                : t
-            )
-          );
-        }
-
-        toast(`Booking #${reservation.reservation_id} rejected. Table released.`, "success");
-        setActive(null);
-      } catch (err) {
-        toast(err.message || "Failed to reject reservation.", "error");
-      }
+      setCancelReason("");
+      setCancelModal({
+        reservation: { ...reservation, reservation_id: rejectId },
+        actionType: "reject",
+      });
     },
-    [setReservations, setTables, toast, user]
+    []
   );
 
-  // Flow D — Manager proactively cancel a Confirmed reservation
+  // Flow D — Manager proactively cancel/reject a reservation
   const handleCancelByManager = useCallback(async () => {
     if (!cancelModal?.reservation) return;
     const resId = cancelModal.reservation.reservation_id;
-    if (!cancelReason.trim() || cancelReason.trim().length < 5) {
-      toast("Please enter a cancellation reason (at least 5 characters).", "error");
-      return;
-    }
+    const cleanReason = cancelReason.trim() || "Cancelled by manager";
+
     setCancelling(true);
     try {
-      await cancelReservation(resId, cancelReason.trim(), user?.userId || user?.user_id);
+      if (cancelModal.actionType === "reject") {
+        await rejectReservation(resId, cleanReason, user?.userId || user?.user_id);
+      } else {
+        await cancelReservation(resId, cleanReason, user?.userId || user?.user_id);
+      }
+
       setReservations((prev) =>
         prev.map((r) =>
           r?.reservation_id === resId || r?.id === resId
-            ? { ...r, status: "cancelled", reservation_status: RESERVATION_STATUS.REJECT_CHECK_IN }
+            ? { ...r, status: "cancelled", reservation_status: RESERVATION_STATUS.CANCELLED }
             : r
         )
       );
-      toast(`Reservation #${resId} cancelled successfully.`, "success");
+
+      const tableId = cancelModal.reservation.table_id;
+      if (tableId && setTables) {
+        setTables((prev) =>
+          prev.map((t) =>
+            String(t.table_id) === String(tableId)
+              ? { ...t, status: "available", table_status: "Available" }
+              : t
+          )
+        );
+      }
+
+      toast(`Reservation #${resId} cancelled/rejected. Table released.`, "success");
       setCancelModal(null);
       setCancelReason("");
       if (active?.reservation_id === resId) setActive(null);
@@ -360,7 +341,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
     } finally {
       setCancelling(false);
     }
-  }, [cancelModal, cancelReason, cancelReservation, setReservations, toast, user, active, setActive]);
+  }, [cancelModal, cancelReason, cancelReservation, rejectReservation, setReservations, setTables, toast, user, active, setActive]);
 
   const handleSaveEdit = useCallback(async () => {
     if (!active) return;
@@ -810,83 +791,186 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                 <h2 style={{ fontSize: "28px", margin: "0 0 12px 0", fontWeight: 700, letterSpacing: "0.05em" }}>
                   #{String(active.reservation_id).padStart(6, "0")}
                 </h2>
-                {active.has_pending_request ? (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff3cd", color: "#856404", fontSize: 12, fontWeight: 700, padding: "5px 14px", borderRadius: 24, letterSpacing: "0.07em", border: "1px solid #ffc107" }}>
-                    ⏳ PENDING EDIT REQUEST
+              {(() => {
+                const isPendingActive = Boolean(
+                  active?.has_pending_request === 1 ||
+                  active?.has_pending_request === true ||
+                  active?.reservation_status === "Pending Request" ||
+                  active?.status === "Pending Request" ||
+                  active?.reservation_status === "Request" ||
+                  active?.status === "Request" ||
+                  (active?.pending_changes_json && active?.pending_changes_json !== "{}" && active?.pending_changes_json !== "null") ||
+                  (active?.request_type && active?.request_type !== "")
+                );
+
+                return isPendingActive ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", background: "rgba(245, 158, 11, 0.12)", color: "#b45309", fontSize: 12, fontWeight: 800, padding: "5px 16px", borderRadius: 24, letterSpacing: "0.08em", border: "1px solid rgba(245, 158, 11, 0.35)", textTransform: "uppercase" }}>
+                    PENDING REQUEST
                   </span>
                 ) : (
                   <StatusBadge tone={RESERVATION_STATUS_META[(active.status || active.reservation_status || "")]?.tone || "default"} color={RESERVATION_STATUS_META[(active.status || active.reservation_status || "")]?.color}>
                     {RESERVATION_STATUS_META[(active.status || active.reservation_status || "")]?.label || active.reservation_status}
                   </StatusBadge>
-                )}
+                );
+              })()}
               </div>
 
-              {/* 2-Panel Edit Request Comparison */}
-              {active.has_pending_request && active.request_type !== 'cancel' && (() => {
+              {/* 50-50 Split Layout for Pending Requests */}
+              {Boolean(
+                active?.has_pending_request === 1 ||
+                active?.has_pending_request === true ||
+                active?.reservation_status === "Pending Request" ||
+                active?.status === "Pending Request" ||
+                active?.reservation_status === "Request" ||
+                active?.status === "Request" ||
+                (active?.pending_changes_json && active?.pending_changes_json !== "{}" && active?.pending_changes_json !== "null") ||
+                (active?.request_type && active?.request_type !== "")
+              ) ? (() => {
                 let pendingChanges = {};
                 try { pendingChanges = JSON.parse(active.pending_changes_json || "{}"); } catch (_) { }
-                const hasChanges = Object.keys(pendingChanges).length > 0;
-                if (!hasChanges) return null;
 
                 const fmt = (iso) => {
-                  try { return format(new Date(iso), "dd/MM/yyyy HH:mm"); } catch { return String(iso); }
+                  try { return format(new Date(iso), "dd/MM/yyyy HH:mm"); } catch { return String(iso || "—"); }
                 };
 
-                const changeFields = [
-                  { label: "Date & Time", oldVal: active.reservation_start_at ? fmt(active.reservation_start_at) : <EmptyVal val="" />, newVal: pendingChanges.reservation_start_at ? fmt(pendingChanges.reservation_start_at) : null },
-                  { label: "End Time", oldVal: active.reservation_end_at ? fmt(active.reservation_end_at) : <EmptyVal val="" />, newVal: pendingChanges.reservation_end_at ? fmt(pendingChanges.reservation_end_at) : null },
-                  { label: "Guests", oldVal: <EmptyVal val={String(active.guest_count || "")} />, newVal: pendingChanges.guest_count != null ? String(pendingChanges.guest_count) : null },
-                  { label: "Tables", oldVal: active.assigned_tables || active.table_label || "Unassigned", newVal: pendingChanges.table_ids ? `Table #${pendingChanges.table_ids.join(", ")}` : null },
-                  { label: "Dining Purpose", oldVal: active.dining_purpose || active.occasion || "None", newVal: pendingChanges.dining_purpose || pendingChanges.occasion || null },
-                  { label: "Notes", oldVal: active.special_request || active.notes || "None", newVal: pendingChanges.special_request || pendingChanges.notes || null },
-                ].filter(f => f.newVal != null);
+                const rawSpecial = active.special_request || active.notes || "";
+                const cleanNote = String(rawSpecial)
+                  .replace(/\[PreferredTable[^\]]*\]/gi, "")
+                  .replace(/\[PreferredTableId[^\]]*\]/gi, "")
+                  .replace(/\[Assignment[^\]]*\]/gi, "")
+                  .replace(/\[[^\]]+\]/g, "")
+                  .trim();
+
+                let preferredTable = null;
+                const prefMatch = String(rawSpecial).match(/\[PreferredTable:\s*([^\]]+)\]/i);
+                if (prefMatch && prefMatch[1]) {
+                  preferredTable = prefMatch[1].trim();
+                }
+
+                const rawOrigTable = active.assigned_tables || active.table_label || null;
+                const origTable = rawOrigTable
+                  ? rawOrigTable
+                  : preferredTable
+                    ? `${preferredTable} (Preferred)`
+                    : "Not Assigned Yet";
+
+                const newTable = pendingChanges.table_ids
+                  ? `Table #${pendingChanges.table_ids.join(", ")}`
+                  : pendingChanges.table_label
+                    ? pendingChanges.table_label
+                    : origTable;
+
+                const origArea = active.assigned_area_name || active.area_name || active.preferred_area || "Any Area";
+                const newArea = pendingChanges.area_name || pendingChanges.preferred_area || origArea;
+
+                const origStart = active.reservation_start_at ? fmt(active.reservation_start_at) : "—";
+                const newStart = pendingChanges.reservation_start_at ? fmt(pendingChanges.reservation_start_at) : origStart;
+
+                const origEnd = active.reservation_end_at ? fmt(active.reservation_end_at) : "—";
+                const newEnd = pendingChanges.reservation_end_at ? fmt(pendingChanges.reservation_end_at) : origEnd;
+
+                const origGuests = String(active.guest_count || "—") + " Guests";
+                const newGuests = (pendingChanges.guest_count != null ? String(pendingChanges.guest_count) : String(active.guest_count || "—")) + " Guests";
+
+                const origPhone = active.customer_phone || active.contact_phone || "—";
+                const newPhone = pendingChanges.contact_phone || pendingChanges.phone || origPhone;
+
+                const origNotesVal = cleanNote || "None";
+                const newNotesVal = pendingChanges.special_request || pendingChanges.notes || origNotesVal;
+
+                const origDining = active.dining_purpose || active.occasion || "None";
+                const newDining = pendingChanges.dining_purpose || pendingChanges.occasion || origDining;
+
+                const createdStr = active.created_time || active.created_at ? fmt(active.created_time || active.created_at) : "—";
+
+                const compareFields = [
+                  { label: "Request Time", orig: createdStr, new: createdStr },
+                  { label: "Customer Name", orig: active.customer_name || "—", new: active.customer_name || "—" },
+                  { label: "Contact Phone", orig: origPhone, new: newPhone },
+                  { label: "Email Address", orig: active.customer_email || active.email || "—", new: active.customer_email || active.email || "—" },
+                  { label: "Start Time", orig: origStart, new: newStart },
+                  { label: "Guests", orig: origGuests, new: newGuests },
+                  { label: "Table", orig: origTable, new: newTable },
+                  { label: "Area", orig: origArea, new: newArea },
+                  { label: "Dining Purpose", orig: origDining, new: newDining },
+                  { label: "Notes", orig: origNotesVal, new: newNotesVal },
+                ];
 
                 return (
-                  <div style={{ marginBottom: 20, border: "1px solid #ffc107", borderRadius: 12, overflow: "hidden" }}>
-                    <div style={{ background: "#fff8e1", padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid #ffc107" }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "#856404" }}>📋 Customer Requested Changes</span>
-                      <span style={{ fontSize: 11, color: "#a08030", marginLeft: "auto" }}>Awaiting your decision</span>
+                  <div style={{ border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden", background: "#ffffff", boxShadow: "0 4px 14px rgba(0, 0, 0, 0.04)" }}>
+                    {/* Card Header */}
+                    <div style={{ background: "#f8fafc", padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #e2e8f0" }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: "#334155", letterSpacing: "0.06em", textTransform: "uppercase" }}>CHANGE REQUEST COMPARISON</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, background: "#f59e0b", color: "#ffffff", padding: "3px 10px", borderRadius: 12, textTransform: "uppercase", letterSpacing: "0.04em" }}>AWAITING DECISION</span>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0, background: "#fffdf0" }}>
-                      {/* Current Info Panel */}
-                      <div style={{ padding: "14px 16px", borderRight: "1px solid #fde68a" }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#a08030", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Current Info</div>
-                        {changeFields.map(f => (
-                          <div key={f.label} style={{ marginBottom: 8 }}>
-                            <div style={{ fontSize: 11, color: "#9ca3af" }}>{f.label}</div>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>{f.oldVal}</div>
-                          </div>
-                        ))}
+
+                    {/* Column Titles */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid #e2e8f0", background: "#f1f5f9" }}>
+                      <div style={{ padding: "10px 16px", borderRight: "1px solid #e2e8f0", fontSize: 11, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                        ORIGINAL BOOKING
                       </div>
-                      {/* Requested Changes Panel */}
-                      <div style={{ padding: "14px 16px", background: "#fffbeb" }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Requested Changes</div>
-                        {changeFields.map(f => (
-                          <div key={f.label} style={{ marginBottom: 8 }}>
-                            <div style={{ fontSize: 11, color: "#9ca3af" }}>{f.label}</div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: f.newVal !== f.oldVal ? "#16a34a" : "#374151", display: "flex", alignItems: "center", gap: 4 }}>
-                              {f.newVal}
-                              {f.newVal !== f.oldVal && <span style={{ fontSize: 10, background: "#dcfce7", color: "#16a34a", padding: "1px 6px", borderRadius: 10 }}>Changed</span>}
+                      <div style={{ padding: "10px 16px", fontSize: 11, fontWeight: 800, color: "#0369a1", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                        REQUESTED CHANGES
+                      </div>
+                    </div>
+
+                    {/* Row-by-Row 50-50 Grid */}
+                    <div>
+                      {compareFields.map((field, idx) => {
+                        const isDiff = field.orig !== field.new;
+                        return (
+                          <div
+                            key={field.label}
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "1fr 1fr",
+                              borderBottom: idx < compareFields.length - 1 ? "1px solid #f1f5f9" : "none",
+                            }}
+                          >
+                            {/* Left Cell: Original */}
+                            <div style={{ padding: "11px 16px", borderRight: "1px solid #e2e8f0", background: "#ffffff" }}>
+                              <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600, display: "block", textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 3 }}>
+                                {field.label}
+                              </span>
+                              <span style={{ fontSize: 13, color: "#1e293b", fontWeight: 600, wordBreak: "break-word" }}>
+                                {field.orig}
+                              </span>
+                            </div>
+
+                            {/* Right Cell: Requested */}
+                            <div style={{ padding: "11px 16px", background: isDiff ? "#f0fdf4" : "#ffffff" }}>
+                              <span style={{ fontSize: 11, color: isDiff ? "#15803d" : "#64748b", fontWeight: 600, display: "block", textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 3 }}>
+                                {field.label}
+                              </span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                <span style={{ fontSize: 13, color: isDiff ? "#15803d" : "#1e293b", fontWeight: isDiff ? 700 : 600, wordBreak: "break-word" }}>
+                                  {field.new}
+                                </span>
+                                {isDiff && (
+                                  <span style={{ fontSize: 10, background: "#dcfce7", color: "#15803d", border: "1px solid #86efac", fontWeight: 700, padding: "1px 6px", borderRadius: 4 }}>
+                                    Changed
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );
-              })()}
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
-                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Request Time</span>
-                  <strong style={{ fontWeight: "bold", fontSize: "14px", color: "var(--sfx-gold)" }}>
-                    {active.created_time || active.created_at
-                      ? !isNaN(new Date(active.created_time || active.created_at).getTime())
-                        ? format(new Date(active.created_time || active.created_at), "dd/MM/yyyy HH:mm")
-                        : "---"
-                      : "---"}
-                  </strong>
-                </div>
+              })() : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
+                    <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Request Time</span>
+                    <strong style={{ fontWeight: "bold", fontSize: "14px", color: "var(--sfx-gold)" }}>
+                      {active.created_time || active.created_at
+                        ? !isNaN(new Date(active.created_time || active.created_at).getTime())
+                          ? format(new Date(active.created_time || active.created_at), "dd/MM/yyyy HH:mm")
+                          : "---"
+                        : "---"}
+                    </strong>
+                  </div>
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
                   <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Customer Name</span>
                   {isEditing ? (
@@ -922,18 +1006,6 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                   )}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
-                  <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>End Time</span>
-                  {isEditing ? (
-                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}>
-                       <EmptyVal val={editForm.reservation_start_at ? format(new Date(new Date(editForm.reservation_start_at).getTime() + (90 + parseInt(editForm.duration || 0)) * 60000), "HH:mm (dd/MM/yyyy)") : "—"} />
-                    </strong>
-                  ) : (
-                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}>
-                      <EmptyVal val={active.reservation_end_at ? format(new Date(active.reservation_end_at), "HH:mm (dd/MM/yyyy)") : "—"} />
-                    </strong>
-                  )}
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
                   <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Guests</span>
                   {isEditing ? (
                     <input className="sfx-input" type="number" min="1" value={editForm.guest_count} onChange={e => setEditForm(p => ({ ...p, guest_count: e.target.value }))} />
@@ -951,7 +1023,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
                   <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px" }}>Area</span>
-                  <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.area_name || active.preferred_area || "Any"}</strong>
+                  <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{active.assigned_area_name || active.area_name || active.preferred_area || "Any"}</strong>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
                   <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", alignSelf: "center" }}>Dining Purpose</span>
@@ -1019,7 +1091,9 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                       ))}
                     </select>
                   ) : (
-                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}>{RESERVATION_STATUS_META[(active.status || active.reservation_status || "")]?.label || active.reservation_status}</strong>
+                    <strong style={{ fontWeight: "bold", fontSize: "14px" }}>
+                      {active.has_pending_request ? "Pending Request" : (RESERVATION_STATUS_META[(active.status || active.reservation_status || "")]?.label || active.reservation_status)}
+                    </strong>
                   )}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 16, alignItems: "start" }}>
@@ -1038,7 +1112,13 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                   {isEditing ? (
                     <textarea className="sfx-input" rows="3" value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} />
                   ) : (() => {
-                    const cleanNote = active.special_request || active.notes;
+                    const rawNote = active.special_request || active.notes || "";
+                    const cleanNote = String(rawNote)
+                      .replace(/\[PreferredTable[^\]]*\]/gi, "")
+                      .replace(/\[PreferredTableId[^\]]*\]/gi, "")
+                      .replace(/\[Assignment[^\]]*\]/gi, "")
+                      .replace(/\[[^\]]+\]/g, "")
+                      .trim();
                     return cleanNote ? (
                       <strong style={{ fontWeight: "bold", fontSize: "14px", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
                         {cleanNote}
@@ -1055,6 +1135,7 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                   </div>
                 )}
               </div>
+            )}
 
               <div className="sfx-detail__block" style={{ marginTop: 24 }}>
                 <span style={{ color: "var(--sfx-muted)", fontWeight: "normal", fontSize: "13px", marginBottom: 8, display: "block" }}>Pre-ordered items</span>
@@ -1099,12 +1180,40 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                           MANAGER_APPROVED_EDIT: "#14b8a6",
                           MANAGER_DECLINE_REQUEST: "#ef4444",
                           CANCEL_RESERVATION: "#ef4444",
+                          CUSTOMER_INITIATED_RESERVATION: "#c9a96e",
+                          RESERVATION_CREATED: "#c9a96e",
+                          SYSTEM_TABLE_STATUS_CONFLICT: "#eab308",
+                          AUTOMATED_PAYMENT_SUCCESS: "#22c55e",
+                          CUSTOMER_EDIT_REQUEST: "#3b82f6",
+                          CUSTOMER_CANCEL_REQUEST: "#ef4444",
+                          STAFF_RESOLVED_CHANGE_REQUEST: "#14b8a6",
+                          MANAGER_APPROVED_CHANGE_REQUEST: "#14b8a6",
+                          CHECK_IN_RESERVATION: "#22c55e",
+                          STAFF_CHECKIN_CONFIRMED: "#22c55e",
+                          PAYMENT_CHECKOUT_AUTO: "#c2610a",
+                          STAFF_CHECKOUT_CONFIRMED: "#7c5cbf",
+                          REJECT_RESERVATION: "#ef4444",
+                          REJECT_CHECKIN: "#ef4444",
+                          MANAGER_CONFIRMED: "#3b82f6",
+                          MANAGER_RESOLVE_REQUEST: "#14b8a6",
+                          MANAGER_APPROVED_EDIT: "#14b8a6",
+                          MANAGER_DECLINE_REQUEST: "#ef4444",
+                          CANCEL_RESERVATION: "#ef4444",
+                          CUSTOMER_CANCELLED_RESERVATION: "#ef4444",
                           STAFF_SEND_COOKING_QUEUE: "#8b5cf6",
                           "Staff Send Cooking Queue": "#8b5cf6",
                           SEED_TEST_RESERVATION: "#c9a96e",
+                          REJECT_CHECKOUT: "#ef4444",
                         };
                         const ACTION_LABEL = {
+                          CUSTOMER_INITIATED_RESERVATION: "Reservation Created",
                           RESERVATION_CREATED: "Reservation Created",
+                          SYSTEM_TABLE_STATUS_CONFLICT: "Table Status Conflict",
+                          AUTOMATED_PAYMENT_SUCCESS: "Payment Successful",
+                          CUSTOMER_EDIT_REQUEST: "Change Request Submitted",
+                          CUSTOMER_CANCEL_REQUEST: "Cancellation Requested",
+                          STAFF_RESOLVED_CHANGE_REQUEST: "Change Request Approved",
+                          MANAGER_APPROVED_CHANGE_REQUEST: "Change Request Approved",
                           CHECK_IN_RESERVATION: "Check-in Confirmed",
                           STAFF_CHECKIN_CONFIRMED: "Check-in Confirmed",
                           PAYMENT_CHECKOUT_AUTO: "Payment Completed",
@@ -1116,39 +1225,52 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                           MANAGER_APPROVED_EDIT: "Edit Approved",
                           MANAGER_DECLINE_REQUEST: "Edit Request Rejected",
                           CANCEL_RESERVATION: "Reservation Cancelled",
+                          CUSTOMER_CANCELLED_RESERVATION: "Reservation Cancelled",
                           STAFF_SEND_COOKING_QUEUE: "Sent to Kitchen",
                           "Staff Send Cooking Queue": "Sent to Kitchen",
                           SEED_TEST_RESERVATION: "Seed Test Reservation",
                           REJECT_CHECKOUT: "Check-out Rejected",
                         };
-                        const color = ACTION_COLOR[hist.action_name] || "#8a8175";
-                        const label = ACTION_LABEL[hist.action_name] || hist.label || hist.action_name;
+
+                        const rawAction = hist.action_name || "";
+                        const color = ACTION_COLOR[rawAction] || "#8a8175";
+                        let label = ACTION_LABEL[rawAction] || hist.label;
+                        if (!label) {
+                          label = rawAction
+                            .replace(/_/g, " ")
+                            .toLowerCase()
+                            .replace(/\b\w/g, (c) => c.toUpperCase())
+                            .trim();
+                        }
+
                         let performerName = hist.performed_by || hist.actor_name || "System";
-                        // Actor role label
                         let actorRole = hist.role_name;
                         if (!actorRole) {
-                          if (hist.action_name === "RESERVATION_CREATED") {
+                          if (["RESERVATION_CREATED", "CUSTOMER_INITIATED_RESERVATION", "CUSTOMER_EDIT_REQUEST", "CUSTOMER_CANCEL_REQUEST"].includes(rawAction)) {
                             actorRole = "Customer";
                             if (performerName === "System") {
-                              performerName = active.customer_name || active.contact_name || "Unknown";
+                              performerName = active.customer_name || active.contact_name || "Guest";
                             }
-                          } else if (["CHECK_IN_RESERVATION", "STAFF_CHECKIN_CONFIRMED", "STAFF_CHECKOUT_CONFIRMED", "REJECT_RESERVATION", "REJECT_CHECKIN", "STAFF_SEND_COOKING_QUEUE", "Staff Send Cooking Queue"].includes(hist.action_name)) {
+                          } else if (["CHECK_IN_RESERVATION", "STAFF_CHECKIN_CONFIRMED", "STAFF_CHECKOUT_CONFIRMED", "REJECT_RESERVATION", "REJECT_CHECKIN", "STAFF_SEND_COOKING_QUEUE", "Staff Send Cooking Queue", "STAFF_RESOLVED_CHANGE_REQUEST"].includes(rawAction)) {
                             actorRole = "Staff";
-                          } else if (["MANAGER_CONFIRMED", "MANAGER_RESOLVE_REQUEST", "MANAGER_APPROVED_EDIT", "MANAGER_DECLINE_REQUEST"].includes(hist.action_name)) {
+                          } else if (["MANAGER_CONFIRMED", "MANAGER_RESOLVE_REQUEST", "MANAGER_APPROVED_EDIT", "MANAGER_DECLINE_REQUEST", "MANAGER_APPROVED_CHANGE_REQUEST"].includes(rawAction)) {
                             actorRole = "Manager";
-                          } else if (hist.action_name !== "PAYMENT_CHECKOUT_AUTO") {
+                          } else {
                             actorRole = "System";
                           }
                         }
+
                         // Timestamp
                         const tsStr = (hist.created_time || hist.created_at) && !isNaN(new Date(hist.created_time || hist.created_at).getTime())
                           ? format(new Date(hist.created_time || hist.created_at), "dd/MM HH:mm")
                           : "---";
                         // Extract sent_to from notes if it's a kitchen queue action
                         let destInfo = "";
-                        if (hist.action_name === "Staff Send Cooking Queue" || hist.action_name === "STAFF_SEND_COOKING_QUEUE") {
+                        if (rawAction === "Staff Send Cooking Queue" || rawAction === "STAFF_SEND_COOKING_QUEUE") {
                           if (hist.notes && hist.notes.sent_to) destInfo = ` ➔ ${hist.notes.sent_to}`;
                         }
+
+                        const displayPerformer = performerName && performerName !== "System" ? ` ${performerName}` : "";
 
                         return (
                           <div key={idx} className="sfx-reservations__timeline-item">
@@ -1158,12 +1280,12 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                             <div className="sfx-reservations__timeline-dot-container" style={{ background: color, boxShadow: `0 0 0 3px color-mix(in srgb, ${color} 20%, transparent)` }} />
                             <div className="sfx-reservations__timeline-content">
                               <div className="sfx-reservations__timeline-header">
-                                <span className="sfx-reservations__timeline-label">{label}:</span>
+                                <span className="sfx-reservations__timeline-label">{label}</span>
                                 <span className="sfx-reservations__timeline-time">{tsStr !== "---" ? tsStr.replace(" ", " ") : ""}</span>
                               </div>
-                              {actorRole !== null && (
+                              {actorRole && (
                                 <span className="sfx-reservations__timeline-actor">
-                                  By {actorRole}{hist.action_name === "RESERVATION_CREATED" ? " : " : " "}{performerName}{destInfo}
+                                  By {actorRole}{displayPerformer}{destInfo}
                                 </span>
                               )}
                               {hist.notes && (
@@ -1196,25 +1318,33 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
       <ManagerDrawer
         open={!!pendingAction}
         onClose={() => setPendingAction(null)}
-        title={pendingAction?.type === 'confirm' ? "Confirm Reservation" : "Reject Reservation"}
+        title={
+          pendingAction?.reservation?.has_pending_request
+            ? (pendingAction?.type === 'confirm' ? "Confirm Change Request?" : "Reject Change Request?")
+            : (pendingAction?.type === 'confirm' ? "Confirm Reservation" : "Reject Reservation")
+        }
       >
         <div className="sfx-form sfx-form--vert">
-          <p className="sfx-text-muted sfx-reservations__desc-text">
-            Are you sure you want to {pendingAction?.type} reservation #{String(pendingAction?.reservation?.reservation_id || pendingAction?.reservation?.id).padStart(6, "0")}? This will notify the customer.
+          <p className="sfx-text-muted sfx-reservations__desc-text" style={{ fontSize: "14px", lineHeight: "1.5" }}>
+            {pendingAction?.reservation?.has_pending_request ? (
+              <>Are you sure you want to <strong>{pendingAction?.type === 'confirm' ? 'confirm and apply' : 'reject'}</strong> the requested changes for reservation <strong>#{String(pendingAction?.reservation?.reservation_id || pendingAction?.reservation?.id).padStart(6, "0")}</strong>? This action cannot be undone.</>
+            ) : (
+              <>Are you sure you want to {pendingAction?.type} reservation #{String(pendingAction?.reservation?.reservation_id || pendingAction?.reservation?.id).padStart(6, "0")}? This will notify the customer.</>
+            )}
           </p>
 
-          <div className="sfx-detail">
+          <div className="sfx-detail" style={{ background: "#fafafa", borderRadius: "12px", padding: "16px" }}>
             <span className="sfx-detail__label">Customer Name</span>
             <span className="sfx-detail__value">{pendingAction?.reservation?.customer_name || "---"}</span>
 
-            <span className="sfx-detail__label">Date & Time</span>
+            <span className="sfx-detail__label">Date &amp; Time</span>
             <span className="sfx-detail__value">{formatReservationDateTime(pendingAction?.reservation)}</span>
 
             <span className="sfx-detail__label">Guests</span>
             <span className="sfx-detail__value">{pendingAction?.reservation?.guest_count} people</span>
           </div>
 
-          <div className="sfx-actions sfx-reservations__actions-row">
+          <div className="sfx-actions sfx-reservations__actions-row" style={{ marginTop: "20px" }}>
             <Button variant="ghost" onClick={() => setPendingAction(null)}>
               Cancel
             </Button>
@@ -1230,7 +1360,9 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
                 setActive(null);
               }}
             >
-              {pendingAction?.type === 'confirm' ? 'Yes, Confirm Booking' : 'Yes, Reject Booking'}
+              {pendingAction?.reservation?.has_pending_request
+                ? (pendingAction?.type === 'confirm' ? 'Yes, Confirm Changes' : 'Yes, Reject Request')
+                : (pendingAction?.type === 'confirm' ? 'Yes, Confirm Booking' : 'Yes, Reject Booking')}
             </Button>
           </div>
         </div>
@@ -1361,34 +1493,115 @@ function ReservationsSection({ reservations, setReservations, setTables, toast }
         </div>
       )}
 
-      {/* ── Flow D: Manager Cancel Modal ──────────────────────────────── */}
+      {/* ── Flow D: Unified Manager Cancel / Reject Modal ──────────────── */}
       {cancelModal && (
-        <div className="sfx-reservations__cancel-overlay">
-          <div className="sfx-reservations__cancel-card">
-            <h3 className="sfx-reservations__cancel-title">Cancel Reservation</h3>
-            <p className="sfx-reservations__cancel-desc">
-              You are cancelling <strong>Reservation #{cancelModal.reservation.reservation_id}</strong> for{" "}
-              <strong>{cancelModal.reservation.customer_name || "Guest"}</strong>.
-              <br />This action will release the table and notify the customer by email.
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(15, 23, 42, 0.45)", backdropFilter: "blur(12px)",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: "20px",
+          animation: "appleFadeIn 0.2s ease forwards",
+        }}>
+          <div style={{
+            background: "#ffffff", border: "1px solid #cbd5e1",
+            borderRadius: "16px", padding: "24px 28px", maxWidth: "480px", width: "100%",
+            boxShadow: "0 20px 50px rgba(0,0,0,0.18)",
+            fontFamily: "'Inter', sans-serif", color: "#0f172a",
+            animation: "appleScaleEntrance 0.2s cubic-bezier(0.25, 0.1, 0.25, 1) forwards",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "#0f172a" }}>
+                  {cancelModal.actionType === "reject" ? "Reject Reservation" : "Cancel Reservation"}
+                </h3>
+                <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>
+                  Reservation <strong>#{cancelModal.reservation.reservation_id}</strong> · {cancelModal.reservation.customer_name || "Guest"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setCancelModal(null); setCancelReason(""); }}
+                style={{ background: "none", border: "none", fontSize: "18px", color: "#94a3b8", cursor: "pointer" }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 14px", lineHeight: 1.5 }}>
+              This action will release any assigned table, record an Audit Log entry, and notify the customer by email.
             </p>
-            <label className="sfx-reservations__cancel-label">
-              Cancellation Reason <span className="sfx-reservations__cancel-asterisk">*</span>
+
+            {/* Quick Reason Preset Chips */}
+            <div style={{ marginBottom: "12px" }}>
+              <label style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "#94a3b8", letterSpacing: "0.05em", display: "block", marginBottom: "6px" }}>
+                Quick Reasons:
+              </label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                {[
+                  "Customer requested cancellation",
+                  "Out of capacity / No table available",
+                  "No-show / Exceeded hold duration",
+                  "Duplicate booking",
+                ].map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => setCancelReason(chip)}
+                    style={{
+                      padding: "4px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: 600,
+                      background: cancelReason === chip ? "#fef3c7" : "#f1f5f9",
+                      border: `1px solid ${cancelReason === chip ? "#fde68a" : "#cbd5e1"}`,
+                      color: cancelReason === chip ? "#92400e" : "#475569",
+                      cursor: "pointer", transition: "all 0.15s ease",
+                    }}
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <label style={{ fontSize: "12px", fontWeight: 600, color: "#334155", display: "block", marginBottom: "6px" }}>
+              Cancellation / Rejection Reason Note:
             </label>
             <textarea
-              rows={4}
+              rows={3}
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="e.g. Restaurant closure, customer called to cancel, overbooking…"
-              className="sfx-reservations__cancel-textarea"
+              placeholder="Select a quick reason above or type a custom reason..."
+              style={{
+                width: "100%", padding: "10px 12px", borderRadius: "10px",
+                border: "1px solid #cbd5e1", background: "#f8fafc",
+                fontSize: "13px", color: "#0f172a", outline: "none",
+                boxSizing: "border-box", resize: "none", marginBottom: "18px",
+              }}
             />
-            <p className="sfx-reservations__cancel-hint">Minimum 5 characters. This reason will be recorded in the Audit Log.</p>
-            <div className="sfx-reservations__cancel-actions">
-              <Button variant="ghost" onClick={() => { setCancelModal(null); setCancelReason(""); }} disabled={cancelling}>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button
+                type="button"
+                className="apple-btn-interactive"
+                onClick={() => { setCancelModal(null); setCancelReason(""); }}
+                disabled={cancelling}
+                style={{
+                  padding: "8px 16px", borderRadius: "8px", background: "#f1f5f9",
+                  border: "1px solid #cbd5e1", color: "#475569", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                }}
+              >
                 Go Back
-              </Button>
-              <Button variant="danger" onClick={handleCancelByManager} disabled={cancelling || cancelReason.trim().length < 5}>
-                {cancelling ? "Cancelling…" : "Confirm Cancellation"}
-              </Button>
+              </button>
+              <button
+                type="button"
+                className="apple-btn-interactive"
+                onClick={handleCancelByManager}
+                disabled={cancelling}
+                style={{
+                  padding: "8px 18px", borderRadius: "8px", background: "#ef4444",
+                  border: "1px solid #dc2626", color: "#ffffff", fontSize: "13px", fontWeight: 700, cursor: "pointer",
+                  boxShadow: "0 2px 6px rgba(239, 68, 68, 0.25)",
+                }}
+              >
+                {cancelling ? "Processing…" : "Confirm Cancellation"}
+              </button>
             </div>
           </div>
         </div>
