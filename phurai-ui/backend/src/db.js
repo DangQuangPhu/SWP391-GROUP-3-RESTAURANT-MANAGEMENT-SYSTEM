@@ -232,6 +232,33 @@ function getPool() {
         IF NOT EXISTS (SELECT 1 FROM dbo.RestaurantSettings WHERE setting_key = N'closed_days')
             INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description, updated_by) VALUES (N'closed_days', N'', N'Closed days or dates (e.g. Sunday or 2026-07-27)', 1);
 
+        -- 12. Customer-owned loyalty promotions
+        IF OBJECT_ID(N'dbo.CustomerPromotions', N'U') IS NULL
+        BEGIN
+          CREATE TABLE dbo.CustomerPromotions (
+            customer_promotion_id INT IDENTITY(1,1) NOT NULL,
+            customer_id INT NOT NULL,
+            promotion_id INT NOT NULL,
+            points_spent INT NOT NULL,
+            promo_code NVARCHAR(50) NOT NULL,
+            status NVARCHAR(20) NOT NULL CONSTRAINT DF_CustomerPromotions_status DEFAULT N'active',
+            redeemed_at DATETIME2(0) NOT NULL CONSTRAINT DF_CustomerPromotions_redeemed DEFAULT SYSDATETIME(),
+            expires_at DATETIME2(0) NOT NULL,
+            used_at DATETIME2(0) NULL,
+            used_in_order_id INT NULL,
+            used_in_reservation_id INT NULL,
+            CONSTRAINT PK_CustomerPromotions PRIMARY KEY (customer_promotion_id),
+            CONSTRAINT UQ_CustomerPromotions_code UNIQUE (promo_code),
+            CONSTRAINT FK_CustomerPromotions_Customer FOREIGN KEY (customer_id) REFERENCES dbo.UserAccounts(user_id) ON DELETE CASCADE,
+            CONSTRAINT FK_CustomerPromotions_Promotions FOREIGN KEY (promotion_id) REFERENCES dbo.Promotions(promotion_id) ON DELETE CASCADE,
+            CONSTRAINT FK_CustomerPromotions_Orders FOREIGN KEY (used_in_order_id) REFERENCES dbo.Orders(order_id) ON DELETE SET NULL,
+            CONSTRAINT FK_CustomerPromotions_Reservations FOREIGN KEY (used_in_reservation_id) REFERENCES dbo.Reservations(reservation_id) ON DELETE SET NULL,
+            CONSTRAINT CK_CustomerPromotions_status CHECK (status IN (N'active', N'used', N'expired'))
+          );
+        END;
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_CustomerPromotions_StatusExpiry' AND object_id = OBJECT_ID(N'dbo.CustomerPromotions'))
+          CREATE INDEX IX_CustomerPromotions_StatusExpiry ON dbo.CustomerPromotions (status, expires_at);
+
       `).then(() => console.log("[DB] Schema synchronized."))
         .catch((err) => console.error("[DB] Schema sync error:", err.message));
 
