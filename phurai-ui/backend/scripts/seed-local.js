@@ -104,6 +104,14 @@ async function executeInserts(pool, tableName, columns, valueRows, identityInser
   console.log(`    ✓ dbo.${tableName}: ${valueRows.length} rows inserted.`);
 }
 
+async function tableExists(pool, tableName) {
+  const result = await pool.request()
+    .input('tableName', sql.NVarChar(128), tableName)
+    .query(`SELECT 1 AS ok FROM INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_SCHEMA = N'dbo' AND TABLE_NAME = @tableName`);
+  return result.recordset.length > 0;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main export — called by run_master_schema.js
 // ─────────────────────────────────────────────────────────────────────────────
@@ -112,7 +120,9 @@ export async function generateAndSeed(pool) {
 
   const endDate   = new Date();
   const startDate = new Date();
-  startDate.setDate(endDate.getDate() - 30);
+  // The demo promises one year of history; the former 30-day range also made
+  // the generated volume/date distribution disagree with TOTAL_DAYS.
+  startDate.setDate(endDate.getDate() - 364);
 
   const TOTAL_DAYS       = 365;
   let   globalOrderId    = 100000;
@@ -121,7 +131,8 @@ export async function generateAndSeed(pool) {
   let   globalResId      = 100000;
   let   globalUserId     = 1000;
   let   globalTimelineId = 1000;
-  let   globalLoyaltyId  = 1000;
+  // Static schema demo rows already use low loyalty transaction IDs.
+  let   globalLoyaltyId  = 200000;
 
   // ── IMPORTANT: Include Demo User (ID 15) ───────────────────────────────────
   // Note: user_id 15 is already created by System_Restaurant.sql, so we just add
@@ -169,7 +180,10 @@ export async function generateAndSeed(pool) {
   let currentDate = new Date(startDate);
   let dayCounter  = 0;
 
-  const staffIdMap = { 3: 2, 4: 3, 14: 6 }; // user_id → staff_id
+  // Keep this aligned with the static StaffProfiles seed in System_Restaurant.sql.
+  // The old map referenced a deleted/nonexistent staff_id (6), violating the
+  // PerformanceReviews FK during local initialization.
+  const staffIdMap = { 3: 3, 4: 4, 14: 7 }; // user_id → staff_id
 
   while (currentDate <= endDate) {
     dayCounter++;
@@ -211,8 +225,10 @@ export async function generateAndSeed(pool) {
         }
       }
 
+      // Keep generated data inside CK_Reservations_status. "Confirmed" is a
+      // legacy display value; the persisted canonical value is Await Check-in.
       const resStatus = isCancelled ? 'Cancelled'
-                      : isFuture ? 'Confirmed'
+                      : isFuture ? 'Await Check-in'
                       : isOngoing ? 'Dining'
                       : 'Completed';
 
@@ -383,8 +399,12 @@ export async function generateAndSeed(pool) {
   console.log('  Inserting audit logs...');
   await executeInserts(pool, 'AuditLogs', 'user_id, target_id, target_table, action_name, new_value_json, ip_address, created_at', allAudit, false);
 
-  console.log('  Inserting staff schedules...');
-  await executeInserts(pool, 'StaffSchedules', 'user_id, staff_id, shift_id, work_date, attendance_status, assigned_by, created_at, updated_at', allSchedules, false);
+  if (await tableExists(pool, 'StaffSchedules')) {
+    console.log('  Inserting staff schedules...');
+    await executeInserts(pool, 'StaffSchedules', 'user_id, staff_id, shift_id, work_date, attendance_status, assigned_by, created_at, updated_at', allSchedules, false);
+  } else {
+    console.log('  Skipping staff schedules (table is not part of this schema).');
+  }
 
   console.log('  Inserting performance reviews...');
   await executeInserts(pool, 'PerformanceReviews', 'staff_id, rating, notes, reviewed_by, review_date, created_at', allReviews, false);
@@ -428,7 +448,8 @@ export async function generateAndSeed(pool) {
   );
 
   // Get the actual promotion IDs we just inserted
-  const [promoRows] = await pool.query(`SELECT TOP 3 promotion_id, promotion_name FROM dbo.Promotions ORDER BY promotion_id ASC`);
+  const promoResult = await pool.query(`SELECT TOP 3 promotion_id, promotion_name FROM dbo.Promotions ORDER BY promotion_id ASC`);
+  const promoRows = promoResult.recordset;
   const welcomePromoId = promoRows.find(r => r.promotion_name.startsWith('Welcome'))?.promotion_id;
   const loyalPromoId   = promoRows.find(r => r.promotion_name.startsWith('Loyal'))?.promotion_id;
   const resPromoId     = promoRows.find(r => r.promotion_name.startsWith('Reservation'))?.promotion_id;
