@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Filter, ChevronDown, Check, X, Search, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import FloorPlanSVG, { normalizeStatus } from './FloorPlanSVG';
+import TablePreviewModal from './TablePreviewModal';
 
 function tableCodeAliases(code) {
   const value = String(code || '').trim().toUpperCase();
@@ -27,6 +28,7 @@ export default function TableBoard({
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [viewZoneImage, setViewZoneImage] = useState(null);
+  const [previewTable, setPreviewTable] = useState(null);
   const [draftTableIds, setDraftTableIds] = useState(() => selectedTableIds.length ? selectedTableIds.map(Number) : (selectedTableId ? [Number(selectedTableId)] : []));
   const dropdownRef = useRef(null);
 
@@ -72,11 +74,14 @@ export default function TableBoard({
   const handleTableClick = (configId) => {
     const apiTable = tableCodeAliases(configId).map((key) => apiTableMap.get(key)).find(Boolean);
     const status = normalizeStatus(apiTable, guestCount, allowMultiple);
-    // A single click is deliberately the selection control. This makes a
-    // selected table immediately toggle to deselected, while Apply remains the
-    // only action that commits the draft to Reservation/Walk-in/Edit Request.
-    if (!apiTable || (status !== 'Available' && status !== 'CurrentTable')) return;
-    handleDraftSelect(apiTable.table_id);
+    // Preview first: guests see the real table image and then explicitly choose
+    // Select or Deselect. Apply is still the single commit action.
+    setPreviewTable({
+      code: configId,
+      apiTable,
+      status,
+      isSelected: Boolean(apiTable && draftTableIds.includes(Number(apiTable.table_id))),
+    });
   };
 
   const selectedApiTable = useMemo(
@@ -245,7 +250,9 @@ export default function TableBoard({
       </div>
       <FloorPlanSVG
         tables={tables}
-        selectedTableId={selectedTableId}
+        // Render the draft only. Passing the parent/committed table here kept a
+        // table orange after Deselect until Apply, which made PR-01 look stuck.
+        selectedTableId={activeSelectedIds[0] || null}
         selectedTableIds={activeSelectedIds}
         currentTableId={currentTableId}
         guestCount={guestCount}
@@ -265,6 +272,9 @@ export default function TableBoard({
       <div className="tb-draft-toolbar">
         <span>{allowMultiple ? `${activeSelectedIds.length} table${activeSelectedIds.length !== 1 ? 's' : ''} selected · ${selectedCapacity}/${guestCount || 0} seats` : (activeSelectedIds.length ? '1 table selected' : 'Select one table')}</span>
         <div>
+          {activeSelectedIds.length > 0 && (
+            <button type="button" className="rzv-btn rzv-btn--ghost" onClick={() => setDraftTableIds([])}>Deselect all</button>
+          )}
           <button type="button" className="rzv-btn rzv-btn--ghost" onClick={() => onCancelSelection?.()}>Cancel</button>
           <button type="button" className="rzv-btn rzv-btn--solid tb-apply-button" disabled={!canApply} onClick={applyDraft}>Apply selection</button>
         </div>
@@ -293,6 +303,19 @@ export default function TableBoard({
           </div>
         </div>
       )}
+
+      <TablePreviewModal
+        table={previewTable?.code}
+        apiTable={previewTable?.apiTable}
+        tableStatus={previewTable?.status}
+        isSelected={previewTable?.isSelected}
+        isOpen={Boolean(previewTable)}
+        onClose={() => setPreviewTable(null)}
+        onSelect={(selectedId) => {
+          handleDraftSelect(selectedId);
+          setPreviewTable(null);
+        }}
+      />
 
     </div>
   );
