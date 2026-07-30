@@ -15,6 +15,24 @@ GO
 USE [System_Restaurant];
 GO
 
+-- SAFETY GUARD ---------------------------------------------------------------
+-- This is a destructive master rebuild, not an incremental seed.  Running it
+-- directly against an already-initialised database used to re-run demo rows
+-- with fixed identity values and produced duplicate Reservations/Orders after
+-- a partial execution.  The supported rebuild command clears tables first:
+--   npm run db:init:prod   (or npm run db:init:local)
+-- For an existing demo database, use the targeted seed/sync scripts instead.
+IF OBJECT_ID(N'dbo.UserAccounts', N'U') IS NOT NULL
+BEGIN
+    RAISERROR(
+        N'System_Restaurant.sql was stopped: an existing database was detected. Use npm run db:init:prod for a deliberate rebuild; do not execute this master file as an incremental seed.',
+        16,
+        1
+    );
+    SET NOEXEC ON;
+END
+GO
+
 -- ============================================================================
 -- 0. CLEANUP: DYNAMICALLY WIPE ALL FOREIGN KEYS, TABLES AND FUNCTIONS
 -- ============================================================================
