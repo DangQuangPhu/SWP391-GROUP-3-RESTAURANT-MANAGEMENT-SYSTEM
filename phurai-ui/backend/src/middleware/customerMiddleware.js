@@ -10,8 +10,9 @@ export async function requireCustomer(req, res, next) {
   try {
     let userId = req.userId || req.user?.user_id || req.user?.id;
     if (!userId && process.env.NODE_ENV !== "production") {
-      userId = 1222;
-      req.userId = 1222;
+      const [[devCust]] = await pool.query("SELECT TOP 1 user_id FROM dbo.UserAccounts WHERE email = 'quagphu159@gmail.com' OR role_id = (SELECT role_id FROM dbo.Roles WHERE role_name = 'Customer') ORDER BY CASE WHEN email = 'quagphu159@gmail.com' THEN 0 ELSE 1 END");
+      userId = devCust?.user_id || 1;
+      req.userId = userId;
     }
 
     if (!userId) {

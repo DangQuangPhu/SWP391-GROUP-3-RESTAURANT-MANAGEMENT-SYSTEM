@@ -1,10 +1,11 @@
 import jwt from 'jsonwebtoken';
+import pool from '../db.js';
 
 /**
  * Resolves the active user id for profile and customer routes.
  * Decodes JWT token if provided in Authorization header, or uses fallbacks.
  */
-export function resolveUserId(req, _res, next) {
+export async function resolveUserId(req, _res, next) {
   let tokenUserId = null;
   const header = req.headers['authorization'];
   if (header && header.startsWith('Bearer ')) {
@@ -31,13 +32,17 @@ export function resolveUserId(req, _res, next) {
   if (Number.isFinite(parsed) && parsed > 0) {
     req.userId = parsed;
   } else {
-    // Development fallback so customer/profile local API calls do not throw 401
-    req.userId = process.env.NODE_ENV !== "production" ? 1222 : null;
+    if (process.env.NODE_ENV !== "production") {
+      const [[devCust]] = await pool.query("SELECT TOP 1 user_id FROM dbo.UserAccounts WHERE email = 'quagphu159@gmail.com' OR role_id = (SELECT role_id FROM dbo.Roles WHERE role_name = 'Customer') ORDER BY CASE WHEN email = 'quagphu159@gmail.com' THEN 0 ELSE 1 END");
+      req.userId = devCust?.user_id || 1342;
+    } else {
+      req.userId = null;
+    }
   }
   next();
 }
 
-export function requireUserId(req, res, next) {
+export async function requireUserId(req, res, next) {
   if (!req.userId) {
     return res.status(401).json({
       success: false,

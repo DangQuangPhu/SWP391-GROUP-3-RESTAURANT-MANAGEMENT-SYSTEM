@@ -7,6 +7,9 @@ import { validateTableCapacity } from '../utils/validateTableCapacity';
 import '../styles/ReservationDetails.css';
 
 const STEPS = ['Details', 'Summary', 'Payment', 'Confirmed'];
+const MULTI_TABLE_PURPOSES = new Set([
+  'birthday', 'business meeting', 'family gathering', 'special occasion', 'private party',
+]);
 
 const addMinutesToTime = (timeStr, minsToAdd) => {
   if (!timeStr) return '';
@@ -631,7 +634,9 @@ export default function ReservationDetails({
   selectedTableId,
   selectedTableIds = [],
   allowMultipleTables = false,
+  onSelectEntireArea,
   onSelectTable,
+  onApplyTables,
   tablesLoading,
   isAuthenticated,
   onUpdateForm,
@@ -702,7 +707,14 @@ export default function ReservationDetails({
   const [showTableBoard, setShowTableBoard] = useState(false);
   const [errors, setErrors] = useState({});
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const selectionGuestLimit = allowMultipleTables ? 50 : 10;
+  // Derive from this form as well as the page prop. This avoids a render-timing
+  // race where the customer changes purpose then immediately opens the map.
+  const isMultiTableSelection = allowMultipleTables || MULTI_TABLE_PURPOSES.has(String(form.diningPurpose || '').trim().toLowerCase());
+  const selectionGuestLimit = isMultiTableSelection ? 50 : 10;
+  const selectedCapacity = useMemo(() => selectedTableIds.reduce((total, id) => {
+    const table = tables?.find((item) => String(item.table_id) === String(id));
+    return total + Number(table?.capacity || 0);
+  }, 0), [selectedTableIds, tables]);
 
   useEffect(() => {
     if (showTableBoard) {
@@ -715,9 +727,10 @@ export default function ReservationDetails({
     };
   }, [showTableBoard]);
 
-  // Automatically clear selected table if guest count changes and becomes invalid for table capacity
+  // Standard reservations need one fitting table. Event reservations keep every
+  // selected table so the guest can add tables until the combined capacity fits.
   useEffect(() => {
-    if (selectedTableId && tables && form.guests !== '') {
+    if (!isMultiTableSelection && selectedTableId && tables && form.guests !== '') {
       const selectedTable = tables.find(t => t.table_id === selectedTableId);
       if (selectedTable) {
         const isValid = validateTableCapacity(form.guests, selectedTable.capacity);
@@ -726,13 +739,13 @@ export default function ReservationDetails({
         }
       }
     }
-  }, [form.guests, selectedTableId, tables, onSelectTable]);
+  }, [form.guests, selectedTableId, tables, onSelectTable, isMultiTableSelection]);
 
   useEffect(() => {
     const today = getTodayString();
     if (!form.date || form.date < today) {
       setForm((prev) => ({ ...prev, date: today }));
-      if (onUpdateForm) onUpdateForm({ ...form, date: today });
+      if (onUpdateForm) onUpdateForm('date', today);
     }
   }, [form.date, onUpdateForm]);
 
@@ -988,13 +1001,16 @@ export default function ReservationDetails({
       }
     }
 
-    // Validate Table Selection (only if guests is 1-10)
-    if (form.guests !== '' && Number(form.guests) >= 1 && Number(form.guests) <= 10) {
-      if (!selectedTableId) {
+    // Validate table capacity for the allowed party size of this reservation type.
+    if (form.guests !== '' && Number(form.guests) >= 1 && Number(form.guests) <= selectionGuestLimit) {
+      if (!selectedTableIds.length) {
         newErrors.selectedTable = "Please select a table on the floor plan.";
+      } else if (isMultiTableSelection && selectedCapacity < Number(form.guests)) {
+        const missingSeats = Number(form.guests) - selectedCapacity;
+        newErrors.selectedTable = `Selected tables provide ${selectedCapacity} seats for ${form.guests} guests. Please add another table (${missingSeats} more seat${missingSeats > 1 ? 's' : ''} needed), or contact our staff so we can arrange extra tables.`;
       } else {
         const selectedTable = tables?.find((t) => String(t.table_id) === String(selectedTableId));
-        if (selectedTable && !validateTableCapacity(form.guests, selectedTable.capacity)) {
+        if (!isMultiTableSelection && selectedTable && !validateTableCapacity(form.guests, selectedTable.capacity)) {
           newErrors.selectedTable = `Table ${selectedTable.table_number || selectedTable.display_label || selectedTableId} has ${selectedTable.capacity} seats and is not suitable for ${form.guests} guest(s).`;
         }
       }
@@ -1170,17 +1186,32 @@ export default function ReservationDetails({
                         tables={tables || []}
                         selectedTableId={selectedTableId}
                         selectedTableIds={selectedTableIds}
-                        allowMultiple={allowMultipleTables}
-                        onSelectTable={(tableId) => {
-                          onSelectTable(tableId);
-                          if (!allowMultipleTables) setShowTableBoard(false);
-                        }}
+                        allowMultiple={isMultiTableSelection}
+                        onSelectTable={onSelectTable}
+                        onApplySelection={(ids) => { onApplyTables?.(ids); setShowTableBoard(false); }}
+                        onCancelSelection={() => setShowTableBoard(false)}
                         loading={tablesLoading}
                         guestCount={form.guests}
                         isAuthenticated={isAuthenticated}
                         onNavigateLogin={() => navigate('/login')}
                         onNavigateRegister={() => navigate('/register')}
                       />
+                      {false && isMultiTableSelection && (
+                        <div style={{ marginTop: '1rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          {Array.from(new Map((tables || []).filter((table) => table.area_id).map((table) => [table.area_id, table])).values()).map((area) => (
+                            <button key={area.area_id} type="button" className="rzv-btn rzv-btn--ghost" onClick={() => {
+                              if (onSelectEntireArea?.(area.area_id)) setShowTableBoard(false);
+                            }}>
+                              Book entire {area.area_name} area
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {false && isMultiTableSelection && (
+                        <button type="button" className="rzv-btn rzv-btn--solid" style={{ marginTop: "1rem" }} onClick={() => setShowTableBoard(false)}>
+                          Done selecting tables ({selectedTableIds.length})
+                        </button>
+                      )}
                     </div>
                   </div>,
                   document.body
@@ -1189,7 +1220,7 @@ export default function ReservationDetails({
             ) : (
               <div style={{ padding: "1rem", border: "1px solid #ddd", borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <p className="rd-selected-table" style={{ margin: 0, fontWeight: 500, fontSize: "0.9rem" }}>
-                  Selected table{selectedTableIds.length > 1 ? "s" : ""}: {selectedTableIds.map((id) => tables?.find((t) => Number(t.table_id) === Number(id))?.display_label || id).join(", ")}
+                  Selected table{selectedTableIds.length > 1 ? "s" : ""}: {selectedTableIds.map((id) => tables?.find((t) => Number(t.table_id) === Number(id))?.display_label || id).join(", ")}{isMultiTableSelection ? ` · ${selectedCapacity}/${form.guests || 0} seats` : ""}
                 </p>
                 <button
                   type="button"
@@ -1223,18 +1254,17 @@ export default function ReservationDetails({
                         tables={tables || []}
                         selectedTableId={selectedTableId}
                         selectedTableIds={selectedTableIds}
-                        allowMultiple={allowMultipleTables}
-                        onSelectTable={(tableId) => {
-                          onSelectTable(tableId);
-                          if (!allowMultipleTables) setShowTableBoard(false);
-                        }}
+                        allowMultiple={isMultiTableSelection}
+                        onSelectTable={onSelectTable}
+                        onApplySelection={(ids) => { onApplyTables?.(ids); setShowTableBoard(false); }}
+                        onCancelSelection={() => setShowTableBoard(false)}
                         loading={tablesLoading}
                         guestCount={form.guests}
                         isAuthenticated={isAuthenticated}
                         onNavigateLogin={() => navigate('/login')}
                         onNavigateRegister={() => navigate('/register')}
                       />
-                      {allowMultipleTables && (
+                      {false && isMultiTableSelection && (
                         <button type="button" className="rzv-btn rzv-btn--solid" style={{ marginTop: "1rem" }} onClick={() => setShowTableBoard(false)}>
                           Done selecting tables ({selectedTableIds.length})
                         </button>
@@ -1282,6 +1312,7 @@ export default function ReservationDetails({
             'Business Meeting',
             'Family Gathering',
             'Special Occasion',
+            'Private Party',
             'Other'
           ]}
         />

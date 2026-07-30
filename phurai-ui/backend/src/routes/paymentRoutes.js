@@ -45,8 +45,8 @@ router.get('/orders/:orderId/status', async (req, res) => {
             SET reservation_status = N'Pending Payment', updated_at = SYSDATETIME()
             WHERE reservation_id = @resId;
 
-            INSERT INTO dbo.ReservationTimelines (reservation_id, status_from, status_to, note, created_at)
-            VALUES (@resId, N'Dining', N'Pending Payment', N'Customer loaded QR checkout page', SYSDATETIME());
+            INSERT INTO dbo.ReservationTimelines (reservation_id, event_type, performed_by, notes, created_at)
+            VALUES (@resId, N'PAYMENT_PENDING', NULL, N'Customer loaded QR checkout page', SYSDATETIME());
           `);
           
         const io = getIO();
@@ -86,6 +86,55 @@ router.get('/reservations/:id/status', async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Rehydrates the payment amount from the database. The client never calculates
+// a multi-table deposit itself; this is the authoritative amount used in QR.
+router.get('/reservations/:id/payment-quote', async (req, res) => {
+  try {
+    const reservationId = Number(req.params.id);
+    const orderCode = String(req.query.order_code || '').trim();
+    if (!Number.isFinite(reservationId) || reservationId <= 0 || !orderCode) {
+      return res.status(400).json({ success: false, message: 'reservation id and order code are required.' });
+    }
+
+    const pool = await getRawPool();
+    const result = await pool.request()
+      .input('reservationId', sql.Int, reservationId)
+      .input('orderCode', sql.VarChar(50), orderCode)
+      .query(`
+        SELECT r.reservation_id, r.order_code, r.reservation_status,
+               r.deposit_amount, r.final_total,
+               COUNT(rt.table_id) AS table_count,
+               STRING_AGG(t.table_number, N', ') AS table_numbers
+        FROM dbo.Reservations r
+        LEFT JOIN dbo.ReservationTables rt ON rt.reservation_id = r.reservation_id
+        LEFT JOIN dbo.RestaurantTables t ON t.table_id = rt.table_id
+        WHERE r.reservation_id = @reservationId AND r.order_code = @orderCode
+        GROUP BY r.reservation_id, r.order_code, r.reservation_status, r.deposit_amount, r.final_total;
+      `);
+    const quote = result.recordset[0];
+    if (!quote) return res.status(404).json({ success: false, message: 'Reservation payment was not found.' });
+
+    const amount = Number(quote.deposit_amount || 0);
+    const vietqrUrl = `https://qr.sepay.vn/img?bank=TPBank&acc=00003942326&amount=${amount}&des=${encodeURIComponent(quote.order_code)}&template=&showinfo=true&holder=DANG%20QUANG%20PHU&store=PHURAI%20RESTAURANT`;
+    return res.json({
+      success: true,
+      quote: {
+        reservation_id: quote.reservation_id,
+        order_code: quote.order_code,
+        status: quote.reservation_status,
+        table_count: Number(quote.table_count || 0),
+        table_numbers: quote.table_numbers || '',
+        amount_due: amount,
+        remaining_after_deposit: Number(quote.final_total || 0),
+        vietqr_url: vietqrUrl,
+      },
+    });
+  } catch (error) {
+    console.error('[payment-quote] failed:', error);
+    return res.status(500).json({ success: false, message: 'Could not load payment quote.' });
   }
 });
 

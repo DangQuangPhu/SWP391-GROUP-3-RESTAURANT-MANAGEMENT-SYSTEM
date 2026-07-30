@@ -21,6 +21,7 @@ export default function TablePreviewModal({
   table,
   apiTable,
   tableStatus,
+  isSelected = false,
   isOpen,
   onClose,
   onSelect
@@ -135,7 +136,7 @@ export default function TablePreviewModal({
               onClick={handleSelectClick}
               disabled={!isAvailable}
             >
-              Select
+              {isSelected ? 'Deselect table' : 'Select table'}
             </button>
           </div>
         </div>

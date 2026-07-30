@@ -6,7 +6,7 @@ import { TABLES } from '../../config/floorPlanConfig';
 import { validateTableCapacity } from '../../utils/validateTableCapacity';
 
 // Normalize status based on backend API data and restaurant seating policy.
-export function normalizeStatus(apiTable, guestCount) {
+export function normalizeStatus(apiTable, guestCount, allowMultiple = false) {
   if (!apiTable) return "Inactive";
 
   const statusStr = (apiTable.availability_at_slot || apiTable.table_status || apiTable.status || "").toLowerCase().trim();
@@ -23,7 +23,9 @@ export function normalizeStatus(apiTable, guestCount) {
 
   const guests = Number(guestCount);
   const capacity = Number(apiTable.capacity);
-  if (Number.isFinite(guests) && Number.isFinite(capacity) && guests > 0 && capacity > 0) {
+  // Event reservations can combine tables. A 6-seat table must remain selectable
+  // for an 8-person party so the guest can add a second available table.
+  if (!allowMultiple && Number.isFinite(guests) && Number.isFinite(capacity) && guests > 0 && capacity > 0) {
     if (!validateTableCapacity(guests, capacity)) {
       return "InvalidCapacity";
     }
@@ -40,6 +42,18 @@ const IMAGES = {
   private: '/@fs/Users/phu/.gemini/antigravity-ide/brain/4f85d582-51c9-42b3-b311-de3c3d6b74b0/private_room_view_1782253645615.png',
   kitchen: '/@fs/Users/phu/.gemini/antigravity-ide/brain/4f85d582-51c9-42b3-b311-de3c3d6b74b0/kitchen_view_4_chairs_1782254469257.png'
 };
+
+// The production seed uses compact codes (S01, P01, R01, K01) while the
+// illustrated floor plan uses display codes (S-01, PRE-01, PR-01, K-01).
+// Keep the API authoritative but resolve both forms before assigning a status.
+function tableCodeAliases(code) {
+  const value = String(code || '').trim().toUpperCase();
+  const compact = value.replace(/-/g, '');
+  const aliases = [value, compact];
+  if (value.startsWith('PRE-')) aliases.push(`P${value.slice(4)}`);
+  if (value.startsWith('PR-')) aliases.push(`R${value.slice(3)}`);
+  return [...new Set(aliases)];
+}
 
 const ZoneViewButton = ({ x, y, label, img, onViewZone }) => {
   if (!onViewZone) return null;
@@ -64,8 +78,11 @@ export default function FloorPlanSVG({
   selectedTableIds = [],
   currentTableId,
   guestCount,
+  allowMultiple = false,
   onTableClick,
   activeFilter = null,
+  activeAreaId = null,
+  searchQuery = '',
   zoomScale: externalZoomScale,
   setZoomScale: externalSetZoomScale,
   pan: externalPan,
@@ -165,7 +182,7 @@ export default function FloorPlanSVG({
   const apiTableMap = useMemo(() => {
     const map = new Map();
     tables.forEach(t => {
-      map.set(t.table_number, t);
+      tableCodeAliases(t.table_number).forEach((key) => map.set(key, t));
     });
     return map;
   }, [tables]);
@@ -312,8 +329,8 @@ export default function FloorPlanSVG({
 
         <g id="tables-layer">
           {TABLES.map((tableConfig) => {
-            const apiTable = apiTableMap.get(tableConfig.id);
-            let status = normalizeStatus(apiTable, guestCount);
+            const apiTable = tableCodeAliases(tableConfig.id).map((key) => apiTableMap.get(key)).find(Boolean);
+            let status = normalizeStatus(apiTable, guestCount, allowMultiple);
 
             const isSelected = apiTable && (selectedTableIds.map(String).includes(String(apiTable.table_id)) || String(selectedTableId) === String(apiTable.table_id));
             const isCurrent = apiTable && String(currentTableId) === String(apiTable.table_id);
@@ -326,7 +343,10 @@ export default function FloorPlanSVG({
               visualStatus = 'Selected';
             }
 
-            const isDimmed = activeFilter !== null && visualStatus !== activeFilter;
+            const searchable = `${tableConfig.id} ${apiTable?.table_number || ''} ${apiTable?.area_name || ''}`.toLowerCase();
+            const isDimmed = (activeFilter !== null && visualStatus !== activeFilter)
+              || (activeAreaId !== null && String(apiTable?.area_id) !== String(activeAreaId))
+              || (searchQuery.trim() && !searchable.includes(searchQuery.trim().toLowerCase()));
 
             return (
               <TableUnit

@@ -15,7 +15,10 @@ export async function closeQrSessionsForCheckout({ transaction, tableId, reserva
     UPDATE dbo.QROrderSessions
     SET session_status = N'Closed',
         closed_at = SYSDATETIME(),
-        expires_at = COALESCE(expires_at, SYSDATETIME())
+        -- generated_at is stored with the SQL server's local clock in some
+        -- legacy flows.  Derive expiry from it so the expiry constraint stays
+        -- valid regardless of the server/API timezone.
+        expires_at = COALESCE(expires_at, DATEADD(second, 1, generated_at))
     OUTPUT INSERTED.qr_session_id INTO @Closed
     WHERE session_status IN (N'Active', N'Pending')
       AND (

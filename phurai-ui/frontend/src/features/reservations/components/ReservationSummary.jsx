@@ -39,6 +39,16 @@ function getAreaFromTable(tableLabel) {
   }
 }
 
+function getTableAreaSurcharge(areaName, capacity) {
+  const rates = {
+    'Premium Area': { 2: 30000, 4: 50000, 6: 80000, 8: 120000 },
+    'Private Room': { 2: 50000, 4: 100000, 6: 150000, 8: 200000 },
+    'VIP Lounge': { 2: 50000, 4: 100000, 6: 150000, 8: 200000 },
+  };
+  const tier = Number(capacity) >= 8 ? 8 : Number(capacity) >= 6 ? 6 : Number(capacity) >= 4 ? 4 : 2;
+  return rates[String(areaName || '').trim()]?.[tier] || 0;
+}
+
 /**
  * Final review of the booking before the guest confirms.
  */
@@ -133,6 +143,7 @@ function ReservationSummary({
   };
 
   const totalCapacity = selectedTables.reduce((sum, t) => sum + Number(t.capacity), 0);
+  const totalAreaSurcharge = selectedTables.reduce((sum, table) => sum + getTableAreaSurcharge(table.area_name, table.capacity), 0);
   const tableLabels = selectedTables.length > 0
     ? selectedTables.map((t) => t.display_label || t.table_number).join(", ")
     : "Not selected";
@@ -369,14 +380,21 @@ function ReservationSummary({
             <h3 style={{ fontSize: "1.05rem", fontWeight: 600, color: "#ffffff", marginBottom: "0.75rem" }}>Payment Details</h3>
             
             <div className="rzv-summary__row">
-              <span className="rzv-summary__label">Base Table Deposit</span>
-              <span className="rzv-summary__value">{formatVND(20000)}</span>
+              <span className="rzv-summary__label">Base Table Deposit ({selectedTables.length} table{selectedTables.length !== 1 ? 's' : ''})</span>
+              <span className="rzv-summary__value">{formatVND(20000 * selectedTables.length)}</span>
             </div>
 
             {preorderTotal > 0 && (
               <div className="rzv-summary__row">
                 <span className="rzv-summary__label">Pre-order Food Total</span>
                 <span className="rzv-summary__value">{formatVND(preorderTotal)}</span>
+              </div>
+            )}
+
+            {totalAreaSurcharge > 0 && (
+              <div className="rzv-summary__row">
+                <span className="rzv-summary__label">Area surcharge ({selectedTables.length} table{selectedTables.length !== 1 ? 's' : ''})</span>
+                <span className="rzv-summary__value">{formatVND(totalAreaSurcharge)}</span>
               </div>
             )}
 
@@ -390,8 +408,8 @@ function ReservationSummary({
             {(() => {
               const discountAmt = promoDiscount ? Number(promoDiscount.discount_amount) : 0;
               const foodTotal = Math.max(0, preorderTotal - discountAmt);
-              const baseTableFee = 20000;
-              const netTotal = baseTableFee + foodTotal;
+              const baseTableFee = 20000 * selectedTables.length;
+              const netTotal = baseTableFee + totalAreaSurcharge + foodTotal;
               const depositRequired = Math.round(netTotal * 0.3);
               const remainingBalance = netTotal - depositRequired;
 

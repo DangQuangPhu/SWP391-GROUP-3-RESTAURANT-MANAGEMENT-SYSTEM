@@ -235,14 +235,13 @@ function getPool() {
       `).then(() => console.log("[DB] Schema synchronized."))
         .catch((err) => console.error("[DB] Schema sync error:", err.message));
 
-      // Batch 2: admin account upsert (parallel with schema batch)
-      // Password Admin@123 — only set on INSERT (WHEN MATCHED skips password so user can change it)
+      // Batch 2: admin account upsert (parallel with schema batch).
+      // Existing password hashes must never be overwritten during startup.
       const adminBatch = pool.request().query(`
         MERGE dbo.UserAccounts AS target
         USING (SELECT N'phuadmin@phurai.vn' AS email) AS src ON target.email = src.email
         WHEN MATCHED THEN UPDATE SET
           role_id=4, full_name=N'Dang Quang Phu', is_active=1, email_verified=1,
-          password_hash=N'scrypt$3fc41cd9111a05256c622615de15c504$8478e9821bc1955d78e788229acce921aa4e9b7be840afe40b8551b486c10f6d565a17afffe7d8aee279a2782dda8b4fddbf3bd99bba6f46b9df11c0d73f0af6',
           updated_at=SYSDATETIME()
         WHEN NOT MATCHED THEN INSERT (role_id, full_name, email, phone, password_hash, is_active, email_verified)
           VALUES (4, N'Dang Quang Phu', N'phuadmin@phurai.vn', '0901000001',
@@ -252,7 +251,6 @@ function getPool() {
         USING (SELECT N'phumanager@phurai.vn' AS email) AS src ON target.email = src.email
         WHEN MATCHED THEN UPDATE SET
           role_id=3, full_name=N'Dang Quang Phu', is_active=1, email_verified=1,
-          password_hash=N'scrypt$3fc41cd9111a05256c622615de15c504$8478e9821bc1955d78e788229acce921aa4e9b7be840afe40b8551b486c10f6d565a17afffe7d8aee279a2782dda8b4fddbf3bd99bba6f46b9df11c0d73f0af6',
           updated_at=SYSDATETIME()
         WHEN NOT MATCHED THEN INSERT (role_id, full_name, email, phone, password_hash, is_active, email_verified)
           VALUES (3, N'Dang Quang Phu', N'phumanager@phurai.vn', '0901000002',
@@ -261,8 +259,11 @@ function getPool() {
         .catch((err) => console.error("[DB] Admin upsert error:", err.message));
 
 
-      // Fire both in parallel — server is up and serving before these finish
-      await Promise.all([schemaBatch, adminBatch]);
+      // Run startup migrations serially.  Running DDL and account upserts in
+      // parallel can race on a fresh database and produce transient constraint
+      // errors even though both batches are individually idempotent.
+      await adminBatch;
+      await schemaBatch;
 
       return pool;
     });

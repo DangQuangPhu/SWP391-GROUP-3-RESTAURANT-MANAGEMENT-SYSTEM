@@ -38,7 +38,10 @@ function parseDbDate(value) {
 
 function formatTimePart(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
-  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  // SQL DATETIME values represent the restaurant's local wall-clock time.
+  // The SQL driver serializes them as UTC Dates, so local getters add the
+  // browser/server offset and move evening reservations into the next day.
+  return `${pad2(date.getUTCHours())}:${pad2(date.getUTCMinutes())}`;
 }
 
 function mapTodayReservationRow(row, tablesByReservation, preordersByReservation = {}) {
@@ -997,7 +1000,8 @@ export async function resetTable(req, res) {
     }
 
     return jsonOk(res, {
-      table_id: tableId,
+      table_id: table.table_id,
+      table_ids: releasedTableIds,
       table_number: table.table_number,
       table_status: "Cleaning",
     });
@@ -2193,9 +2197,11 @@ async function loadOccupiedTableContext(executor, tableId) {
        a.area_name
      FROM dbo.RestaurantTables AS t
      INNER JOIN dbo.RestaurantAreas AS a ON a.area_id = t.area_id
-     WHERE t.table_id = ?
+     WHERE t.table_id = COALESCE((
+         SELECT merged_into_table_id FROM dbo.RestaurantTables WHERE table_id = ?
+       ), ?)
        AND a.is_active = 1;`,
-    [tableId]
+    [tableId, tableId]
   );
 
   const table = tableRows[0];
@@ -2672,29 +2678,38 @@ export async function checkoutTablePayment(req, res) {
       );
     }
 
+    const checkoutReservationId = reservation?.reservation_id ?? order?.reservation_id ?? null;
+    const [groupTableRows] = checkoutReservationId
+      ? await connection.query(`SELECT table_id FROM dbo.ReservationTables WHERE reservation_id = ? ORDER BY table_id;`, [checkoutReservationId])
+      : [[{ table_id: table.table_id }]];
+    const releasedTableIds = groupTableRows.map((row) => Number(row.table_id));
+
     const [activeQrSessions] = await connection.query(
       `SELECT qr_session_id
        FROM dbo.QROrderSessions
-       WHERE table_id = ?
+       WHERE (table_id = ? OR (? IS NOT NULL AND reservation_id = ?))
          AND session_status IN (N'Active', N'Pending');`,
-      [tableId]
+      [table.table_id, checkoutReservationId, checkoutReservationId]
     );
 
     await connection.query(
       `UPDATE dbo.QROrderSessions
        SET session_status = N'Closed',
-           closed_at = SYSDATETIME()
-       WHERE table_id = ?
+           closed_at = SYSDATETIME(),
+           expires_at = COALESCE(expires_at, SYSDATETIME())
+       WHERE (table_id = ? OR (? IS NOT NULL AND reservation_id = ?))
          AND session_status IN (N'Active', N'Pending');`,
-      [tableId]
+      [table.table_id, checkoutReservationId, checkoutReservationId]
     );
 
     await connection.query(
       `UPDATE dbo.RestaurantTables
        SET table_status = N'Cleaning',
+           merged_into_table_id = NULL,
            updated_at = SYSDATETIME()
-       WHERE table_id = ?;`,
-      [tableId]
+       WHERE table_id = ?
+          OR (? IS NOT NULL AND table_id IN (SELECT table_id FROM dbo.ReservationTables WHERE reservation_id = ?));`,
+      [table.table_id, checkoutReservationId, checkoutReservationId]
     );
 
     // Auto-link Customer account to Order & Reservation if matched in UserAccounts
@@ -2807,10 +2822,11 @@ export async function checkoutTablePayment(req, res) {
       userId: staffId,
       actionName: "TABLE_RELEASED",
       targetTable: "RestaurantTables",
-      targetId: tableId,
+      targetId: table.table_id,
       oldValue: {
         actor_user_id: staffId,
-        table_id: tableId,
+        table_id: table.table_id,
+        table_ids: releasedTableIds,
         reservation_id: reservation?.reservation_id ?? order?.reservation_id ?? null,
         customer_id: order?.customer_id ?? null,
         order_id: order?.order_id ?? null,
@@ -2835,12 +2851,15 @@ export async function checkoutTablePayment(req, res) {
     try {
       const io = getIO();
       if (io) {
-        io.to("room:staff").to("room:manager").emit("table:sync", {
-          table_id: tableId,
-          order_id: order?.order_id ?? null,
-          table_status: "Cleaning",
-          course_stage: "Payment Confirmed",
-        });
+        for (const releasedTableId of releasedTableIds) {
+          io.to("room:staff").to("room:manager").emit("table:sync", {
+            table_id: releasedTableId,
+            reservation_id: checkoutReservationId,
+            order_id: order?.order_id ?? null,
+            table_status: "Cleaning",
+            course_stage: "Payment Confirmed",
+          });
+        }
 
         for (const resId of completedResIds) {
           io.to('room:staff').emit('reservation:checkout_ready', { reservation_id: resId });
@@ -2849,7 +2868,7 @@ export async function checkoutTablePayment(req, res) {
         for (const qrSession of activeQrSessions) {
           io.to(`session_${qrSession.qr_session_id}`).emit("TABLE_SESSION_CLEARED", {
             session_id: qrSession.qr_session_id,
-            table_id: tableId,
+            table_id: table.table_id,
             reason: "payment_completed",
           });
         }
@@ -2863,7 +2882,8 @@ export async function checkoutTablePayment(req, res) {
       {
         payment_id: paymentId,
         order_id: order ? order.order_id : null,
-        table_id: tableId,
+        table_id: table.table_id,
+        table_ids: releasedTableIds,
         table_number: table.table_number,
         table_status: "Cleaning",
         order_status: order ? "Paid" : null,

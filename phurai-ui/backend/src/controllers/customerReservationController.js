@@ -30,6 +30,7 @@ export const createPreSaveReservation = async (req, res) => {
       promo_code,
       table_ids = [],
       dining_purpose,
+      book_entire_area = false,
     } = req.body;
 
     if (!reservation_start_at || !guest_count || table_ids.length === 0) {
@@ -70,6 +71,10 @@ export const createPreSaveReservation = async (req, res) => {
 
     const selectedTables = tableResult.recordset;
     const selectedTable = selectedTables[0];
+    const requestedSlotStart = new Date(reservation_start_at);
+    const requestedSlotEnd = reservation_end_at
+      ? new Date(reservation_end_at)
+      : new Date(requestedSlotStart.getTime() + (Number(durationMinutes) || 120) * 60 * 1000);
     if (selectedTables.length !== normalizedTableIds.length) {
       return res.status(400).json({
         success: false, message: "One or more selected tables were not found.",
@@ -77,6 +82,46 @@ export const createPreSaveReservation = async (req, res) => {
     }
     if (new Set(selectedTables.map((table) => table.area_id)).size > 1) {
       return res.status(400).json({ success: false, message: "Event tables must be in the same dining area." });
+    }
+
+    // A full-area booking must reserve every active table in that area. This
+    // prevents a client from labeling a partial selection as an area buyout.
+    if (book_entire_area) {
+      const areaId = selectedTables[0]?.area_id;
+      const allAreaTables = await pool.request()
+        .input('areaId', sql.SmallInt, areaId)
+        .query(`SELECT table_id FROM dbo.RestaurantTables WHERE area_id = @areaId AND table_status <> N'Inactive'`);
+      const allAreaIds = allAreaTables.recordset.map((table) => Number(table.table_id)).sort((a, b) => a - b);
+      const selectedIds = [...normalizedTableIds].sort((a, b) => a - b);
+      if (allAreaIds.length === 0 || allAreaIds.length !== selectedIds.length || allAreaIds.some((id, index) => id !== selectedIds[index])) {
+        return res.status(400).json({ success: false, message: "A full-area booking must include every active table in the selected area." });
+      }
+
+      // A buyout is valid only when every table is free for this exact slot.
+      // We check both current operational status and overlapping reservations
+      // inside the transaction path, not merely the UI availability snapshot.
+      const unavailable = await pool.request()
+        .input('areaId', sql.SmallInt, areaId)
+        .input('slotStart', sql.DateTime2, requestedSlotStart)
+        .input('slotEnd', sql.DateTime2, requestedSlotEnd)
+        .query(`
+          SELECT DISTINCT t.table_number
+          FROM dbo.RestaurantTables t
+          LEFT JOIN dbo.ReservationTables rt ON rt.table_id = t.table_id
+          LEFT JOIN dbo.Reservations r ON r.reservation_id = rt.reservation_id
+            AND r.reservation_status IN (N'Pending Request', N'Awaiting Deposit', N'Await Check-in', N'Dining', N'Pending Payment')
+            AND r.reservation_start_at < @slotEnd AND r.reservation_end_at > @slotStart
+          WHERE t.area_id = @areaId
+            AND t.table_status IN (N'Occupied', N'Cleaning')
+             OR (t.area_id = @areaId AND r.reservation_id IS NOT NULL)
+        `);
+      if (unavailable.recordset.length) {
+        return res.status(409).json({
+          success: false,
+          code: 'AREA_NOT_FULLY_AVAILABLE',
+          message: `The full area is unavailable for this time. Unavailable table(s): ${unavailable.recordset.map((row) => row.table_number).join(', ')}. You may select only the remaining individual tables.`,
+        });
+      }
     }
 
     const tableAssignmentStatus = getAssignmentMode(reservation_start_at);
@@ -87,6 +132,9 @@ export const createPreSaveReservation = async (req, res) => {
     }, { surcharge: 0, isLuxury: false, description: "" });
 
     let baseSpecialRequest = special_request || "";
+    if (book_entire_area) {
+      baseSpecialRequest = `[Area Buyout: ${selectedTable.area_name}] ${baseSpecialRequest}`.trim();
+    }
     if (areaSurchargeInfo.isLuxury) {
       baseSpecialRequest = `[Area Surcharge: ${areaSurchargeInfo.description}] ${baseSpecialRequest}`.trim();
     }
@@ -283,6 +331,7 @@ export const createPreSaveReservation = async (req, res) => {
         preferred_table_number: selectedTable.table_number,
         preferred_area_id: selectedTable.area_id,
         preferred_area_name: selectedTable.area_name,
+        book_entire_area: Boolean(book_entire_area),
         order_code,
         deposit_amount,
         final_total
@@ -313,6 +362,7 @@ export const createPreSaveReservation = async (req, res) => {
           preferred_table_number: selectedTable.table_number,
           preferred_area_id: selectedTable.area_id,
           preferred_area_name: selectedTable.area_name,
+          book_entire_area: Boolean(book_entire_area),
           order_code,
           contact_name,
           guest_count,

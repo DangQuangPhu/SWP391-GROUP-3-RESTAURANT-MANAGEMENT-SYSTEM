@@ -21,7 +21,7 @@ import "../styles/AddWalkInModal.css";
 // ─── Field config ────────────────────────────────────────────────────────────
 const FIELD_RULES = {
   contact_name:  { label: "Full Name",    required: true,  max: 100, type: "text",   placeholder: "e.g. Nguyen Van An",      autoComplete: "name" },
-  contact_phone: { label: "Phone Number", required: false, max: 20,  type: "tel",    placeholder: "e.g. 0901234567",        autoComplete: "tel" },
+  contact_phone: { label: "Phone Number", required: true,  max: 20,  type: "tel",    placeholder: "e.g. 0901234567",        autoComplete: "tel" },
   contact_email: { label: "Email",        required: true,  max: 100, type: "email",  placeholder: "e.g. guest@example.com", autoComplete: "email" },
   guest_count:   { label: "Guest Count",  required: true,  max: 3,   type: "number", placeholder: "e.g. 2",                 autoComplete: "off" },
 };
@@ -44,6 +44,9 @@ function validate(fields) {
   if (!fields.contact_name?.trim() || fields.contact_name.trim().length < 2) {
     errors.contact_name = "Full name is required (min 2 characters).";
   }
+  if (!fields.contact_phone?.trim() || fields.contact_phone.trim().length < 8) {
+    errors.contact_phone = "A valid phone number is required.";
+  }
   if (!fields.contact_email?.trim()) {
     errors.contact_email = "Email address is required for e-receipt delivery.";
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.contact_email.trim())) {
@@ -56,8 +59,8 @@ function validate(fields) {
   if (!fields.start_time) {
     errors.start_time = "Start time is required.";
   }
-  if (!fields.table_id) {
-    errors.table_id = "Please select a table using the floor plan.";
+  if (!Array.isArray(fields.table_ids) || fields.table_ids.length === 0) {
+    errors.table_id = "Please select enough tables using the floor plan.";
   }
   return errors;
 }
@@ -80,6 +83,7 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated, initia
     contact_email: "",
     guest_count:   "2",
     table_id:      initialTableId ? String(initialTableId) : "",
+    table_ids:     initialTableId ? [Number(initialTableId)] : [],
     start_time:    getNowTimeString(),
   });
   const [seatedAt, setSeatedAt] = useState(() => getNowDate());
@@ -160,9 +164,9 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated, initia
   }
 
   // The currently-selected table object (for display)
-  const selectedTableData = allTables.find(
-    (t) => String(t.table_id) === String(fields.table_id)
-  );
+  const selectedTableData = allTables.find((t) => String(t.table_id) === String(fields.table_id));
+  const selectedTableDataList = allTables.filter((t) => fields.table_ids.map(String).includes(String(t.table_id)));
+  const selectedCapacity = selectedTableDataList.reduce((sum, table) => sum + Number(table.capacity || 0), 0);
   const estimatedDurationMin = getDefaultErtDurationMin(
     fields.guest_count,
     selectedTableData?.area_name
@@ -172,8 +176,10 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated, initia
   // TableBoard-adapted table list
   const adaptedTables = allTables.map(adaptForTableBoard);
 
-  function handleTableSelect(tableId) {
-    setField("table_id", tableId != null ? String(tableId) : "");
+  function handleTableSelect(tableIds) {
+    const ids = (Array.isArray(tableIds) ? tableIds : [tableIds]).map(Number).filter(Number.isFinite);
+    setFields((previous) => ({ ...previous, table_ids: ids, table_id: ids[0] ? String(ids[0]) : "" }));
+    if (errors.table_id) setErrors((previous) => { const next = { ...previous }; delete next.table_id; return next; });
     setShowFloorPlan(false);
   }
 
@@ -192,6 +198,7 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated, initia
         contact_email: fields.contact_email.trim(),
         guest_count:   parseInt(fields.guest_count, 10),
         table_id:      parseInt(fields.table_id, 10),
+        table_ids:     fields.table_ids,
       });
       toast(result.message || "Walk-in created successfully.", "success");
       onCreated?.(result);
@@ -332,7 +339,7 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated, initia
           <div className="walkin-form__section">
             <p className="walkin-form__section-label">Table Assignment</p>
 
-            {!selectedTableData ? (
+            {!selectedTableDataList.length ? (
               /* ── No table selected yet ── */
               <div className={`walkin-table-picker${errors.table_id ? " is-error" : ""}`}>
                 <button
@@ -357,15 +364,8 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated, initia
                     <Check size={12} strokeWidth={3} />
                   </span>
                   <div className="walkin-table-selected__info">
-                    <span className="walkin-table-selected__name">
-                      {selectedTableData.table_name || selectedTableData.table_number}
-                    </span>
-                    {selectedTableData.area_name && (
-                      <span className="walkin-table-selected__area">{selectedTableData.area_name}</span>
-                    )}
-                    {selectedTableData.capacity && (
-                      <span className="walkin-table-selected__cap">{selectedTableData.capacity} seats</span>
-                    )}
+                    <span className="walkin-table-selected__name">{selectedTableDataList.map((table) => table.table_name || table.table_number).join(" + ")}</span>
+                    <span className="walkin-table-selected__area">{selectedCapacity} seats for {fields.guest_count} guests</span>
                   </div>
                 </div>
                 <button
@@ -437,7 +437,10 @@ export default function AddWalkInModal({ user, toast, onClose, onCreated, initia
         <TableBoard
           tables={adaptedTables}
           selectedTableId={fields.table_id ? parseInt(fields.table_id, 10) : null}
-          onSelectTable={handleTableSelect}
+          selectedTableIds={fields.table_ids}
+          allowMultiple
+          onApplySelection={handleTableSelect}
+          onCancelSelection={() => setShowFloorPlan(false)}
           guestCount={parseInt(fields.guest_count, 10) || 2}
         />
       </div>

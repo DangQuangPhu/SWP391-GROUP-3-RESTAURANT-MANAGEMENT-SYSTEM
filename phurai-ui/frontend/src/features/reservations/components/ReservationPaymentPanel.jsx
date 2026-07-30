@@ -58,8 +58,17 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
     return 15 * 60;
   });
   const [appliedDiscount] = useState(0);
+  const [paymentQuote, setPaymentQuote] = useState(null);
   const { socket } = useSocket();
   const phaseRef = useRef(phase);
+
+  useEffect(() => {
+    if (!reservation?.reservation_id || !orderCode) return;
+    const params = new URLSearchParams({ order_code: orderCode });
+    apiGet(`/payments/reservations/${reservation.reservation_id}/payment-quote?${params}`)
+      .then((result) => setPaymentQuote(result?.quote || null))
+      .catch(() => setPaymentQuote(null)); // The creation response remains a safe fallback.
+  }, [reservation?.reservation_id, orderCode]);
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -239,6 +248,7 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
       'phurai_pending_reservation',
       'phurai_reservation_form',
       'phurai_reservation_table',
+      'phurai_reservation_tables',
       'phurai_reservation_preorder_items',
       'phurai_reservation_preorder_total',
       'phurai_applied_promo',
@@ -260,12 +270,12 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
     return 6000;
   });
 
-  const displayAmount = Math.max(0, baseAmount - appliedDiscount);
+  const displayAmount = Math.max(0, Number(paymentQuote?.amount_due ?? baseAmount) - appliedDiscount);
 
   const [generatedOrderCode] = useState(() => {
     return orderCode || `PHURAIRESTAURANT${reservation?.reservation_id || Math.floor(1000 + Math.random() * 9000)}`;
   });
-  const finalQrUrl = qrUrl;
+  const finalQrUrl = paymentQuote?.vietqr_url || qrUrl;
 
   // When payment is detected, onSuccess() advances the parent to the Confirmed step.
   // No need for a separate overlay here — the parent handles the transition.
@@ -346,6 +356,12 @@ export default function ReservationPaymentPanel({ reservation, amount, orderCode
                   <CopyableField label="Description" copyValue={generatedOrderCode}>
                     <span className="font-semibold text-[#ffd064] font-mono text-sm">{generatedOrderCode}</span>
                   </CopyableField>
+                  {paymentQuote?.table_count > 1 && (
+                    <div className="flex justify-between items-center border-b border-white/5 pb-2 text-xs">
+                      <span className="text-white/50">Event tables ({paymentQuote.table_count})</span>
+                      <span className="font-semibold text-white">{paymentQuote.table_numbers}</span>
+                    </div>
+                  )}
                   {/* Pre-ordered Dishes List */}
                   <div className="pt-0.5 pb-2 border-b border-white/5 text-left">
                     <span className="text-white/50 text-[10px] font-bold uppercase tracking-wider mb-1.5 block">Pre-ordered Dishes</span>

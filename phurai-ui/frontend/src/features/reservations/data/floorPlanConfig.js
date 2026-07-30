@@ -102,7 +102,7 @@ export const HOLD_DURATION_OPTIONS = [
  * Generate 30-minute time slots inside opening hours.
  * Last start respects the chosen duration so the booking ends before close.
  */
-export function buildTimeSlots(openTime = "10:00", closeTime = "22:00", durationMinutes = 120) {
+export function buildTimeSlots(openTime = "12:00", closeTime = "22:00", durationMinutes = 120) {
   const toMin = (t) => {
     const [h, m] = String(t).split(":").map(Number);
     return h * 60 + (m || 0);

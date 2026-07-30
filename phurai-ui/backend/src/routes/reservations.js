@@ -127,7 +127,9 @@ async function loadSettings() {
   }
 
   return {
-    open_time: map.open_time || "10:00",
+    // The restaurant opens at 11:00, but the first seating is 12:00 after
+    // the opening preparation window.
+    open_time: map.open_time || "12:00",
     close_time: map.close_time || "22:00",
     max_guests: Number(map.max_guests) || 12,
     table_hold_min: Number(map.table_hold_min) || 15,
@@ -322,7 +324,7 @@ router.get("/settings", async (_req, res) => {
     return res.json({
       success: true,
       settings: {
-        open_time: "10:00",
+        open_time: "12:00",
         close_time: "22:00",
         max_guests: 12,
         cancel_deadline_h: 2,

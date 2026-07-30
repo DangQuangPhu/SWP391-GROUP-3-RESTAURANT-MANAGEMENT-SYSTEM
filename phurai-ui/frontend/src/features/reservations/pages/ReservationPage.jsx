@@ -38,6 +38,7 @@ const INITIAL_FORM = {
   phone: "",
   notes: "",
   diningPurposeNote: "",
+  bookEntireArea: false,
 };
 
 const STEPS = [
@@ -355,7 +356,29 @@ function ReservationPage({
       setSelectedTableId(next[0] || null);
       return next;
     });
+    setForm((previous) => ({ ...previous, bookEntireArea: false }));
   }, [allowsMultipleTables]);
+
+  const handleApplyTableSelection = useCallback((tableIds) => {
+    const next = [...new Set((tableIds || []).map(Number).filter((id) => Number.isFinite(id) && id > 0))];
+    setSelectedTableIds(next);
+    setSelectedTableId(next[0] || null);
+    setForm((previous) => ({ ...previous, bookEntireArea: false }));
+  }, []);
+
+  const handleSelectEntireArea = useCallback((areaId) => {
+    const areaTables = tables.filter((table) => Number(table.area_id) === Number(areaId) && String(table.table_status || '').toLowerCase() !== 'inactive');
+    if (!areaTables.length || areaTables.some((table) => table.is_bookable === false)) {
+      setError('This entire area is not available for the selected time. Please choose individual tables or another area.');
+      return false;
+    }
+    const ids = areaTables.map((table) => Number(table.table_id));
+    setSelectedTableIds(ids);
+    setSelectedTableId(ids[0] || null);
+    setForm((previous) => ({ ...previous, bookEntireArea: true, preferredAreaId: Number(areaId) }));
+    setError('');
+    return true;
+  }, [tables]);
 
   const handleUpdateForm = useCallback((name, value) => {
     setError("");
@@ -382,7 +405,7 @@ function ReservationPage({
       .catch(() => {
         if (active) {
           setSettings({
-            open_time: "10:00",
+            open_time: "12:00",
             close_time: "22:00",
             max_guests: 12,
             cancel_deadline_h: 2,
@@ -543,6 +566,7 @@ function ReservationPage({
         reservation_end_at: form.endTime ? `${form.date}T${form.endTime}:00` : undefined,
         special_request: combinedNotes || null,
         dining_purpose: form.diningPurpose,
+        book_entire_area: Boolean(form.bookEntireArea),
         table_ids: selectedTableIds,
         contact_name: form.fullName,
         contact_phone: form.phone,
@@ -688,7 +712,9 @@ function ReservationPage({
                   selectedTableId={selectedTableId}
                   selectedTableIds={selectedTableIds}
                   allowMultipleTables={allowsMultipleTables}
+                  onSelectEntireArea={handleSelectEntireArea}
                   onSelectTable={handleSelectTable}
+                  onApplyTables={handleApplyTableSelection}
                   tablesLoading={loadingAvailability}
                   isAuthenticated={isAuthenticated}
                   error={error}

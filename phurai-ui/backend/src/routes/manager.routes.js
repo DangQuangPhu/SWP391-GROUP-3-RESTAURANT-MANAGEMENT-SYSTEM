@@ -65,6 +65,16 @@ const requireManagerOrAdmin = (req, res, next) => {
     return res.status(403).json({ success: false, message: 'Manager or Admin access is required.' });
 };
 
+// Restaurant Staff use the reservation board for check-in and table service.
+// This grants read-only access to the list endpoint only; every management
+// mutation below continues to require Manager or Admin.
+const requireReservationBoardAccess = (req, res, next) => {
+    if ([2, 3, 4].includes(Number(req.user?.role_id))) {
+        return next();
+    }
+    return res.status(403).json({ success: false, message: 'Staff, Manager, or Admin access is required.' });
+};
+
 import { getFloorPlanData } from '../controllers/floorPlanController.js';
 import { updateTablePosition } from '../controllers/tablePositionController.js';
 
@@ -83,7 +93,7 @@ router.delete('/mock-data/purge', requireManagerOrAdmin, purgeMockData);
 
 // Fallbacks for manager routes to prevent 404
 router.get('/reservations/pending', requireManagerOrAdmin, getPendingReservations);
-router.get('/reservations/all', requireManagerOrAdmin, getAllReservations);
+router.get('/reservations/all', requireReservationBoardAccess, getAllReservations);
 // Keep this concrete route ahead of `/:id` so "today" is not treated as an ID.
 router.get('/reservations/today', requireManagerOrAdmin, listTodayReservations);
 router.get('/reservations/:id', requireManagerOrAdmin, getReservationDetails);

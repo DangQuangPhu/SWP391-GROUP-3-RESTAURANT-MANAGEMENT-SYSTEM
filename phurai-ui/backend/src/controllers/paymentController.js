@@ -5,7 +5,7 @@ import { sendReservationInvoiceEmail, sendCheckoutReceiptEmail } from '../email.
 import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
 import { handlePostCheckoutSuccess } from '../services/checkoutHelper.js';
 import { notifyStaffNewCustomerAction, notifyCustomerStaffAction } from '../services/notificationService.js';
-import { closeOccupancySession } from '../services/tableReleaseService.js';
+import { closeOccupancySession, releaseTableGroupForPayment } from '../services/tableReleaseService.js';
 import { closeQrSessionsForCheckout } from '../services/qrSessionCleanupService.js';
 
 
@@ -378,14 +378,12 @@ export const handleSepayWebhook = async (req, res) => {
             WHERE order_id = @orderId
           `);
 
-        // 1. Update table status to Cleaning
-        await transaction.request()
-          .input('tableId', sql.SmallInt, order.table_id)
-          .query(`
-            UPDATE dbo.RestaurantTables
-            SET table_status = N'Cleaning', updated_at = SYSDATETIME()
-            WHERE table_id = @tableId
-          `);
+        // A merged party is one bill: release every assigned table together.
+        const releasedTableIds = await releaseTableGroupForPayment({
+          transaction,
+          tableId: order.table_id,
+          reservationId: order.reservation_id,
+        });
 
         // 1b. Close the active TableOccupancySession (fire-and-forget within transaction)
         if (order.table_id) {
@@ -393,6 +391,7 @@ export const handleSepayWebhook = async (req, res) => {
             await closeOccupancySession({
               transaction,
               tableId: order.table_id,
+              reservationId: order.reservation_id,
               releaseTrigger: 'OnlinePayment',
               releasedByStaffId: null,
             });
@@ -424,23 +423,24 @@ export const handleSepayWebhook = async (req, res) => {
           await transaction.request()
             .input('resId', sql.Int, order.reservation_id)
             .query(`
-              INSERT INTO dbo.ReservationTimelines (reservation_id, status_from, status_to, note, created_at)
-              VALUES (@resId, N'Dining', N'Completed', N'Payment completed', SYSDATETIME())
+              INSERT INTO dbo.ReservationTimelines (reservation_id, event_type, performed_by, notes, created_at)
+              VALUES (@resId, N'PAYMENT_COMPLETED', NULL, N'Payment completed', SYSDATETIME())
             `);
         }
 
         // Record the payment
         await transaction.request()
           .input('orderId', sql.Int, orderId)
+          .input('reservationId', sql.Int, order.reservation_id || null)
           .input('paymentMethodId', sql.TinyInt, 3)
           .input('amountPaid', sql.Decimal(12, 2), transferAmount)
           .input('paymentStatus', sql.VarChar, 'Completed')
           .input('transactionRef', sql.VarChar, referenceCode)
           .query(`
             INSERT INTO dbo.Payments (
-              order_id, payment_method_id, amount_paid, payment_status, transaction_ref, paid_at, created_at, updated_at
+              order_id, reservation_id, payment_method_id, amount_paid, payment_status, transaction_ref, paid_at, created_at, updated_at
             ) VALUES (
-              @orderId, @paymentMethodId, @amountPaid, @paymentStatus, @transactionRef, SYSDATETIME(), SYSDATETIME(), SYSDATETIME()
+              @orderId, @reservationId, @paymentMethodId, @amountPaid, @paymentStatus, @transactionRef, SYSDATETIME(), SYSDATETIME(), SYSDATETIME()
             )
           `);
 
@@ -481,11 +481,15 @@ export const handleSepayWebhook = async (req, res) => {
             table_id: order.table_id,
             session_id: order.qr_session_id ?? null,
             amount_paid: receivedAmount,
+            reservation_id: order.reservation_id ?? null,
+            table_ids: releasedTableIds,
           };
           io.emit('PAYMENT_STATUS_CHANGED', payload);
           io.emit('QR_SESSION_PAYMENT_COMPLETED', payload);
           io.to("room:kitchen").emit("kds:clear_order", { orderId: orderId });
-          io.to("room:staff").to("room:manager").emit("table:status_changed", { tableId: order.table_id, status: 'Cleaning' });
+          for (const tableId of releasedTableIds) {
+            io.to("room:staff").to("room:manager").emit("table:status_changed", { tableId, status: 'Cleaning', reservation_id: order.reservation_id ?? null });
+          }
           if (order.reservation_id) {
             io.to('room:staff').to('room:manager').emit('reservation:status_changed', {
               reservation_id: order.reservation_id,
@@ -521,7 +525,11 @@ export const handleSepayWebhook = async (req, res) => {
   } catch (error) {
     console.error('[SePay Webhook] Error processing webhook:', error);
     // Important: return 500 so SePay will retry
-    return res.status(500).json({ success: false, message: 'Internal Server Error' });
+    return res.status(500).json({
+      success: false,
+      message: 'Internal Server Error',
+      ...(process.env.NODE_ENV === 'production' ? {} : { error: error.message }),
+    });
   }
 };
 
@@ -648,20 +656,20 @@ export const confirmCashPaymentStaff = async (req, res) => {
         `);
 
       const effectiveTableId = Number(order.table_id);
+      let releasedTableIds = [];
       if (effectiveTableId) {
-        await transaction.request()
-          .input('tableId', sql.Int, effectiveTableId)
-          .query(`
-            UPDATE dbo.RestaurantTables
-            SET table_status = 'Cleaning'
-            WHERE table_id = @tableId
-          `);
+        releasedTableIds = await releaseTableGroupForPayment({
+          transaction,
+          tableId: effectiveTableId,
+          reservationId: order.reservation_id,
+        });
 
         // Close active occupancy session
         try {
           await closeOccupancySession({
             transaction,
             tableId: effectiveTableId,
+            reservationId: order.reservation_id,
             releaseTrigger: 'StaffCashConfirm',
             releasedByStaffId: req.user?.user_id || req.user?.id || null,
           });
@@ -722,7 +730,9 @@ export const confirmCashPaymentStaff = async (req, res) => {
       const io = getIO();
       if (io) {
         io.emit('payment:confirmed', { orderId });
-        io.to("room:staff").to("room:manager").emit("table:status_changed", { tableId: effectiveTableId, status: 'Cleaning', table_status: 'Cleaning' });
+        for (const tableId of releasedTableIds) {
+          io.to("room:staff").to("room:manager").emit("table:status_changed", { tableId, status: 'Cleaning', table_status: 'Cleaning', reservation_id: order.reservation_id ?? null });
+        }
         for (const sessionId of closedQrSessionIds) {
           io.to(`session_${sessionId}`).emit("TABLE_SESSION_CLEARED", {
             session_id: sessionId,

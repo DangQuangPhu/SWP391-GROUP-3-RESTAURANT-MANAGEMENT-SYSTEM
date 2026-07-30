@@ -1047,10 +1047,10 @@ SET IDENTITY_INSERT dbo.UserAccounts ON;
 INSERT INTO dbo.UserAccounts
 (user_id, role_id, full_name, email, phone, password_hash, is_active, email_verified, last_login_at)
 VALUES
-(1, 4, N'Dang Quang Phu', N'phuadmin@phurai.vn', '0901000001', N'scrypt$4f2ab2ac57cea58a40e76477d53f3e61$d38e5d2db24cd605a3d29eaf79e1b0429e7c7f5fce28c47faf59126fdd15029828447e1b56d0886c74f888ff7ac6693d7b33e0371ac39c9ff0b55385a0ca547e', 1, 1, '2026-05-18T08:00:00'),
+(1, 4, N'Dang Quang Phu', N'phuadmin@phurai.vn', '0901000001', N'scrypt$dc072ecb290a3956cc3c912f28de1c65$7c208416d82bc4d2db485795ff69c5f0e2c6d337a02be03d21c5d48d04f6dc8ffa9cffe7e5f66d772d7ba39c8c10b02a825058d953c4e8c5b4c57d3bed210ea4', 1, 1, '2026-05-18T08:00:00'),
 
-(2, 3, N'Dang Quang Phu', N'phumanager@phurai.vn', '0901000002', N'scrypt$8b83430313edc67abc8eadeefc31e841$ce82bbdd63b2f38cc66e8cb939a52599c91f53a8396a40ec2ee1d3d28dd106eedb890ddbe0a4b462080f268b0f848fc5d3f1974aa3930dab29612cb25cb887f0', 1, 1, '2026-05-18T08:10:00'),
-(3, 2, N'Dang Quang Phu', N'phustaff1@phurai.vn', '0901000003', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6', 1, 1, '2026-05-18T08:30:00'),
+(2, 3, N'Dang Quang Phu', N'phumanager@phurai.vn', '0901000002', N'scrypt$9074a21fc3062c3bad0bd8725326a6c5$0bad673c711e8dc95ea370cf4159233d596a3e215ef5cfbb84e07dff0654040e7cddbec4496a624351ac1c794918f85d8100ca76b402e8d3f53ccbd4edb61a80', 1, 1, '2026-05-18T08:10:00'),
+(3, 2, N'Dang Quang Phu', N'phustaff1@phurai.vn', '0901000003', N'scrypt$52b68eb49e6c18fa9ed0b922e434baf3$43928efa26f1ebb63398c1d173e39a1cf5e82f2d7f2ed3dc77e7ee928765fc0118eadbc94cf68ef03e31b5530e8ccdfb4f7e6287c146c054bc4e49293bab05c4', 1, 1, '2026-05-18T08:30:00'),
 (4, 2, N'Pham Thi Thuy', N'thuystaff@phurai.vn', '0901000004', N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6', 1, 1, NULL),
 (7, 1, N'Minh Khoa', N'khoa@gmail.com', '0908000001', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, '2026-05-17T20:00:00'),
 (8, 1, N'Thu Huong', N'huong@gmail.com', '0908000002', N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1, '2026-05-17T21:00:00'),
@@ -1226,7 +1226,7 @@ GO
 
 INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description, updated_by) VALUES
 (N'restaurant_name', N'Phūrai Premium Restaurant', N'Display name', 1),
-(N'open_time', N'10:00', N'Opening time', 1),
+(N'open_time', N'12:00', N'First bookable seating time (restaurant opens at 11:00)', 1),
 (N'close_time', N'22:00', N'Closing time', 1),
 (N'table_hold_min', N'15', N'Minutes to hold reserved table', 1),
 (N'service_charge', N'5', N'Service charge percent', 1),
@@ -1737,11 +1737,11 @@ SET IDENTITY_INSERT dbo.UserAccounts ON;
 MERGE dbo.UserAccounts AS target
 USING (VALUES
   (1,  4, N'Dang Quang Phu',     N'phuadmin@phurai.vn',  '0901000001',
-      N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1),
+      N'scrypt$dc072ecb290a3956cc3c912f28de1c65$7c208416d82bc4d2db485795ff69c5f0e2c6d337a02be03d21c5d48d04f6dc8ffa9cffe7e5f66d772d7ba39c8c10b02a825058d953c4e8c5b4c57d3bed210ea4', 1, 1),
   (2,  3, N'Dang Quang Phu',     N'phumanager@phurai.vn', '0901000002',
-      N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6', 1, 1),
+      N'scrypt$9074a21fc3062c3bad0bd8725326a6c5$0bad673c711e8dc95ea370cf4159233d596a3e215ef5cfbb84e07dff0654040e7cddbec4496a624351ac1c794918f85d8100ca76b402e8d3f53ccbd4edb61a80', 1, 1),
   (3,  2, N'Dang Quang Phu',     N'phustaff1@phurai.vn',  '0901000003',
-      N'$2b$10$.s0tXgRsluKKb9rvQOvLB.8Xk6NNncuUhw3EIbrqp70Ap6knasgP6',  1, 1)
+      N'scrypt$52b68eb49e6c18fa9ed0b922e434baf3$43928efa26f1ebb63398c1d173e39a1cf5e82f2d7f2ed3dc77e7ee928765fc0118eadbc94cf68ef03e31b5530e8ccdfb4f7e6287c146c054bc4e49293bab05c4',  1, 1)
 ) AS source (user_id, role_id, full_name, email, phone, password_hash, is_active, email_verified)
 ON target.user_id = source.user_id
 WHEN MATCHED THEN UPDATE SET
@@ -2310,6 +2310,102 @@ FROM @PhuUsers source;
 COMMIT TRANSACTION;
 GO
 
+/*
+  Presentation customer profile and loyalty catalog.
+  This is intentionally part of the master schema file so a fresh database only
+  needs database/System_Restaurant.sql; it is also safe to execute again.
+*/
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+
+DECLARE @PresentationEmail NVARCHAR(180) = N'quagphu159@gmail.com';
+DECLARE @PresentationUserId INT = (SELECT user_id FROM dbo.UserAccounts WHERE LOWER(email) = LOWER(@PresentationEmail));
+IF @PresentationUserId IS NULL THROW 51001, 'Presentation customer account was not found.', 1;
+DECLARE @PresentationTableId SMALLINT = (SELECT TOP 1 table_id FROM dbo.RestaurantTables WHERE table_status <> N'Inactive' ORDER BY table_id);
+DECLARE @PresentationAreaId SMALLINT = (SELECT TOP 1 area_id FROM dbo.RestaurantAreas ORDER BY area_id);
+DECLARE @PresentationPaymentMethodId TINYINT = (SELECT TOP 1 payment_method_id FROM dbo.PaymentMethods WHERE is_active = 1 ORDER BY payment_method_id);
+DECLARE @PresentationDishId INT = (SELECT TOP 1 dish_id FROM dbo.Dishes WHERE is_available = 1 ORDER BY dish_id);
+
+/* Replace only this customer's demo history, keeping every other seeded account intact. */
+DELETE FROM dbo.TableOccupancySessions
+WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE customer_id = @PresentationUserId)
+   OR reservation_id IN (SELECT reservation_id FROM dbo.Reservations WHERE customer_id = @PresentationUserId);
+DELETE FROM dbo.CustomerReviews WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE customer_id = @PresentationUserId);
+DELETE FROM dbo.KitchenTickets WHERE order_item_id IN (SELECT order_item_id FROM dbo.OrderItems WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE customer_id = @PresentationUserId));
+DELETE FROM dbo.OrderItems WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE customer_id = @PresentationUserId);
+DELETE FROM dbo.Payments WHERE order_id IN (SELECT order_id FROM dbo.Orders WHERE customer_id = @PresentationUserId)
+   OR reservation_id IN (SELECT reservation_id FROM dbo.Reservations WHERE customer_id = @PresentationUserId);
+DELETE FROM dbo.Orders WHERE customer_id = @PresentationUserId;
+DELETE FROM dbo.ReservationTables WHERE reservation_id IN (SELECT reservation_id FROM dbo.Reservations WHERE customer_id = @PresentationUserId);
+DELETE FROM dbo.Reservations WHERE customer_id = @PresentationUserId;
+DELETE FROM dbo.CustomerPromotions WHERE customer_id = @PresentationUserId;
+DELETE FROM dbo.LoyaltyTransactions WHERE customer_id = @PresentationUserId;
+
+UPDATE dbo.UserAccounts
+SET role_id = 1, full_name = N'Dang Quang Phu', phone = '0964813966', is_active = 1, email_verified = 1,
+    created_at = '2025-01-25T00:00:00', updated_at = SYSDATETIME()
+WHERE user_id = @PresentationUserId;
+
+MERGE dbo.CustomerProfiles AS target
+USING (SELECT @PresentationUserId AS user_id) AS source ON target.user_id = source.user_id
+WHEN MATCHED THEN UPDATE SET username=N'quagphu159', date_of_birth='2004-12-29', gender=N'Male', country=N'Vietnam', [language]=N'Vietnamese', bio=N'VIP customer since 2025.', preferences=N'["VIP area","Window seat","Steak"]', updated_at=SYSDATETIME()
+WHEN NOT MATCHED THEN INSERT (user_id,username,date_of_birth,gender,country,[language],bio,loyalty_points,preferences,created_at,updated_at)
+  VALUES (@PresentationUserId,N'quagphu159','2004-12-29',N'Male',N'Vietnam',N'Vietnamese',N'VIP customer since 2025.',0,N'["VIP area","Window seat","Steak"]','2025-01-25T00:00:00',SYSDATETIME());
+
+DECLARE @PresentationActivity TABLE (code VARCHAR(40), start_at DATETIME2(0), total DECIMAL(12,2), guests TINYINT, purpose NVARCHAR(100));
+INSERT @PresentationActivity VALUES
+('PHU-YEAR-01', DATEADD(hour,12,CAST(CAST(DATEADD(month,-11,GETDATE()) AS date) AS datetime)),685000,2,N'Casual Dinner'),
+('PHU-YEAR-02', DATEADD(hour,18,CAST(CAST(DATEADD(month,-10,GETDATE()) AS date) AS datetime)),1245000,4,N'Business Meeting'),
+('PHU-YEAR-03', DATEADD(hour,12,CAST(CAST(DATEADD(month,-9,GETDATE()) AS date) AS datetime)),892000,3,N'Birthday'),
+('PHU-YEAR-04', DATEADD(hour,19,CAST(CAST(DATEADD(month,-8,GETDATE()) AS date) AS datetime)),1568000,6,N'Family Gathering'),
+('PHU-YEAR-05', DATEADD(hour,12,CAST(CAST(DATEADD(month,-7,GETDATE()) AS date) AS datetime)),734000,2,N'Casual Dinner'),
+('PHU-YEAR-06', DATEADD(hour,18,CAST(CAST(DATEADD(month,-6,GETDATE()) AS date) AS datetime)),1198000,4,N'Anniversary'),
+('PHU-YEAR-07', DATEADD(hour,12,CAST(CAST(DATEADD(month,-5,GETDATE()) AS date) AS datetime)),946000,3,N'Casual Dinner'),
+('PHU-YEAR-08', DATEADD(hour,19,CAST(CAST(DATEADD(month,-4,GETDATE()) AS date) AS datetime)),1785000,8,N'Business Meeting'),
+('PHU-YEAR-09', DATEADD(hour,12,CAST(CAST(DATEADD(month,-3,GETDATE()) AS date) AS datetime)),815000,2,N'Casual Dinner'),
+('PHU-YEAR-10', DATEADD(hour,18,CAST(CAST(DATEADD(month,-2,GETDATE()) AS date) AS datetime)),1326000,5,N'Birthday'),
+('PHU-YEAR-11', DATEADD(hour,12,CAST(CAST(DATEADD(month,-1,GETDATE()) AS date) AS datetime)),1079000,4,N'Casual Dinner'),
+('PHU-YEAR-12', DATEADD(hour,18,CAST(CAST(DATEADD(day,-14,GETDATE()) AS date) AS datetime)),1495000,6,N'Anniversary');
+
+INSERT dbo.Reservations (customer_id,contact_name,contact_phone,contact_email,preferred_area_id,reservation_start_at,reservation_end_at,guest_count,dining_purpose,deposit_amount,final_total,order_code,reservation_status,reservation_source,checked_in_at,seated_at,checked_out_at,completed_at,created_at,updated_at)
+SELECT @PresentationUserId,N'Dang Quang Phu','0964813966',@PresentationEmail,@PresentationAreaId,start_at,DATEADD(minute,120,start_at),guests,purpose,0,total,code,N'Completed',N'Online',DATEADD(minute,5,start_at),DATEADD(minute,8,start_at),DATEADD(minute,120,start_at),DATEADD(minute,120,start_at),DATEADD(day,-7,start_at),DATEADD(minute,120,start_at) FROM @PresentationActivity;
+INSERT dbo.ReservationTables (reservation_id,table_id,assigned_at) SELECT r.reservation_id,@PresentationTableId,DATEADD(minute,3,r.reservation_start_at) FROM dbo.Reservations r WHERE r.customer_id=@PresentationUserId AND r.order_code LIKE 'PHU-YEAR-%';
+INSERT dbo.Orders (reservation_id,table_id,customer_id,order_type,order_status,subtotal,discount_amount,service_charge,total_amount,amount_paid,created_at,updated_at)
+SELECT r.reservation_id,@PresentationTableId,@PresentationUserId,N'Dine In',N'Paid',r.final_total,0,0,r.final_total,r.final_total,DATEADD(minute,30,r.reservation_start_at),r.completed_at FROM dbo.Reservations r WHERE r.customer_id=@PresentationUserId AND r.order_code LIKE 'PHU-YEAR-%';
+INSERT dbo.OrderItems (order_id,dish_id,quantity,unit_price,notes,item_status,created_at,updated_at)
+SELECT o.order_id,@PresentationDishId,1,o.total_amount,N'Completed presentation customer order',N'Served',o.created_at,o.updated_at FROM dbo.Orders o WHERE o.customer_id=@PresentationUserId;
+INSERT dbo.Payments (order_id,reservation_id,payment_method_id,amount_paid,payment_status,transaction_ref,paid_at,created_at,updated_at)
+SELECT o.order_id,o.reservation_id,@PresentationPaymentMethodId,o.total_amount,N'Completed',CONCAT(N'PHU-PAY-',o.order_id),o.updated_at,o.updated_at,o.updated_at FROM dbo.Orders o WHERE o.customer_id=@PresentationUserId;
+INSERT dbo.LoyaltyTransactions (customer_id,points,transaction_type,reference_type,reference_id,description,created_at)
+SELECT @PresentationUserId,CONVERT(INT,FLOOR(o.total_amount/10000)),N'Earn',N'Payment',p.payment_id,CONCAT(N'Points from payment ',p.transaction_ref),p.paid_at FROM dbo.Orders o JOIN dbo.Payments p ON p.order_id=o.order_id WHERE o.customer_id=@PresentationUserId;
+UPDATE cp SET loyalty_points=(SELECT COALESCE(SUM(points),0) FROM dbo.LoyaltyTransactions WHERE customer_id=@PresentationUserId), updated_at=SYSDATETIME() FROM dbo.CustomerProfiles cp WHERE cp.user_id=@PresentationUserId;
+
+/* Twenty active rewards are included in the same file and can be redeemed through /api/loyalty/redeem. */
+DECLARE @LoyaltyRewards TABLE (promo_code NVARCHAR(40) PRIMARY KEY, promotion_name NVARCHAR(150), points_required INT, discount_value DECIMAL(12,2), min_order_value DECIMAL(12,2));
+INSERT @LoyaltyRewards VALUES
+(N'LOYALTY-2026-01',N'Loyalty Reward 01',100,25000,150000),(N'LOYALTY-2026-02',N'Loyalty Reward 02',150,30000,150000),
+(N'LOYALTY-2026-03',N'Loyalty Reward 03',200,35000,150000),(N'LOYALTY-2026-04',N'Loyalty Reward 04',250,40000,150000),
+(N'LOYALTY-2026-05',N'Loyalty Reward 05',300,45000,150000),(N'LOYALTY-2026-06',N'Loyalty Reward 06',400,50000,150000),
+(N'LOYALTY-2026-07',N'Loyalty Reward 07',500,60000,180000),(N'LOYALTY-2026-08',N'Loyalty Reward 08',600,70000,210000),
+(N'LOYALTY-2026-09',N'Loyalty Reward 09',750,80000,240000),(N'LOYALTY-2026-10',N'Loyalty Reward 10',900,90000,270000),
+(N'LOYALTY-2026-11',N'Loyalty Reward 11',1000,100000,300000),(N'LOYALTY-2026-12',N'Loyalty Reward 12',1100,110000,330000),
+(N'LOYALTY-2026-13',N'Loyalty Reward 13',1250,125000,375000),(N'LOYALTY-2026-14',N'Loyalty Reward 14',1400,140000,420000),
+(N'LOYALTY-2026-15',N'Loyalty Reward 15',1600,160000,480000),(N'LOYALTY-2026-16',N'Loyalty Reward 16',1800,180000,540000),
+(N'LOYALTY-2026-17',N'Loyalty Reward 17',2000,200000,600000),(N'LOYALTY-2026-18',N'Loyalty Reward 18',2200,220000,660000),
+(N'LOYALTY-2026-19',N'Loyalty Reward 19',2400,240000,720000),(N'LOYALTY-2026-20',N'Loyalty Reward 20',2600,260000,780000);
+
+INSERT dbo.Promotions (promotion_name,description,discount_type,discount_value,min_order_value,max_discount,start_at,end_at,is_active,applicable_to,points_required,validity_duration_hours,total_quantity,remaining_quantity,created_by_staff_id,created_at,updated_at)
+SELECT r.promotion_name,CONCAT(N'Ưu đãi đổi điểm thành viên — hạng ',r.points_required,N' điểm.'),N'Fixed',r.discount_value,r.min_order_value,r.discount_value,DATEADD(day,-30,SYSDATETIME()),DATEADD(year,1,SYSDATETIME()),1,N'Both',r.points_required,720,100,100,NULL,SYSDATETIME(),SYSDATETIME()
+FROM @LoyaltyRewards r
+WHERE NOT EXISTS (SELECT 1 FROM dbo.PromoCodes pc WHERE pc.promo_code=r.promo_code);
+INSERT dbo.PromoCodes (promotion_id,promo_code,usage_limit,times_used,is_active,created_at,updated_at)
+SELECT p.promotion_id,r.promo_code,100,0,1,SYSDATETIME(),SYSDATETIME()
+FROM @LoyaltyRewards r JOIN dbo.Promotions p ON p.promotion_name=r.promotion_name
+WHERE NOT EXISTS (SELECT 1 FROM dbo.PromoCodes pc WHERE pc.promo_code=r.promo_code);
+
+COMMIT TRANSACTION;
+GO
+
 
 
 -- ==========================================
@@ -2528,11 +2624,11 @@ SELECT c.category_id,m.dish_name,N'Canonical two-year seed menu item.',m.price,R
 
 DECLARE @FinalCustomers TABLE(n INT PRIMARY KEY, full_name NVARCHAR(120), email NVARCHAR(180), phone VARCHAR(25));
 INSERT @FinalCustomers VALUES
- (1,N'Dang Quang Phu',N'customer01@seed.local','0901000001'),(2,N'Tran Gia Han',N'customer02@seed.local','0901000002'),(3,N'Le Quoc Bao',N'customer03@seed.local','0901000003'),(4,N'Pham Thanh Mai',N'customer04@seed.local','0901000004'),(5,N'Hoang Duc Long',N'customer05@seed.local','0901000005'),(6,N'Vu Thao Linh',N'customer06@seed.local','0901000006'),(7,N'Dang Huu Phuc',N'customer07@seed.local','0901000007'),(8,N'Bui Ngoc Chau',N'customer08@seed.local','0901000008'),(9,N'Phan Tuan Kiet',N'customer09@seed.local','0901000009'),(10,N'Vo Khanh Vy',N'customer10@seed.local','0901000010'),(11,N'Nguyen Hai Nam',N'customer11@seed.local','0901000011'),(12,N'Tran My Duyen',N'customer12@seed.local','0901000012'),(13,N'Le Gia Huy',N'customer13@seed.local','0901000013'),(14,N'Pham Nhu Quynh',N'customer14@seed.local','0901000014'),(15,N'Hoang Bao Tran',N'customer15@seed.local','0901000015'),(16,N'Vu Minh Khoa',N'customer16@seed.local','0901000016'),(17,N'Dang Thu Ha',N'customer17@seed.local','0901000017'),(18,N'Bui Tien Dat',N'customer18@seed.local','0901000018'),(19,N'Phan Yen Nhi',N'customer19@seed.local','0901000019'),(20,N'Vo Quang Huy',N'customer20@seed.local','0901000020');
+ (1,N'Dang Quang Phu',N'quagphu159@gmail.com','0964813966'),(2,N'Tran Gia Han',N'customer02@seed.local','0901000002'),(3,N'Le Quoc Bao',N'customer03@seed.local','0901000003'),(4,N'Pham Thanh Mai',N'customer04@seed.local','0901000004'),(5,N'Hoang Duc Long',N'customer05@seed.local','0901000005'),(6,N'Vu Thao Linh',N'customer06@seed.local','0901000006'),(7,N'Dang Huu Phuc',N'customer07@seed.local','0901000007'),(8,N'Bui Ngoc Chau',N'customer08@seed.local','0901000008'),(9,N'Phan Tuan Kiet',N'customer09@seed.local','0901000009'),(10,N'Vo Khanh Vy',N'customer10@seed.local','0901000010'),(11,N'Nguyen Hai Nam',N'customer11@seed.local','0901000011'),(12,N'Tran My Duyen',N'customer12@seed.local','0901000012'),(13,N'Le Gia Huy',N'customer13@seed.local','0901000013'),(14,N'Pham Nhu Quynh',N'customer14@seed.local','0901000014'),(15,N'Hoang Bao Tran',N'customer15@seed.local','0901000015'),(16,N'Vu Minh Khoa',N'customer16@seed.local','0901000016'),(17,N'Dang Thu Ha',N'customer17@seed.local','0901000017'),(18,N'Bui Tien Dat',N'customer18@seed.local','0901000018'),(19,N'Phan Yen Nhi',N'customer19@seed.local','0901000019'),(20,N'Vo Quang Huy',N'customer20@seed.local','0901000020');
 INSERT dbo.UserAccounts(role_id,full_name,email,phone,password_hash,is_active,email_verified,created_at,updated_at)
 SELECT @CustomerRoleIdFinal,full_name,email,phone,N'scrypt$3fc41cd9111a05256c622615de15c504$8478e9821bc1955d78e788229acce921aa4e9b7be840afe40b8551b486c10f6d565a17afffe7d8aee279a2782dda8b4fddbf3bd99bba6f46b9df11c0d73f0af6',1,1,DATEADD(day,-n*13,@SeedEnd),@SeedEnd FROM @FinalCustomers;
-INSERT dbo.CustomerProfiles(user_id,username,loyalty_points,country,[language],created_at,updated_at)
-SELECT ua.user_id,N'seed_customer_'+CONVERT(NVARCHAR(10),c.n),0,N'Vietnam',N'English',ua.created_at,@SeedEnd FROM @FinalCustomers c JOIN dbo.UserAccounts ua ON ua.email=c.email;
+INSERT dbo.CustomerProfiles(user_id,username,gender,country,[language],date_of_birth,bio,loyalty_points,created_at,updated_at)
+SELECT ua.user_id,CASE WHEN ua.email = N'quagphu159@gmail.com' THEN N'quagphu159' ELSE N'seed_customer_'+CONVERT(NVARCHAR(10),c.n) END,CASE WHEN ua.email = N'quagphu159@gmail.com' THEN N'Male' ELSE NULL END,N'Vietnam',CASE WHEN ua.email = N'quagphu159@gmail.com' THEN N'Vietnamese' ELSE N'English' END,CASE WHEN ua.email = N'quagphu159@gmail.com' THEN '2004-12-29' ELSE NULL END,CASE WHEN ua.email = N'quagphu159@gmail.com' THEN N'VIP customer since 2025.' ELSE NULL END,0,CASE WHEN ua.email = N'quagphu159@gmail.com' THEN '2026-01-25 00:00:00' ELSE ua.created_at END,@SeedEnd FROM @FinalCustomers c JOIN dbo.UserAccounts ua ON ua.email=c.email;
 IF NOT EXISTS(SELECT 1 FROM dbo.CustomerProfiles WHERE user_id = 1) INSERT dbo.CustomerProfiles(user_id,username,loyalty_points,country,[language],created_at,updated_at) VALUES(1,N'dangquangphu',0,N'Vietnam',N'English',DATEADD(month,-6,@SeedEnd),@SeedEnd);
 
 IF NOT EXISTS(SELECT 1 FROM dbo.PaymentMethods WHERE method_name=N'Cash') INSERT dbo.PaymentMethods(method_name,is_active) VALUES(N'Cash',1);
@@ -2547,7 +2643,7 @@ DECLARE @FinalUsers TABLE(rn INT PRIMARY KEY,user_id INT,full_name NVARCHAR(120)
 INSERT @FinalUsers SELECT ROW_NUMBER() OVER(ORDER BY user_id),user_id,full_name,phone,email FROM dbo.UserAccounts WHERE role_id=@CustomerRoleIdFinal;
 DECLARE @SeedReservationsFinal TABLE(seed_key INT PRIMARY KEY,start_at DATETIME2(0),end_at DATETIME2(0),guest_count TINYINT,reservation_status NVARCHAR(25),customer_id INT NULL,contact_name NVARCHAR(120),contact_phone VARCHAR(25),contact_email NVARCHAR(180),table_id SMALLINT,area_id SMALLINT,created_at DATETIME2(0));
 ;WITH Days AS(SELECT TOP(DATEDIFF(day,@SeedStart,@SeedEnd)+1) ROW_NUMBER() OVER(ORDER BY(SELECT NULL))-1 d FROM sys.all_objects a CROSS JOIN sys.all_objects b), Slots AS(SELECT d,n FROM Days CROSS APPLY(SELECT TOP(3+d/180+CASE WHEN DATEPART(weekday,DATEADD(day,d,@SeedStart)) IN(1,7) THEN 3 ELSE 0 END) ROW_NUMBER() OVER(ORDER BY(SELECT NULL)) n FROM sys.all_objects)x)
-INSERT @SeedReservationsFinal SELECT d*100+n,DATEADD(minute,CASE WHEN n%3=0 THEN 690+(n*11)%150 ELSE 1110+(n*13)%150 END,CONVERT(DATETIME2(0),DATEADD(day,d,@SeedStart))),DATEADD(minute,120,DATEADD(minute,CASE WHEN n%3=0 THEN 690+(n*11)%150 ELSE 1110+(n*13)%150 END,CONVERT(DATETIME2(0),DATEADD(day,d,@SeedStart)))),CONVERT(TINYINT,1+(ABS(CHECKSUM(d*17+n))%6)),CASE WHEN d=DATEDIFF(day,@SeedStart,@SeedEnd) AND n=1 THEN N'Await Check-in' WHEN (CHECKSUM(CONVERT(NVARCHAR(10),d)+N':'+CONVERT(NVARCHAR(10),n))&2147483647)%100<7 THEN N'No Show' WHEN (CHECKSUM(CONVERT(NVARCHAR(10),d)+N':'+CONVERT(NVARCHAR(10),n))&2147483647)%100<16 THEN N'Cancelled' ELSE N'Completed' END,CASE WHEN n%10<4 THEN NULL ELSE u.user_id END,CASE WHEN n%10<4 THEN CONCAT(N'Walk-in Guest ',d*100+n) ELSE u.full_name END,CASE WHEN n%10<4 THEN CONCAT('0908',RIGHT(CONCAT('000000',d*100+n),6)) ELSE u.phone END,CASE WHEN n%10<4 THEN NULL ELSE u.email END,t.table_id,t.area_id,DATEADD(hour,-12,DATEADD(minute,CASE WHEN n%3=0 THEN 690+(n*11)%150 ELSE 1110+(n*13)%150 END,CONVERT(DATETIME2(0),DATEADD(day,d,@SeedStart)))) FROM Slots CROSS APPLY(SELECT TOP(1)* FROM @FinalTables WHERE rn=1+(ABS(CHECKSUM(d*31+n))%(SELECT COUNT(*) FROM @FinalTables)))t CROSS APPLY(SELECT TOP(1)* FROM @FinalUsers WHERE rn=1+((d*3+n)%20))u;
+INSERT @SeedReservationsFinal SELECT d*100+n,DATEADD(minute,CASE WHEN n%3=0 THEN 720+(n*11)%150 ELSE 1110+(n*13)%150 END,CONVERT(DATETIME2(0),DATEADD(day,d,@SeedStart))),DATEADD(minute,120,DATEADD(minute,CASE WHEN n%3=0 THEN 720+(n*11)%150 ELSE 1110+(n*13)%150 END,CONVERT(DATETIME2(0),DATEADD(day,d,@SeedStart)))),CONVERT(TINYINT,1+(ABS(CHECKSUM(d*17+n))%6)),CASE WHEN d=DATEDIFF(day,@SeedStart,@SeedEnd) AND n=1 THEN N'Await Check-in' WHEN (CHECKSUM(CONVERT(NVARCHAR(10),d)+N':'+CONVERT(NVARCHAR(10),n))&2147483647)%100<7 THEN N'No Show' WHEN (CHECKSUM(CONVERT(NVARCHAR(10),d)+N':'+CONVERT(NVARCHAR(10),n))&2147483647)%100<16 THEN N'Cancelled' ELSE N'Completed' END,CASE WHEN n%10<4 THEN NULL ELSE u.user_id END,CASE WHEN n%10<4 THEN CONCAT(N'Walk-in Guest ',d*100+n) ELSE u.full_name END,CASE WHEN n%10<4 THEN CONCAT('0908',RIGHT(CONCAT('000000',d*100+n),6)) ELSE u.phone END,CASE WHEN n%10<4 THEN NULL ELSE u.email END,t.table_id,t.area_id,DATEADD(hour,-12,DATEADD(minute,CASE WHEN n%3=0 THEN 720+(n*11)%150 ELSE 1110+(n*13)%150 END,CONVERT(DATETIME2(0),DATEADD(day,d,@SeedStart)))) FROM Slots CROSS APPLY(SELECT TOP(1)* FROM @FinalTables WHERE rn=1+(ABS(CHECKSUM(d*31+n))%(SELECT COUNT(*) FROM @FinalTables)))t CROSS APPLY(SELECT TOP(1)* FROM @FinalUsers WHERE rn=1+((d*3+n)%20))u;
 INSERT dbo.Reservations(customer_id,contact_name,contact_phone,contact_email,created_by_staff_id,preferred_area_id,reservation_start_at,reservation_end_at,guest_count,order_code,reservation_status,reservation_source,confirmed_by_staff_id,confirmed_at,checked_in_at,seated_at,cancelled_at,checked_out_at,completed_at,cancel_reason,created_at,updated_at)
 SELECT customer_id,contact_name,contact_phone,contact_email,@StaffActorFinal,area_id,start_at,end_at,guest_count,CONCAT('CANONICAL-2Y-',seed_key),reservation_status,CASE WHEN customer_id IS NULL THEN N'Walk-in' ELSE N'Online' END,@StaffActorFinal,DATEADD(hour,1,created_at),CASE WHEN reservation_status=N'Completed' THEN DATEADD(minute,5,start_at) END,CASE WHEN reservation_status=N'Completed' THEN DATEADD(minute,8,start_at) END,CASE WHEN reservation_status=N'Cancelled' THEN DATEADD(hour,-2,start_at) END,CASE WHEN reservation_status=N'Completed' THEN end_at END,CASE WHEN reservation_status=N'Completed' THEN end_at END,CASE WHEN reservation_status=N'Cancelled' THEN N'Guest cancelled before arrival' END,created_at,COALESCE(CASE WHEN reservation_status=N'Completed' THEN end_at END,created_at) FROM @SeedReservationsFinal;
 INSERT dbo.ReservationTables(reservation_id,table_id,assigned_by_staff_id,assigned_at) SELECT r.reservation_id,s.table_id,@StaffActorFinal,DATEADD(hour,1,s.created_at) FROM @SeedReservationsFinal s JOIN dbo.Reservations r ON r.order_code=CONCAT('CANONICAL-2Y-',s.seed_key);
@@ -2628,5 +2724,55 @@ CROSS JOIN (SELECT TOP 2 promotion_id FROM dbo.Promotions) p
 
 IF EXISTS(SELECT 1 FROM dbo.Orders WHERE ABS((subtotal-discount_amount)-total_amount)>0.01 OR amount_paid<>total_amount) THROW 51101, 'Canonical seed order totals are invalid.', 1;
 IF EXISTS(SELECT 1 FROM dbo.Reservations WHERE reservation_start_at<DATEADD(day,-1,@SeedEnd) AND reservation_status IN(N'Pending Request',N'Awaiting Deposit',N'Await Check-in',N'Dining',N'Pending Payment')) THROW 51102, 'Canonical seed has historical open reservations.', 1;
+COMMIT TRANSACTION;
+GO
+
+/* Final presentation overlay: this is deliberately last because the canonical seed above resets demo data. */
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+DECLARE @PresentationFinalEmail NVARCHAR(180)=N'quagphu159@gmail.com';
+DECLARE @PresentationFinalUserId INT=(SELECT user_id FROM dbo.UserAccounts WHERE LOWER(email)=LOWER(@PresentationFinalEmail));
+DECLARE @PresentationFinalTableId SMALLINT=(SELECT TOP 1 table_id FROM dbo.RestaurantTables WHERE table_status<>N'Inactive' ORDER BY table_id);
+DECLARE @PresentationFinalAreaId SMALLINT=(SELECT TOP 1 area_id FROM dbo.RestaurantAreas ORDER BY area_id);
+DECLARE @PresentationFinalPaymentMethodId TINYINT=(SELECT TOP 1 payment_method_id FROM dbo.PaymentMethods WHERE is_active=1 ORDER BY payment_method_id);
+DECLARE @PresentationFinalDishId INT=(SELECT TOP 1 dish_id FROM dbo.Dishes WHERE is_available=1 ORDER BY dish_id);
+IF @PresentationFinalUserId IS NULL THROW 51001, 'Presentation customer account was not found.', 1;
+
+DELETE FROM dbo.TableOccupancySessions WHERE order_id IN(SELECT order_id FROM dbo.Orders WHERE customer_id=@PresentationFinalUserId) OR reservation_id IN(SELECT reservation_id FROM dbo.Reservations WHERE customer_id=@PresentationFinalUserId);
+DELETE FROM dbo.CustomerReviews WHERE order_id IN(SELECT order_id FROM dbo.Orders WHERE customer_id=@PresentationFinalUserId);
+DELETE FROM dbo.KitchenTickets WHERE order_item_id IN(SELECT order_item_id FROM dbo.OrderItems WHERE order_id IN(SELECT order_id FROM dbo.Orders WHERE customer_id=@PresentationFinalUserId));
+DELETE FROM dbo.OrderItems WHERE order_id IN(SELECT order_id FROM dbo.Orders WHERE customer_id=@PresentationFinalUserId);
+DELETE FROM dbo.Payments WHERE order_id IN(SELECT order_id FROM dbo.Orders WHERE customer_id=@PresentationFinalUserId) OR reservation_id IN(SELECT reservation_id FROM dbo.Reservations WHERE customer_id=@PresentationFinalUserId);
+DELETE FROM dbo.Orders WHERE customer_id=@PresentationFinalUserId;
+DELETE FROM dbo.ReservationTables WHERE reservation_id IN(SELECT reservation_id FROM dbo.Reservations WHERE customer_id=@PresentationFinalUserId);
+DELETE FROM dbo.Reservations WHERE customer_id=@PresentationFinalUserId;
+DELETE FROM dbo.CustomerPromotions WHERE customer_id=@PresentationFinalUserId;
+DELETE FROM dbo.LoyaltyTransactions WHERE customer_id=@PresentationFinalUserId;
+UPDATE dbo.UserAccounts SET full_name=N'Dang Quang Phu',phone='0964813966',is_active=1,email_verified=1,created_at='2025-01-25T00:00:00',updated_at=SYSDATETIME() WHERE user_id=@PresentationFinalUserId;
+UPDATE dbo.CustomerProfiles SET username=N'quagphu159',date_of_birth='2004-12-29',gender=N'Male',country=N'Vietnam',[language]=N'Vietnamese',bio=N'VIP customer since 2025.',preferences=N'["VIP area","Window seat","Steak"]',loyalty_points=0,updated_at=SYSDATETIME() WHERE user_id=@PresentationFinalUserId;
+
+DECLARE @PresentationFinalActivity TABLE(code VARCHAR(40),start_at DATETIME2(0),total DECIMAL(12,2),guests TINYINT,purpose NVARCHAR(100));
+INSERT @PresentationFinalActivity VALUES
+('PHU-YEAR-01',DATEADD(hour,12,CAST(CAST(DATEADD(month,-11,GETDATE()) AS date) AS datetime)),685000,2,N'Casual Dinner'),('PHU-YEAR-02',DATEADD(hour,18,CAST(CAST(DATEADD(month,-10,GETDATE()) AS date) AS datetime)),1245000,4,N'Business Meeting'),
+('PHU-YEAR-03',DATEADD(hour,12,CAST(CAST(DATEADD(month,-9,GETDATE()) AS date) AS datetime)),892000,3,N'Birthday'),('PHU-YEAR-04',DATEADD(hour,19,CAST(CAST(DATEADD(month,-8,GETDATE()) AS date) AS datetime)),1568000,6,N'Family Gathering'),
+('PHU-YEAR-05',DATEADD(hour,12,CAST(CAST(DATEADD(month,-7,GETDATE()) AS date) AS datetime)),734000,2,N'Casual Dinner'),('PHU-YEAR-06',DATEADD(hour,18,CAST(CAST(DATEADD(month,-6,GETDATE()) AS date) AS datetime)),1198000,4,N'Anniversary'),
+('PHU-YEAR-07',DATEADD(hour,12,CAST(CAST(DATEADD(month,-5,GETDATE()) AS date) AS datetime)),946000,3,N'Casual Dinner'),('PHU-YEAR-08',DATEADD(hour,19,CAST(CAST(DATEADD(month,-4,GETDATE()) AS date) AS datetime)),1785000,8,N'Business Meeting'),
+('PHU-YEAR-09',DATEADD(hour,12,CAST(CAST(DATEADD(month,-3,GETDATE()) AS date) AS datetime)),815000,2,N'Casual Dinner'),('PHU-YEAR-10',DATEADD(hour,18,CAST(CAST(DATEADD(month,-2,GETDATE()) AS date) AS datetime)),1326000,5,N'Birthday'),
+('PHU-YEAR-11',DATEADD(hour,12,CAST(CAST(DATEADD(month,-1,GETDATE()) AS date) AS datetime)),1079000,4,N'Casual Dinner'),('PHU-YEAR-12',DATEADD(hour,18,CAST(CAST(DATEADD(day,-14,GETDATE()) AS date) AS datetime)),1495000,6,N'Anniversary');
+INSERT dbo.Reservations(customer_id,contact_name,contact_phone,contact_email,preferred_area_id,reservation_start_at,reservation_end_at,guest_count,dining_purpose,deposit_amount,final_total,order_code,reservation_status,reservation_source,checked_in_at,seated_at,checked_out_at,completed_at,created_at,updated_at)
+SELECT @PresentationFinalUserId,N'Dang Quang Phu','0964813966',@PresentationFinalEmail,@PresentationFinalAreaId,start_at,DATEADD(minute,120,start_at),guests,purpose,0,total,code,N'Completed',N'Online',DATEADD(minute,5,start_at),DATEADD(minute,8,start_at),DATEADD(minute,120,start_at),DATEADD(minute,120,start_at),DATEADD(day,-7,start_at),DATEADD(minute,120,start_at) FROM @PresentationFinalActivity;
+INSERT dbo.ReservationTables(reservation_id,table_id,assigned_at) SELECT reservation_id,@PresentationFinalTableId,DATEADD(minute,3,reservation_start_at) FROM dbo.Reservations WHERE customer_id=@PresentationFinalUserId AND order_code LIKE 'PHU-YEAR-%';
+INSERT dbo.Orders(reservation_id,table_id,customer_id,order_type,order_status,subtotal,discount_amount,service_charge,total_amount,amount_paid,created_at,updated_at) SELECT reservation_id,@PresentationFinalTableId,@PresentationFinalUserId,N'Dine In',N'Paid',final_total,0,0,final_total,final_total,DATEADD(minute,30,reservation_start_at),completed_at FROM dbo.Reservations WHERE customer_id=@PresentationFinalUserId AND order_code LIKE 'PHU-YEAR-%';
+INSERT dbo.OrderItems(order_id,dish_id,quantity,unit_price,notes,item_status,created_at,updated_at) SELECT order_id,@PresentationFinalDishId,1,total_amount,N'Completed presentation customer order',N'Served',created_at,updated_at FROM dbo.Orders WHERE customer_id=@PresentationFinalUserId;
+INSERT dbo.Payments(order_id,reservation_id,payment_method_id,amount_paid,payment_status,transaction_ref,paid_at,created_at,updated_at) SELECT order_id,reservation_id,@PresentationFinalPaymentMethodId,total_amount,N'Completed',CONCAT(N'PHU-PAY-',order_id),updated_at,updated_at,updated_at FROM dbo.Orders WHERE customer_id=@PresentationFinalUserId;
+INSERT dbo.LoyaltyTransactions(customer_id,points,transaction_type,reference_type,reference_id,description,created_at) SELECT @PresentationFinalUserId,CONVERT(INT,FLOOR(o.total_amount/10000)),N'Earn',N'Payment',p.payment_id,CONCAT(N'Points from payment ',p.transaction_ref),p.paid_at FROM dbo.Orders o JOIN dbo.Payments p ON p.order_id=o.order_id WHERE o.customer_id=@PresentationFinalUserId;
+UPDATE dbo.CustomerProfiles SET loyalty_points=(SELECT COALESCE(SUM(points),0) FROM dbo.LoyaltyTransactions WHERE customer_id=@PresentationFinalUserId),updated_at=SYSDATETIME() WHERE user_id=@PresentationFinalUserId;
+
+DECLARE @PresentationFinalRewards TABLE(promo_code NVARCHAR(40) PRIMARY KEY,promotion_name NVARCHAR(150),points_required INT,discount_value DECIMAL(12,2),min_order_value DECIMAL(12,2));
+INSERT @PresentationFinalRewards VALUES
+(N'LOYALTY-2026-01',N'Loyalty Reward 01',100,25000,150000),(N'LOYALTY-2026-02',N'Loyalty Reward 02',150,30000,150000),(N'LOYALTY-2026-03',N'Loyalty Reward 03',200,35000,150000),(N'LOYALTY-2026-04',N'Loyalty Reward 04',250,40000,150000),(N'LOYALTY-2026-05',N'Loyalty Reward 05',300,45000,150000),(N'LOYALTY-2026-06',N'Loyalty Reward 06',400,50000,150000),(N'LOYALTY-2026-07',N'Loyalty Reward 07',500,60000,180000),(N'LOYALTY-2026-08',N'Loyalty Reward 08',600,70000,210000),(N'LOYALTY-2026-09',N'Loyalty Reward 09',750,80000,240000),(N'LOYALTY-2026-10',N'Loyalty Reward 10',900,90000,270000),(N'LOYALTY-2026-11',N'Loyalty Reward 11',1000,100000,300000),(N'LOYALTY-2026-12',N'Loyalty Reward 12',1100,110000,330000),(N'LOYALTY-2026-13',N'Loyalty Reward 13',1250,125000,375000),(N'LOYALTY-2026-14',N'Loyalty Reward 14',1400,140000,420000),(N'LOYALTY-2026-15',N'Loyalty Reward 15',1600,160000,480000),(N'LOYALTY-2026-16',N'Loyalty Reward 16',1800,180000,540000),(N'LOYALTY-2026-17',N'Loyalty Reward 17',2000,200000,600000),(N'LOYALTY-2026-18',N'Loyalty Reward 18',2200,220000,660000),(N'LOYALTY-2026-19',N'Loyalty Reward 19',2400,240000,720000),(N'LOYALTY-2026-20',N'Loyalty Reward 20',2600,260000,780000);
+INSERT dbo.Promotions(promotion_name,description,discount_type,discount_value,min_order_value,max_discount,start_at,end_at,is_active,applicable_to,points_required,validity_duration_hours,total_quantity,remaining_quantity,created_by_staff_id,created_at,updated_at)
+SELECT promotion_name,CONCAT(N'Ưu đãi đổi điểm thành viên — hạng ',points_required,N' điểm.'),N'Fixed',discount_value,min_order_value,discount_value,DATEADD(day,-30,SYSDATETIME()),DATEADD(year,1,SYSDATETIME()),1,N'Both',points_required,720,100,100,NULL,SYSDATETIME(),SYSDATETIME() FROM @PresentationFinalRewards r WHERE NOT EXISTS(SELECT 1 FROM dbo.PromoCodes pc WHERE pc.promo_code=r.promo_code);
+INSERT dbo.PromoCodes(promotion_id,promo_code,usage_limit,times_used,is_active,created_at,updated_at) SELECT p.promotion_id,r.promo_code,100,0,1,SYSDATETIME(),SYSDATETIME() FROM @PresentationFinalRewards r JOIN dbo.Promotions p ON p.promotion_name=r.promotion_name WHERE NOT EXISTS(SELECT 1 FROM dbo.PromoCodes pc WHERE pc.promo_code=r.promo_code);
 COMMIT TRANSACTION;
 GO

@@ -29,7 +29,7 @@ export const createWalkInReservation = async (req, res) => {
     return res.status(401).json({ success: false, message: 'Unauthorized.' });
   }
 
-  const { contact_name, contact_phone, contact_email, guest_count, table_id } = req.body;
+  const { contact_name, contact_phone, contact_email, guest_count, table_id, table_ids = [] } = req.body;
 
   // ── Input validation ──────────────────────────────────────────────────────
   if (!contact_name || typeof contact_name !== 'string' || contact_name.trim().length < 2) {
@@ -45,8 +45,11 @@ export const createWalkInReservation = async (req, res) => {
   if (!parsedGuestCount || parsedGuestCount < 1 || parsedGuestCount > 50) {
     return res.status(400).json({ success: false, message: 'Guest count must be between 1 and 50.' });
   }
-  const parsedTableId = parseInt(table_id, 10);
-  if (!parsedTableId || isNaN(parsedTableId)) {
+  const parsedTableIds = [...new Set((Array.isArray(table_ids) && table_ids.length ? table_ids : [table_id])
+    .map((id) => parseInt(id, 10))
+    .filter((id) => Number.isFinite(id) && id > 0))];
+  const parsedTableId = parsedTableIds[0];
+  if (!parsedTableId) {
     return res.status(400).json({ success: false, message: 'A valid table must be selected.' });
   }
 
@@ -64,25 +67,32 @@ export const createWalkInReservation = async (req, res) => {
     // A second concurrent transaction reading 'Available' is blocked until
     // this one commits or rolls back — race condition eliminated. ──────────
     const req1 = new sql.Request(transaction);
-    req1.input('tableId', sql.Int, parsedTableId);
+    parsedTableIds.forEach((tableId, index) => req1.input(`tableId${index}`, sql.Int, tableId));
     const tableCheck = await req1.query(`
-      SELECT t.table_status, t.table_number, t.capacity, a.area_name
+      SELECT t.table_id, t.table_status, t.table_number, t.capacity, a.area_name, t.area_id
       FROM dbo.RestaurantTables t WITH (UPDLOCK, ROWLOCK)
       INNER JOIN dbo.RestaurantAreas a ON a.area_id = t.area_id
-      WHERE t.table_id = @tableId
+      WHERE t.table_id IN (${parsedTableIds.map((_, index) => `@tableId${index}`).join(', ')})
     `);
 
-    if (!tableCheck.recordset.length) {
+    if (tableCheck.recordset.length !== parsedTableIds.length) {
       await transaction.rollback();
       return res.status(404).json({ success: false, message: 'Table not found.' });
     }
-    const tableRow = tableCheck.recordset[0];
-    if (tableRow.table_status !== 'Available') {
+    const tableRows = tableCheck.recordset;
+    const tableRow = tableRows[0];
+    const unavailable = tableRows.find((row) => row.table_status !== 'Available');
+    if (unavailable) {
       await transaction.rollback();
       return res.status(409).json({
         success: false,
-        message: `Table is not available (currently: ${tableRow.table_status}). Please select another table.`
+        message: `Table ${unavailable.table_number} is not available (currently: ${unavailable.table_status}). Please select another table.`
       });
+    }
+    const totalCapacity = tableRows.reduce((sum, row) => sum + Number(row.capacity || 0), 0);
+    if (totalCapacity < parsedGuestCount) {
+      await transaction.rollback();
+      return res.status(400).json({ success: false, message: `Selected tables seat ${totalCapacity}, but the walk-in party has ${parsedGuestCount} guests.` });
     }
 
     // Find matching customer account by phone or email
@@ -141,38 +151,44 @@ export const createWalkInReservation = async (req, res) => {
     const newReservationId = insertRes.recordset[0].reservation_id;
 
     // ── Step 2: Link reservation ↔ table ──────────────────────────────────
-    const req3 = new sql.Request(transaction);
-    req3.input('reservationId', sql.Int, newReservationId);
-    req3.input('tableId',       sql.Int, parsedTableId);
-    req3.input('staffId',       sql.Int, staffId);
-    await req3.query(`
-      INSERT INTO dbo.ReservationTables (reservation_id, table_id, assigned_by_staff_id)
-      VALUES (@reservationId, @tableId, @staffId)
-    `);
+    for (const linkedTableId of parsedTableIds) {
+      const req3 = new sql.Request(transaction);
+      req3.input('reservationId', sql.Int, newReservationId);
+      req3.input('tableId', sql.Int, linkedTableId);
+      req3.input('staffId', sql.Int, staffId);
+      await req3.query(`INSERT INTO dbo.ReservationTables (reservation_id, table_id, assigned_by_staff_id) VALUES (@reservationId, @tableId, @staffId)`);
+    }
 
     // ── Step 3: Table → Occupied ──────────────────────────────────────────
     const req4 = new sql.Request(transaction);
-    req4.input('tableId', sql.Int, parsedTableId);
+    parsedTableIds.forEach((tableId, index) => req4.input(`tableId${index}`, sql.Int, tableId));
     await req4.query(`
       UPDATE dbo.RestaurantTables
       SET table_status = N'Occupied', updated_at = SYSDATETIME()
-      WHERE table_id = @tableId
+      WHERE table_id IN (${parsedTableIds.map((_, index) => `@tableId${index}`).join(', ')})
     `);
 
+    // One walk-in party with several tables gets one primary QR/bill.  Child
+    // tables remain visible through ReservationTables but resolve to the main
+    // table for every QR, order and KDS request.
+    if (parsedTableIds.length > 1) {
+      const mergeReq = new sql.Request(transaction);
+      mergeReq.input('primaryTableId', sql.Int, parsedTableId);
+      parsedTableIds.slice(1).forEach((tableId, index) => mergeReq.input(`childId${index}`, sql.Int, tableId));
+      await mergeReq.query(`
+        UPDATE dbo.RestaurantTables
+        SET merged_into_table_id = @primaryTableId, table_status = N'Inactive', updated_at = SYSDATETIME()
+        WHERE table_id IN (${parsedTableIds.slice(1).map((_, index) => `@childId${index}`).join(', ')});
+      `);
+    }
+
     // ── Step 3b: Open TableOccupancySession ──────────────────────────────
-    try {
-      await openOccupancySession({
-        transaction,
-        tableId: parsedTableId,
-        reservationId: newReservationId,
-        orderId: null,
-        guestCount: parsedGuestCount,
-        inputDurationMin: diningDuration,
-        checkInAt: now,
-      });
-    } catch (sessionErr) {
-      // Non-fatal — do not abort the walk-in transaction over a session open error
-      console.warn('[createWalkInReservation] openOccupancySession failed (non-fatal):', sessionErr.message);
+    for (const linkedTableId of parsedTableIds) {
+      try {
+        await openOccupancySession({ transaction, tableId: linkedTableId, reservationId: newReservationId, orderId: null, guestCount: parsedGuestCount, inputDurationMin: diningDuration, checkInAt: now });
+      } catch (sessionErr) {
+        console.warn('[createWalkInReservation] openOccupancySession failed (non-fatal):', sessionErr.message);
+      }
     }
 
     // ── Step 4: Timeline + Audit ──────────────────────────────────────────

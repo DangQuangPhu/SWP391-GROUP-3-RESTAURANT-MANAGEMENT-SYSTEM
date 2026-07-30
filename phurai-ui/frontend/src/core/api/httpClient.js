@@ -21,8 +21,13 @@ export function saveAuthUser(user, remember = false) {
 export function saveAuthToken(token, remember = false) {
   if (!token) return;
   const storage = remember ? localStorage : sessionStorage;
-  const other = remember ? sessionStorage : localStorage;
-  other.removeItem("phurai_token");
+  // A previous app version stored JWTs under generic legacy keys.  Leaving
+  // one behind can make a newly authenticated user send the old token.
+  for (const target of [localStorage, sessionStorage]) {
+    target.removeItem("phurai_token");
+    target.removeItem("token");
+    target.removeItem("authToken");
+  }
   storage.setItem("phurai_token", token);
 }
 
@@ -40,8 +45,11 @@ export function loadAuthUser() {
 export function clearAuthUser() {
   localStorage.removeItem(AUTH_STORAGE_KEY);
   sessionStorage.removeItem(AUTH_STORAGE_KEY);
-  localStorage.removeItem("phurai_token");
-  sessionStorage.removeItem("phurai_token");
+  for (const storage of [localStorage, sessionStorage]) {
+    storage.removeItem("phurai_token");
+    storage.removeItem("token");
+    storage.removeItem("authToken");
+  }
 }
 
 export function createApiError(message, { status, code, data } = {}) {
@@ -146,12 +154,13 @@ export async function request(path, options = {}) {
 
 export function getAuthToken() {
   return (
-    localStorage.getItem("phurai_token") ||
-    localStorage.getItem("token") ||
-    localStorage.getItem("authToken") ||
     sessionStorage.getItem("phurai_token") ||
+    localStorage.getItem("phurai_token") ||
+    // Backward compatibility for users who have not logged in again yet.
     sessionStorage.getItem("token") ||
     sessionStorage.getItem("authToken") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("authToken") ||
     ""
   );
 }
@@ -199,4 +208,3 @@ export async function apiPut(path, body, options = {}) {
 export async function apiDelete(path, options = {}) {
   return request(path, { ...options, method: "DELETE", headers: { ...authHeaders(), ...(options.headers || {}) } });
 }
-

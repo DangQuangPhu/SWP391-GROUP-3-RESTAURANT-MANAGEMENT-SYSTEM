@@ -194,14 +194,13 @@ export const createPromotion = async (req, res) => {
         .input('target_id', sql.Int, promotionId)
         .input('new_value_json', sql.NVarChar(sql.MAX), JSON.stringify(auditPayload))
         .input('ip_address', sql.VarChar(50), req.ip || 'unknown')
-        .input('user_agent', sql.NVarChar(500), req.get('user-agent') || 'system')
         .query(`
           INSERT INTO dbo.AuditLogs (
             user_id, action_name, target_table, target_id, 
-            new_value_json, ip_address, user_agent, created_at
+            new_value_json, ip_address, created_at
           ) VALUES (
             @user_id, @action_name, @target_table, @target_id, 
-            @new_value_json, @ip_address, @user_agent, SYSDATETIME()
+            @new_value_json, @ip_address, SYSDATETIME()
           )
         `);
     } catch (err) {

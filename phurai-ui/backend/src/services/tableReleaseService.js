@@ -197,11 +197,13 @@ export async function openOccupancySessionDirect({
 export async function closeOccupancySession({
   transaction,
   tableId,
+  reservationId = null,
   releaseTrigger,
   releasedByStaffId = null,
 }) {
   const req = new sql.Request(transaction);
   req.input('tableId',          sql.SmallInt,  tableId);
+  req.input('reservationId',    sql.Int,       reservationId);
   req.input('releaseTrigger',   sql.NVarChar(30), releaseTrigger);
   req.input('staffId',          sql.Int,       releasedByStaffId);
 
@@ -213,9 +215,9 @@ export async function closeOccupancySession({
         released_by_staff_id = @staffId,
         updated_at           = SYSDATETIME()
     OUTPUT INSERTED.session_id INTO @ClosedOut
-    WHERE table_id   = @tableId
-      AND released_at IS NULL;
-    SELECT TOP 1 session_id FROM @ClosedOut;
+    WHERE released_at IS NULL
+      AND (table_id = @tableId OR (@reservationId IS NOT NULL AND reservation_id = @reservationId));
+    SELECT session_id FROM @ClosedOut;
   `);
 
   const sessionId = result.recordset[0]?.session_id ?? null;
@@ -231,6 +233,30 @@ export async function closeOccupancySession({
   }
 
   return { sessionId };
+}
+
+/** Release every table belonging to one reservation.  A merged party must
+ * never leave its child table Occupied/Inactive after the common bill is paid. */
+export async function releaseTableGroupForPayment({ transaction, tableId, reservationId = null }) {
+  const req = new sql.Request(transaction);
+  req.input('tableId', sql.SmallInt, tableId);
+  req.input('reservationId', sql.Int, reservationId);
+  const result = await req.query(`
+    DECLARE @Released TABLE (table_id SMALLINT);
+    UPDATE t
+    SET table_status = N'Cleaning',
+        merged_into_table_id = NULL,
+        updated_at = SYSDATETIME()
+    OUTPUT INSERTED.table_id INTO @Released
+    FROM dbo.RestaurantTables t
+    WHERE t.table_id = @tableId
+       OR (@reservationId IS NOT NULL AND EXISTS (
+            SELECT 1 FROM dbo.ReservationTables rt
+            WHERE rt.reservation_id = @reservationId AND rt.table_id = t.table_id
+          ));
+    SELECT table_id FROM @Released;
+  `);
+  return result.recordset.map((row) => Number(row.table_id));
 }
 
 /**

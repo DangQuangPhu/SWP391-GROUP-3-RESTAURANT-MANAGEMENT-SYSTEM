@@ -1,7 +1,15 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Filter, ChevronDown, Check, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Filter, ChevronDown, Check, X, Search, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import FloorPlanSVG, { normalizeStatus } from './FloorPlanSVG';
-import TablePreviewModal from './TablePreviewModal';
+
+function tableCodeAliases(code) {
+  const value = String(code || '').trim().toUpperCase();
+  const compact = value.replace(/-/g, '');
+  const aliases = [value, compact];
+  if (value.startsWith('PRE-')) aliases.push(`P${value.slice(4)}`);
+  if (value.startsWith('PR-')) aliases.push(`R${value.slice(3)}`);
+  return [...new Set(aliases)];
+}
 
 export default function TableBoard({
   tables = [],
@@ -10,12 +18,16 @@ export default function TableBoard({
   allowMultiple = false,
   currentTableId,
   onSelectTable,
+  onApplySelection,
+  onCancelSelection,
   guestCount
 }) {
   const [activeFilter, setActiveFilter] = useState(null);
+  const [activeAreaId, setActiveAreaId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [viewZoneImage, setViewZoneImage] = useState(null);
-  const [previewTable, setPreviewTable] = useState(null); // Table object for preview modal
+  const [draftTableIds, setDraftTableIds] = useState(() => selectedTableIds.length ? selectedTableIds.map(Number) : (selectedTableId ? [Number(selectedTableId)] : []));
   const dropdownRef = useRef(null);
 
   // Lifted Zoom & Pan states
@@ -38,44 +50,91 @@ export default function TableBoard({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // The parent only changes after Apply. Keep the initial/draft selection in
+  // sync when a new availability response or reservation is loaded, without
+  // overwriting the user's in-progress clicks.
+  useEffect(() => {
+    const next = selectedTableIds.length
+      ? selectedTableIds.map(Number)
+      : (selectedTableId ? [Number(selectedTableId)] : []);
+    setDraftTableIds(next.filter(Number.isFinite));
+  }, [selectedTableId, selectedTableIds]);
+
   // We need to map config Table ID (e.g. "S-03") to API Table object
   const apiTableMap = useMemo(() => {
     const map = new Map();
     tables.forEach(t => {
-      // Map table_number (e.g. S-03) to the full API object
-      map.set(t.table_number, t);
+      tableCodeAliases(t.table_number).forEach((key) => map.set(key, t));
     });
     return map;
   }, [tables]);
 
   const handleTableClick = (configId) => {
-    const apiTable = apiTableMap.get(configId);
-    const status = normalizeStatus(apiTable, guestCount);
-
-    // Open Apple-style Table Preview Modal for confirmation / view
-    setPreviewTable({
-      code: configId,
-      apiTable: apiTable || { table_number: configId, capacity: 2 },
-      status
-    });
+    const apiTable = tableCodeAliases(configId).map((key) => apiTableMap.get(key)).find(Boolean);
+    const status = normalizeStatus(apiTable, guestCount, allowMultiple);
+    // A single click is deliberately the selection control. This makes a
+    // selected table immediately toggle to deselected, while Apply remains the
+    // only action that commits the draft to Reservation/Walk-in/Edit Request.
+    if (!apiTable || (status !== 'Available' && status !== 'CurrentTable')) return;
+    handleDraftSelect(apiTable.table_id);
   };
 
   const selectedApiTable = useMemo(
     () => tables.find((t) => String(t.table_id) === String(selectedTableId)),
     [tables, selectedTableId]
   );
-  const activeSelectedIds = selectedTableIds.length ? selectedTableIds : (selectedTableId ? [selectedTableId] : []);
+  const activeSelectedIds = draftTableIds;
+  const selectedCapacity = tables
+    .filter((table) => activeSelectedIds.map(String).includes(String(table.table_id)))
+    .reduce((total, table) => total + Number(table.capacity || 0), 0);
+  const areas = Array.from(new Map(tables.filter((table) => table.area_id).map((table) => [String(table.area_id), table])).values());
+  const canApply = allowMultiple
+    ? activeSelectedIds.length > 0 && selectedCapacity >= Number(guestCount || 0)
+    : activeSelectedIds.length === 1;
+
+  const handleDraftSelect = (tableId) => {
+    const id = Number(tableId);
+    if (!Number.isFinite(id)) return;
+    setDraftTableIds((previous) => {
+      if (!allowMultiple) return [id];
+      if (previous.includes(id)) return previous.filter((value) => value !== id);
+      const currentCapacity = tables
+        .filter((table) => previous.includes(Number(table.table_id)))
+        .reduce((total, table) => total + Number(table.capacity || 0), 0);
+      // Once the party is seated, keep the selection intentional: the guest
+      // must deselect a table before adding another instead of accumulating
+      // unrelated tables (e.g. 30 seats for an 8-person booking).
+      if (Number(guestCount) > 0 && currentCapacity >= Number(guestCount)) return previous;
+      return [...previous, id];
+    });
+  };
+
+  const applyDraft = () => {
+    if (!canApply) return;
+    if (onApplySelection) onApplySelection(activeSelectedIds);
+    else activeSelectedIds.forEach((id) => onSelectTable?.(id));
+  };
 
   return (
     <div className="table-board-container">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 relative" ref={dropdownRef}>
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-4 relative" ref={dropdownRef}>
         <div className="tb-board__header m-0 p-0 border-0 bg-transparent">
           <p className="tb-board__hint">
-            {allowMultiple ? "Select all available tables for your event; tap again to remove a table." : "Select an available table. Occupied or invalid capacity tables are disabled."}
+            {allowMultiple ? "Select enough available tables for your event. The combined seats must cover every guest; tap again to remove a table." : "Select an available table. Occupied or invalid capacity tables are disabled."}
           </p>
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto xl:justify-end">
+          <label className="relative min-w-[220px] flex-1 xl:flex-none">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search table or area…"
+              className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-8 text-sm text-gray-700 outline-none focus:border-[#8c764b] focus:ring-2 focus:ring-[#8c764b]/15"
+            />
+            {searchQuery && <button type="button" aria-label="Clear table search" onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:bg-gray-100"><X className="w-3.5 h-3.5" /></button>}
+          </label>
           {/* Zoom & Pan Control Bar placed next to Filter Tables */}
           <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-xs text-xs font-semibold text-gray-700">
             <span className="text-[11px] text-gray-500 mr-1 hidden md:inline">Hold Left-Click Drag | Scroll to Zoom</span>
@@ -171,16 +230,30 @@ export default function TableBoard({
           </div>
         </div>
       </div>
-    </div>
+      </div>
 
+      <div className="tb-quick-actions" aria-label="Table quick actions">
+        <span className="tb-quick-actions__label">Quick select</span>
+        <button type="button" className={!activeAreaId ? 'is-active' : ''} onClick={() => setActiveAreaId(null)}>All areas</button>
+        {areas.map((area) => (
+          <button key={area.area_id} type="button" className={String(activeAreaId) === String(area.area_id) ? 'is-active' : ''} onClick={() => setActiveAreaId(String(area.area_id))}>
+            {area.area_name}
+          </button>
+        ))}
+        <button type="button" className={activeFilter === 'Available' ? 'is-active' : ''} onClick={() => setActiveFilter((value) => value === 'Available' ? null : 'Available')}>Available only</button>
+        {allowMultiple && <span className="tb-selection-count">{activeSelectedIds.length} table{activeSelectedIds.length !== 1 ? 's' : ''} · {selectedCapacity}/{guestCount || 0} seats</span>}
+      </div>
       <FloorPlanSVG
         tables={tables}
         selectedTableId={selectedTableId}
         selectedTableIds={activeSelectedIds}
         currentTableId={currentTableId}
         guestCount={guestCount}
+        allowMultiple={allowMultiple}
         onTableClick={handleTableClick}
         activeFilter={activeFilter}
+        activeAreaId={activeAreaId}
+        searchQuery={searchQuery}
         zoomScale={zoomScale}
         setZoomScale={setZoomScale}
         pan={pan}
@@ -188,6 +261,14 @@ export default function TableBoard({
         onResetZoomAndPan={handleResetZoomAndPan}
         onViewZone={(img, label) => setViewZoneImage({ src: img, title: label })}
       />
+
+      <div className="tb-draft-toolbar">
+        <span>{allowMultiple ? `${activeSelectedIds.length} table${activeSelectedIds.length !== 1 ? 's' : ''} selected · ${selectedCapacity}/${guestCount || 0} seats` : (activeSelectedIds.length ? '1 table selected' : 'Select one table')}</span>
+        <div>
+          <button type="button" className="rzv-btn rzv-btn--ghost" onClick={() => onCancelSelection?.()}>Cancel</button>
+          <button type="button" className="rzv-btn rzv-btn--solid tb-apply-button" disabled={!canApply} onClick={applyDraft}>Apply selection</button>
+        </div>
+      </div>
 
       {/* Zone Image Viewer Modal */}
       {viewZoneImage && (
@@ -213,20 +294,6 @@ export default function TableBoard({
         </div>
       )}
 
-      {/* Apple-style Table Preview Modal */}
-      <TablePreviewModal
-        table={previewTable?.code}
-        apiTable={previewTable?.apiTable}
-        tableStatus={previewTable?.status}
-        isOpen={Boolean(previewTable)}
-        onClose={() => setPreviewTable(null)}
-        onSelect={(selectedId) => {
-          if (onSelectTable) {
-            onSelectTable(selectedId);
-          }
-          setPreviewTable(null);
-        }}
-      />
     </div>
   );
 }

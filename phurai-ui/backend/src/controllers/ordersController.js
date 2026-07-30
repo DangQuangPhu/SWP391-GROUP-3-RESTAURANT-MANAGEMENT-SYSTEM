@@ -2,6 +2,7 @@ import { getRawPool } from '../db.js';
 import sql from 'mssql';
 import { getIO } from '../socket.js';
 import { closeQrSessionsForCheckout } from '../services/qrSessionCleanupService.js';
+import { releaseTableGroupForPayment } from '../services/tableReleaseService.js';
 
 function resolveCartDishId(item = {}) {
     const direct = Number(item.dish_id ?? item.menu_item_id ?? item.db_id);
@@ -67,6 +68,7 @@ async function checkoutQrDineInOrder(req, res) {
                     qs.qr_session_id,
                     qs.table_id,
                     qs.customer_id,
+                    qs.reservation_id,
                     qs.session_status,
                     t.table_number,
                     t.merged_into_table_id
@@ -227,14 +229,15 @@ async function checkoutQrDineInOrder(req, res) {
         const orderResult = await transaction.request()
             .input('tableId', sql.Int, targetTableId)
             .input('customerId', sql.Int, session.customer_id || null)
+            .input('reservationId', sql.Int, session.reservation_id || null)
             .input('sessionId', sql.Int, sessionId)
             .input('subtotal', sql.Decimal(12, 2), subtotal)
             .query(`
                 INSERT INTO dbo.Orders
-                    (table_id, customer_id, qr_session_id, order_type, order_status, subtotal, total_amount, created_at, updated_at)
+                    (table_id, customer_id, qr_session_id, reservation_id, order_type, order_status, subtotal, total_amount, created_at, updated_at)
                 OUTPUT INSERTED.order_id
                 VALUES
-                    (@tableId, @customerId, @sessionId, N'QR Self', N'Sent To Kitchen', @subtotal, @subtotal, SYSDATETIME(), SYSDATETIME())
+                    (@tableId, @customerId, @sessionId, @reservationId, N'QR Self', N'Sent To Kitchen', @subtotal, @subtotal, SYSDATETIME(), SYSDATETIME())
             `);
 
         const orderId = orderResult.recordset[0]?.order_id;
@@ -282,6 +285,7 @@ async function checkoutQrDineInOrder(req, res) {
             table_id: Number(session.table_id),
             table_number: session.table_number,
             session_id: sessionId,
+            reservation_id: session.reservation_id ?? null,
             item_count: createdItems.reduce((sum, item) => sum + item.quantity, 0),
             items: createdItems,
         };
@@ -845,11 +849,12 @@ export const processCashPayment = async (req, res) => {
         // 2. Insert Payment record (method_id 1 = Cash)
         await transaction.request()
             .input('orderId', sql.Int, parsedOrderId)
+            .input('reservationId', sql.Int, order.reservation_id || null)
             .input('amountPaid', sql.Decimal(12, 2), parsedAmountPaid)
             .input('changeGiven', sql.Decimal(12, 2), changeGiven)
             .query(`
-                INSERT INTO dbo.Payments (order_id, payment_method_id, amount_paid, change_given, payment_status, paid_at, created_at, updated_at)
-                VALUES (@orderId, 1, @amountPaid, @changeGiven, N'Completed', SYSDATETIME(), SYSDATETIME(), SYSDATETIME())
+                INSERT INTO dbo.Payments (order_id, reservation_id, payment_method_id, amount_paid, change_given, payment_status, paid_at, created_at, updated_at)
+                VALUES (@orderId, @reservationId, 1, @amountPaid, @changeGiven, N'Completed', SYSDATETIME(), SYSDATETIME(), SYSDATETIME())
             `);
 
         // 3. Mark Order as Paid
@@ -862,12 +867,10 @@ export const processCashPayment = async (req, res) => {
                 WHERE order_id = @orderId
             `);
 
-        // 4. Update table to Cleaning
-        if (order.table_id) {
-            await transaction.request()
-                .input('tableId', sql.SmallInt, order.table_id)
-                .query(`UPDATE dbo.RestaurantTables SET table_status = N'Cleaning', updated_at = SYSDATETIME() WHERE table_id = @tableId`);
-        }
+        // 4. A merged event is one bill: release every reservation table together.
+        const releasedTableIds = order.table_id
+            ? await releaseTableGroupForPayment({ transaction, tableId: order.table_id, reservationId: order.reservation_id })
+            : [];
 
         // 5. Close every active QR session belonging to this table/reservation.
         const closedQrSessionIds = await closeQrSessionsForCheckout({
@@ -885,8 +888,8 @@ export const processCashPayment = async (req, res) => {
                     SET reservation_status = N'Completed', updated_at = SYSDATETIME()
                     WHERE reservation_id = @resId;
 
-                    INSERT INTO dbo.ReservationTimelines (reservation_id, status_from, status_to, note, created_at)
-                    VALUES (@resId, N'Dining', N'Completed', N'Cash payment completed by staff', SYSDATETIME())
+                    INSERT INTO dbo.ReservationTimelines (reservation_id, event_type, performed_by, notes, created_at)
+                    VALUES (@resId, N'PAYMENT_COMPLETED', NULL, N'Cash payment completed by staff', SYSDATETIME())
                 `);
         }
 
@@ -906,9 +909,9 @@ export const processCashPayment = async (req, res) => {
         // 8. Emit socket events
         const io = req.app?.get?.('io') || getIO();
         if (io) {
-            const payload = { orderId: parsedOrderId, order_id: parsedOrderId, status: 'Paid', table_id: order.table_id, payment_method: 'Cash' };
+            const payload = { orderId: parsedOrderId, order_id: parsedOrderId, reservation_id: order.reservation_id ?? null, status: 'Paid', table_id: order.table_id, table_ids: releasedTableIds, payment_method: 'Cash' };
             io.emit('PAYMENT_STATUS_CHANGED', payload);
-            io.to('room:staff').to('room:manager').emit('table:status_changed', { tableId: order.table_id, status: 'Cleaning' });
+            for (const tableId of releasedTableIds) io.to('room:staff').to('room:manager').emit('table:status_changed', { tableId, status: 'Cleaning', reservation_id: order.reservation_id ?? null });
             io.to('room:kitchen').emit('kds:clear_order', { orderId: parsedOrderId });
             for (const sessionId of closedQrSessionIds) {
                 io.to(`session_${sessionId}`).emit('TABLE_SESSION_CLEARED', {

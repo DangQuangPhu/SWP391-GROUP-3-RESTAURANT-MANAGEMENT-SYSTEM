@@ -193,7 +193,7 @@ async function ensureRestaurantSettings() {
   if ((await rowCount("RestaurantSettings")) === 0) {
     await exec(`INSERT INTO dbo.RestaurantSettings (setting_key, setting_value, description, updated_by) VALUES
       (N'restaurant_name',  N'Phūrai Premium Restaurant', N'Display name', 1),
-      (N'open_time',        N'10:00',                     N'Opening time', 1),
+      (N'open_time',        N'12:00',                     N'First bookable seating time (restaurant opens at 11:00)', 1),
       (N'close_time',       N'22:00',                     N'Closing time', 1),
       (N'table_hold_min',   N'15',                        N'Minutes to hold reserved table', 1),
       (N'service_charge',   N'5',                         N'Service charge percent', 1),

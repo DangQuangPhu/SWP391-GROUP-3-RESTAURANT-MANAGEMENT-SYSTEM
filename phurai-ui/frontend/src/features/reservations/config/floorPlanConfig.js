@@ -11,40 +11,23 @@ export const SHAPES = {
 };
 
 export const TABLES = [
-  // ---- Window Row (Ascending: 2, 4, 6, 8 seats) ----
+  // These 31 real tables are the source-of-truth inventory in
+  // dbo.RestaurantTables. The reception circle on the plan is not a table.
   { id: "WIN-A", x: 140, y: 120, type: "round2", fill: "#dceaf5", chair: "#cfe3da" },
   { id: "WIN-B", x: 400, y: 120, type: "round4", fill: "#dceaf5", chair: "#cfe3da" },
   { id: "WIN-C", x: 880, y: 115, type: "booth6", fill: "#dceaf5", chair: "#cfe3da" },
   { id: "WIN-D", x: 1165, y: 115, type: "booth8", fill: "#dceaf5", chair: "#cfe3da" },
-
-  // ---- VIP Rooms Row (6 seats) ----
   { id: "VIP-1", x: 140, y: 290, type: "vip6", fill: "#f6d6d6", chair: "#f1c2c2" },
   { id: "VIP-2", x: 140, y: 455, type: "vip6", fill: "#f6d6d6", chair: "#f1c2c2" },
   { id: "VIP-3", x: 140, y: 630, type: "vip6", fill: "#f6d6d6", chair: "#f1c2c2" },
-
-  // ---- Standard Hall (4 columns x 3 rows = 12 tables of 4 seats) ----
-  // Column X: 350, 490, 630, 770 | Row Y: 300, 450, 600
   { id: "S-01", x: 350, y: 300, type: "round4" }, { id: "S-02", x: 490, y: 300, type: "round4" }, { id: "S-03", x: 630, y: 300, type: "round4" }, { id: "S-04", x: 770, y: 300, type: "round4" },
   { id: "S-05", x: 350, y: 450, type: "round4" }, { id: "S-06", x: 490, y: 450, type: "round4" }, { id: "S-07", x: 630, y: 450, type: "round4" }, { id: "S-08", x: 770, y: 450, type: "round4" },
   { id: "S-09", x: 350, y: 600, type: "round4" }, { id: "S-10", x: 490, y: 600, type: "round4" }, { id: "S-11", x: 630, y: 600, type: "round4" }, { id: "S-12", x: 770, y: 600, type: "round4" },
-
-  // ---- Premium Hall (4 tables of 4 seats arranged vertically) ----
-  { id: "PRE-01", x: 930, y: 290, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
-  { id: "PRE-02", x: 930, y: 405, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
-  { id: "PRE-03", x: 930, y: 520, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
-  { id: "PRE-04", x: 930, y: 640, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
-
-  // ---- Private Rooms (Ascending: 2, 4, 6, 8 rectangular seats) ----
-  { id: "PR-01", x: 1165, y: 290, type: "rect2", fill: "#ece1f0", chair: "#ddc9e6" },
-  { id: "PR-02", x: 1165, y: 460, type: "rect4", fill: "#ece1f0", chair: "#ddc9e6" },
-  { id: "PR-03", x: 1165, y: 630, type: "rect6", fill: "#ece1f0", chair: "#ddc9e6" },
-  { id: "PR-04", x: 1165, y: 820, type: "rect8", fill: "#ece1f0", chair: "#ddc9e6" },
-
-  // ---- Kitchen View (Area close to kitchen, 4 tables) ----
-  { id: "K-01", x: 330, y: 825, type: "round4" },
-  { id: "K-02", x: 440, y: 825, type: "round4" },
-  { id: "K-03", x: 545, y: 825, type: "round4" },
-  { id: "K-04", x: 650, y: 825, type: "round4" }
+  { id: "PRE-01", x: 930, y: 290, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" }, { id: "PRE-02", x: 930, y: 405, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
+  { id: "PRE-03", x: 930, y: 520, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" }, { id: "PRE-04", x: 930, y: 640, type: "round4", fill: "#f7e6c2", chair: "#f0d8a8" },
+  { id: "PR-01", x: 1165, y: 290, type: "rect2", fill: "#ece1f0", chair: "#ddc9e6" }, { id: "PR-02", x: 1165, y: 460, type: "rect4", fill: "#ece1f0", chair: "#ddc9e6" },
+  { id: "PR-03", x: 1165, y: 630, type: "rect6", fill: "#ece1f0", chair: "#ddc9e6" }, { id: "PR-04", x: 1165, y: 820, type: "rect8", fill: "#ece1f0", chair: "#ddc9e6" },
+  { id: "K-01", x: 330, y: 825, type: "round4" }, { id: "K-02", x: 440, y: 825, type: "round4" }, { id: "K-03", x: 545, y: 825, type: "round4" }, { id: "K-04", x: 650, y: 825, type: "round4" }
 ];
 
 export function getChairPositions(profile) {
