@@ -307,8 +307,8 @@ export async function deleteDish(dishId, userId) {
   return res;
 }
 
-export function fetchBestSellers() {
-  return managerGet("/staff/best-selling", BEST_SELLERS).then((res) => ({
+export function fetchBestSellers(filter = "month") {
+  return managerGet(`/staff/best-selling?filter=${filter}`, BEST_SELLERS).then((res) => ({
     ...res,
     data: asArray(res.data),
   }));
@@ -714,9 +714,7 @@ export function savePromotion() {
 export function deletePromotion() {
   return Promise.resolve(NOT_CONNECTED);
 }
-export function exportReport() {
-  return Promise.resolve(NOT_CONNECTED);
-}
+
 
 /* ---- Chatbot ---------------------------------------------------- */
 export const sendChatMessage = async (message) => {
@@ -921,3 +919,64 @@ export async function fetchTableQueueApi(tableId, userId, date) {
   return [];
 }
 
+// --- AI Reports ----------------------------------------------------
+
+export async function askReportAI(prompt, userId) {
+  return await managerAuthRequest("/staff/reports/ask", {
+    method: "POST",
+    body: JSON.stringify({ prompt })
+  }, userId);
+}
+
+export async function exportReport(intent, format, userId) {
+  // Use fetch directly because managerAuthRequest expects JSON response and we need a Blob
+  const token = localStorage.getItem("phurai_token") || sessionStorage.getItem("phurai_token") || localStorage.getItem("token") || sessionStorage.getItem("token");
+  const headers = {
+    "Content-Type": "application/json",
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch("http://localhost:5001/api/staff/reports/export", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ intent, format })
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to export report");
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `report_${Date.now()}.${format === "excel" ? "xlsx" : "pdf"}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function uploadReviewedReport(file, intent, userId) {
+  const token = localStorage.getItem("phurai_token") || sessionStorage.getItem("phurai_token") || localStorage.getItem("token") || sessionStorage.getItem("token");
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const formData = new FormData();
+  formData.append("file", file);
+  if (intent) formData.append("intent", JSON.stringify(intent));
+
+  const response = await fetch("http://localhost:5001/api/staff/reports/upload", {
+    method: "POST",
+    headers,
+    body: formData
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to upload report");
+  }
+
+  return await response.json();
+}

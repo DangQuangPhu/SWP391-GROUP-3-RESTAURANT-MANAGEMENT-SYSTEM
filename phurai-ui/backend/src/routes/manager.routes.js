@@ -1,6 +1,6 @@
 import express from 'express';
-import { sendEditConfirmedEmail } from "../email.js";
-import { getTableUpcomingReservations, getStaffFullTimeline } from '../controllers/staffController.js';
+import { sendEditConfirmedEmail, sendEditRejectedEmail } from "../email.js";
+import { getTableUpcomingReservations, getStaffFullTimeline, listTodayReservations } from '../controllers/staffController.js';
 import { 
     forceSettleOrder, 
     getAreas, 
@@ -50,16 +50,19 @@ import { createArea, updateArea, deactivateArea } from '../controllers/areaContr
 import { processRefund, emitRefundNotification } from '../services/refundService.js';
 import { resolveUserId, requireUserId } from '../middleware/authMiddleware.js';
 import { getAccountabilityAudit } from '../controllers/managerAuditController.js';
+import pool from '../db.js';
 
 
 const router = express.Router();
 
-// Apply auth middleware to all manager routes
-// router.use(authMiddleware);
+// Apply authentication and restrict this router to the canonical Manager/Admin roles.
+router.use(authMiddleware);
 
-// Middleware to strictly restrict to Manager (4) or Admin (5)
 const requireManagerOrAdmin = (req, res, next) => {
-    next();
+    if ([3, 4].includes(Number(req.user?.role_id))) {
+        return next();
+    }
+    return res.status(403).json({ success: false, message: 'Manager or Admin access is required.' });
 };
 
 import { getFloorPlanData } from '../controllers/floorPlanController.js';
@@ -81,6 +84,8 @@ router.delete('/mock-data/purge', requireManagerOrAdmin, purgeMockData);
 // Fallbacks for manager routes to prevent 404
 router.get('/reservations/pending', requireManagerOrAdmin, getPendingReservations);
 router.get('/reservations/all', requireManagerOrAdmin, getAllReservations);
+// Keep this concrete route ahead of `/:id` so "today" is not treated as an ID.
+router.get('/reservations/today', requireManagerOrAdmin, listTodayReservations);
 router.get('/reservations/:id', requireManagerOrAdmin, getReservationDetails);
 router.get('/reservations/:id/history', requireManagerOrAdmin, getReservationHistory);
 router.patch('/reservations/:id/confirm', requireManagerOrAdmin, confirmReservation);
@@ -117,17 +122,6 @@ router.post('/staff', requireManagerOrAdmin, createStaffAccount);
 router.put('/staff/:id', requireManagerOrAdmin, updateStaffAccount);
 router.put('/staff/:id/shift', requireManagerOrAdmin, updateStaffShift);
 router.delete('/staff/:id', requireManagerOrAdmin, deleteStaffAccount);
-
-import pool from '../db.js';
-router.post('/debug-sql', requireManagerOrAdmin, async (req, res) => {
-  try {
-    const rawPool = await pool.getRawPool();
-    const result = await rawPool.request().query(req.body.query);
-    res.json(result.recordset);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // Promotions Management
 router.get('/promotions', requireManagerOrAdmin, getAllPromotions);
@@ -353,6 +347,9 @@ router.post('/reservation-requests/:id/approve', requireManagerOrAdmin, async (r
       if (rcr.requested_start_at) { resUpdates.push('reservation_start_at = ?'); resParams.push(rcr.requested_start_at); }
       if (rcr.requested_end_at)   { resUpdates.push('reservation_end_at = ?');   resParams.push(rcr.requested_end_at); }
       if (rcr.requested_party_size) { resUpdates.push('guest_count = ?'); resParams.push(rcr.requested_party_size); }
+      if (['Confirmed', 'Reserved', 'Pending Request'].includes(rcr.reservation_status)) {
+        resUpdates.push("reservation_status = N'Await Check-in'");
+      }
       resUpdates.push('pending_changes_json = NULL');
       resUpdates.push('request_type = NULL');
       resUpdates.push('resolved_at = SYSDATETIME()');
@@ -364,13 +361,16 @@ router.post('/reservation-requests/:id/approve', requireManagerOrAdmin, async (r
     }
 
     if (rcr.request_type === 'Cancel' || rcr.request_type === 'TableChange') {
+      const isStatusChange = rcr.request_type === 'TableChange' && ['Confirmed', 'Reserved', 'Pending Request'].includes(rcr.reservation_status)
+        ? ", reservation_status = N'Await Check-in'"
+        : "";
       await connection.query(
         `UPDATE dbo.Reservations
          SET pending_changes_json = NULL,
              request_type = NULL,
              resolved_at = SYSDATETIME(),
              resolved_by = ?,
-             updated_at = SYSDATETIME()
+             updated_at = SYSDATETIME()${isStatusChange}
          WHERE reservation_id = ?`,
         [managerId, rcr.reservation_id]
       );
@@ -505,7 +505,7 @@ router.post('/reservation-requests/:id/reject', requireManagerOrAdmin, async (re
     await connection.commit();
     connection.release();
 
-    // Fire-and-forget: notify customer of rejection
+    // Fire-and-forget: notify customer of rejection via Socket & Email
     try {
       const io = (await import('../socket.js')).getIO();
       if (io && rcr.customer_id) {
@@ -525,7 +525,25 @@ router.post('/reservation-requests/:id/reject', requireManagerOrAdmin, async (re
           decision: 'ManagerRejected',
         });
       }
-    } catch { /* non-critical */ }
+
+      // Send rejection email to customer
+      const [cusRows] = await pool.query(
+        `SELECT COALESCE(ua.email, r.contact_email) AS recipient_email,
+                COALESCE(ua.full_name, r.contact_name, N'Guest') AS recipient_name
+         FROM dbo.Reservations r
+         LEFT JOIN dbo.UserAccounts ua ON ua.user_id = r.customer_id
+         WHERE r.reservation_id = ?`,
+        [rcr.reservation_id]
+      );
+      if (cusRows.length > 0 && cusRows[0].recipient_email) {
+        sendEditRejectedEmail({
+          toEmail: cusRows[0].recipient_email,
+          customerName: cusRows[0].recipient_name,
+          reservationId: rcr.reservation_id,
+          rejectReason: reason || "The requested changes could not be accommodated at this time.",
+        }).catch((e) => console.error("[manager/reject] Email error:", e?.message));
+      }
+    } catch { /* ignore */ }
 
     return res.json({ success: true, message: 'Change request rejected.' });
   } catch (err) {

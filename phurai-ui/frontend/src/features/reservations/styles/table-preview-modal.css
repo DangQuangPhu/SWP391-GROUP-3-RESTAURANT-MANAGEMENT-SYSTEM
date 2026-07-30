@@ -2,7 +2,7 @@
 .tpm-overlay {
   position: fixed;
   inset: 0;
-  z-index: 100000;
+  z-index: 2147483647;
   background: rgba(0, 0, 0, 0.45) !important;
   backdrop-filter: blur(28px) saturate(220%) !important;
   -webkit-backdrop-filter: blur(28px) saturate(220%) !important;
@@ -298,7 +298,7 @@
 .tpm-lightbox-overlay {
   position: fixed;
   inset: 0;
-  z-index: 110000;
+  z-index: 2147483647;
   background: rgba(0, 0, 0, 0.85) !important;
   backdrop-filter: blur(28px) saturate(220%) !important;
   -webkit-backdrop-filter: blur(28px) saturate(220%) !important;

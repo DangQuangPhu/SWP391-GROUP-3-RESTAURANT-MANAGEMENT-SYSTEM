@@ -7,7 +7,6 @@ import { getStaffSegment } from "../config/staffRoutes.js";
 import { useStaffPortal } from "../context/StaffPortalContext.jsx";
 
 const REFRESH_LABELS = {
-  orders:       "Refresh Orders",
   tables:       "Refresh Tables",
   reservations: "Refresh Reservations",
   kds:          "Refresh KDS",

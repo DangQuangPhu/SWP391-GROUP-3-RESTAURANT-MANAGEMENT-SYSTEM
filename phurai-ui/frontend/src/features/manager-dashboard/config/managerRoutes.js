@@ -11,7 +11,6 @@ const CONSOLIDATED_VIEWS = new Set([
   "tables",
   "staff",
   "promotions",
-  "audit",
   "ratings",
 ]);
 
@@ -31,7 +30,6 @@ const SEGMENT_TO_VIEW = {
   staff: "staff",
   promotions: "promotions",
   reports: "reports",
-  audit: "audit",
   ratings: "ratings",
   settings: "settings",
 };
@@ -96,7 +94,7 @@ export function buildManagerPath(view, action = null) {
   return `${pathname}${search}`;
 }
 
-export const REPORT_TAB_IDS = ["revenue", "reservations", "stats", "export"];
+export const REPORT_TAB_IDS = ["revenue", "stats", "export", "top-dishes"];
 
 export function getReportsTabFromSearch(search = "") {
   const tab = parseSearchParams(search).get("tab");

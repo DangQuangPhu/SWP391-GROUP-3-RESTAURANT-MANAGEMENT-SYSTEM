@@ -419,12 +419,13 @@ router.get("/availability", async (req, res) => {
             ) THEN N'Occupied'
             WHEN EXISTS (
               SELECT 1
-              FROM dbo.ReservationTables rt
-              JOIN dbo.Reservations r ON rt.reservation_id = r.reservation_id
-              WHERE rt.table_id = t.table_id
-                AND (
-                   r.reservation_status IN (${ACTIVE_RESERVATION_STATUS_SQL})
-                )
+              FROM dbo.Reservations r
+              LEFT JOIN dbo.ReservationTables rt ON rt.reservation_id = r.reservation_id
+              WHERE (
+                rt.table_id = t.table_id
+                OR r.special_request LIKE CONCAT('%[PreferredTableId: ', t.table_id, ']%')
+              )
+                AND r.reservation_status IN (${ACTIVE_RESERVATION_STATUS_SQL})
                 AND DATEADD(minute, -?, r.reservation_start_at) < ?
                 AND DATEADD(minute, ?, r.reservation_end_at) > ?
             ) THEN N'Booked'
@@ -752,6 +753,7 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
 
   try {
     const settings = await loadSettings();
+    const bufferMinutes = Number(settings.table_hold_min) || 15;
 
     if (guestCount > settings.max_guests) {
       return res.status(400).json({
@@ -788,8 +790,6 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
 
       // [BMAD EXECUTE] Strict Time-Slot Overlap Prevention
       if (effective_preferred_area_id && !kitchenViewBooking) {
-        const bufferMinutes = Number(settings.table_hold_min) || 15;
-
         // Fetch total capacity of the requested area
         const [areaCapacityRows] = await connection.query(
           `SELECT ISNULL(SUM(capacity), 0) AS total_capacity 
@@ -1028,7 +1028,11 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
       const created = { reservation_status: initialStatus, created_at: new Date() };
 
 
-      for (const tableId of isConfirmedAssignment ? effectiveTableIds : []) {
+      const tablesToAssign = effectiveTableIds.length
+        ? effectiveTableIds
+        : (preferredTableForTags?.table_id ? [preferredTableForTags.table_id] : []);
+
+      for (const tableId of tablesToAssign) {
         await connection.query(
           `INSERT INTO dbo.ReservationTables (reservation_id, table_id)
            VALUES (?, ?);`,
@@ -1148,16 +1152,7 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
           ]
         );
 
-        notifyCustomerStaffAction({
-          customerId,
-          notificationType: 'Booking Reminder',
-          title: 'Reservation Submitted 📝',
-          message: `Your reservation request #${reservationId} for ${guestCount} guest(s) on ${formatLocalIso(slotStart)} at ${startLabel} has been received!`
-        }).catch(() => {});
       }
-
-      await connection.commit();
-      connection.release();
 
       const tableSummaries = kitchenViewBooking
         ? [
@@ -1357,6 +1352,9 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
       }, 15 * 60 * 1000); // 15 minutes
       // -----------------------------
 
+      await connection.commit();
+      connection.release();
+
       return res.status(201).json(responsePayload);
 
     } catch (txError) {
@@ -1456,7 +1454,7 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
       const placeholders = ids.map(() => "?").join(", ");
 
       const [tableRows] = await pool.query(
-        `SELECT rt.reservation_id, t.table_number, t.capacity, t.area_id, a.area_name
+        `SELECT rt.reservation_id, t.table_id, t.table_number, t.capacity, t.area_id, a.area_name
          FROM dbo.ReservationTables rt
          JOIN dbo.RestaurantTables t ON rt.table_id = t.table_id
          LEFT JOIN dbo.RestaurantAreas a ON t.area_id = a.area_id
@@ -1472,6 +1470,7 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
         acc[row.reservation_id] = acc[row.reservation_id] || [];
 
         acc[row.reservation_id].push({
+          table_id: row.table_id,
           table_number: row.table_number,
           display_label: meta.displayLabel,
           capacity: row.capacity,
@@ -1549,6 +1548,7 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
           ? `${parsedPreference.preferred_table_number} (preference)`
           : null,
         preorders: preorderByReservation[r.reservation_id] || [],
+        preorder_items: preorderByReservation[r.reservation_id] || [],
       };
     });
 

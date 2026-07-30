@@ -2427,3 +2427,150 @@ VALUES
   (14, NULL,   NULL, 3, DATEADD(minute, -75, SYSDATETIME()), 90, 15, DATEADD(minute, 30, SYSDATETIME()), NULL),
   (24, 100004, NULL, 2, DATEADD(minute, -10, SYSDATETIME()), 60, 15, DATEADD(minute, 65, SYSDATETIME()), NULL);
 GO
+
+-- ============================================================================
+-- REPORT SUBMISSIONS (MANAGER TO ADMIN REVIEW LOOP)
+-- ============================================================================
+IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'dbo.ReportSubmissions') AND type = 'U')
+BEGIN
+  CREATE TABLE dbo.ReportSubmissions (
+      submission_id     INT IDENTITY(1,1) NOT NULL,
+      manager_id        INT NOT NULL,
+      report_type       NVARCHAR(50) NOT NULL,
+      date_range_from   DATETIME2(0) NULL,
+      date_range_to     DATETIME2(0) NULL,
+      file_reference    NVARCHAR(255) NOT NULL,
+      intent_json       NVARCHAR(MAX) NULL,
+      status            NVARCHAR(20) NOT NULL CONSTRAINT DF_ReportSubmissions_status DEFAULT N'Submitted',
+      submitted_at      DATETIME2(0) NOT NULL CONSTRAINT DF_ReportSubmissions_submitted_at DEFAULT SYSDATETIME(),
+      reviewed_by       INT NULL,
+      reviewed_at       DATETIME2(0) NULL,
+      CONSTRAINT PK_ReportSubmissions PRIMARY KEY (submission_id),
+      CONSTRAINT FK_ReportSubmissions_Manager FOREIGN KEY (manager_id) REFERENCES dbo.UserAccounts(user_id),
+      CONSTRAINT FK_ReportSubmissions_ReviewedBy FOREIGN KEY (reviewed_by) REFERENCES dbo.UserAccounts(user_id)
+  );
+END
+GO
+
+-- ============================================================================
+-- CANONICAL TWO-YEAR DEVELOPMENT SEED
+-- This final seed supersedes every legacy mock-data block above. It is kept
+-- here so a fresh System_Restaurant.sql initialization ends in the same
+-- coherent dataset as backend/scripts/reset-and-seed-two-year.js.
+-- ============================================================================
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+
+DECLARE @SeedStart DATE = '2024-07-30';
+DECLARE @SeedEnd DATE = '2026-07-30';
+DECLARE @CustomerRoleIdFinal TINYINT = (SELECT role_id FROM dbo.Roles WHERE role_name = N'Customer');
+DECLARE @StaffActorFinal INT = (SELECT TOP (1) ua.user_id FROM dbo.UserAccounts ua JOIN dbo.Roles r ON r.role_id = ua.role_id WHERE r.role_name = N'Restaurant Staff' AND ua.is_active = 1 ORDER BY ua.user_id);
+DECLARE @ManagerFinal INT = (SELECT TOP (1) ua.user_id FROM dbo.UserAccounts ua JOIN dbo.Roles r ON r.role_id = ua.role_id WHERE r.role_name = N'Manager' AND ua.is_active = 1 ORDER BY ua.user_id);
+
+IF @CustomerRoleIdFinal IS NULL OR @StaffActorFinal IS NULL OR @ManagerFinal IS NULL
+  THROW 51100, 'Canonical seed requires Customer, Restaurant Staff, and Manager accounts.', 1;
+
+DELETE FROM dbo.AuditLogs;
+DELETE FROM dbo.ReportSnapshots;
+DELETE FROM dbo.RecommendationLogs;
+DELETE FROM dbo.CustomerReviews;
+DELETE FROM dbo.Notifications;
+DELETE FROM dbo.TableOccupancySessions;
+DELETE FROM dbo.PromotionRedemptions;
+DELETE FROM dbo.Payments;
+DELETE FROM dbo.BillSplits;
+DELETE FROM dbo.KitchenTickets;
+DELETE FROM dbo.OrderItems;
+DELETE FROM dbo.Orders;
+DELETE FROM dbo.QROrderSessions;
+DELETE FROM dbo.PreorderItems;
+DELETE FROM dbo.ReservationChangeRequests;
+DELETE FROM dbo.ReservationTimelines;
+DELETE FROM dbo.ReservationTables;
+DELETE FROM dbo.Reservations;
+DELETE FROM dbo.PromoCodes;
+DELETE FROM dbo.CustomerPromotions;
+DELETE FROM dbo.Promotions;
+DELETE FROM dbo.LoyaltyTransactions;
+DELETE FROM dbo.CustomerProfiles;
+DELETE FROM dbo.OtpTokens;
+DELETE FROM dbo.UserAccounts WHERE role_id = @CustomerRoleIdFinal;
+DELETE FROM dbo.Dishes;
+DELETE FROM dbo.MenuCategories;
+UPDATE dbo.RestaurantTables SET merged_into_table_id = NULL;
+DELETE FROM dbo.RestaurantTables;
+DELETE FROM dbo.RestaurantAreas;
+
+INSERT dbo.RestaurantAreas (area_name, area_type, description, is_active, created_at, updated_at) VALUES
+  (N'Kitchen View', N'Regular', N'Open-kitchen dining area.', 1, @SeedStart, @SeedStart),
+  (N'Premium Area', N'VIP', N'Premium dining tables.', 1, @SeedStart, @SeedStart),
+  (N'Private Room', N'Private', N'Private rooms for groups and events.', 1, @SeedStart, @SeedStart),
+  (N'Standard Area', N'Regular', N'Main dining room.', 1, @SeedStart, @SeedStart);
+
+DECLARE @FinalLayout TABLE (area_name NVARCHAR(80), table_number NVARCHAR(20), capacity TINYINT, price_tier NVARCHAR(20), x SMALLINT, y SMALLINT);
+INSERT @FinalLayout VALUES
+ (N'Kitchen View',N'K01',2,N'Standard',80,80),(N'Kitchen View',N'K02',4,N'Standard',180,80),(N'Kitchen View',N'K03',4,N'Standard',280,80),(N'Kitchen View',N'K04',6,N'Premium',380,80),
+ (N'Premium Area',N'P01',2,N'Premium',80,220),(N'Premium Area',N'P02',4,N'Premium',180,220),(N'Premium Area',N'P03',4,N'Premium',280,220),(N'Premium Area',N'P04',6,N'VIP',380,220),
+ (N'Private Room',N'R01',6,N'VIP',80,360),(N'Private Room',N'R02',8,N'VIP',220,360),(N'Private Room',N'R03',10,N'VIP',380,360),
+ (N'Standard Area',N'S01',2,N'Standard',80,500),(N'Standard Area',N'S02',4,N'Standard',180,500),(N'Standard Area',N'S03',4,N'Standard',280,500),(N'Standard Area',N'S04',6,N'Standard',380,500),(N'Standard Area',N'S05',8,N'Premium',480,500);
+INSERT dbo.RestaurantTables (area_id,table_number,capacity,table_status,price_tier,static_qr_code,position_x,position_y,created_at,updated_at)
+SELECT a.area_id,l.table_number,l.capacity,N'Available',l.price_tier,N'RES-SEED-'+l.table_number,l.x,l.y,@SeedStart,@SeedStart FROM @FinalLayout l JOIN dbo.RestaurantAreas a ON a.area_name=l.area_name;
+
+INSERT dbo.MenuCategories(category_name,display_order,is_active,created_at,updated_at) VALUES
+ (N'Appetizers',1,1,@SeedStart,@SeedStart),(N'Signature Mains',2,1,@SeedStart,@SeedStart),(N'Seafood',3,1,@SeedStart,@SeedStart),(N'Grill',4,1,@SeedStart,@SeedStart),(N'Noodles and Rice',5,1,@SeedStart,@SeedStart),(N'Desserts',6,1,@SeedStart,@SeedStart),(N'Beverages',7,1,@SeedStart,@SeedStart),(N'Wine and Cocktails',8,1,@SeedStart,@SeedStart);
+DECLARE @FinalMenu TABLE(category_name NVARCHAR(80), dish_name NVARCHAR(150), price DECIMAL(12,2), recommended BIT, prep SMALLINT);
+INSERT @FinalMenu VALUES
+ (N'Appetizers',N'Fresh Spring Rolls',89000,0,10),(N'Appetizers',N'Crispy Calamari',148000,1,12),(N'Appetizers',N'Tuna Tartare',188000,0,12),(N'Signature Mains',N'Pho Braised Beef',218000,1,18),(N'Signature Mains',N'Lemongrass Chicken',198000,0,18),(N'Signature Mains',N'Five Spice Duck',328000,1,25),(N'Seafood',N'Grilled Tiger Prawns',368000,1,22),(N'Seafood',N'Sea Bass in Banana Leaf',428000,1,25),(N'Seafood',N'Seafood Fried Rice',248000,0,18),(N'Grill',N'Australian Ribeye',690000,1,25),(N'Grill',N'Grilled Pork Chop',248000,0,20),(N'Grill',N'Wagyu Striploin',990000,1,30),(N'Noodles and Rice',N'Beef Pho',168000,1,12),(N'Noodles and Rice',N'Chicken Fried Rice',148000,0,14),(N'Noodles and Rice',N'Spicy Seafood Noodles',228000,0,16),(N'Desserts',N'Coconut Panna Cotta',98000,0,8),(N'Desserts',N'Chocolate Lava Cake',128000,1,12),(N'Desserts',N'Mango Sticky Rice',108000,0,8),(N'Beverages',N'Vietnamese Iced Coffee',69000,1,5),(N'Beverages',N'Passionfruit Soda',79000,0,5),(N'Beverages',N'Jasmine Tea',59000,0,5),(N'Wine and Cocktails',N'House Red Wine',168000,0,5),(N'Wine and Cocktails',N'Signature Mojito',148000,1,5),(N'Wine and Cocktails',N'Lychee Martini',158000,0,5);
+INSERT dbo.Dishes(category_id,dish_name,description,price,cost_price,is_available,is_recommended,allow_preorder,spicy_level,prep_time_min,is_preorderable,created_at,updated_at)
+SELECT c.category_id,m.dish_name,N'Canonical two-year seed menu item.',m.price,ROUND(m.price*.35,2),1,m.recommended,1,0,m.prep,1,@SeedStart,@SeedStart FROM @FinalMenu m JOIN dbo.MenuCategories c ON c.category_name=m.category_name;
+
+DECLARE @FinalCustomers TABLE(n INT PRIMARY KEY, full_name NVARCHAR(120), email NVARCHAR(180), phone VARCHAR(25));
+INSERT @FinalCustomers VALUES
+ (1,N'Nguyen Minh Anh',N'customer01@seed.local','0901000001'),(2,N'Tran Gia Han',N'customer02@seed.local','0901000002'),(3,N'Le Quoc Bao',N'customer03@seed.local','0901000003'),(4,N'Pham Thanh Mai',N'customer04@seed.local','0901000004'),(5,N'Hoang Duc Long',N'customer05@seed.local','0901000005'),(6,N'Vu Thao Linh',N'customer06@seed.local','0901000006'),(7,N'Dang Huu Phuc',N'customer07@seed.local','0901000007'),(8,N'Bui Ngoc Chau',N'customer08@seed.local','0901000008'),(9,N'Phan Tuan Kiet',N'customer09@seed.local','0901000009'),(10,N'Vo Khanh Vy',N'customer10@seed.local','0901000010'),(11,N'Nguyen Hai Nam',N'customer11@seed.local','0901000011'),(12,N'Tran My Duyen',N'customer12@seed.local','0901000012'),(13,N'Le Gia Huy',N'customer13@seed.local','0901000013'),(14,N'Pham Nhu Quynh',N'customer14@seed.local','0901000014'),(15,N'Hoang Bao Tran',N'customer15@seed.local','0901000015'),(16,N'Vu Minh Khoa',N'customer16@seed.local','0901000016'),(17,N'Dang Thu Ha',N'customer17@seed.local','0901000017'),(18,N'Bui Tien Dat',N'customer18@seed.local','0901000018'),(19,N'Phan Yen Nhi',N'customer19@seed.local','0901000019'),(20,N'Vo Quang Huy',N'customer20@seed.local','0901000020');
+INSERT dbo.UserAccounts(role_id,full_name,email,phone,password_hash,is_active,email_verified,created_at,updated_at)
+SELECT @CustomerRoleIdFinal,full_name,email,phone,N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6',1,1,DATEADD(day,-n*13,@SeedEnd),@SeedEnd FROM @FinalCustomers;
+INSERT dbo.CustomerProfiles(user_id,username,loyalty_points,country,[language],created_at,updated_at)
+SELECT ua.user_id,N'seed_customer_'+CONVERT(NVARCHAR(10),c.n),0,N'Vietnam',N'English',ua.created_at,@SeedEnd FROM @FinalCustomers c JOIN dbo.UserAccounts ua ON ua.email=c.email;
+
+IF NOT EXISTS(SELECT 1 FROM dbo.PaymentMethods WHERE method_name=N'Cash') INSERT dbo.PaymentMethods(method_name,is_active) VALUES(N'Cash',1);
+IF NOT EXISTS(SELECT 1 FROM dbo.PaymentMethods WHERE method_name=N'Bank Transfer') INSERT dbo.PaymentMethods(method_name,is_active) VALUES(N'Bank Transfer',1);
+INSERT dbo.Promotions(promotion_name,description,discount_type,discount_value,min_order_value,max_discount,start_at,end_at,is_active,applicable_to,created_by_staff_id,created_at,updated_at) VALUES(N'Weekday Welcome',N'Historical seed promotion',N'Percent',10,300000,150000,@SeedStart,@SeedEnd,0,N'Both',@ManagerFinal,@SeedStart,@SeedEnd),(N'Current Loyalty Reward',N'Active seed promotion',N'Fixed',100000,600000,NULL,@SeedEnd,DATEADD(day,90,@SeedEnd),1,N'Both',@ManagerFinal,@SeedEnd,@SeedEnd);
+
+DECLARE @FinalTables TABLE(rn INT PRIMARY KEY, table_id SMALLINT, area_id SMALLINT);
+INSERT @FinalTables SELECT ROW_NUMBER() OVER(ORDER BY table_id),table_id,area_id FROM dbo.RestaurantTables;
+DECLARE @FinalDishes TABLE(rn INT PRIMARY KEY,dish_id INT,price DECIMAL(12,2));
+INSERT @FinalDishes SELECT ROW_NUMBER() OVER(ORDER BY dish_id),dish_id,price FROM dbo.Dishes;
+DECLARE @FinalUsers TABLE(rn INT PRIMARY KEY,user_id INT,full_name NVARCHAR(120),phone VARCHAR(25),email NVARCHAR(180));
+INSERT @FinalUsers SELECT ROW_NUMBER() OVER(ORDER BY user_id),user_id,full_name,phone,email FROM dbo.UserAccounts WHERE role_id=@CustomerRoleIdFinal;
+DECLARE @SeedReservationsFinal TABLE(seed_key INT PRIMARY KEY,start_at DATETIME2(0),end_at DATETIME2(0),guest_count TINYINT,reservation_status NVARCHAR(25),customer_id INT NULL,contact_name NVARCHAR(120),contact_phone VARCHAR(25),contact_email NVARCHAR(180),table_id SMALLINT,area_id SMALLINT,created_at DATETIME2(0));
+;WITH Days AS(SELECT TOP(DATEDIFF(day,@SeedStart,@SeedEnd)+1) ROW_NUMBER() OVER(ORDER BY(SELECT NULL))-1 d FROM sys.all_objects a CROSS JOIN sys.all_objects b), Slots AS(SELECT d,n FROM Days CROSS APPLY(SELECT TOP(3+d/180+CASE WHEN DATEPART(weekday,DATEADD(day,d,@SeedStart)) IN(1,7) THEN 3 ELSE 0 END) ROW_NUMBER() OVER(ORDER BY(SELECT NULL)) n FROM sys.all_objects)x)
+INSERT @SeedReservationsFinal SELECT d*100+n,DATEADD(minute,CASE WHEN n%3=0 THEN 690+(n*11)%150 ELSE 1110+(n*13)%150 END,CONVERT(DATETIME2(0),DATEADD(day,d,@SeedStart))),DATEADD(minute,120,DATEADD(minute,CASE WHEN n%3=0 THEN 690+(n*11)%150 ELSE 1110+(n*13)%150 END,CONVERT(DATETIME2(0),DATEADD(day,d,@SeedStart)))),CONVERT(TINYINT,1+(ABS(CHECKSUM(d*17+n))%6)),CASE WHEN d=DATEDIFF(day,@SeedStart,@SeedEnd) AND n=1 THEN N'Await Check-in' WHEN (CHECKSUM(CONVERT(NVARCHAR(10),d)+N':'+CONVERT(NVARCHAR(10),n))&2147483647)%100<7 THEN N'No Show' WHEN (CHECKSUM(CONVERT(NVARCHAR(10),d)+N':'+CONVERT(NVARCHAR(10),n))&2147483647)%100<16 THEN N'Cancelled' ELSE N'Completed' END,CASE WHEN n%10<4 THEN NULL ELSE u.user_id END,CASE WHEN n%10<4 THEN CONCAT(N'Walk-in Guest ',d*100+n) ELSE u.full_name END,CASE WHEN n%10<4 THEN CONCAT('0908',RIGHT(CONCAT('000000',d*100+n),6)) ELSE u.phone END,CASE WHEN n%10<4 THEN NULL ELSE u.email END,t.table_id,t.area_id,DATEADD(hour,-12,DATEADD(minute,CASE WHEN n%3=0 THEN 690+(n*11)%150 ELSE 1110+(n*13)%150 END,CONVERT(DATETIME2(0),DATEADD(day,d,@SeedStart)))) FROM Slots CROSS APPLY(SELECT TOP(1)* FROM @FinalTables WHERE rn=1+(ABS(CHECKSUM(d*31+n))%(SELECT COUNT(*) FROM @FinalTables)))t CROSS APPLY(SELECT TOP(1)* FROM @FinalUsers WHERE rn=1+(ABS(CHECKSUM(d*13+n))%20))u;
+INSERT dbo.Reservations(customer_id,contact_name,contact_phone,contact_email,created_by_staff_id,preferred_area_id,reservation_start_at,reservation_end_at,guest_count,order_code,reservation_status,reservation_source,confirmed_by_staff_id,confirmed_at,checked_in_at,seated_at,cancelled_at,checked_out_at,completed_at,cancel_reason,created_at,updated_at)
+SELECT customer_id,contact_name,contact_phone,contact_email,@StaffActorFinal,area_id,start_at,end_at,guest_count,CONCAT('CANONICAL-2Y-',seed_key),reservation_status,CASE WHEN customer_id IS NULL THEN N'Walk-in' ELSE N'Online' END,@StaffActorFinal,DATEADD(hour,1,created_at),CASE WHEN reservation_status=N'Completed' THEN DATEADD(minute,5,start_at) END,CASE WHEN reservation_status=N'Completed' THEN DATEADD(minute,8,start_at) END,CASE WHEN reservation_status=N'Cancelled' THEN DATEADD(hour,-2,start_at) END,CASE WHEN reservation_status=N'Completed' THEN end_at END,CASE WHEN reservation_status=N'Completed' THEN end_at END,CASE WHEN reservation_status=N'Cancelled' THEN N'Guest cancelled before arrival' END,created_at,COALESCE(CASE WHEN reservation_status=N'Completed' THEN end_at END,created_at) FROM @SeedReservationsFinal;
+INSERT dbo.ReservationTables(reservation_id,table_id,assigned_by_staff_id,assigned_at) SELECT r.reservation_id,s.table_id,@StaffActorFinal,DATEADD(hour,1,s.created_at) FROM @SeedReservationsFinal s JOIN dbo.Reservations r ON r.order_code=CONCAT('CANONICAL-2Y-',s.seed_key);
+INSERT dbo.PreorderItems(reservation_id,dish_id,quantity,unit_price,notes,created_at)
+SELECT r.reservation_id,d.dish_id,1,d.price,N'Preordered for reservation',DATEADD(hour,1,s.created_at)
+FROM @SeedReservationsFinal s JOIN dbo.Reservations r ON r.order_code=CONCAT('CANONICAL-2Y-',s.seed_key)
+CROSS APPLY(SELECT TOP(1)* FROM @FinalDishes WHERE rn=1+(s.seed_key%(SELECT COUNT(*) FROM @FinalDishes)))d
+WHERE s.seed_key%10=0;
+DECLARE @ConflictTableFinal SMALLINT=(SELECT table_id FROM dbo.RestaurantTables WHERE table_number=N'P02');
+DECLARE @ConflictAreaFinal SMALLINT=(SELECT area_id FROM dbo.RestaurantTables WHERE table_id=@ConflictTableFinal);
+INSERT dbo.Reservations(customer_id,contact_name,contact_phone,contact_email,created_by_staff_id,preferred_area_id,reservation_start_at,reservation_end_at,guest_count,order_code,reservation_status,reservation_source,confirmed_by_staff_id,confirmed_at,created_at,updated_at)
+SELECT u.user_id,u.full_name,u.phone,u.email,@StaffActorFinal,@ConflictAreaFinal,DATEADD(hour,18,CONVERT(DATETIME2(0),DATEADD(day,v.day_offset,@SeedEnd))),DATEADD(minute,105,DATEADD(hour,18,CONVERT(DATETIME2(0),DATEADD(day,v.day_offset,@SeedEnd)))),4,CONCAT(N'CANONICAL-CONFLICT-',v.n),N'Await Check-in',N'Online',@StaffActorFinal,@SeedEnd,@SeedEnd,@SeedEnd
+FROM (VALUES(1,1),(2,1),(3,2),(4,2))v(n,day_offset) CROSS APPLY(SELECT TOP(1)* FROM @FinalUsers ORDER BY rn)u;
+INSERT dbo.ReservationTables(reservation_id,table_id,assigned_by_staff_id,assigned_at) SELECT reservation_id,@ConflictTableFinal,@StaffActorFinal,@SeedEnd FROM dbo.Reservations WHERE order_code LIKE N'CANONICAL-CONFLICT-%';
+INSERT dbo.QROrderSessions(table_id,scanned_table_id,reservation_id,customer_id,token,session_status,generated_by_staff_id,generated_at,expires_at,closed_at) SELECT s.table_id,s.table_id,r.reservation_id,s.customer_id,CONCAT(N'canonical-qr-',s.seed_key),N'Closed',@StaffActorFinal,DATEADD(minute,5,s.start_at),DATEADD(hour,4,s.start_at),s.end_at FROM @SeedReservationsFinal s JOIN dbo.Reservations r ON r.order_code=CONCAT('CANONICAL-2Y-',s.seed_key) WHERE s.reservation_status=N'Completed' AND s.seed_key%5=0;
+INSERT dbo.Orders(reservation_id,table_id,customer_id,created_by_staff_id,qr_session_id,order_type,order_status,order_note,subtotal,discount_amount,service_charge,total_amount,amount_paid,created_at,updated_at) SELECT r.reservation_id,s.table_id,s.customer_id,@StaffActorFinal,q.qr_session_id,CASE WHEN q.qr_session_id IS NULL THEN N'Dine In' ELSE N'QR Self' END,N'Paid',CONCAT(N'Canonical two-year seed:',s.seed_key),0,0,0,0,0,DATEADD(minute,12,s.start_at),s.end_at FROM @SeedReservationsFinal s JOIN dbo.Reservations r ON r.order_code=CONCAT('CANONICAL-2Y-',s.seed_key) LEFT JOIN dbo.QROrderSessions q ON q.reservation_id=r.reservation_id WHERE s.reservation_status=N'Completed';
+INSERT dbo.OrderItems(order_id,dish_id,quantity,unit_price,item_status,created_at,updated_at) SELECT o.order_id,d.dish_id,1+(ABS(CHECKSUM(o.order_id))%2),d.price,N'Served',o.created_at,DATEADD(minute,35,o.created_at) FROM dbo.Orders o CROSS APPLY(SELECT TOP(1)* FROM @FinalDishes WHERE rn=CASE WHEN o.order_id%10<5 THEN 1+(o.order_id%6) ELSE 1+(ABS(CHECKSUM(o.order_id))%(SELECT COUNT(*) FROM @FinalDishes)) END)d WHERE o.order_note LIKE N'Canonical two-year seed:%';
+UPDATE o SET subtotal=x.subtotal,discount_amount=CASE WHEN o.order_id%7=0 THEN ROUND(x.subtotal*.10,2) ELSE 0 END,service_charge=0,total_amount=x.subtotal-CASE WHEN o.order_id%7=0 THEN ROUND(x.subtotal*.10,2) ELSE 0 END,amount_paid=x.subtotal-CASE WHEN o.order_id%7=0 THEN ROUND(x.subtotal*.10,2) ELSE 0 END,updated_at=DATEADD(minute,90,o.created_at) FROM dbo.Orders o CROSS APPLY(SELECT SUM(line_total)subtotal FROM dbo.OrderItems WHERE order_id=o.order_id)x WHERE o.order_note LIKE N'Canonical two-year seed:%';
+INSERT dbo.KitchenTickets(order_item_id,kitchen_status,priority_level,assigned_to_staff_id,sent_at,started_at,ready_at,updated_at) SELECT oi.order_item_id,N'Served',3,@StaffActorFinal,DATEADD(minute,2,o.created_at),DATEADD(minute,6,o.created_at),DATEADD(minute,24,o.created_at),DATEADD(minute,35,o.created_at) FROM dbo.OrderItems oi JOIN dbo.Orders o ON o.order_id=oi.order_id;
+INSERT dbo.Payments(order_id,reservation_id,payment_method_id,amount_paid,change_given,payment_status,transaction_ref,processed_by_staff_id,paid_at,created_at,updated_at) SELECT o.order_id,o.reservation_id,(SELECT TOP(1)payment_method_id FROM dbo.PaymentMethods WHERE is_active=1 ORDER BY payment_method_id),o.total_amount,0,N'Completed',CONCAT(N'CANONICAL-PAY-',o.order_id),@StaffActorFinal,DATEADD(minute,95,o.created_at),DATEADD(minute,95,o.created_at),DATEADD(minute,95,o.created_at) FROM dbo.Orders o;
+INSERT dbo.TableOccupancySessions(table_id,reservation_id,order_id,guest_count,check_in_at,estimated_duration_min,buffer_min,estimated_release_at,released_at,release_trigger,released_by_staff_id,created_at,updated_at) SELECT o.table_id,o.reservation_id,o.order_id,r.guest_count,r.checked_in_at,120,15,DATEADD(minute,135,r.checked_in_at),r.completed_at,N'StaffCashConfirm',@StaffActorFinal,r.checked_in_at,r.completed_at FROM dbo.Orders o JOIN dbo.Reservations r ON r.reservation_id=o.reservation_id;
+INSERT dbo.AuditLogs(user_id,action_name,target_table,target_id,new_value_json,ip_address,created_at) SELECT @StaffActorFinal,N'CHECK_IN',N'Reservations',reservation_id,N'{"status":"Dining","source":"canonical-two-year-seed"}','127.0.0.1',checked_in_at FROM dbo.Reservations WHERE reservation_status=N'Completed';
+INSERT dbo.AuditLogs(user_id,action_name,target_table,target_id,new_value_json,ip_address,created_at) SELECT @StaffActorFinal,N'NO_SHOW',N'Reservations',reservation_id,N'{"status":"No Show"}','127.0.0.1',DATEADD(minute,20,reservation_start_at) FROM dbo.Reservations WHERE reservation_status=N'No Show';
+INSERT dbo.AuditLogs(user_id,action_name,target_table,target_id,new_value_json,ip_address,created_at) SELECT @StaffActorFinal,N'PAYMENT_COMPLETED',N'Payments',payment_id,CONCAT(N'{"order_id":',order_id,N',"amount":',CONVERT(NVARCHAR(30),amount_paid),N'}'),'127.0.0.1',paid_at FROM dbo.Payments;
+
+IF EXISTS(SELECT 1 FROM dbo.Orders WHERE ABS((subtotal-discount_amount)-total_amount)>0.01 OR amount_paid<>total_amount) THROW 51101, 'Canonical seed order totals are invalid.', 1;
+IF EXISTS(SELECT 1 FROM dbo.Reservations WHERE reservation_start_at<DATEADD(day,-1,@SeedEnd) AND reservation_status IN(N'Pending Request',N'Awaiting Deposit',N'Await Check-in',N'Dining',N'Pending Payment')) THROW 51102, 'Canonical seed has historical open reservations.', 1;
+COMMIT TRANSACTION;
+GO

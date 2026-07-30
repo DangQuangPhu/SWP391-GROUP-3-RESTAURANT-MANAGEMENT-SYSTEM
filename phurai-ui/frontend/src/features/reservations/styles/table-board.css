@@ -429,6 +429,23 @@
   stroke-width: 2.2px !important;
 }
 
+/* Current Table Status (Vibrant Orange / Amber Glow - Distinguishes User's Current Table) */
+.table-unit.current-table {
+  cursor: pointer;
+  opacity: 1;
+}
+.table-unit.current-table .table-shape {
+  fill: #ffedd5 !important;
+  stroke: #ea580c !important;
+  stroke-width: 3.5px !important;
+  filter: drop-shadow(0 0 10px rgba(234, 88, 12, 0.6));
+}
+.table-unit.current-table .chair {
+  fill: #fed7aa !important;
+  stroke: #ea580c !important;
+  stroke-width: 2.2px !important;
+}
+
 /* Cleaning Status (Vibrant Cyan/Teal Stroke & Fill) */
 .table-unit.cleaning {
   cursor: not-allowed;

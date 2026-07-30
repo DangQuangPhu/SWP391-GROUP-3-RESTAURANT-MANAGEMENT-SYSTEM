@@ -1433,6 +1433,39 @@ export const resolveEditRequest = async (req, res) => {
             `);
           }
         }
+
+        const requestedPreorders = pendingChanges.preorder_items;
+        if (Array.isArray(requestedPreorders) && requestedPreorders.every((item) => item && typeof item === "object" && !Array.isArray(item))) {
+          const reqDeletePreorders = new sql.Request(transaction);
+          reqDeletePreorders.input("resId", sql.Int, reservationId);
+          await reqDeletePreorders.query(`
+            DELETE FROM dbo.PreorderItems WHERE reservation_id = @resId
+          `);
+
+          for (const item of requestedPreorders) {
+            const dishId = Number(item.dish_id || item.dishId || item.id);
+            const quantity = Math.max(1, Number(item.quantity || item.qty || 1));
+            if (!Number.isFinite(dishId) || dishId <= 0 || !Number.isFinite(quantity)) continue;
+
+            const reqCheckDish = new sql.Request(transaction);
+            reqCheckDish.input("dishId", sql.Int, dishId);
+            const { recordset: dishRows } = await reqCheckDish.query(`
+              SELECT price FROM dbo.Dishes WHERE dish_id = @dishId AND is_available = 1
+            `);
+            if (dishRows.length === 0) continue;
+
+            const reqInsertPreorder = new sql.Request(transaction);
+            reqInsertPreorder.input("resId", sql.Int, reservationId);
+            reqInsertPreorder.input("dishId", sql.Int, dishId);
+            reqInsertPreorder.input("quantity", sql.Int, quantity);
+            reqInsertPreorder.input("price", sql.Decimal(10, 2), Number(dishRows[0].price || 0));
+            reqInsertPreorder.input("notes", sql.NVarChar, item.note || item.notes || null);
+            await reqInsertPreorder.query(`
+              INSERT INTO dbo.PreorderItems (reservation_id, dish_id, quantity, unit_price, notes)
+              VALUES (@resId, @dishId, @quantity, @price, @notes)
+            `);
+          }
+        }
       }
 
       // Audit log is already handled by updateReservationStatus

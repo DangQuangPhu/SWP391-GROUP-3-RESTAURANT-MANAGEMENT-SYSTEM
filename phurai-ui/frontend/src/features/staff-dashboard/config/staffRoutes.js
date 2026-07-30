@@ -24,7 +24,6 @@ export const STAFF_DEFAULT_PATH = {
 const SEGMENT_ROLE_ACCESS = {
   reservations: [STAFF_ROLE.RESTAURANT],
   tables:       [STAFF_ROLE.RESTAURANT],
-  orders:       [STAFF_ROLE.RESTAURANT],
   payments:     [STAFF_ROLE.RESTAURANT],
   kds:          [STAFF_ROLE.RESTAURANT],  // Staff (user-JWT): Ready alerts + Served action
 };

@@ -55,4 +55,116 @@ router.get('/reviews', getPaginatedReviews);
 router.get('/settings', getSettings);
 router.put('/settings', updateSettings);
 
+// Incoming Reports (Submitted by Managers)
+import pool from '../db.js';
+import path from 'path';
+import fs from 'fs';
+
+router.get('/reports/submissions', async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT 
+        s.submission_id,
+        s.manager_id,
+        COALESCE(u.full_name, u.email, 'Manager') AS manager_name,
+        s.report_type,
+        s.date_range_from,
+        s.date_range_to,
+        s.file_reference,
+        s.intent_json,
+        s.status,
+        s.submitted_at,
+        s.reviewed_by,
+        s.reviewed_at
+      FROM dbo.ReportSubmissions s
+      LEFT JOIN dbo.UserAccounts u ON s.manager_id = u.user_id
+      ORDER BY s.submitted_at DESC
+    `);
+    const countUnreviewed = (rows || []).filter(r => r.status === 'Submitted').length;
+    return res.json({ success: true, data: rows || [], unreviewed_count: countUnreviewed });
+  } catch (error) {
+    console.error("[GET /admin/reports/submissions] Error:", error);
+    return res.status(500).json({ success: false, message: "Error fetching report submissions" });
+  }
+});
+
+router.patch('/reports/submissions/:id/review', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user?.userId || req.user?.user_id || req.user?.id;
+
+    await pool.query(
+      `UPDATE dbo.ReportSubmissions 
+       SET status = N'Reviewed', reviewed_by = ?, reviewed_at = SYSDATETIME()
+       WHERE submission_id = ?`,
+      [adminId, id]
+    );
+
+    // AuditLog
+    await pool.query(
+      `INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, new_value_json) VALUES (?, ?, ?, ?)`,
+      [adminId || 1, 'REPORT_REVIEWED_BY_ADMIN', 'dbo.ReportSubmissions', JSON.stringify({ submission_id: id })]
+    );
+
+    return res.json({ success: true, message: "Report marked as reviewed" });
+  } catch (error) {
+    console.error("[PATCH /admin/reports/submissions/:id/review] Error:", error);
+    return res.status(500).json({ success: false, message: "Error updating report status" });
+  }
+});
+
+router.get('/reports/submissions/:id/download', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await pool.query(
+      `SELECT file_reference FROM dbo.ReportSubmissions WHERE submission_id = ?`,
+      [id]
+    );
+    if (!rows || rows.length === 0 || !rows[0].file_reference) {
+      return res.status(404).json({ success: false, message: "Submission not found" });
+    }
+
+    const relPath = rows[0].file_reference;
+    const absPath = path.join(process.cwd(), "backend", relPath);
+    if (!fs.existsSync(absPath)) {
+      return res.status(404).json({ success: false, message: "File not found on server" });
+    }
+
+    res.setHeader("Content-Disposition", "attachment; filename=" + path.basename(absPath));
+    return res.sendFile(absPath);
+  } catch (error) {
+    console.error("[GET /admin/reports/submissions/:id/download] Error:", error);
+    return res.status(500).json({ success: false, message: "Error downloading file" });
+  }
+});
+
+router.get('/reports/submissions/:id/view', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await pool.query(
+      `SELECT file_reference FROM dbo.ReportSubmissions WHERE submission_id = ?`,
+      [id]
+    );
+    if (!rows || rows.length === 0 || !rows[0].file_reference) {
+      return res.status(404).json({ success: false, message: "Submission not found" });
+    }
+
+    const relPath = rows[0].file_reference;
+    const absPath = path.join(process.cwd(), "backend", relPath);
+    if (!fs.existsSync(absPath)) {
+      return res.status(404).json({ success: false, message: "File not found on server" });
+    }
+
+    const ext = path.extname(absPath).toLowerCase();
+    if (ext === ".pdf") {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", "inline; filename=" + path.basename(absPath));
+    }
+    return res.sendFile(absPath);
+  } catch (error) {
+    console.error("[GET /admin/reports/submissions/:id/view] Error:", error);
+    return res.status(500).json({ success: false, message: "Error viewing file" });
+  }
+});
+
 export default router;

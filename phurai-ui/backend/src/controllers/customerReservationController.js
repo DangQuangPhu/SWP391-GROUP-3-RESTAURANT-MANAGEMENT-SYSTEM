@@ -220,7 +220,11 @@ export const createPreSaveReservation = async (req, res) => {
 
       // Only near-term reservations receive a confirmed physical table assignment.
       // Far-out reservations keep a preferred table tag and area, then Staff finalizes later.
-      for (const tableId of isConfirmedAssignment ? normalizedTableIds : []) {
+      const tablesToAssign = normalizedTableIds.length
+        ? normalizedTableIds
+        : (selectedTable?.table_id ? [selectedTable.table_id] : []);
+
+      for (const tableId of tablesToAssign) {
         await transaction.request()
           .input('resId', sql.Int, reservation_id)
           .input('tableId', sql.SmallInt, tableId)

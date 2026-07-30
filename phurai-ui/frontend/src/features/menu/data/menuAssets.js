@@ -37,6 +37,8 @@ function removeVietnameseTones(str) {
   return String(str || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ñ/g, 'n')
+    .replace(/Ñ/g, 'n')
     .replace(/đ/g, 'd')
     .replace(/Đ/g, 'd')
     .toLowerCase();
@@ -53,6 +55,22 @@ export function resolveDishImage(imagePath, dishName = '') {
   if (cleanPath.startsWith('/api/dishes/') || cleanPath.endsWith('/image')) {
     cleanPath = '';
   }
+
+  // Direct keyword map for core dishes to ensure 100% accurate sushi asset resolution
+  const normName = removeVietnameseTones(dishName || cleanPath || '');
+  if (normName.includes('yellowtail') || normName.includes('jalapeno')) return menuYellowtailJalapeno;
+  if (normName.includes('toro') || normName.includes('tartare')) return menuToroTartare;
+  if (normName.includes('fluke')) return menuFlukeSashimi;
+  if (normName.includes('salmon')) return menuSalmonNewStyle;
+  if (normName.includes('black cod')) return menuBlackCodMiso;
+  if (normName.includes('rock shrimp')) return menuRockShrimpTempura;
+  if (normName.includes('wagyu')) return menuJapaneseA5Wagyu;
+  if (normName.includes('lobster')) return menuLobsterWasabiPepper;
+  if (normName.includes('lamb')) return menuGrilledLambChops;
+  if (normName.includes('bento') || normName.includes('chocolate')) return menuBentoChocolateCake;
+  if (normName.includes('miso cappuccino')) return menuMisoCappuccino;
+  if (normName.includes('hokusetsu') || normName.includes('sake')) return menuHokusetsuJunmai;
+  if (normName.includes('lychee') || normName.includes('martini')) return menuLycheeMartini;
 
   // 1. Direct http or base64 data URL
   if (cleanPath.startsWith('http') || cleanPath.startsWith('data:')) {

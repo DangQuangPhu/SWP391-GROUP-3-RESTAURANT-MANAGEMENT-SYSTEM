@@ -29,7 +29,7 @@ import StaffSection from "../components/sections/StaffSection.jsx";
 import PromotionsSection from "../components/sections/PromotionsSection.jsx";
 import ReportsSection from "../components/sections/ReportsSection.jsx";
 import RatingDashboard from "./RatingDashboard.jsx";
-import AccountabilityAuditPage from "../components/audit/AccountabilityAuditPage.jsx";
+
 import { ManagerChatbot } from "../components/ManagerChatbot.jsx";
 
 import {
@@ -399,27 +399,6 @@ function ReportsRoute() {
   );
 }
 
-function AuditRoute() {
-  const { loading, currentUser, toast } = useSectionContext();
-  const location = useLocation();
-  return (
-    <AnimatePresence mode="wait">
-      {loading
-        ? routeSkeleton(location.pathname)
-        : (
-          <motion.div
-            key="audit-content"
-            variants={fadeScaleVariants}
-            initial="hidden" animate="visible" exit="exit"
-          >
-            <AccountabilityAuditPage currentUser={currentUser} toast={toast} />
-          </motion.div>
-        )
-      }
-    </AnimatePresence>
-  );
-}
-
 function ManagerPortalPage({
   isAuthenticated,
   currentUser: propCurrentUser,
@@ -660,6 +639,7 @@ function ManagerPortalPage({
         });
         toast(`Payment for Reservation #${resId} succeeded.`, "success");
       }
+      window.dispatchEvent(new Event("phurai_manager_refresh"));
     };
 
     socket.on("reservation:new", handleNewReservation);
@@ -712,6 +692,18 @@ function ManagerPortalPage({
       fetchTables().then(res => {
         setList("tables")(asArray(res.data));
       });
+      fetchRevenueSeries().then(res => {
+        setData(prev => ({ ...prev, revenue: res.data }));
+      });
+      fetchKpis().then(res => {
+        setData(prev => ({ ...prev, kpis: res.data }));
+      });
+      fetchReservationStats().then(res => {
+        setData(prev => ({ ...prev, stats: res.data ?? {} }));
+      });
+      fetchTableUtilization().then(res => {
+        setData(prev => ({ ...prev, utilization: asArray(res.data) }));
+      });
     };
     window.addEventListener("phurai_manager_refresh", handleRefresh);
     window.addEventListener("phurai_reservations_updated", handleRefresh); // Catch same-tab edits
@@ -762,7 +754,7 @@ function ManagerPortalPage({
           <Route path="staff" element={<StaffRoute />} />
           <Route path="promotions" element={<PromotionsRoute />} />
           <Route path="reports" element={<ReportsRoute />} />
-          <Route path="audit" element={<AuditRoute />} />
+
           <Route path="ratings" element={<RatingDashboard />} />
           <Route path="settings" element={<Navigate to="dashboard" replace />} />
           <Route path="*" element={<Navigate to="dashboard" replace />} />

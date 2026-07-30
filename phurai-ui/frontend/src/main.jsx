@@ -7,7 +7,6 @@ import App from './App.jsx';
 import { AuthProvider } from '@/features/auth/context/AuthContext';
 
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
     <BrowserRouter
       future={{
         v7_startTransition: true,
@@ -18,5 +17,4 @@ createRoot(document.getElementById('root')).render(
         <App />
       </AuthProvider>
     </BrowserRouter>
-  </StrictMode>,
 );

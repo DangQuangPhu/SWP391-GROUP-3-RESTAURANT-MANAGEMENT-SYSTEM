@@ -728,11 +728,8 @@ export default function ReservationDetails({
   useEffect(() => {
     const today = getTodayString();
     if (!form.date || form.date < today) {
-      setForm((prev) => {
-        const next = { ...prev, date: today };
-        if (onUpdateForm) onUpdateForm(next);
-        return next;
-      });
+      setForm((prev) => ({ ...prev, date: today }));
+      if (onUpdateForm) onUpdateForm({ ...form, date: today });
     }
   }, [form.date, onUpdateForm]);
 
@@ -1280,7 +1277,7 @@ export default function ReservationDetails({
           <input
             type="text"
             style={{ marginTop: '10px' }}
-            placeholder="Please specify..."
+            placeholder="Please specify dining purpose..."
             value={form.diningPurposeNote}
             onChange={(e) => updateField('diningPurposeNote', e.target.value)}
           />

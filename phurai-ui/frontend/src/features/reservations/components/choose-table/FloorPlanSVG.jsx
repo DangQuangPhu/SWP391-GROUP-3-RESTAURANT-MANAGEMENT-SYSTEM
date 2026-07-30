@@ -11,6 +11,7 @@ export function normalizeStatus(apiTable, guestCount) {
 
   const statusStr = (apiTable.availability_at_slot || apiTable.table_status || apiTable.status || "").toLowerCase().trim();
 
+  if (apiTable.is_current || statusStr === "currenttable" || statusStr === "current_table") return "CurrentTable";
   if (statusStr === "occupied") return "Occupied";
   if (statusStr === "cleaning") return "Cleaning";
   if (statusStr === "reserved" || statusStr === "await check-in" || statusStr === "booked") return "Reserved";
@@ -60,6 +61,7 @@ const ZoneViewButton = ({ x, y, label, img, onViewZone }) => {
 export default function FloorPlanSVG({
   tables = [],
   selectedTableId,
+  currentTableId,
   guestCount,
   onTableClick,
   activeFilter = null,
@@ -170,7 +172,9 @@ export default function FloorPlanSVG({
   const handleShowTooltip = (e, tableConfig, apiTable, status) => {
     if (isDragging) return;
     let text = "";
-    if (status === 'Occupied' && apiTable?.estimated_release_at) {
+    if (status === 'CurrentTable') {
+      text = "Your current table (Bàn hiện tại của bạn)";
+    } else if (status === 'Occupied' && apiTable?.estimated_release_at) {
       const releaseTime = new Date(apiTable.estimated_release_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
       text = `Table occupied, expected release at ${releaseTime}`;
     } else if (status === 'Occupied') {
@@ -308,12 +312,16 @@ export default function FloorPlanSVG({
         <g id="tables-layer">
           {TABLES.map((tableConfig) => {
             const apiTable = apiTableMap.get(tableConfig.id);
-            const status = normalizeStatus(apiTable, guestCount);
+            let status = normalizeStatus(apiTable, guestCount);
 
             const isSelected = apiTable && String(selectedTableId) === String(apiTable.table_id);
+            const isCurrent = apiTable && String(currentTableId) === String(apiTable.table_id);
 
             let visualStatus = status;
-            if (isSelected) {
+            if (isCurrent) {
+              visualStatus = 'CurrentTable';
+              status = 'CurrentTable';
+            } else if (isSelected) {
               visualStatus = 'Selected';
             }
 

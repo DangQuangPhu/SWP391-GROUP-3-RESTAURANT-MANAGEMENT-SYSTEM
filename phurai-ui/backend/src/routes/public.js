@@ -1,7 +1,11 @@
 import express from "express";
 import { getQrSessionHistory, submitQrOrderPublic, cancelOrderItem, applyPromoCodeToQrSession, updateOrderItemQuantity } from '../controllers/qrSessionController.js';
+import { getMenu } from '../controllers/menuController.js';
 
 const router = express.Router();
+
+// Public menu alias used by the landing page and integration clients.
+router.get('/menu', getMenu);
 
 router.post("/qr-order/submit", submitQrOrderPublic);
 router.delete("/qr-order/items/:itemId", cancelOrderItem);
@@ -13,8 +17,9 @@ import { submitOrderReviewPublic } from "../controllers/reviewsController.js";
 router.post("/reviews/:orderId", submitOrderReviewPublic);
 
 import { getRawPool } from '../db.js';
+import { authMiddleware, requireAdmin } from '../middleware/auth.js';
 
-router.get('/debug-promos', async (req, res) => {
+router.get('/debug-promos', authMiddleware, requireAdmin, async (req, res) => {
   try {
     const rawPool = await getRawPool();
     const result = await rawPool.request().query(`

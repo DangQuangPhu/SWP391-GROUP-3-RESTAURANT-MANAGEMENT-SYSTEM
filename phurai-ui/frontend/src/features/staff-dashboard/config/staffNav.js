@@ -12,7 +12,6 @@ export const STAFF_NAV = [
     roles: [STAFF_ROLE.RESTAURANT],
     items: [
       { id: "tables",       label: "Tables",       segment: "tables",       icon: "grid" },
-      { id: "orders",       label: "Orders",       segment: "orders",       icon: "receipt" },
     ],
   },
   {
@@ -61,7 +60,6 @@ export function getNavForRole(role) {
 }
 
 export const VIEW_SUBTITLE = {
-  orders:       "Monitor and process active orders on the floor",
   tables:       "Floor map by area — check-in, reset, and QR session management",
   reservations: "Today's reservation queue — verify, assign tables, and check in guests",
   kds:          "Kitchen queue, ready items, and cooking status",

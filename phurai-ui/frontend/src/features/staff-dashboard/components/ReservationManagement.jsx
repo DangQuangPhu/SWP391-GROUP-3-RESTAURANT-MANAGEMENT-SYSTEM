@@ -1479,10 +1479,10 @@ function ReservationManagement({ user, toast, refreshKey }) {
                             Confirm Changes
                           </Button>
                         </>
-                      ) : isConfirmedState && !isFutureDate ? (
+                      ) : isConfirmedState ? (
                         <>
                           <Button variant="danger" onClick={() => setConfirmDialog({ action: "reject_checkin", target, reason: "" })}>
-                            Reject Check-in
+                            Reject / Cancel
                           </Button>
                           <Button variant="gold" onClick={() => handleCheckInClick(target)}>
                             Confirm Check-in
@@ -1493,7 +1493,7 @@ function ReservationManagement({ user, toast, refreshKey }) {
                             </Button>
                           )}
                         </>
-                      ) : isOccupiedState && !isFutureDate && checkoutReadyIds.has(target.reservation_id) ? (
+                      ) : isOccupiedState && checkoutReadyIds.has(target.reservation_id) ? (
                         <Button variant="gold" onClick={() => setConfirmDialog({ action: "checkout", target })}>
                           Confirm Check-out
                         </Button>

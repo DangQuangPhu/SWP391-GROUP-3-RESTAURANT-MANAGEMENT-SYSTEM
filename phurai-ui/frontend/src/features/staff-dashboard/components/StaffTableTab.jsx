@@ -35,6 +35,7 @@ import {
   deleteStaffTableApi,
   fetchStaffReservationDetail,
   extendReservationErt,
+  extendReservationHold,
   advanceTableStage,
   fetchTableUpcomingReservations,
 } from "../services/staffApi.js";
@@ -678,6 +679,27 @@ function TableManagementTableModal() {
     }
   };
 
+  const handleExtendHold = async (addedMinutes) => {
+    const reservationId =
+      table.active_reservation_id ||
+      table.active_occupancy_reservation_id ||
+      table.reservation_id;
+
+    if (!reservationId) {
+      toast("No reservation found for this table.", "error");
+      return;
+    }
+
+    try {
+      const userId = Number(user?.userId ?? user?.id);
+      const res = await extendReservationHold(reservationId, userId, addedMinutes);
+      toast(res.message || `Hold time extended by +${addedMinutes} minutes`, "success");
+      handleRefreshAll();
+    } catch (err) {
+      toast(err.message || "Failed to extend hold time", "error");
+    }
+  };
+
   const handleExtendErt = async (minutes) => {
     const reservationId =
       table.active_occupancy_reservation_id ||
@@ -829,6 +851,28 @@ function TableManagementTableModal() {
             })}
           </div>
         </div>
+
+        {editingStatus === "Reserved" || table.active_reservation_customer_name || table.reservation_id ? (
+          <div className="staff-table-ert-actions" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "12px 14px", borderRadius: "10px", marginTop: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#15803d", fontWeight: 700, fontSize: "13px" }}>
+              <span>📞 Customer Arriving Late (Extend Hold Time)</span>
+            </div>
+            <p style={{ fontSize: "12px", color: "#166534", margin: "4px 0 10px", lineHeight: 1.4 }}>
+              Prevent system auto-release by extending table hold deadline.
+            </p>
+            <div className="staff-table-ert-actions__buttons" style={{ display: "flex", gap: "8px" }}>
+              <Button variant="soft" size="sm" onClick={() => handleExtendHold(15)} disabled={busy}>
+                +15 min
+              </Button>
+              <Button variant="soft" size="sm" onClick={() => handleExtendHold(30)} disabled={busy}>
+                +30 min
+              </Button>
+              <Button variant="soft" size="sm" onClick={() => handleExtendHold(45)} disabled={busy}>
+                +45 min
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         {editingStatus === "Occupied" ? (
           <>

@@ -1,4 +1,7 @@
 import express from "express";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import pool from "../db.js";
 import { resolveUserId, requireUserId } from "../middleware/authMiddleware.js";
 import { getIO } from "../socket.js";
@@ -31,6 +34,7 @@ import {
   getOrderTimeline,
   verifyCustomerEmail,
   getTableUpcomingReservations,
+  listTodayReservations,
 } from "../controllers/staffController.js";
 
 import {
@@ -52,6 +56,9 @@ import {
   getTableTimeline,
   verifyClearTable,
 } from "../controllers/tableMergeController.js";
+import { parseReportIntent } from "../services/aiReportService.js";
+import { fetchReportData } from "../services/reportExportService.js";
+import { generateExcelBuffer, generatePdfBuffer } from "../services/fileExportService.js";
 import { createVirtualTable } from "../controllers/tableController.js";
 import { splitOrderItems } from "../controllers/staffOrderController.js";
 import { approveQrSession, rejectQrSession } from "../controllers/qrSessionController.js";
@@ -70,6 +77,9 @@ router.patch("/qr-sessions/:id/reject", resolveUserId, requireUserId, rejectQrSe
 
 router.get("/tables", listStaffTables);
 router.get("/tables/timeline", resolveUserId, getStaffFullTimeline);
+// Compatibility endpoint used by the staff portal and operational runbooks.
+// It must precede the parameterised reservation-detail route below.
+router.get("/reservations/today", resolveUserId, listTodayReservations);
 // Shift-scoped view removed
 router.get("/reservations/today-shift", resolveUserId, requireUserId, getTodayShiftReservations);
 router.get("/reservations/:id", resolveUserId, getStaffReservationDetail);
@@ -87,6 +97,19 @@ router.post(
   resolveUserId,
   requireUserId,
   staffCheckIn
+);
+
+router.post(
+  "/reservations/:id/extend-hold",
+  resolveUserId,
+  requireUserId,
+  handleExtendHoldRoute
+);
+router.patch(
+  "/reservations/:id/extend-hold",
+  resolveUserId,
+  requireUserId,
+  handleExtendHoldRoute
 );
 
 router.post(
@@ -852,8 +875,18 @@ router.get("/dishes", async (_req, res) => {
 /* GET /api/staff/best-selling                                         */
 /* ------------------------------------------------------------------ */
 
-router.get("/best-selling", async (_req, res) => {
+router.get("/best-selling", async (req, res) => {
   try {
+    const filter = req.query.filter || 'month';
+    let dateCondition = "";
+    if (filter === 'today') {
+      dateCondition = "AND o.created_at >= CAST(SYSDATETIME() AS DATE)";
+    } else if (filter === 'week') {
+      dateCondition = "AND o.created_at >= DATEADD(day, -7, CAST(SYSDATETIME() AS DATE))";
+    } else if (filter === 'month') {
+      dateCondition = "AND o.created_at >= DATEADD(day, -30, CAST(SYSDATETIME() AS DATE))";
+    }
+
     const [rows] = await pool.query(
       `SELECT TOP 10
          d.dish_name,
@@ -862,8 +895,8 @@ router.get("/best-selling", async (_req, res) => {
        FROM dbo.OrderItems oi
        JOIN dbo.Orders o ON oi.order_id = o.order_id
        JOIN dbo.Dishes d ON oi.dish_id = d.dish_id
-       WHERE o.order_status <> N'Cancelled'
-         AND o.created_at >= DATEADD(day, -30, CAST(SYSDATETIME() AS DATE))
+       WHERE o.order_status = N'Paid'
+         ${dateCondition}
        GROUP BY d.dish_id, d.dish_name
        ORDER BY qty_sold DESC, revenue DESC;`
     );
@@ -1314,6 +1347,73 @@ router.patch("/reservations/:id/extend-ert", resolveUserId, requireUserId, async
 });
 
 /**
+ * POST / PATCH /api/staff/reservations/:id/extend-hold
+ * Extends reservation hold time when customer calls staff to report late arrival.
+ */
+async function handleExtendHoldRoute(req, res) {
+  try {
+    const reservationId = Number(req.params.id);
+    const addedMinutes = Math.max(5, Math.min(180, Number(req.body.addedMinutes || 30)));
+
+    if (!Number.isFinite(reservationId) || reservationId <= 0) {
+      return jsonError(res, "Invalid reservation ID.");
+    }
+
+    const [rows] = await pool.query(
+      `SELECT reservation_id, reservation_start_at, COALESCE(NULLIF(no_show_grace_minutes, 0), 20) AS no_show_grace_minutes, reservation_status
+       FROM dbo.Reservations
+       WHERE reservation_id = ?`,
+      [reservationId]
+    );
+
+    if (!rows || !rows.length) {
+      return jsonError(res, "Reservation not found.");
+    }
+
+    const r = rows[0];
+    const currentGrace = Number(r.no_show_grace_minutes) || 20;
+    const newGrace = currentGrace + addedMinutes;
+
+    await pool.query(
+      `UPDATE dbo.Reservations
+       SET no_show_grace_minutes = ?,
+           updated_at = SYSDATETIME()
+       WHERE reservation_id = ?`,
+      [newGrace, reservationId]
+    );
+
+    // Socket notification
+    try {
+      const io = (await import("../socket.js")).getIO();
+      if (io) {
+        io.to("room:staff").to("room:manager").emit("table:status_changed", {
+          reservation_id: reservationId,
+          reason: "hold_extended",
+          added_minutes: addedMinutes,
+          new_grace_minutes: newGrace,
+        });
+      }
+    } catch { /* ignore */ }
+
+    const startMs = new Date(r.reservation_start_at).getTime();
+    const newDeadlineMs = startMs + newGrace * 60 * 1000;
+    const newDeadline = new Date(newDeadlineMs).toISOString();
+
+    return jsonOk(res, {
+      message: `Hold time extended by +${addedMinutes}m. New grace period: ${newGrace}m.`,
+      new_grace_minutes: newGrace,
+      hold_deadline: newDeadline,
+    });
+  } catch (err) {
+    console.error("[POST/PATCH /staff/reservations/:id/extend-hold] Error:", err);
+    return jsonError(res, "Could not extend hold time.");
+  }
+};
+
+router.post("/reservations/:id/extend-hold", resolveUserId, requireUserId, handleExtendHoldRoute);
+router.patch("/reservations/:id/extend-hold", resolveUserId, requireUserId, handleExtendHoldRoute);
+
+/**
  * POST /api/staff/reservation-requests/:id/resolve
  * Staff resolves a non-financial pending request by applying the change.
  * Blocked on requires_financial_approval=true requests (403).
@@ -1430,6 +1530,11 @@ router.post("/reservation-requests/:id/resolve", resolveUserId, requireUserId, a
     }
 
     // DO NOT SET has_pending_request directly because it is a computed column!
+    // Transition to Await Check-in so Staff/Manager portals show the correct status
+    // after approval and the Manage Table timer activates for the new/unchanged table.
+    if (["Confirmed", "Reserved", "Pending Request"].includes(rcr.reservation_status)) {
+      resUpdates.push("reservation_status = N'Await Check-in'");
+    }
     resUpdates.push("pending_changes_json = NULL");
     resUpdates.push("request_type = NULL");
     resUpdates.push("resolved_at = SYSDATETIME()");
@@ -1629,6 +1734,143 @@ router.get("/no-show-candidates", resolveUserId, requireUserId, async (req, res)
   } catch (err) {
     console.error("[GET /staff/no-show-candidates] Error:", err);
     return jsonError(res, "Could not load no-show candidates.");
+  }
+});
+
+// ==========================================
+// REPORTS & AI EXPORT
+// ==========================================
+
+router.post("/reports/ask", resolveUserId, requireUserId, async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    if (!prompt) return res.status(400).json({ success: false, message: "Prompt is required" });
+
+    // 1. Ask Gemini to parse the intent
+    const intent = await parseReportIntent(prompt);
+
+    // 2. Run predefined query to get the data
+    const { dataset, grandTotalRow } = await fetchReportData(intent);
+
+    return res.json({
+      success: true,
+      intent,
+      data: dataset,
+      grandTotalRow
+    });
+  } catch (error) {
+    console.error("[POST /staff/reports/ask] Error:", error);
+    return res.status(500).json({ success: false, message: "Error processing report request", error: error.message });
+  }
+});
+
+router.post("/reports/export", resolveUserId, requireUserId, async (req, res) => {
+  try {
+    const { intent, format } = req.body;
+    if (!intent || !format) return res.status(400).json({ success: false, message: "Intent and format are required" });
+    if (!new Set(["revenue_summary", "reservation_stats", "top_dishes", "revenue_detail", "custom_filtered"]).has(intent.report_type)) {
+      return res.status(400).json({ success: false, message: "Invalid report type" });
+    }
+
+    const { dataset, grandTotalRow } = await fetchReportData(intent);
+    const userId = req.userId || req.user?.user_id || req.user?.userId || req.user?.id || 1;
+    
+    // Log to AuditLogs
+    await pool.query(
+      `INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, new_value_json) VALUES (?, ?, ?, ?)`,
+      [userId, 'REPORT_GENERATED', 'Report', JSON.stringify({ format, report_type: intent.report_type, date_range: intent.date_range })]
+    );
+
+    if (format === "excel") {
+      const buffer = await generateExcelBuffer(dataset, grandTotalRow, intent);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename=' + `report_${Date.now()}.xlsx`);
+      return res.send(buffer);
+    } else if (format === "pdf") {
+      const buffer = await generatePdfBuffer(dataset, grandTotalRow, intent);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename=' + `report_${Date.now()}.pdf`);
+      return res.send(buffer);
+    } else {
+      return res.status(400).json({ success: false, message: "Invalid format" });
+    }
+  } catch (error) {
+    console.error("[POST /staff/reports/export] Error:", error);
+    return res.status(500).json({ success: false, message: "Error exporting report", error: error.message });
+  }
+});
+
+// Multer storage for reviewed report uploads
+const reportsUploadDir = path.join(process.cwd(), "backend/uploads/reports");
+if (!fs.existsSync(reportsUploadDir)) {
+  fs.mkdirSync(reportsUploadDir, { recursive: true });
+}
+
+const reportStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, reportsUploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `reviewed-report-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+  }
+});
+
+const reportUpload = multer({
+  storage: reportStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+      "application/pdf",
+      "application/octet-stream"
+    ];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedTypes.includes(file.mimetype) || ext === ".xlsx" || ext === ".pdf") {
+      cb(null, true);
+    } else {
+      cb(new Error("Only .xlsx and .pdf files are allowed"));
+    }
+  }
+});
+
+router.post("/reports/upload", resolveUserId, requireUserId, reportUpload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No file uploaded" });
+    }
+
+    const { intent } = req.body;
+    let parsedIntent = null;
+    if (intent) {
+      try { parsedIntent = typeof intent === "string" ? JSON.parse(intent) : intent; } catch (e) {}
+    }
+
+    const managerId = req.userId || req.user?.user_id || req.user?.userId || req.user?.id || 1;
+    const fileRef = `/uploads/reports/${req.file.filename}`;
+    const reportType = parsedIntent?.report_type || "revenue_detail";
+    const fromDate = parsedIntent?.date_range?.from || null;
+    const toDate = parsedIntent?.date_range?.to || null;
+
+    await pool.query(
+      `INSERT INTO dbo.ReportSubmissions 
+        (manager_id, report_type, date_range_from, date_range_to, file_reference, intent_json, status, submitted_at)
+       VALUES (?, ?, ?, ?, ?, ?, N'Submitted', SYSDATETIME())`,
+      [managerId, reportType, fromDate, toDate, fileRef, JSON.stringify(parsedIntent || {})]
+    );
+
+    // AuditLog entry
+    await pool.query(
+      `INSERT INTO dbo.AuditLogs (user_id, action_name, target_table, new_value_json) VALUES (?, ?, ?, ?)`,
+      [managerId, 'REPORT_SUBMITTED_TO_ADMIN', 'ReportSubmission', JSON.stringify({ file_reference: fileRef, report_type: reportType })]
+    );
+    return res.json({
+      success: true,
+      message: "Report submitted successfully to Admin inbox",
+      file_reference: fileRef
+    });
+  } catch (error) {
+    console.error("[POST /staff/reports/upload] Error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Failed to upload report" });
   }
 });
 

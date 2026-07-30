@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { format } from "date-fns";
 import { CalendarX, Utensils, RefreshCw, Lock, AlertCircle, Calendar, Clock, Sparkles } from "lucide-react";
 import CustomDatePicker from "../components/CustomDatePicker.jsx";
+import PreorderDashboardModal from "../components/PreorderDashboardModal.jsx";
+import TableBoard from "../components/choose-table/TableBoard.jsx";
 import "../styles/reservation.css";
 import { Skeleton } from "@/components/ui/Skeleton.jsx";
 import { useTableSession, ViewQrTableModal } from "@/features/table-session";
@@ -23,7 +26,7 @@ const EDIT_FIELDS = [
   { key: "reservation_start_at", label: "Date & Time", type: "datetime-local" },
   { key: "guest_count", label: "Guests", type: "number", min: 1 },
   { key: "contact_phone", label: "Phone", type: "tel" },
-  { key: "special_request", label: "Special Request / Dining Purpose", type: "textarea" },
+  { key: "special_request", label: "Notes", type: "textarea" },
 ];
 
 function toLocalDateTimeInput(value) {
@@ -52,6 +55,22 @@ function parseYmdLocal(ymd) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function isCapacityMatchForGuests(tableCapacity, guestCount) {
+  const cap = Number(tableCapacity || 0);
+  const count = Number(guestCount || 1);
+
+  if (count <= 2) {
+    return cap >= 2 && cap <= 4;
+  }
+  if (count <= 4) {
+    return cap >= 4 && cap <= 6;
+  }
+  if (count <= 6) {
+    return cap >= 6 && cap <= 8;
+  }
+  return cap >= 8;
+}
+
 function normalizeDateFilterValue(value) {
   const text = String(value || "").trim();
   if (!text) return "";
@@ -77,9 +96,48 @@ function getReservationTableIds(reservation) {
       ? reservation.assigned_tables
       : [];
 
-  return candidates
+  const ids = candidates
     .map((table) => Number(table?.table_id ?? table?.id))
     .filter((id) => Number.isFinite(id) && id > 0);
+
+  if (ids.length > 0) return ids;
+
+  if (reservation.preferred_table_id && Number(reservation.preferred_table_id) > 0) {
+    return [Number(reservation.preferred_table_id)];
+  }
+
+  const match = String(reservation?.special_request || "").match(/\[PreferredTableId:\s*(\d+)\]/i);
+  if (match) {
+    const tid = Number(match[1]);
+    if (Number.isFinite(tid) && tid > 0) return [tid];
+  }
+
+  return [];
+}
+
+function getReservationTableNumbers(reservation) {
+  if (!reservation) return [];
+  const numbers = [];
+  if (Array.isArray(reservation.tables)) {
+    reservation.tables.forEach((t) => {
+      if (t?.table_number) numbers.push(String(t.table_number));
+      if (t?.display_label) numbers.push(String(t.display_label));
+    });
+  }
+  if (typeof reservation.assigned_tables === "string") {
+    reservation.assigned_tables.split(",").forEach((s) => {
+      const trimmed = s.trim();
+      if (trimmed) numbers.push(trimmed);
+    });
+  }
+  if (reservation.preferred_table_number) {
+    numbers.push(String(reservation.preferred_table_number));
+  }
+  const matchCode = String(reservation?.special_request || "").match(/\[PreferredTable:\s*([A-Z0-9-]+)\]/i);
+  if (matchCode && matchCode[1]) {
+    numbers.push(matchCode[1]);
+  }
+  return Array.from(new Set(numbers));
 }
 
 function formatDateOnly(iso) {
@@ -340,8 +398,30 @@ function MyReservationsPage({
   const [editWarningOpen, setEditWarningOpen] = useState(false); // 1-time edit warning
   const [editWarningTarget, setEditWarningTarget] = useState(null);
   const [editTables, setEditTables] = useState([]);
+  const [editAllTables, setEditAllTables] = useState([]);
   const [editTablesLoading, setEditTablesLoading] = useState(false);
   const [editValidationError, setEditValidationError] = useState("");
+  const [showEditPreorderModal, setShowEditPreorderModal] = useState(false);
+  const [showEditTableBoard, setShowEditTableBoard] = useState(false);
+
+  const editPreorderItemsMap = useMemo(() => {
+    const map = {};
+    if (Array.isArray(editForm.preorder_items_list)) {
+      editForm.preorder_items_list.forEach((item) => {
+        const id = item.dish_id || item.id;
+        if (id) {
+          map[id] = {
+            dish_id: id,
+            name: item.dish_name || item.name,
+            price: item.unit_price || item.base_price || item.price || 0,
+            quantity: item.quantity || 1,
+            image: item.image || item.image_url || null,
+          };
+        }
+      });
+    }
+    return map;
+  }, [editForm.preorder_items_list]);
 
   // SePay Upgrade Payment Modal State
   const [upgradeModal, setUpgradeModal] = useState(null); // { quote, pendingChanges, isVerifying }
@@ -610,16 +690,29 @@ function MyReservationsPage({
       .replace(/\[[^\]]+\]/g, "")
       .trim();
 
+    const startObj = r.reservation_start_at ? new Date(r.reservation_start_at) : null;
+    const initialDate = startObj ? format(startObj, "yyyy-MM-dd") : "";
+    const initialTime = startObj ? format(startObj, "HH:mm") : "19:00";
+
+    const existingPreorders = Array.isArray(r.preorders) && r.preorders.length > 0
+      ? r.preorders
+      : (Array.isArray(r.preorder_items) ? r.preorder_items : []);
+
+    const formattedPreorderText = existingPreorders
+      .map((i) => `${i.dish_name || i.name} x${i.quantity} (${(Number(i.unit_price || i.base_price || i.price || 0) * i.quantity).toLocaleString("vi-VN")} VND)`)
+      .join("\n");
+
     // Pre-populate form with current values
     setEditForm({
-      reservation_start_at: r.reservation_start_at
-        ? toLocalDateTimeInput(r.reservation_start_at)
-        : "",
+      reservation_date: initialDate,
+      reservation_time: initialTime,
+      reservation_start_at: initialDate && initialTime ? `${initialDate}T${initialTime}` : "",
       guest_count: String(r.guest_count ?? ""),
       contact_phone: r.customer_phone || r.contact_phone || "",
       special_request: cleanSpecialReq,
       table_id: currentTableIds[0] ? String(currentTableIds[0]) : "",
-      preorder_items_text: "",
+      preorder_items_text: formattedPreorderText,
+      preorder_items_list: existingPreorders,
     });
     setEditConfirm(false);
     setEditValidationError("");
@@ -644,15 +737,46 @@ function MyReservationsPage({
       time,
       durationMinutes: 90,
       guestCount,
+      eventType: editForm.dining_purpose || editTarget.dining_purpose || "Standard Dining",
     })
       .then((res) => {
         if (!active) return;
         const currentIds = new Set(getReservationTableIds(editTarget).map(String));
+        const currentTableNumbers = new Set(getReservationTableNumbers(editTarget));
         const rows = Array.isArray(res?.tables) ? res.tables : [];
-        setEditTables(rows.filter((table) => table.is_bookable || currentIds.has(String(table.table_id))));
+        const mappedRows = rows.map((table) => {
+          const isCurrent =
+            currentIds.has(String(table.table_id)) ||
+            currentTableNumbers.has(String(table.table_number)) ||
+            currentTableNumbers.has(String(table.display_label));
+          if (isCurrent) {
+            return {
+              ...table,
+              is_bookable: true,
+              is_current: true,
+              availability_at_slot: "CurrentTable",
+              is_available: true,
+            };
+          }
+          return table;
+        });
+        setEditAllTables(mappedRows);
+        const bookable = mappedRows.filter((table) => {
+          const isCurrent =
+            currentIds.has(String(table.table_id)) ||
+            currentTableNumbers.has(String(table.table_number)) ||
+            currentTableNumbers.has(String(table.display_label));
+          const isAvailable = table.is_bookable !== false && table.availability_at_slot !== "Booked" && table.availability_at_slot !== "Occupied";
+          const capacityMatch = isCapacityMatchForGuests(table.capacity, guestCount);
+          return (isAvailable && capacityMatch) || isCurrent;
+        });
+        setEditTables(bookable);
       })
       .catch(() => {
-        if (active) setEditTables([]);
+        if (active) {
+          setEditTables([]);
+          setEditAllTables([]);
+        }
       })
       .finally(() => {
         if (active) setEditTablesLoading(false);
@@ -689,10 +813,35 @@ function MyReservationsPage({
       const oldVal = String(current[field.key] ?? "").trim();
       if (newVal !== oldVal && newVal !== "") changes[field.key] = editForm[field.key];
     }
-    if (String(editForm.table_id || "").trim() && String(editForm.table_id) !== current.table_id) {
+    // Build the full set of current table IDs:
+    // 1. Numeric IDs from editTarget.tables (available after backend fix)
+    // 2. Resolved by matching table_number from editAllTables (fallback for old cached state)
+    const currentTableNumbers = new Set(
+      (editTarget.tables || []).map(t => t.table_number).filter(Boolean)
+    );
+    const resolvedCurrentIds = editAllTables
+      .filter(t => currentTableNumbers.has(t.table_number))
+      .map(t => String(t.table_id));
+    const currentTableIdSet = new Set([
+      ...getReservationTableIds(editTarget).map(String),
+      ...resolvedCurrentIds,
+    ]);
+
+    if (
+      String(editForm.table_id || "").trim() &&
+      !currentTableIdSet.has(String(editForm.table_id))
+    ) {
       changes.table_ids = [Number(editForm.table_id)].filter((id) => Number.isFinite(id) && id > 0);
     }
-    if (String(editForm.preorder_items_text || "").trim()) {
+    if (editForm.preorder_items_list && editForm.preorder_items_list.length > 0) {
+      changes.preorder_items = editForm.preorder_items_list.map((item) => ({
+        dish_id: item.dish_id,
+        item_name: item.dish_name || item.name || item.item_name,
+        quantity: item.quantity,
+        base_price: item.base_price || item.price || 0,
+        notes: "Requested during reservation edit",
+      }));
+    } else if (String(editForm.preorder_items_text || "").trim()) {
       changes.preorder_items = String(editForm.preorder_items_text)
         .split("\n")
         .map((line) => line.trim())
@@ -706,11 +855,13 @@ function MyReservationsPage({
 
     setSubmittingEdit(true);
     try {
+      console.log("[EditRequest] Sending changes:", JSON.stringify(changes, null, 2));
       // Check upgrade quote if area/table/guests changed
       const quoteRes = await getUpgradeQuoteApi(editTarget.reservation_id, userId, {
         new_area_id: editForm.area_id || null,
         new_table_id: editForm.table_id || null,
         guest_count: editForm.guest_count || editTarget.guest_count,
+        preorder_items: changes.preorder_items,
       });
 
       if (quoteRes?.success && quoteRes?.data?.requires_payment) {
@@ -735,7 +886,10 @@ function MyReservationsPage({
       setEditTarget(null);
       setEditConfirm(false);
     } catch (err) {
-      setError(err?.message || "Could not submit edit request.");
+      const msg = err?.message || "Could not submit edit request.";
+      console.error("[EditRequest] 400 error:", msg, err);
+      setEditValidationError(msg);
+      setError(msg);
     } finally {
       setSubmittingEdit(false);
     }
@@ -1313,160 +1467,825 @@ function MyReservationsPage({
         </div>
       )}
 
-      {/* ── Edit Request modal ── */}
+      {/* ── Apple Spatial Keyframe Animations & Hover Effects Style Block ── */}
+      <style>{`
+        @keyframes appleSpatialIn {
+          0% {
+            opacity: 0;
+            transform: scale(0.93) translateY(22px);
+            filter: blur(12px);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+            filter: blur(0px);
+          }
+        }
+        .apple-glass-card {
+          animation: appleSpatialIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .apple-hover-btn {
+          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+        .apple-hover-btn:hover {
+          transform: translateY(-2px) scale(1.02) !important;
+          box-shadow: 0 12px 30px rgba(234, 179, 8, 0.5), inset 0 1.5px 2px rgba(255, 255, 255, 0.8) !important;
+        }
+        .apple-hover-btn:active {
+          transform: scale(0.96) translateY(0) !important;
+        }
+        .apple-hover-ghost {
+          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+        .apple-hover-ghost:hover {
+          background: rgba(255, 255, 255, 0.22) !important;
+          border-color: rgba(255, 255, 255, 0.45) !important;
+          transform: translateY(-1px) !important;
+        }
+        .apple-hover-ghost:active {
+          transform: scale(0.96) !important;
+        }
+        .apple-input-glow {
+          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+        .apple-input-glow:focus {
+          border-color: rgba(250, 204, 21, 0.8) !important;
+          box-shadow: 0 0 20px rgba(250, 204, 21, 0.35), inset 0 1px 1.5px rgba(255, 255, 255, 0.5) !important;
+          transform: translateY(-1px) !important;
+        }
+        .apple-no-icon::-webkit-calendar-picker-indicator,
+        .apple-no-icon::-webkit-inner-spin-button,
+        .apple-no-icon::-webkit-clear-button {
+          display: none !important;
+          -webkit-appearance: none !important;
+          opacity: 0 !important;
+          width: 0 !important;
+          height: 0 !important;
+        }
+        .apple-no-icon {
+          color-scheme: dark !important;
+          appearance: none !important;
+          -webkit-appearance: none !important;
+          -moz-appearance: none !important;
+        }
+      `}</style>
+
+      {/* ── Edit Request modal (True Apple Liquid Glass WWDC25 Design — Centered 50|50 Layout) ── */}
       {editTarget && !editConfirm && (
-        <div className="rzv-modal-overlay" onClick={(e) => { if (e.target.className === "rzv-modal-overlay") setEditTarget(null); }}>
-          <div className="rzv-modal" style={{ maxWidth: "680px", width: "calc(100% - 32px)", padding: "28px 32px", backgroundColor: "#fff", borderRadius: "20px", boxShadow: "0 20px 50px rgba(0,0,0,0.15)" }}>
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setEditTarget(null); }}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 999999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "24px",
+            background: "rgba(8, 12, 20, 0.55)",
+            backdropFilter: "blur(24px) saturate(200%)",
+            WebkitBackdropFilter: "blur(24px) saturate(200%)",
+            margin: 0,
+            overflow: "hidden",
+          }}
+        >
+          {/* Ambient Liquid Glass Light Orbs */}
+          <div style={{ position: "absolute", top: "-5%", left: "10%", width: "520px", height: "520px", borderRadius: "50%", background: "radial-gradient(circle, rgba(56, 189, 248, 0.45) 0%, rgba(56, 189, 248, 0) 70%)", filter: "blur(90px)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", bottom: "-5%", right: "10%", width: "550px", height: "550px", borderRadius: "50%", background: "radial-gradient(circle, rgba(249, 115, 22, 0.5) 0%, rgba(249, 115, 22, 0) 70%)", filter: "blur(100px)", pointerEvents: "none" }} />
+
+          {/* Spatial Liquid Glass Modal Card */}
+          <div
+            className="apple-glass-card"
+            style={{
+              position: "relative",
+              maxWidth: "960px",
+              width: "100%",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              margin: "auto",
+              padding: "36px 44px",
+              background: "linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.09) 100%)",
+              backdropFilter: "blur(45px) saturate(220%)",
+              WebkitBackdropFilter: "blur(45px) saturate(220%)",
+              border: "1px solid rgba(255, 255, 255, 0.32)",
+              borderRadius: "32px",
+              boxShadow: "inset 0 1.5px 2px rgba(255, 255, 255, 0.65), inset 0 -1px 2px rgba(0, 0, 0, 0.3), 0 32px 90px rgba(0, 0, 0, 0.55)",
+              color: "#ffffff",
+              fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+            }}
+          >
+            {/* Top Navigation Link */}
+            <div style={{ marginBottom: "1.25rem", borderBottom: "1px solid rgba(255, 255, 255, 0.15)", paddingBottom: "0.85rem" }}>
+              <button
+                type="button"
+                className="rzv-backlink apple-hover-ghost"
+                onClick={() => setEditTarget(null)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#ffffff",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  cursor: "pointer",
+                  padding: "4px 8px",
+                  borderRadius: "8px",
+                  transition: "opacity 0.2s ease",
+                  textShadow: "0 1px 2px rgba(0,0,0,0.5)",
+                }}
+              >
+                ← Back to details
+              </button>
+            </div>
+
             {/* Header */}
-            <div style={{ textAlign: "center", marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid #f0f0f0" }}>
-              <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.18em", textTransform: "uppercase", color: "var(--rzv-gold)", display: "block", marginBottom: 6 }}>
-                CHANGE REQUEST
-              </span>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, flexWrap: "wrap" }}>
-                <h2 className="rzv-serif" style={{ margin: 0, fontSize: 24, color: "#111" }}>Edit Reservation</h2>
-                <span style={{ border: "1px solid var(--rzv-line)", background: "#fafafa", borderRadius: 999, padding: "4px 12px", fontSize: 13, fontWeight: 700, color: "#444" }}>
+            <div style={{ marginBottom: "1.5rem", borderBottom: "1px solid rgba(255, 255, 255, 0.15)", paddingBottom: "1.2rem" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+                <div>
+                  <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.22em", textTransform: "uppercase", color: "var(--rzv-gold, #facc15)", display: "block", marginBottom: 4 }}>
+                    CHANGE REQUEST
+                  </span>
+                  <h2 className="rzv-serif" style={{ margin: 0, fontSize: "28px", fontWeight: 700, color: "#ffffff", letterSpacing: "-0.02em", textShadow: "0 2px 4px rgba(0,0,0,0.4)" }}>
+                    Edit Reservation
+                  </h2>
+                </div>
+                <span
+                  style={{
+                    border: "1px solid rgba(255, 255, 255, 0.35)",
+                    background: "rgba(255, 255, 255, 0.14)",
+                    backdropFilter: "blur(16px)",
+                    borderRadius: 999,
+                    padding: "6px 16px",
+                    fontSize: 13.5,
+                    fontWeight: 700,
+                    color: "var(--rzv-gold, #facc15)",
+                    boxShadow: "inset 0 1px 1.5px rgba(255, 255, 255, 0.5)",
+                  }}
+                >
                   #{String(editTarget.reservation_id).padStart(6, "0")}
                 </span>
               </div>
-              <p style={{ fontSize: 13.5, color: "#666", margin: "10px auto 0", maxWidth: "520px", lineHeight: 1.55 }}>
+              <p style={{ fontSize: "14px", color: "rgba(255, 255, 255, 0.85)", margin: "8px 0 0", lineHeight: 1.5 }}>
                 Send your requested changes to Staff Portal for approval. Your current reservation stays unchanged until staff accepts the request.
               </p>
             </div>
 
             {editValidationError ? (
-              <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 10, border: "1px solid #fca5a5", background: "#fef2f2", color: "#b91c1c", fontSize: 13, fontWeight: 600 }}>
-                {editValidationError}
+              <div
+                style={{
+                  marginBottom: "1.5rem",
+                  padding: "14px 18px",
+                  borderRadius: "16px",
+                  border: "1px solid rgba(239, 68, 68, 0.7)",
+                  background: "rgba(239, 68, 68, 0.25)",
+                  color: "#ffffff",
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  backdropFilter: "blur(16px)",
+                }}
+              >
+                ⚠️ {editValidationError}
               </div>
             ) : null}
 
-            {/* Balanced 2-Column Grid Layout */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px 20px" }}>
-              {/* Row 1: Date & Time + Guests */}
-              <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#333" }}>New Date & Time *</span>
-                <input
-                  className="rzv-input"
-                  type="datetime-local"
-                  min={getCurrentLocalDateTimeInput()}
-                  value={editForm.reservation_start_at || ""}
-                  onChange={(e) => {
-                    setEditValidationError("");
-                    setEditForm((p) => ({ ...p, reservation_start_at: e.target.value }));
+            {/* Equal 50|50 2-Column Grid with Center Divider */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1px 1fr",
+                gap: "2.5rem",
+                alignItems: "stretch",
+              }}
+            >
+              {/* LEFT COLUMN (50%): Booking Details & Changes */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                <h3 style={{ fontSize: "1.1rem", fontWeight: 600, color: "#ffffff", margin: 0, textShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>Booking Details</h3>
+                
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {/* Row 1: Separated New Date * and New Time * (No Icons, Sleek Liquid Glass) */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255, 255, 255, 0.95)" }}>New Date *</span>
+                      <input
+                        className="rzv-input apple-input-glow apple-no-icon"
+                        type="date"
+                        min={format(new Date(), "yyyy-MM-dd")}
+                        value={editForm.reservation_date || ""}
+                        onChange={(e) => {
+                          const newDate = e.target.value;
+                          setEditValidationError("");
+                          setEditForm((p) => {
+                            const timeVal = p.reservation_time || "19:00";
+                            return {
+                              ...p,
+                              reservation_date: newDate,
+                              reservation_start_at: newDate ? `${newDate}T${timeVal}` : "",
+                            };
+                          });
+                        }}
+                        style={{
+                          width: "100%",
+                          height: "46px",
+                          borderRadius: "14px",
+                          background: "rgba(255, 255, 255, 0.12)",
+                          border: "1px solid rgba(255, 255, 255, 0.28)",
+                          backdropFilter: "blur(16px)",
+                          color: "#ffffff",
+                          padding: "0 14px",
+                          fontSize: "13.5px",
+                          boxShadow: "inset 0 1px 1.5px rgba(255, 255, 255, 0.4), 0 4px 14px rgba(0, 0, 0, 0.2)",
+                          outline: "none",
+                          cursor: "pointer",
+                        }}
+                      />
+                    </label>
+
+                    <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255, 255, 255, 0.95)" }}>New Time *</span>
+                      <select
+                        className="rzv-input apple-input-glow apple-no-icon"
+                        value={editForm.reservation_time || "19:00"}
+                        onChange={(e) => {
+                          const newTime = e.target.value;
+                          setEditValidationError("");
+                          setEditForm((p) => {
+                            const dateVal = p.reservation_date || format(new Date(), "yyyy-MM-dd");
+                            return {
+                              ...p,
+                              reservation_time: newTime,
+                              reservation_start_at: dateVal ? `${dateVal}T${newTime}` : "",
+                            };
+                          });
+                        }}
+                        style={{
+                          width: "100%",
+                          height: "46px",
+                          borderRadius: "14px",
+                          background: "rgba(255, 255, 255, 0.12)",
+                          border: "1px solid rgba(255, 255, 255, 0.28)",
+                          backdropFilter: "blur(16px)",
+                          color: "#ffffff",
+                          padding: "0 14px",
+                          fontSize: "13.5px",
+                          boxShadow: "inset 0 1px 1.5px rgba(255, 255, 255, 0.4), 0 4px 14px rgba(0, 0, 0, 0.2)",
+                          outline: "none",
+                          cursor: "pointer",
+                          appearance: "none",
+                          WebkitAppearance: "none",
+                          MozAppearance: "none",
+                        }}
+                      >
+                        {["10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00", "18:30", "19:00", "19:30", "20:00", "20:30", "21:00", "21:30", "22:00"].map((slot) => (
+                          <option key={slot} value={slot} style={{ background: "#1e293b", color: "#ffffff" }}>
+                            {slot}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255, 255, 255, 0.95)" }}>Guests *</span>
+                    <input
+                      className="rzv-input apple-input-glow"
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={editForm.guest_count || ""}
+                      onChange={(e) => setEditForm((p) => ({ ...p, guest_count: e.target.value }))}
+                      style={{
+                        width: "100%",
+                        height: "46px",
+                        borderRadius: "14px",
+                        background: "rgba(255, 255, 255, 0.12)",
+                        border: "1px solid rgba(255, 255, 255, 0.28)",
+                        backdropFilter: "blur(16px)",
+                        color: "#ffffff",
+                        padding: "0 16px",
+                        fontSize: "14px",
+                        boxShadow: "inset 0 1px 1.5px rgba(255, 255, 255, 0.4), 0 4px 14px rgba(0, 0, 0, 0.2)",
+                        outline: "none",
+                      }}
+                    />
+                  </label>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255, 255, 255, 0.95)" }}>Requested Table</span>
+
+                    {!editForm.table_id ? (
+                      <button
+                        type="button"
+                        className="apple-hover-ghost"
+                        onClick={() => setShowEditTableBoard(true)}
+                        style={{
+                          width: "100%",
+                          height: "46px",
+                          borderRadius: "14px",
+                          background: "rgba(255, 255, 255, 0.08)",
+                          border: "1px solid rgba(255, 255, 255, 0.25)",
+                          color: "#ffffff",
+                          fontSize: "13px",
+                          fontWeight: 700,
+                          letterSpacing: "0.05em",
+                          cursor: "pointer",
+                          backdropFilter: "blur(16px)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        CHOOSE AND VIEW TABLE
+                      </button>
+                    ) : (
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: "14px", padding: "0 16px", height: "46px", backdropFilter: "blur(16px)" }}>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: "#ffffff" }}>
+                          {(() => {
+                            const tbl = editAllTables.find(t => String(t.table_id) === String(editForm.table_id));
+                            return tbl ? `${tbl.table_number} — ${tbl.area_name || ""} (${tbl.capacity} seats)` : `Table #${editForm.table_id}`;
+                          })()}
+                        </span>
+                        <button
+                          type="button"
+                          style={{ background: "none", border: "none", color: "#facc15", fontSize: "12.5px", fontWeight: 700, cursor: "pointer", textDecoration: "underline", padding: 0 }}
+                          onClick={() => setShowEditTableBoard(true)}
+                        >
+                          Change Table
+                        </button>
+                      </div>
+                    )}
+
+                    {showEditTableBoard && createPortal(
+                      <div className="rzv-fullscreen-overlay" style={{ zIndex: 2147483647 }} onClick={() => setShowEditTableBoard(false)}>
+                        <div className="rzv-fullscreen-content" onClick={(e) => e.stopPropagation()}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                            <div>
+                              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.2em", textTransform: "uppercase", color: "#d97706", display: "block", marginBottom: 2 }}>INTERACTIVE TABLE DIAGRAM</span>
+                              <h3 style={{ margin: 0, color: "var(--text-color)" }}>Choose your table · {editForm.reservation_date} @ {editForm.reservation_time}</h3>
+                            </div>
+                            <button
+                              type="button"
+                              className="rzv-btn rzv-btn--ghost"
+                              onClick={() => setShowEditTableBoard(false)}
+                            >
+                              ✕ Close
+                            </button>
+                          </div>
+                          <TableBoard
+                            tables={editAllTables}
+                            selectedTableId={Number(editForm.table_id)}
+                            currentTableId={Number(getReservationTableIds(editTarget)[0] || editTarget?.assigned_table_id || 0)}
+                            onSelectTable={(tableId) => {
+                              const targetTable = editAllTables.find(
+                                (t) => String(t.table_id) === String(tableId) || t.table_number === String(tableId)
+                              );
+                              const resolvedId = targetTable ? String(targetTable.table_id) : String(tableId);
+                              setEditForm((prev) => ({ ...prev, table_id: resolvedId }));
+                              setShowEditTableBoard(false);
+                            }}
+                            loading={editTablesLoading}
+                            guestCount={Number(editForm.guest_count || editTarget?.guest_count || 2)}
+                          />
+                        </div>
+                      </div>,
+                      document.body
+                    )}
+                  </div>
+
+                  <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255, 255, 255, 0.95)" }}>Contact Phone</span>
+                    <input
+                      className="rzv-input apple-input-glow"
+                      type="tel"
+                      value={editForm.contact_phone || ""}
+                      onChange={(e) => setEditForm((p) => ({ ...p, contact_phone: e.target.value }))}
+                      style={{
+                        width: "100%",
+                        height: "46px",
+                        borderRadius: "14px",
+                        background: "rgba(255, 255, 255, 0.12)",
+                        border: "1px solid rgba(255, 255, 255, 0.28)",
+                        backdropFilter: "blur(16px)",
+                        color: "#ffffff",
+                        padding: "0 16px",
+                        fontSize: "14px",
+                        boxShadow: "inset 0 1px 1.5px rgba(255, 255, 255, 0.4), 0 4px 14px rgba(0, 0, 0, 0.2)",
+                        outline: "none",
+                      }}
+                    />
+                  </label>
+                </div>
+
+                {/* Preferred Table Pill Card */}
+                <div
+                  style={{
+                    background: "rgba(255, 255, 255, 0.1)",
+                    border: "1px solid rgba(255, 255, 255, 0.28)",
+                    backdropFilter: "blur(16px)",
+                    borderRadius: "16px",
+                    padding: "14px 18px",
+                    marginTop: "4px",
+                    boxShadow: "inset 0 1px 1.5px rgba(255, 255, 255, 0.4)",
                   }}
-                  style={{ width: "100%", height: "42px", borderRadius: "10px" }}
-                />
-              </label>
-
-              <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#333" }}>Guests *</span>
-                <input
-                  className="rzv-input"
-                  type="number"
-                  min="1"
-                  max="20"
-                  value={editForm.guest_count || ""}
-                  onChange={(e) => setEditForm((p) => ({ ...p, guest_count: e.target.value }))}
-                  style={{ width: "100%", height: "42px", borderRadius: "10px" }}
-                />
-              </label>
-
-              {/* Row 2: Requested Table + Phone */}
-              <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#333" }}>Requested Table</span>
-                <select
-                  className="rzv-input"
-                  value={editForm.table_id || ""}
-                  onChange={(e) => setEditForm((p) => ({ ...p, table_id: e.target.value }))}
-                  disabled={editTablesLoading}
-                  style={{ width: "100%", height: "42px", borderRadius: "10px" }}
                 >
-                  <option value="">{editTablesLoading ? "Loading available tables..." : "Keep current table"}</option>
-                  {editTables.map((table) => (
-                    <option key={table.table_id} value={String(table.table_id)}>
-                      {table.table_number} - {table.area_name} ({table.capacity} seats)
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <p style={{ margin: 0, fontSize: "12.5px", color: "rgba(255, 255, 255, 0.9)", lineHeight: 1.5 }}>
+                    <strong style={{ color: "var(--rzv-gold, #facc15)", fontWeight: 700 }}>Preferred table</strong> · Your selected table change is recorded as a preference. Staff confirms the final table assignment upon request review.
+                  </p>
+                </div>
+              </div>
 
-              <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#333" }}>Contact Phone</span>
-                <input
-                  className="rzv-input"
-                  type="tel"
-                  value={editForm.contact_phone || ""}
-                  onChange={(e) => setEditForm((p) => ({ ...p, contact_phone: e.target.value }))}
-                  style={{ width: "100%", height: "42px", borderRadius: "10px" }}
-                />
-              </label>
+              {/* CENTER DIVIDER LINE */}
+              <div style={{ background: "rgba(255, 255, 255, 0.18)", width: "1px", alignSelf: "stretch" }} />
 
-              {/* Row 3: Pre-order Items + Special Request */}
-              <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#333" }}>Pre-order Items</span>
-                <textarea
-                  className="rzv-input"
-                  rows={4}
-                  placeholder={"e.g.\nSushi Set x1\nLychee Martini x2"}
-                  value={editForm.preorder_items_text || ""}
-                  onChange={(e) => setEditForm((p) => ({ ...p, preorder_items_text: e.target.value }))}
-                  style={{ width: "100%", borderRadius: "10px", resize: "none", fontSize: "13px" }}
-                />
-              </label>
+              {/* RIGHT COLUMN (50%): Pre-orders, Notes & Actions */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                <h3 style={{ fontSize: "1.1rem", fontWeight: 600, color: "#ffffff", margin: 0, textShadow: "0 1px 3px rgba(0,0,0,0.4)" }}>Pre-orders & Notes</h3>
 
-              <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#333" }}>Special Request / Purpose</span>
-                <textarea
-                  className="rzv-input"
-                  rows={4}
-                  placeholder="Anniversary, quiet corner table, birthday cake..."
-                  value={editForm.special_request || ""}
-                  onChange={(e) => setEditForm((p) => ({ ...p, special_request: e.target.value }))}
-                  style={{ width: "100%", borderRadius: "10px", resize: "none", fontSize: "13px" }}
-                />
-              </label>
-            </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255, 255, 255, 0.95)" }}>Pre-orders & Food Selection</span>
+                    
+                    {/* ADD PRE-ORDER (OPTIONAL) Liquid Glass Button */}
+                    <button
+                      type="button"
+                      className="apple-hover-ghost"
+                      onClick={() => setShowEditPreorderModal(true)}
+                      style={{
+                        width: "100%",
+                        height: "46px",
+                        borderRadius: "14px",
+                        background: "rgba(255, 255, 255, 0.12)",
+                        border: "1px solid rgba(255, 255, 255, 0.3)",
+                        color: "#ffffff",
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        cursor: "pointer",
+                        backdropFilter: "blur(16px)",
+                        boxShadow: "inset 0 1px 1.5px rgba(255, 255, 255, 0.4), 0 4px 14px rgba(0, 0, 0, 0.25)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <span>✨</span>
+                      <span>ADD PRE-ORDER (OPTIONAL)</span>
+                    </button>
 
-            {/* Action Buttons */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 24, paddingTop: 16, borderTop: "1px solid #f0f0f0" }}>
-              <button type="button" className="rzv-btn rzv-btn--ghost" style={{ borderRadius: "10px", padding: "10px 20px" }} onClick={() => setEditTarget(null)}>Cancel</button>
-              <button
-                type="button"
-                className="rzv-btn rzv-btn--solid"
-                style={{ borderRadius: "10px", padding: "10px 24px" }}
-                onClick={() => {
-                  const requestedStart = editForm.reservation_start_at ? new Date(editForm.reservation_start_at) : null;
-                  if (requestedStart && requestedStart.getTime() <= Date.now()) {
-                    setEditValidationError("Please choose a future date and time. Past time slots cannot be requested.");
-                    return;
-                  }
-                  setEditConfirm(true);
-                }}
-              >
-                Send Request
-              </button>
+                    {/* Active Selected Pre-orders Liquid Glass Summary Card */}
+                    {editForm.preorder_items_list && editForm.preorder_items_list.length > 0 ? (
+                      <div
+                        style={{
+                          background: "rgba(255, 255, 255, 0.08)",
+                          border: "1px solid rgba(255, 255, 255, 0.24)",
+                          borderRadius: "14px",
+                          padding: "12px 14px",
+                          backdropFilter: "blur(16px)",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", paddingBottom: "6px", borderBottom: "1px solid rgba(255, 255, 255, 0.15)" }}>
+                          <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--rzv-gold, #facc15)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                            Selected Items ({editForm.preorder_items_list.reduce((sum, item) => sum + item.quantity, 0)})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setShowEditPreorderModal(true)}
+                            style={{ background: "none", border: "none", color: "#ffffff", fontSize: "12px", textDecoration: "underline", cursor: "pointer" }}
+                          >
+                            Modify
+                          </button>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "5px", maxHeight: "110px", overflowY: "auto" }}>
+                          {editForm.preorder_items_list.map((item, idx) => (
+                            <div key={item.dish_id || idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "12.5px", color: "rgba(255, 255, 255, 0.9)" }}>
+                              <span>{item.dish_name || item.name} <strong style={{ color: "#facc15" }}>x{item.quantity}</strong></span>
+                              <span style={{ fontWeight: 600 }}>{(Number(item.base_price || item.price || 0) * item.quantity).toLocaleString("vi-VN")} VND</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ marginTop: "8px", paddingTop: "6px", borderTop: "1px solid rgba(255, 255, 255, 0.15)", display: "flex", justifyContent: "space-between", fontSize: "12.5px", fontWeight: 700, color: "#ffffff" }}>
+                          <span>Pre-order Total:</span>
+                          <span style={{ color: "#facc15" }}>
+                            {editForm.preorder_items_list.reduce((sum, item) => sum + (Number(item.base_price || item.price || 0) * item.quantity), 0).toLocaleString("vi-VN")} VND
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <textarea
+                        className="rzv-input apple-input-glow"
+                        rows={2}
+                        placeholder="Or type custom pre-order notes (e.g. Sushi Set x1)..."
+                        value={editForm.preorder_items_text || ""}
+                        onChange={(e) => setEditForm((p) => ({ ...p, preorder_items_text: e.target.value }))}
+                        style={{
+                          width: "100%",
+                          borderRadius: "14px",
+                          background: "rgba(255, 255, 255, 0.08)",
+                          border: "1px solid rgba(255, 255, 255, 0.22)",
+                          backdropFilter: "blur(16px)",
+                          color: "#ffffff",
+                          padding: "10px 14px",
+                          fontSize: "13px",
+                          resize: "none",
+                          boxShadow: "inset 0 1px 1.5px rgba(255, 255, 255, 0.3)",
+                          outline: "none",
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "rgba(255, 255, 255, 0.95)" }}>Notes</span>
+                    <textarea
+                      className="rzv-input apple-input-glow"
+                      rows={3}
+                      placeholder="Anniversary, quiet corner table, birthday cake..."
+                      value={editForm.special_request || ""}
+                      onChange={(e) => setEditForm((p) => ({ ...p, special_request: e.target.value }))}
+                      style={{
+                        width: "100%",
+                        borderRadius: "14px",
+                        background: "rgba(255, 255, 255, 0.12)",
+                        border: "1px solid rgba(255, 255, 255, 0.28)",
+                        backdropFilter: "blur(16px)",
+                        color: "#ffffff",
+                        padding: "12px 16px",
+                        fontSize: "13.5px",
+                        resize: "none",
+                        boxShadow: "inset 0 1px 1.5px rgba(255, 255, 255, 0.4), 0 4px 14px rgba(0, 0, 0, 0.2)",
+                        outline: "none",
+                      }}
+                    />
+                  </label>
+                </div>
+
+                {/* VIP Surcharge Banner */}
+                {(() => {
+                  const selectedTableObj = editTables.find((t) => String(t.table_id) === String(editForm.table_id));
+                  const isLuxury = selectedTableObj && ["Premium Area", "Private Room", "VIP Lounge", "VIP", "Private"].some(kw => 
+                    String(selectedTableObj.area_name || "").toLowerCase().includes(kw.toLowerCase())
+                  );
+                  if (!isLuxury) return null;
+
+                  const currentDeposit = Number(editTarget?.deposit_amount || 0);
+
+                  return (
+                    <div
+                      style={{
+                        width: "100%",
+                        background: "rgba(239, 68, 68, 0.2)",
+                        border: "1.5px solid rgba(239, 68, 68, 0.7)",
+                        borderRadius: "16px",
+                        padding: "14px 18px",
+                        backdropFilter: "blur(16px)",
+                      }}
+                    >
+                      <div style={{ color: "#ffffff", fontWeight: 800, fontSize: "13px", display: "flex", alignItems: "center", gap: "8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                        <span style={{ fontSize: "15px" }}>⚠️</span>
+                        <span>ADDITIONAL DEPOSIT REQUIRED ({selectedTableObj.area_name.toUpperCase()})</span>
+                      </div>
+                      <p style={{ margin: "6px 0 0", fontSize: "12px", color: "rgba(255, 255, 255, 0.95)", lineHeight: 1.5, fontWeight: 500 }}>
+                        Selected table is in <strong>{selectedTableObj.area_name} ({selectedTableObj.capacity} seats)</strong>. Your paid deposit of <strong>{currentDeposit.toLocaleString("vi-VN")} VND</strong> will be credited directly.
+                      </p>
+                    </div>
+                  );
+                })()}
+
+                {/* Action Buttons */}
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "auto", paddingTop: "1.25rem", borderTop: "1px solid rgba(255, 255, 255, 0.15)" }}>
+                  <button
+                    type="button"
+                    className="apple-hover-ghost"
+                    style={{
+                      background: "rgba(255, 255, 255, 0.14)",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                      color: "#ffffff",
+                      borderRadius: "14px",
+                      padding: "12px 26px",
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      backdropFilter: "blur(12px)",
+                      boxShadow: "inset 0 1px 1px rgba(255, 255, 255, 0.4)",
+                    }}
+                    onClick={() => setEditTarget(null)}
+                  >
+                    CANCEL
+                  </button>
+
+                  <button
+                    type="button"
+                    className="apple-hover-btn"
+                    style={{
+                      background: "linear-gradient(135deg, #facc15 0%, #ca8a04 100%)",
+                      border: "1px solid rgba(255, 255, 255, 0.5)",
+                      color: "#000000",
+                      borderRadius: "14px",
+                      padding: "12px 32px",
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      letterSpacing: "0.04em",
+                      cursor: "pointer",
+                      boxShadow: "inset 0 1.5px 2px rgba(255, 255, 255, 0.7), 0 10px 28px rgba(234, 179, 8, 0.5)",
+                    }}
+                    onClick={() => {
+                      const requestedStart = editForm.reservation_start_at ? new Date(editForm.reservation_start_at) : null;
+                      if (requestedStart && requestedStart.getTime() <= Date.now()) {
+                        setEditValidationError("Please choose a future date and time. Past time slots cannot be requested.");
+                        return;
+                      }
+                      setEditConfirm(true);
+                    }}
+                  >
+                    SEND REQUEST
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Edit Request — Verify Confirm Request second dialog */}
-      {editTarget && editConfirm && (
-        <div className="rzv-modal-overlay">
-          <div className="rzv-modal" style={{ maxWidth: "380px", width: "100%", padding: "24px", backgroundColor: "#fff", borderRadius: "8px" }}>
-            <h2 className="rzv-serif" style={{ marginBottom: "8px" }}>Verify Confirm Request</h2>
-            <p style={{ fontSize: 14, color: "#666", marginBottom: 20 }}>
-              Submit your edit request for booking <strong>#{String(editTarget.reservation_id).padStart(6, "0")}</strong>?
-              Staff will review the pending request and apply the change if approved. Manager Portal will keep the audit trail. Note: you may only request one edit per booking.
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button type="button" className="rzv-btn rzv-btn--ghost" disabled={submittingEdit} onClick={() => setEditConfirm(false)}>Go Back</button>
-              <button type="button" className="rzv-btn rzv-btn--solid" disabled={submittingEdit} onClick={handleSubmitEditRequest}>
-                {submittingEdit ? "Submitting…" : "Confirm"}
-              </button>
+      {/* Edit Request — Verify Confirm Request second dialog (Apple Liquid Glass, two-column summary) */}
+      {editTarget && editConfirm && (() => {
+        const preorderList = editForm.preorder_items_list || [];
+        const preorderTotal = preorderList.reduce((sum, item) => sum + (Number(item.unit_price || item.base_price || item.price || 0) * item.quantity), 0);
+        return (
+          <div
+            onClick={(e) => { if (e.target === e.currentTarget) setEditConfirm(false); }}
+            style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              zIndex: 9999999, display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "24px",
+              background: "rgba(8, 12, 20, 0.72)",
+              backdropFilter: "blur(32px) saturate(200%)",
+              WebkitBackdropFilter: "blur(32px) saturate(200%)",
+              overflow: "auto",
+            }}
+          >
+            {/* Ambient orbs */}
+            <div style={{ position: "fixed", top: "8%", left: "15%", width: "480px", height: "480px", borderRadius: "50%", background: "radial-gradient(circle, rgba(56,189,248,0.35) 0%, rgba(56,189,248,0) 70%)", filter: "blur(90px)", pointerEvents: "none" }} />
+            <div style={{ position: "fixed", bottom: "8%", right: "15%", width: "500px", height: "500px", borderRadius: "50%", background: "radial-gradient(circle, rgba(249,115,22,0.4) 0%, rgba(249,115,22,0) 70%)", filter: "blur(90px)", pointerEvents: "none" }} />
+
+            <div
+              className="apple-glass-card"
+              style={{
+                position: "relative", maxWidth: "860px", width: "100%", margin: "auto",
+                padding: "36px 40px",
+                background: "linear-gradient(135deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.09) 100%)",
+                backdropFilter: "blur(48px) saturate(220%)",
+                WebkitBackdropFilter: "blur(48px) saturate(220%)",
+                border: "1px solid rgba(255,255,255,0.32)",
+                borderRadius: "32px",
+                boxShadow: "inset 0 1.5px 2px rgba(255,255,255,0.65), 0 36px 100px rgba(0,0,0,0.6)",
+                color: "#ffffff",
+                fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+              }}
+            >
+              {/* Header */}
+              <div style={{ marginBottom: "28px", paddingBottom: "18px", borderBottom: "1px solid rgba(255,255,255,0.15)" }}>
+                <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.22em", textTransform: "uppercase", color: "#facc15", display: "block", marginBottom: 6 }}>
+                  CONFIRMATION · #{String(editTarget.reservation_id).padStart(6, "0")}
+                </span>
+                <h2 className="rzv-serif" style={{ margin: "0 0 6px", fontSize: "26px", color: "#ffffff", fontWeight: 700 }}>
+                  Review Your Change Request
+                </h2>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", margin: 0, lineHeight: 1.5 }}>
+                  Please review the details below. Staff will apply these changes upon approval.
+                </p>
+              </div>
+
+              {/* Two-column body */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px", marginBottom: "28px" }}>
+
+                {/* LEFT: Booking Details */}
+                <div>
+                  <p style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.45)", margin: "0 0 14px" }}>Booking Details</p>
+
+                  {/* Date & Time row */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+                    <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "14px", padding: "14px 16px", border: "1px solid rgba(255,255,255,0.12)" }}>
+                      <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.45)" }}>New Date</p>
+                      <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#ffffff" }}>{editForm.reservation_date || "—"}</p>
+                    </div>
+                    <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "14px", padding: "14px 16px", border: "1px solid rgba(255,255,255,0.12)" }}>
+                      <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.45)" }}>New Time</p>
+                      <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#ffffff" }}>{editForm.reservation_time || "—"}</p>
+                    </div>
+                  </div>
+
+                  {/* Guests */}
+                  <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "14px", padding: "14px 16px", border: "1px solid rgba(255,255,255,0.12)", marginBottom: "14px" }}>
+                    <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.45)" }}>Guests</p>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#ffffff" }}>{editForm.guest_count || editTarget.guest_count || "—"}</p>
+                  </div>
+
+                  {/* Table */}
+                  <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "14px", padding: "14px 16px", border: "1px solid rgba(255,255,255,0.12)", marginBottom: "14px" }}>
+                    <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.45)" }}>Requested Table</p>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#ffffff" }}>
+                      {editForm.table_id
+                        ? (() => {
+                            const tbl = editAllTables.find(t => String(t.table_id) === String(editForm.table_id));
+                            return tbl ? `${tbl.table_number} — ${tbl.area_name || ""}` : `Table #${editForm.table_id}`;
+                          })()
+                        : "Keep current table"}
+                    </p>
+                  </div>
+
+                  {/* Contact Phone */}
+                  <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "14px", padding: "14px 16px", border: "1px solid rgba(255,255,255,0.12)" }}>
+                    <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.45)" }}>Contact Phone</p>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#ffffff" }}>{editForm.contact_phone || "—"}</p>
+                  </div>
+                </div>
+
+                {/* RIGHT: Pre-orders & Notes */}
+                <div>
+                  <p style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.45)", margin: "0 0 14px" }}>Pre-orders & Notes</p>
+
+                  {/* Pre-order items */}
+                  <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "14px", padding: "14px 16px", border: "1px solid rgba(255,255,255,0.12)", marginBottom: "14px", minHeight: "120px" }}>
+                    <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.45)" }}>
+                      Pre-order Items {preorderList.length > 0 ? `(${preorderList.length})` : ""}
+                    </p>
+                    {preorderList.length > 0 ? (
+                      <>
+                        {preorderList.map((item, i) => (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                            <span style={{ fontSize: 13, color: "#ffffff", fontWeight: 600 }}>
+                              {(item.dish_name || item.name || "Dish").toUpperCase()} <span style={{ color: "#facc15" }}>x{item.quantity}</span>
+                            </span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>
+                              {(Number(item.unit_price || item.base_price || item.price || 0) * item.quantity).toLocaleString("vi-VN")} VND
+                            </span>
+                          </div>
+                        ))}
+                        <div style={{ borderTop: "1px solid rgba(255,255,255,0.15)", paddingTop: "10px", marginTop: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.7)" }}>Pre-order Total:</span>
+                          <span style={{ fontSize: 15, fontWeight: 800, color: "#facc15" }}>{preorderTotal.toLocaleString("vi-VN")} VND</span>
+                        </div>
+                      </>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: 13, color: "rgba(255,255,255,0.4)", fontStyle: "italic" }}>No pre-order items selected</p>
+                    )}
+                  </div>
+
+                  {/* Notes */}
+                  <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: "14px", padding: "14px 16px", border: "1px solid rgba(255,255,255,0.12)" }}>
+                    <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.45)" }}>Notes</p>
+                    <p style={{ margin: 0, fontSize: 13.5, color: "#ffffff", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
+                      {editForm.special_request || <span style={{ color: "rgba(255,255,255,0.35)", fontStyle: "italic" }}>None</span>}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Error banner — shown when submission fails */}
+              {editValidationError && (
+                <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.45)", borderRadius: "12px", padding: "12px 16px", marginBottom: "16px", fontSize: 13, color: "#fca5a5", lineHeight: 1.5, fontWeight: 600 }}>
+                  {editValidationError}
+                </div>
+              )}
+
+              {/* Notice banner */}
+              <div style={{ background: "rgba(250, 204, 21, 0.12)", border: "1px solid rgba(250, 204, 21, 0.3)", borderRadius: "12px", padding: "12px 16px", marginBottom: "24px", fontSize: 12.5, color: "rgba(255,255,255,0.8)", lineHeight: 1.5 }}>
+                Staff will review this change request. Your current reservation stays unchanged until approved. You may only request one edit per booking.
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                <button
+                  type="button"
+                  className="apple-hover-ghost"
+                  style={{ background: "rgba(255,255,255,0.14)", border: "1px solid rgba(255,255,255,0.3)", color: "#ffffff", borderRadius: "14px", padding: "11px 24px", fontSize: "14px", fontWeight: 600, cursor: "pointer", backdropFilter: "blur(12px)" }}
+                  disabled={submittingEdit}
+                  onClick={() => { setEditConfirm(false); setEditValidationError(""); }}
+                >
+                  Go Back
+                </button>
+                <button
+                  type="button"
+                  className="apple-hover-btn"
+                  style={{ background: "linear-gradient(135deg, #facc15 0%, #ca8a04 100%)", border: "1px solid rgba(255,255,255,0.5)", color: "#000000", borderRadius: "14px", padding: "11px 32px", fontSize: "14px", fontWeight: 700, cursor: "pointer", boxShadow: "inset 0 1.5px 2px rgba(255,255,255,0.7), 0 8px 28px rgba(234,179,8,0.45)" }}
+                  disabled={submittingEdit}
+                  onClick={handleSubmitEditRequest}
+                >
+                  {submittingEdit ? "Submitting…" : "Confirm & Send Request"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
 
       {/* ── SePay Upgrade Payment Difference Modal ── */}
       {upgradeModal && (
@@ -1542,27 +2361,128 @@ function MyReservationsPage({
         </div>
       )}
 
-      {/* ── Edit 1-Time Warning Modal ── */}
+      {/* ── Edit 1-Time Warning Modal (Apple Liquid Glass WWDC25 Layout) ── */}
       {editWarningOpen && (
-        <div className="rzv-modal-overlay">
-          <div className="rzv-modal" style={{ maxWidth: "400px", width: "100%", padding: "28px", backgroundColor: "#fff", borderRadius: "10px" }}>
-            <h2 className="rzv-serif" style={{ marginBottom: "8px", color: "#9f7c3a" }}>⚠️ One-Time Edit Notice</h2>
-            <p style={{ fontSize: 14, color: "#555", marginBottom: 20, lineHeight: 1.7 }}>
-              You are allowed to edit this reservation <strong>only once</strong>.<br />
-              After submitting your edit request, you will <strong>not be able to make further changes</strong> to this booking.<br /><br />
-              A confirmation email will be sent to you when the manager applies the changes.
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) { setEditWarningOpen(false); setEditWarningTarget(null); } }}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 9999999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "24px",
+            background: "rgba(8, 12, 20, 0.55)",
+            backdropFilter: "blur(24px) saturate(200%)",
+            WebkitBackdropFilter: "blur(24px) saturate(200%)",
+            margin: 0,
+            overflow: "hidden",
+          }}
+        >
+          {/* Ambient Liquid Glass Light Orbs */}
+          <div style={{ position: "absolute", top: "10%", left: "20%", width: "400px", height: "400px", borderRadius: "50%", background: "radial-gradient(circle, rgba(56, 189, 248, 0.4) 0%, rgba(56, 189, 248, 0) 70%)", filter: "blur(80px)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", bottom: "10%", right: "20%", width: "420px", height: "420px", borderRadius: "50%", background: "radial-gradient(circle, rgba(249, 115, 22, 0.45) 0%, rgba(249, 115, 22, 0) 70%)", filter: "blur(90px)", pointerEvents: "none" }} />
+
+          {/* Centered Spatial Liquid Glass Modal Card */}
+          <div
+            className="apple-glass-card"
+            style={{
+              position: "relative",
+              maxWidth: "480px",
+              width: "100%",
+              margin: "auto",
+              padding: "32px 36px",
+              background: "linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.09) 100%)",
+              backdropFilter: "blur(45px) saturate(220%)",
+              WebkitBackdropFilter: "blur(45px) saturate(220%)",
+              border: "1px solid rgba(255, 255, 255, 0.32)",
+              borderRadius: "28px",
+              boxShadow: "inset 0 1.5px 2px rgba(255, 255, 255, 0.65), inset 0 -1px 2px rgba(0, 0, 0, 0.3), 0 32px 90px rgba(0, 0, 0, 0.55)",
+              color: "#ffffff",
+              fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+            }}
+          >
+            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.22em", textTransform: "uppercase", color: "var(--rzv-gold, #facc15)", display: "block", marginBottom: 6 }}>
+              ⚠️ ONE-TIME EDIT POLICY
+            </span>
+            <h2 className="rzv-serif" style={{ margin: "0 0 14px", fontSize: "24px", color: "#ffffff", fontWeight: 700, textShadow: "0 2px 4px rgba(0,0,0,0.4)" }}>
+              One-Time Edit Notice
+            </h2>
+            <p style={{ fontSize: 14, color: "rgba(255, 255, 255, 0.85)", marginBottom: 28, lineHeight: 1.65 }}>
+              You are allowed to edit this reservation <strong style={{ color: "#facc15" }}>only once</strong>.<br /><br />
+              After submitting your edit request, you will <strong style={{ color: "#fca5a5" }}>not be able to make further changes</strong> to this booking.<br /><br />
+              A confirmation email will be sent to you when the manager approves the changes.
             </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-              <button type="button" className="rzv-btn rzv-btn--ghost" onClick={() => { setEditWarningOpen(false); setEditWarningTarget(null); }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+              <button
+                type="button"
+                className="apple-hover-ghost"
+                style={{
+                  background: "rgba(255, 255, 255, 0.14)",
+                  border: "1px solid rgba(255, 255, 255, 0.3)",
+                  color: "#ffffff",
+                  borderRadius: "14px",
+                  padding: "11px 22px",
+                  fontSize: "13.5px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  backdropFilter: "blur(12px)",
+                  boxShadow: "inset 0 1px 1px rgba(255, 255, 255, 0.4)",
+                }}
+                onClick={() => { setEditWarningOpen(false); setEditWarningTarget(null); }}
+              >
                 Cancel
               </button>
-              <button type="button" className="rzv-btn rzv-btn--solid" onClick={confirmEditWarning}>
+              <button
+                type="button"
+                className="apple-hover-btn"
+                style={{
+                  background: "linear-gradient(135deg, #facc15 0%, #ca8a04 100%)",
+                  border: "1px solid rgba(255, 255, 255, 0.5)",
+                  color: "#000000",
+                  borderRadius: "14px",
+                  padding: "11px 26px",
+                  fontSize: "13.5px",
+                  fontWeight: 700,
+                  letterSpacing: "0.02em",
+                  cursor: "pointer",
+                  boxShadow: "inset 0 1.5px 2px rgba(255, 255, 255, 0.7), 0 10px 28px rgba(234, 179, 8, 0.5)",
+                }}
+                onClick={confirmEditWarning}
+              >
                 I Understand — Continue
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* ── Interactive Pre-order Selection Modal for Edit Request (PreorderDashboardModal) ── */}
+      <PreorderDashboardModal
+        isOpen={showEditPreorderModal}
+        onClose={() => setShowEditPreorderModal(false)}
+        preorderItems={editPreorderItemsMap}
+        onSave={(newCart) => {
+          const selectedItems = Object.values(newCart || {});
+          const formattedText = selectedItems
+            .map((i) => `${i.name || i.dish_name} x${i.quantity} (${(Number(i.price || i.base_price || 0) * i.quantity).toLocaleString("vi-VN")} VND)`)
+            .join("\n");
+          setEditForm((prev) => ({
+            ...prev,
+            preorder_items_list: selectedItems,
+            preorder_items_text: formattedText,
+          }));
+          setShowEditPreorderModal(false);
+        }}
+        currentUser={{ id: userId }}
+      />
+
+      {/* ── Interactive Table Diagram / Map Modal for Edit Request ── */}
+      {/* showEditTableBoard portal is now rendered inline in the edit form via createPortal */}
     </main>
   );
 }

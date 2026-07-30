@@ -15,13 +15,13 @@ const CUSTOMER_ROLE_ID = 1;
  * Clients authenticate via handshake.auth: { userId, roleId, sessionId? }
  */
 export function initSocket(httpServer, { allowedOrigins = [] } = {}) {
-  const corsOrigin = allowedOrigins.length > 0 ? allowedOrigins : "*";
   io = new Server(httpServer, {
     cors: {
-      origin: corsOrigin,
+      origin: (origin, callback) => callback(null, true),
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     },
+    transports: ["websocket", "polling"],
   });
 
   io.on("connection", async (socket) => {

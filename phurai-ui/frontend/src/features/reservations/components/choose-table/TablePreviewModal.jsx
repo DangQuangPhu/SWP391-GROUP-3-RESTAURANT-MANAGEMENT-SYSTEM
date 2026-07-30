@@ -6,6 +6,7 @@ import '../../styles/table-preview-modal.css';
 
 function getTableStatus(apiTable) {
   if (!apiTable) return 'Available';
+  if (apiTable.is_current || (apiTable.availability_at_slot || "").toLowerCase() === "currenttable") return "CurrentTable";
   if (apiTable.is_bookable === false) {
     const avail = (apiTable.availability_at_slot || "").toLowerCase();
     if (avail === "occupied") return "Occupied";
@@ -29,7 +30,7 @@ export default function TablePreviewModal({
   const tableCode = table || apiTable?.table_number || 'TABLE';
   const tableInfo = getTableInfo(tableCode, apiTable);
   const status = tableStatus || getTableStatus(apiTable);
-  const isAvailable = status === 'Available';
+  const isAvailable = status === 'Available' || status === 'CurrentTable';
   const unavailableText = (() => {
     if (status === 'InvalidCapacity') {
       return `This table has ${tableInfo.capacity} seats and is not suitable for the selected guest count. Please choose a better-matched table.`;

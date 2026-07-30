@@ -3670,7 +3670,7 @@ export async function getStaffFullTimeline(req, res) {
        ORDER BY a.area_id ASC, t.table_number ASC;`
     );
 
-    // 3. Fetch all reservations for the date
+    // 3. Fetch all reservations for the date (using assigned or preferred table)
     const [reservations] = await pool.query(
       `SELECT
          r.reservation_id,
@@ -3683,13 +3683,14 @@ export async function getStaffFullTimeline(req, res) {
          r.reservation_status,
          r.dining_purpose,
          r.special_request,
-         COALESCE(a.area_name, N'Unassigned') AS area_name,
-         rt.table_id,
-         t.table_number
+         COALESCE(a.area_name, pa.area_name, N'Unassigned') AS area_name,
+         rt.table_id AS table_id,
+         t.table_number AS table_number
        FROM dbo.Reservations r
        LEFT JOIN dbo.ReservationTables rt ON r.reservation_id = rt.reservation_id
        LEFT JOIN dbo.RestaurantTables t ON t.table_id = rt.table_id
        LEFT JOIN dbo.RestaurantAreas a ON a.area_id = t.area_id
+       LEFT JOIN dbo.RestaurantAreas pa ON pa.area_id = r.preferred_area_id
        LEFT JOIN dbo.UserAccounts ua ON ua.user_id = r.customer_id
        WHERE ${dateFilter}
          AND r.reservation_status NOT IN (N'Cancelled')
@@ -3713,6 +3714,13 @@ export async function getStaffFullTimeline(req, res) {
       }
       const durationMinutes = Math.round((endTimeMs - startTimeMs) / 60000);
       const computedEnd = end || new Date(endTimeMs);
+
+      let effectiveTableId = r.table_id ? Number(r.table_id) : null;
+      if (!effectiveTableId && r.special_request) {
+        const prefMatch = String(r.special_request).match(/\[PreferredTableId:\s*(\d+)\]/i);
+        if (prefMatch) effectiveTableId = Number(prefMatch[1]);
+      }
+
       return {
         reservation_id: r.reservation_id,
         customer_id: r.customer_id,
@@ -3729,7 +3737,7 @@ export async function getStaffFullTimeline(req, res) {
         reservation_status: r.reservation_status,
         dining_purpose: r.dining_purpose || "Casual Dining",
         special_request: r.special_request || "",
-        table_id: r.table_id ? Number(r.table_id) : null,
+        table_id: effectiveTableId,
         table_number: r.table_number || null,
         area_name: r.area_name,
         is_conflict: false,

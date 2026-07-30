@@ -40,6 +40,8 @@ export default function TableUnit({ tableData, status, isSelected, isDimmed, onC
   let statusClass = 'available';
   if (isSelected) {
     statusClass = 'selected';
+  } else if (status === 'CurrentTable') {
+    statusClass = 'current-table';
   } else if (status === 'Occupied') {
     statusClass = 'occupied';
   } else if (status === 'Reserved') {

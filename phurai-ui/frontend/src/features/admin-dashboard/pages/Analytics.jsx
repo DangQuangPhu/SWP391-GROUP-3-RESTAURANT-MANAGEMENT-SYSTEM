@@ -211,7 +211,7 @@ function renderChart(type, data) {
       return (
         <motion.div style={{ ...chartCard, height: 360 }} variants={fadeScaleVariants} initial="hidden" animate="visible">
           <h3 className="adp-chart-title">Daily Revenue (VND)</h3>
-          <ResponsiveContainer width="100%" height="90%" minWidth={1} minHeight={1}>
+          <ResponsiveContainer width="100%" height={290} minWidth={1} minHeight={290}>
             <AreaChart data={data}>
               <defs>
                 <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
@@ -233,7 +233,7 @@ function renderChart(type, data) {
       return (
         <motion.div style={{ ...chartCard, height: 360 }} variants={fadeScaleVariants} initial="hidden" animate="visible">
           <h3 className="adp-chart-title">Reservations by Status</h3>
-          <ResponsiveContainer width="100%" height="90%" minWidth={1} minHeight={1}>
+          <ResponsiveContainer width="100%" height={290} minWidth={1} minHeight={290}>
             <BarChart data={data} barSize={36}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
               <XAxis dataKey="reservation_status" tick={{ fontSize: 12 }} stroke="#c9c0b2" />
@@ -253,7 +253,7 @@ function renderChart(type, data) {
         >
           <div style={{ ...chartCard, height: 360 }}>
             <h3 className="adp-chart-title">Orders by Status</h3>
-            <ResponsiveContainer width="100%" height="88%" minWidth={1} minHeight={1}>
+            <ResponsiveContainer width="100%" height={280} minWidth={1} minHeight={280}>
               <PieChart>
                 <Pie data={data} dataKey="count" nameKey="order_status" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
                   {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
@@ -264,7 +264,7 @@ function renderChart(type, data) {
           </div>
           <div style={{ ...chartCard, height: 360 }}>
             <h3 className="adp-chart-title">Avg Order Value by Status (VND)</h3>
-            <ResponsiveContainer width="100%" height="88%" minWidth={1} minHeight={1}>
+            <ResponsiveContainer width="100%" height={280} minWidth={1} minHeight={280}>
               <BarChart data={data} barSize={36}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                 <XAxis dataKey="order_status" tick={{ fontSize: 11 }} stroke="#c9c0b2" />
@@ -281,7 +281,7 @@ function renderChart(type, data) {
       return (
         <motion.div style={{ ...chartCard, height: 360 }} variants={fadeScaleVariants} initial="hidden" animate="visible">
           <h3 className="adp-chart-title">Reviews by Rating</h3>
-          <ResponsiveContainer width="100%" height="88%" minWidth={1} minHeight={1}>
+          <ResponsiveContainer width="100%" height={290} minWidth={1} minHeight={290}>
             <BarChart data={data} layout="vertical" barSize={28}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
               <XAxis type="number" tick={{ fontSize: 12 }} stroke="#c9c0b2" />
@@ -297,7 +297,7 @@ function renderChart(type, data) {
       return (
         <motion.div style={{ ...chartCard, height: 360 }} variants={fadeScaleVariants} initial="hidden" animate="visible">
           <h3 className="adp-chart-title">Shifts Handled per Staff</h3>
-          <ResponsiveContainer width="100%" height="88%" minWidth={1} minHeight={1}>
+          <ResponsiveContainer width="100%" height={290} minWidth={1} minHeight={290}>
             <BarChart data={data} barSize={32}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
               <XAxis dataKey="staff_code" tick={{ fontSize: 11 }} stroke="#c9c0b2" />
@@ -512,6 +512,159 @@ export default function Analytics({ type, title, description }) {
       {/* Render Reviews Table if type is 'reviews' */}
       {type === 'reviews' && (
         <AdminReviewsTable startDate={dateRange.startDate} endDate={dateRange.endDate} />
+      )}
+
+      {/* Render Incoming Reports Table if type is 'revenue' */}
+      {type === 'revenue' && (
+        <AdminIncomingReportsTable />
+      )}
+    </div>
+  );
+}
+
+function AdminIncomingReportsTable() {
+  const [submissions, setSubmissions] = useState([]);
+  const [unreviewedCount, setUnreviewedCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  const fetchSubmissions = useCallback(async () => {
+    try {
+      const res = await apiGet('/admin/reports/submissions');
+      if (res?.success) {
+        setSubmissions(res.data || []);
+        setUnreviewedCount(res.unreviewed_count || 0);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSubmissions();
+  }, [fetchSubmissions]);
+
+  const handleMarkReviewed = async (id) => {
+    try {
+      const token = localStorage.getItem("phurai_token") || localStorage.getItem("token");
+      const response = await fetch(`http://localhost:5001/api/admin/reports/submissions/${id}/review`, {
+        method: "PATCH",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (response.ok) {
+        fetchSubmissions();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDownload = (id) => {
+    const token = localStorage.getItem("phurai_token") || localStorage.getItem("token");
+    window.open(`http://localhost:5001/api/admin/reports/submissions/${id}/download?token=${token}`, '_blank');
+  };
+
+  const handleView = (item) => {
+    const token = localStorage.getItem("phurai_token") || localStorage.getItem("token");
+    window.open(`http://localhost:5001/api/admin/reports/submissions/${item.submission_id}/view?token=${token}`, '_blank');
+  };
+
+  return (
+    <div style={{ marginTop: 24, background: '#fff', borderRadius: 16, border: '1px solid rgba(31,26,23,0.07)', padding: '20px 24px', boxShadow: '0 1px 2px rgba(31,26,23,0.04)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <h3 className="adp-chart-title" style={{ margin: 0 }}>Incoming Reports (Manager Submissions)</h3>
+          {unreviewedCount > 0 && (
+            <span style={{ background: '#e06c6c', color: '#fff', fontSize: '11px', fontWeight: 'bold', borderRadius: '12px', padding: '2px 8px' }}>
+              {unreviewedCount} New
+            </span>
+          )}
+        </div>
+        <button type="button" onClick={fetchSubmissions} style={{ background: 'none', border: '1px solid #e2dcd0', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: '12px' }}>
+          Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ padding: 24, textAlign: 'center', color: '#888' }}>Loading submitted reports...</div>
+      ) : submissions.length === 0 ? (
+        <div style={{ padding: 24, textAlign: 'center', color: '#888' }}>No submissions received from Managers yet.</div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#faf8f5', textAlign: 'left', borderBottom: '1px solid #eee' }}>
+                <th style={{ padding: '10px 12px' }}>Manager</th>
+                <th style={{ padding: '10px 12px' }}>Report Type</th>
+                <th style={{ padding: '10px 12px' }}>Date Range</th>
+                <th style={{ padding: '10px 12px' }}>Submitted At</th>
+                <th style={{ padding: '10px 12px' }}>Status</th>
+                <th style={{ padding: '10px 12px', textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {submissions.map((item, idx) => {
+                let dateRangeStr = "—";
+                if (item.date_range_from) {
+                  dateRangeStr = `${String(item.date_range_from).split('T')[0]} to ${String(item.date_range_to).split('T')[0]}`;
+                } else if (item.intent_json) {
+                  try {
+                    const parsed = typeof item.intent_json === "string" ? JSON.parse(item.intent_json) : item.intent_json;
+                    if (parsed.date_range?.from) {
+                      dateRangeStr = `${parsed.date_range.from} to ${parsed.date_range.to}`;
+                    }
+                  } catch {
+                    // Ignore JSON parse error fallback
+                  }
+                }
+
+                return (
+                  <tr key={item.submission_id || idx} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 600 }}>{item.manager_name}</td>
+                    <td style={{ padding: '10px 12px' }}>{item.report_type}</td>
+                    <td style={{ padding: '10px 12px' }}>{dateRangeStr}</td>
+                    <td style={{ padding: '10px 12px' }}>{new Date(item.submitted_at).toLocaleString('vi-VN')}</td>
+                    <td style={{ padding: '10px 12px' }}>
+                      <span style={{
+                        padding: '2px 8px', borderRadius: 10, fontSize: '11px', fontWeight: 600,
+                        background: item.status === 'Submitted' ? '#fef3c7' : '#d1fae5',
+                        color: item.status === 'Submitted' ? '#92400e' : '#065f46'
+                      }}>
+                        {item.status}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleView(item)}
+                          style={{ background: '#8b5cf6', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: '12px', fontWeight: 500 }}
+                        >
+                          View Direct
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownload(item.submission_id)}
+                          style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: '12px' }}
+                        >
+                          Download
+                        </button>
+                        {item.status === 'Submitted' && (
+                          <button
+                            type="button"
+                            onClick={() => handleMarkReviewed(item.submission_id)}
+                            style={{ background: '#10b981', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: '12px' }}
+                          >
+                            Mark Reviewed
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

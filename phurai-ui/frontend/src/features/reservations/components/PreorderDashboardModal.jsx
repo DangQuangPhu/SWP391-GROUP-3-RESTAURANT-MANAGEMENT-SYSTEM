@@ -184,14 +184,20 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave, curren
     if (!isOpen) return;
     let active = true;
     setLoading(true);
-    fetch('/api/menu')
+    fetch('/api/dishes/preorder')
       .then(res => res.json())
       .then((json) => {
         if (!active) return;
-        const data = json.data || [];
-        // Filter out items that are not preorderable
-        const valid = data.filter((d) => d.is_preorderable);
-        setDishes(valid);
+        const data = Array.isArray(json) ? json : (json.data || []);
+        if (data.length > 0) {
+          setDishes(data);
+        } else {
+          return fetch('/api/menu').then(res => res.json()).then(j => {
+            if (!active) return;
+            const menuData = j.data || [];
+            setDishes(menuData.filter((d) => d.is_preorderable !== false));
+          });
+        }
       })
       .catch((err) => console.error("Failed to load preorder menu:", err))
       .finally(() => {
@@ -261,7 +267,7 @@ function PreorderDashboardModal({ isOpen, onClose, preorderItems, onSave, curren
     <div 
       className="sfx-overlay sfx-overlay--visible" 
       style={{ 
-        zIndex: 1000, 
+        zIndex: 99999999, 
         background: 'rgba(10, 8, 6, 0.78)', 
         backdropFilter: 'blur(40px)', 
         WebkitBackdropFilter: 'blur(40px)', 

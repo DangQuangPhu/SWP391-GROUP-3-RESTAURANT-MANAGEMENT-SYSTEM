@@ -199,6 +199,18 @@ export async function fetchStaffReservationDetail(reservationId, userId) {
   return res.data;
 }
 
+export async function extendReservationHold(reservationId, userId, addedMinutes = 30) {
+  const res = await staffPost(
+    `/staff/reservations/${reservationId}/extend-hold`,
+    userId,
+    { addedMinutes }
+  );
+  if (!res?.success) {
+    throw new Error(res?.message || "Failed to extend hold time");
+  }
+  return res.data;
+}
+
 export async function extendReservationErt(reservationId, userId, minutes) {
   const res = await staffPatch(
     `/staff/reservations/${reservationId}/extend-ert`,

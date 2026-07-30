@@ -15,16 +15,16 @@ const requireManagerOrAdmin = (req, res, next) => {
 
 // Public read route (or basic auth)
 router.get('/', getMenu);
-router.get('/sync', syncMenu);
 
-// Protected write routes
+// Protected management routes. Menu synchronisation changes database records.
 router.use(authMiddleware);
+router.get('/sync', requireManagerOrAdmin, syncMenu);
 router.post('/', requireManagerOrAdmin, createDish);
 router.put('/:id', requireManagerOrAdmin, updateDish);
 router.patch('/:id/deactivate', requireManagerOrAdmin, deactivateDish); // Soft-disable/enable
 router.delete('/:id', requireManagerOrAdmin, deleteDish);
 
-router.get('/fix-404', async (req, res) => {
+router.get('/fix-404', requireManagerOrAdmin, async (req, res) => {
     try {
         const { getRawPool } = await import('../db.js');
         const pool = await getRawPool();

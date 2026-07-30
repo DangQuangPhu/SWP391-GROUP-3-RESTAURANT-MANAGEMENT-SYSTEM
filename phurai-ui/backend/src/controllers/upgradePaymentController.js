@@ -11,7 +11,7 @@ import { notifyStaffNewCustomerAction } from "../services/notificationService.js
 export async function getUpgradeQuote(req, res) {
   try {
     const reservationId = req.params.id;
-    const { new_area_id, new_table_id, guest_count } = req.body || {};
+    const { new_area_id, new_table_id, guest_count, preorder_items } = req.body || {};
 
     const pool = await getRawPool();
     const resResult = await pool.request()
@@ -60,11 +60,23 @@ export async function getUpgradeQuote(req, res) {
       }
     }
 
-    // Compute preorder items total from DB
-    const preorderRes = await pool.request()
-      .input("resId", sql.Int, reservationId)
-      .query("SELECT ISNULL(SUM(quantity * unit_price), 0) AS items_total FROM dbo.PreorderItems WHERE reservation_id = @resId");
-    const preorderItemsTotal = Number(preorderRes.recordset[0]?.items_total || 0);
+    // Compute preorder items total
+    let preorderItemsTotal = 0;
+    
+    if (Array.isArray(preorder_items)) {
+      // If client provided a new list of preorder items (Change Request includes menu changes)
+      preorderItemsTotal = preorder_items.reduce((sum, item) => {
+        const qty = Number(item.quantity) || 1;
+        const price = Number(item.price || item.unit_price || item.base_price || 0);
+        return sum + (qty * price);
+      }, 0);
+    } else {
+      // Fallback to existing preorders in DB if no changes were made to the menu
+      const preorderRes = await pool.request()
+        .input("resId", sql.Int, reservationId)
+        .query("SELECT ISNULL(SUM(quantity * unit_price), 0) AS items_total FROM dbo.PreorderItems WHERE reservation_id = @resId");
+      preorderItemsTotal = Number(preorderRes.recordset[0]?.items_total || 0);
+    }
 
     // Calculate new area surcharge
     const areaSurchargeInfo = getAreaSurcharge(targetAreaName, targetCapacity);

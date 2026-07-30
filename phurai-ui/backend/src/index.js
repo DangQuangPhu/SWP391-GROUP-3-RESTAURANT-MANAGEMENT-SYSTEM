@@ -135,6 +135,14 @@ app.use((req, res, next) => {
   next();
 });
 
+// Return malformed JSON as a stable API error instead of Express's HTML error page.
+app.use((error, _req, res, next) => {
+  if (error instanceof SyntaxError && "body" in error) {
+    return res.status(400).json({ success: false, message: "Invalid JSON request body." });
+  }
+  return next(error);
+});
+
 // 404 fallback for unmatched API routes
 app.use((req, res) => {
   res.status(404).json({
@@ -231,4 +239,3 @@ process.on("SIGTERM", () => handleGracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => handleGracefulShutdown("SIGINT"));
 
 startServer();
-

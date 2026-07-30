@@ -553,9 +553,11 @@ export const validateReservationUpdate = async (req, res, next) => {
         slotEnd = new Date(slotStart.getTime() + (90 + Number(target.durationMinutes)) * 60000);
       } else {
         // Compute relative difference from old reservation if only start_at changed
+        // Cap to 90 minutes so inherited long-duration reservations don't fail validation
         if (target.reservation_start_at) {
           const oldDiff = new Date(existing.reservation_end_at).getTime() - new Date(existing.reservation_start_at).getTime();
-          slotEnd = new Date(slotStart.getTime() + oldDiff);
+          const cappedDiff = Math.min(oldDiff, 90 * 60000);
+          slotEnd = new Date(slotStart.getTime() + cappedDiff);
         } else {
           slotEnd = new Date(existing.reservation_end_at);
         }
@@ -787,15 +789,9 @@ export const validateReservationUpdate = async (req, res, next) => {
       if (target.preorder_items !== undefined) target.preorder_items = validPreorderItems;
       if (target.pre_order_items !== undefined) target.pre_order_items = validPreorderItems;
       if (target.preorderItems !== undefined) target.preorderItems = validPreorderItems;
-
-      const BASE_TABLE_DEPOSIT = 20000;
-      const net_total = BASE_TABLE_DEPOSIT + preorderItemsTotal;
-      const secureDepositAmount = Math.round(net_total * 0.3);
-      const secureFinalTotal = net_total - secureDepositAmount;
- 
-      target.deposit_amount = secureDepositAmount;
-      target.final_total = secureFinalTotal;
-      target.items_total = preorderItemsTotal;
+      // NOTE: Do NOT add deposit_amount/final_total/items_total to target here —
+      // those keys are not in EDIT_REQUEST_ALLOWED_FIELDS and would cause
+      // sanitizeEditChanges to reject the payload with INVALID_FIELDS.
     }
 
     next();

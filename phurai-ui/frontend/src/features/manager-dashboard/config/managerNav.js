@@ -10,7 +10,6 @@ export const NAV_GROUPS = [
     group: "Overview",
     items: [
       { id: "overview", label: "Dashboard", view: "overview", icon: "grid" },
-      { id: "today", label: "Today Operations", view: "today", icon: "clock" },
     ],
   },
   {
@@ -33,7 +32,6 @@ export const NAV_GROUPS = [
     group: "Insights",
     items: [
       { id: "reports", label: "Reports", view: "reports", icon: "chart", managerOnly: true },
-      { id: "audit", label: "Audit", view: "audit", icon: "report", managerOnly: true },
       { id: "ratings", label: "Ratings", view: "ratings", icon: "star", managerOnly: true },
     ],
   },

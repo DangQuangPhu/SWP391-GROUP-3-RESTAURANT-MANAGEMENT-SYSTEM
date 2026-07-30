@@ -495,14 +495,18 @@ function ReservationPage({
     setSubmitting(true);
     setError("");
     try {
-      // API payload construction matching backend contract
+      const combinedNotes = [form.diningPurposeNote, form.notes]
+        .map(n => String(n || "").trim())
+        .filter(Boolean)
+        .join(" · ");
+
       const payload = {
         customer_id: activeCustomerId,
         guest_count: form.guestCount,
         reservation_start_at: `${form.date}T${form.time}:00`,
         durationMinutes: form.holdDurationMinutes || 30,
         reservation_end_at: form.endTime ? `${form.date}T${form.endTime}:00` : undefined,
-        special_request: form.diningPurposeNote && form.diningPurposeNote.trim() ? form.diningPurposeNote.trim() : null,
+        special_request: combinedNotes || null,
         dining_purpose: form.diningPurpose,
         table_ids: [Number(selectedTableId)].filter((id) => Number.isFinite(id) && id > 0),
         contact_name: form.fullName,
@@ -539,33 +543,38 @@ function ReservationPage({
     }
   };
 
-  const handleReturnHome = useCallback(() => {
+  const clearAllDraftSession = useCallback(() => {
     localStorage.removeItem("phurai_pending_reservation");
-    navigate("/");
-  }, [navigate]);
-
-  const handleViewReservation = useCallback(() => {
-    localStorage.removeItem("phurai_pending_reservation");
-    navigate("/my-reservations");
-  }, [navigate]);
-
-  const handlePaymentSuccess = useCallback(() => {
-    localStorage.removeItem("phurai_applied_promo");
-    localStorage.removeItem("phurai_applied_promo_discount");
     localStorage.removeItem("phurai_reservation_form");
     localStorage.removeItem("phurai_reservation_table");
     localStorage.removeItem("phurai_reservation_preorder_items");
     localStorage.removeItem("phurai_reservation_preorder_total");
+    localStorage.removeItem("phurai_applied_promo");
+    localStorage.removeItem("phurai_applied_promo_discount");
+  }, []);
+
+  const handleReturnHome = useCallback(() => {
+    clearAllDraftSession();
+    navigate("/");
+  }, [clearAllDraftSession, navigate]);
+
+  const handleViewReservation = useCallback(() => {
+    clearAllDraftSession();
+    navigate("/my-reservations");
+  }, [clearAllDraftSession, navigate]);
+
+  const handlePaymentSuccess = useCallback(() => {
+    clearAllDraftSession();
     toast.success("Reservation & Payment completed! Check your notifications.", { autoClose: 3000 });
     setIsPaymentSuccess(true);
     transitionTo("success");
-  }, [transitionTo]);
+  }, [clearAllDraftSession, transitionTo]);
 
   return (
     <div className="rd-page">
       {/* Summary background overlay — fades in after header reaches center */}
       <div className={`rd-summary-bg-overlay ${showSummaryBg ? 'rd-summary-bg-overlay--visible' : ''}`} />
-      <button className="rd-home-btn" onClick={() => navigate("/")} aria-label="Go to Home">
+      <button className="rd-home-btn" onClick={handleReturnHome} aria-label="Go to Home">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
           <polyline points="9 22 9 12 15 12 15 22"></polyline>

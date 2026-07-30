@@ -6,6 +6,7 @@ import TablePreviewModal from './TablePreviewModal';
 export default function TableBoard({
   tables = [],
   selectedTableId,
+  currentTableId,
   onSelectTable,
   guestCount
 }) {
@@ -139,6 +140,7 @@ export default function TableBoard({
               {[
                 { label: 'Available', key: 'Available', color: '#2f7d4f', bg: 'rgba(47, 125, 79, 0.1)' },
                 { label: 'Selected', key: 'Selected', color: '#b8862c', bg: '#f6c453' },
+                { label: 'Your Current Table', key: 'CurrentTable', color: '#ea580c', bg: '#ffedd5' },
                 { label: 'Reserved', key: 'Reserved', color: '#3a6ea5', bg: 'rgba(58, 110, 165, 0.1)' },
                 { label: 'Cleaning', key: 'Cleaning', color: '#7c5cbf', bg: 'rgba(124, 92, 191, 0.1)' },
                 { label: 'Occupied / Unavailable', key: 'Occupied', color: '#b7791f', bg: 'rgba(183, 121, 31, 0.1)' },
@@ -171,6 +173,7 @@ export default function TableBoard({
       <FloorPlanSVG
         tables={tables}
         selectedTableId={selectedTableId}
+        currentTableId={currentTableId}
         guestCount={guestCount}
         onTableClick={handleTableClick}
         activeFilter={activeFilter}

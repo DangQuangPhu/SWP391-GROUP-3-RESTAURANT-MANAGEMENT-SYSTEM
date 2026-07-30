@@ -238,15 +238,32 @@ function StaffReservationDetail({ reservation, userId, checkedInAt: checkedInAtP
     : null;
   const displayAreaName = tableAreaName || assigned_area_name || area_name || preferred_area || null;
 
-  const FadedUnassigned = <span style={{ color: "var(--sfx-muted, #9ca3af)", fontStyle: "italic", fontWeight: 400 }}>Unassigned</span>;
-  const FadedAny = <span style={{ color: "var(--sfx-muted, #9ca3af)", fontStyle: "italic", fontWeight: 400 }}>Any</span>;
+  const resolveTableName = () => {
+    if (assigned_tables && String(assigned_tables).trim() !== "" && assigned_tables !== "Unassigned" && assigned_tables !== "—") return assigned_tables;
+    if (table_label && String(table_label).trim() !== "" && table_label !== "Unassigned" && table_label !== "—") return table_label;
+    if (reservation.preferred_table_number) return `Table ${reservation.preferred_table_number} (Preferred)`;
+    if (reservation.preferred_table_name) return `${reservation.preferred_table_name} (Preferred)`;
+    if (reservation.table_number) return `Table ${reservation.table_number}`;
+    if (Array.isArray(reservation.tables) && reservation.tables.length > 0) {
+      const names = reservation.tables.map(t => typeof t === "string" ? t : (t.table_number || t.table_label || t.name)).filter(Boolean).join(", ");
+      if (names) return names;
+    }
+    const prefMatch = String(noteText || "").match(/\[PreferredTable:\s*([^\]]+)\]/i) || String(noteText || "").match(/\[Preferred Table:\s*([^\]]+)\]/i);
+    if (prefMatch && prefMatch[1]) return `${prefMatch[1].trim()} (Preferred)`;
+    return null;
+  };
 
-  const cleanNotes = String(noteText || "")
-    .replace(/\[PreferredTable[^\]]*\]/gi, "")
-    .replace(/\[PreferredTableId[^\]]*\]/gi, "")
-    .replace(/\[Assignment[^\]]*\]/gi, "")
-    .replace(/\[[^\]]+\]/g, "")
-    .trim();
+  const displayTableName = resolveTableName();
+
+  const displayNoteText = (() => {
+    if (!noteText) return null;
+    const cleaned = String(noteText)
+      .replace(/\[PreferredTableId:[^\]]*\]/gi, "")
+      .replace(/\[PreferredTable:[^\]]*\]/gi, "")
+      .replace(/\[Assignment:[^\]]*\]/gi, "")
+      .trim();
+    return cleaned.length > 0 ? cleaned : null;
+  })();
 
   const isPendingRequest = Boolean(
     reservation.has_pending_request === 1 ||
@@ -325,8 +342,10 @@ function StaffReservationDetail({ reservation, userId, checkedInAt: checkedInAtP
         const origPhone = customer_phone || phone || "—";
         const newPhone = pendingChanges.contact_phone || pendingChanges.phone || origPhone;
 
-        const origNotesVal = cleanNotes || "None";
-        const newNotesVal = pendingChanges.special_request || pendingChanges.notes || origNotesVal;
+        const origNotesVal = displayNoteText || "None";
+        const rawNewNotes = pendingChanges.special_request || pendingChanges.notes;
+        const cleanedNewNotes = rawNewNotes ? String(rawNewNotes).replace(/\[PreferredTableId:[^\]]*\]/gi, "").replace(/\[PreferredTable:[^\]]*\]/gi, "").replace(/\[Assignment:[^\]]*\]/gi, "").trim() : null;
+        const newNotesVal = rawNewNotes !== undefined ? (cleanedNewNotes || "None") : origNotesVal;
 
         const origDining = diningPurpose || "None";
         const newDining = pendingChanges.dining_purpose || pendingChanges.occasion || origDining;
@@ -427,14 +446,14 @@ function StaffReservationDetail({ reservation, userId, checkedInAt: checkedInAtP
           <DetailRow label="Est. Duration (ERT)"><EmptyVal val={duration} fallback="60 minutes" /></DetailRow>
           <DetailRow label="Guests"><EmptyVal val={guest_count} /></DetailRow>
           <DetailRow label="Table">
-            <span style={{ fontWeight: 600 }}>{assigned_tables || table_label || FadedUnassigned}</span>
+            <span style={{ fontWeight: 600 }}>{displayTableName || <span style={{ color: "var(--sfx-muted, #9ca3af)", fontStyle: "italic", fontWeight: 400 }}>Unassigned</span>}</span>
           </DetailRow>
-          <DetailRow label="Area">{displayAreaName || FadedAny}</DetailRow>
+          <DetailRow label="Area">{displayAreaName || <span style={{ color: "var(--sfx-muted, #9ca3af)", fontStyle: "italic", fontWeight: 400 }}>Any</span>}</DetailRow>
           <DetailRow label="Dining Purpose"><EmptyVal val={diningPurpose} fallback="None" /></DetailRow>
           <DetailRow label="Status"><EmptyVal val={reservation_status} /></DetailRow>
           <DetailRow label="Notes">
-            {cleanNotes
-              ? <span style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{cleanNotes}</span>
+            {displayNoteText
+              ? <span style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{displayNoteText}</span>
               : <EmptyVal val="" fallback="None" />
             }
           </DetailRow>

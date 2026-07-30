@@ -121,6 +121,7 @@ export default function StaffNotificationListener({ user, isAuthenticated }) {
       socket.off("auth:force_logout", handleForceLogout);
       socket.off("auth:session_revoked", handleSessionRevoked);
       socket.off("table:overrun_warning", handleTableOverrun);
+      socket.off("UNPAID_PAYMENT_TIMEOUT", handleUnpaidTimeout);
     };
   }, [socket, isStaffOrManager, handleSignOut, navigate]);
 
