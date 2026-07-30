@@ -185,7 +185,6 @@ const DASHBOARD_ITEMS = [
   { key: "favorites", label: "My Favorites", icon: BookmarkSidebarIcon, customerOnly: true },
   { key: "profile", label: "Profile", icon: ProfileIcon },
   { key: "appearance", label: "Appearance", icon: AppearanceIcon },
-  { key: "accessibility", label: "Accessibility", icon: AccessibilityIcon },
   { key: "password", label: "Password & Authentication", icon: PasswordIcon },
   { key: "sessions", label: "Sessions", icon: MonitorSmartphone },
   { key: "payments", label: "Payment History", icon: CreditCard, customerOnly: true },
@@ -1045,18 +1044,6 @@ function ProfilePage({
     if (activePanel === "appearance") {
       return (
         <AppearancePanel coverTheme={effectiveDraft.coverTheme} onSelectTheme={handleSelectTheme} />
-      );
-    }
-    if (activePanel === "accessibility") {
-      return (
-        <AccessibilityPanel
-          prefs={{
-            reduceMotion: effectiveDraft.reduceMotion,
-            largerText: effectiveDraft.largerText,
-            highContrast: effectiveDraft.highContrast,
-          }}
-          onChange={handleAccessibilityChange}
-        />
       );
     }
     if (activePanel === "password") {

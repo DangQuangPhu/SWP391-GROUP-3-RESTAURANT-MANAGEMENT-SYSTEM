@@ -9,7 +9,6 @@ const MAIN_ITEMS = [
   { id: "profile", label: "Public profile", path: "/settings/profile", icon: "user" },
   { id: "account", label: "Account", path: "/settings/account", icon: "gear" },
   { id: "appearance", label: "Appearance", path: "/settings/appearance", icon: "brush" },
-  { id: "accessibility", label: "Accessibility", path: "/settings/accessibility", icon: "accessibility" },
   { id: "notifications", label: "Notifications", path: "/settings/notifications", icon: "bell" },
 ];
 

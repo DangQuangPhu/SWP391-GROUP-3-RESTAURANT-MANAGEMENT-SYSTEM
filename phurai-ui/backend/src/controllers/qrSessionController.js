@@ -1,5 +1,4 @@
-import pool, { createDbRequest } from "../db.js";
-import sql from "mssql";
+import pool from "../db.js";
 
 const SESSION_SELECT = `
   SELECT TOP 1
@@ -33,6 +32,61 @@ function mapSessionRow(row) {
     static_qr_code: row.static_qr_code,
     area_name: row.area_name ?? null,
   };
+}
+
+// A table can be reused many times per day.  Always resolve the reservation
+// from its assigned table *and* active dining window; never infer it from the
+// latest reservation ID alone.
+async function findCurrentReservationForTable(connection, tableId) {
+  const [rows] = await connection.query(
+    `SELECT TOP 1 r.reservation_id, r.customer_id, r.dining_purpose
+     FROM dbo.ReservationTables rt
+     JOIN dbo.Reservations r ON r.reservation_id = rt.reservation_id
+     WHERE rt.table_id = ?
+       AND r.reservation_status IN (N'Check-in', N'Dining')
+       AND SYSUTCDATETIME() >= DATEADD(minute, -30, r.reservation_start_at)
+       AND SYSUTCDATETIME() <= DATEADD(hour, 3, r.reservation_end_at)
+     ORDER BY r.reservation_start_at DESC, r.reservation_id DESC`,
+    [tableId]
+  );
+
+  return rows[0] || null;
+}
+
+const MULTI_TABLE_PURPOSES = new Set([
+  "birthday", "business meeting", "family gathering", "special occasion", "private party",
+]);
+
+// The first QR scan of a checked-in event reservation turns its selected
+// tables into one physical group. Every child QR then resolves to this primary
+// table, giving the entire party one bill and one QR session.
+async function ensureEventTablesMergedForQr(connection, reservation, fallbackTableId) {
+  if (!reservation || !MULTI_TABLE_PURPOSES.has(String(reservation.dining_purpose || "").trim().toLowerCase())) {
+    return fallbackTableId;
+  }
+
+  const [rows] = await connection.query(
+    `SELECT rt.table_id
+     FROM dbo.ReservationTables rt
+     WHERE rt.reservation_id = ?
+     ORDER BY rt.table_id`,
+    [reservation.reservation_id]
+  );
+  if (rows.length < 2) return fallbackTableId;
+
+  const primaryTableId = Number(rows[0].table_id);
+  const childTableIds = rows.map((row) => Number(row.table_id)).filter((id) => id !== primaryTableId);
+  if (childTableIds.length) {
+    const placeholders = childTableIds.map(() => "?").join(", ");
+    await connection.query(
+      `UPDATE dbo.RestaurantTables
+       SET merged_into_table_id = ?, table_status = N'Inactive', updated_at = SYSDATETIME()
+       WHERE table_id IN (${placeholders})
+         AND merged_into_table_id IS NULL`,
+      [primaryTableId, ...childTableIds]
+    );
+  }
+  return primaryTableId;
 }
 
 /**
@@ -184,24 +238,16 @@ export async function scanStaticQr(req, res) {
       const crypto = await import('crypto');
       const token = crypto.randomBytes(32).toString('hex');
 
-      // Check for an active reservation
-      const [resRows] = await pool.query(
-        `SELECT TOP 1 r.reservation_id, r.customer_id
-         FROM dbo.ReservationTables rt
-         JOIN dbo.Reservations r ON rt.reservation_id = r.reservation_id
-         WHERE rt.table_id = ? AND r.reservation_status IN (N'Check-in', N'Dining')
-         ORDER BY r.reservation_id DESC`,
-        [resolvedTableId]
-      );
-
-      const reservationId = resRows.length > 0 ? resRows[0].reservation_id : null;
-      const customerId = resRows.length > 0 ? resRows[0].customer_id : null;
+      const reservation = await findCurrentReservationForTable(pool, resolvedTableId);
+      const reservationId = reservation?.reservation_id ?? null;
+      const customerId = reservation?.customer_id ?? null;
+      const sessionTableId = await ensureEventTablesMergedForQr(pool, reservation, resolvedTableId);
 
       const insertResult = await pool.query(`
         INSERT INTO dbo.QROrderSessions (table_id, scanned_table_id, token, session_status, generated_at, reservation_id, customer_id)
         OUTPUT INSERTED.qr_session_id
         VALUES (?, ?, ?, N'Active', SYSUTCDATETIME(), ?, ?)
-      `, [resolvedTableId, tableId, token, reservationId, customerId]);
+      `, [sessionTableId, tableId, token, reservationId, customerId]);
 
       const newSessionId = insertResult[0][0].qr_session_id;
 
@@ -210,6 +256,11 @@ export async function scanStaticQr(req, res) {
         [newSessionId]
       );
       session = mapSessionRow(newSessions[0]);
+      if (sessionTableId !== resolvedTableId) {
+        req.app.get("io")?.to("room:staff").to("room:manager").emit("table:sync", {
+          action: "auto_merge_event_tables", reservation_id: reservationId, table_id: sessionTableId,
+        });
+      }
     }
 
     return res.json({
@@ -292,24 +343,16 @@ export async function scanStaticQrCodeUrl(req, res) {
       const crypto = await import('crypto');
       const token = crypto.randomBytes(32).toString('hex');
 
-      // Check for an active reservation
-      const [resRows] = await pool.query(
-        `SELECT TOP 1 r.reservation_id, r.customer_id
-         FROM dbo.ReservationTables rt
-         JOIN dbo.Reservations r ON rt.reservation_id = r.reservation_id
-         WHERE rt.table_id = ? AND r.reservation_status IN (N'Check-in', N'Dining')
-         ORDER BY r.reservation_id DESC`,
-        [resolvedTableId]
-      );
-
-      const reservationId = resRows.length > 0 ? resRows[0].reservation_id : null;
-      const customerId = resRows.length > 0 ? resRows[0].customer_id : null;
+      const reservation = await findCurrentReservationForTable(pool, resolvedTableId);
+      const reservationId = reservation?.reservation_id ?? null;
+      const customerId = reservation?.customer_id ?? null;
+      const sessionTableId = await ensureEventTablesMergedForQr(pool, reservation, resolvedTableId);
 
       const insertResult = await pool.query(`
         INSERT INTO dbo.QROrderSessions (table_id, scanned_table_id, token, session_status, generated_at, reservation_id, customer_id)
         OUTPUT INSERTED.qr_session_id
         VALUES (?, ?, ?, N'Active', SYSUTCDATETIME(), ?, ?)
-      `, [resolvedTableId, tableId, token, reservationId, customerId]);
+      `, [sessionTableId, tableId, token, reservationId, customerId]);
 
       const newSessionId = insertResult[0][0].qr_session_id;
 
@@ -318,6 +361,11 @@ export async function scanStaticQrCodeUrl(req, res) {
         [newSessionId]
       );
       session = mapSessionRow(newSessions[0]);
+      if (sessionTableId !== resolvedTableId) {
+        req.app.get("io")?.to("room:staff").to("room:manager").emit("table:sync", {
+          action: "auto_merge_event_tables", reservation_id: reservationId, table_id: sessionTableId,
+        });
+      }
     }
 
     return res.json({
@@ -535,9 +583,22 @@ export async function submitQrOrderPublic(req, res) {
 
     // 1. Verify session is Active
     const [sessions] = await conn.query(
-      `SELECT qs.table_id, qs.session_status, t.table_number 
+      `SELECT qs.table_id, qs.reservation_id, qs.customer_id, qs.session_status, t.table_number,
+              r.reservation_status, r.reservation_start_at, r.reservation_end_at,
+              CASE WHEN qs.reservation_id IS NULL THEN 1
+                   WHEN r.reservation_id IS NOT NULL
+                    AND r.reservation_status IN (N'Check-in', N'Dining')
+                    AND SYSUTCDATETIME() >= DATEADD(minute, -30, r.reservation_start_at)
+                    AND SYSUTCDATETIME() <= DATEADD(hour, 3, r.reservation_end_at)
+                    AND EXISTS (
+                      SELECT 1 FROM dbo.ReservationTables rt
+                      WHERE rt.reservation_id = qs.reservation_id
+                        AND rt.table_id = qs.table_id
+                    ) THEN 1
+                   ELSE 0 END AS reservation_is_current
        FROM dbo.QROrderSessions qs WITH (UPDLOCK)
        JOIN dbo.RestaurantTables t ON qs.table_id = t.table_id
+       LEFT JOIN dbo.Reservations r ON r.reservation_id = qs.reservation_id
        WHERE qs.qr_session_id = ?`,
       [sessionId]
     );
@@ -546,15 +607,25 @@ export async function submitQrOrderPublic(req, res) {
       await conn.rollback();
       return res.status(403).json({ success: false, message: "Unauthorized QR Session." });
     }
+    if (!sessions[0].reservation_is_current) {
+      await conn.rollback();
+      return res.status(409).json({
+        success: false,
+        message: "This QR session is no longer linked to the current reservation. Please ask staff to refresh the table session.",
+      });
+    }
     const tableId = sessions[0].table_id;
     const tableName = sessions[0].table_number;
+    const reservationId = sessions[0].reservation_id ?? null;
+    const customerId = sessions[0].customer_id ?? null;
 
-    // 2. Check for an Open Order linked to this table
+    // 2. An open order belongs to a QR session, not merely to a physical table.
+    // This prevents a later guest at the same table from appending to an old bill.
     const [openOrders] = await conn.query(
       `SELECT order_id 
        FROM dbo.Orders WITH (UPDLOCK)
-       WHERE table_id = ? AND order_status = N'Open'`,
-      [tableId]
+       WHERE qr_session_id = ? AND order_status = N'Open'`,
+      [sessionId]
     );
 
     let orderId;
@@ -563,10 +634,10 @@ export async function submitQrOrderPublic(req, res) {
     } else {
       // 3. Create a new Order
       const insertOrder = await conn.query(
-        `INSERT INTO dbo.Orders (table_id, qr_session_id, order_type, order_status, created_at, subtotal, total_amount)
+        `INSERT INTO dbo.Orders (reservation_id, table_id, customer_id, qr_session_id, order_type, order_status, created_at, subtotal, total_amount)
          OUTPUT INSERTED.order_id
-         VALUES (?, ?, N'QR Self', N'Open', SYSUTCDATETIME(), 0, 0)`,
-        [tableId, sessionId]
+         VALUES (?, ?, ?, ?, N'QR Self', N'Open', SYSUTCDATETIME(), 0, 0)`,
+        [reservationId, tableId, customerId, sessionId]
       );
       orderId = insertOrder[0][0].order_id;
     }
@@ -649,26 +720,38 @@ export async function getQrSessionHistory(req, res) {
     const sessionObj = sessions[0] || {};
     const safeResId = sessionObj.reservation_id ?? null;
     const safeSessionId = sessionObj.qr_session_id ?? null;
-    const safeTableId = sessionObj.table_id ?? null;
-
-
-
     // 2. Query all relevant Orders for this session/table/reservation
     const [orders] = await pool.query(
       `SELECT order_id, order_type, subtotal, discount_amount, service_charge, total_amount, amount_paid
        FROM dbo.Orders
        WHERE (reservation_id = ? AND reservation_id IS NOT NULL) 
-          OR (qr_session_id = ? AND qr_session_id IS NOT NULL)
-          OR (table_id = ? AND order_status = N'Open')`,
-      [safeResId, safeSessionId, safeTableId]
+          OR (qr_session_id = ? AND qr_session_id IS NOT NULL)`,
+      [safeResId, safeSessionId]
     );
 
 
 
     let globalSubtotal = 0;
     let globalPrepaid = 0;
+    // Preorders are authoritative in PreorderItems. Some legacy reservations
+    // have a Preorder order header but no OrderItems, so reading only Orders
+    // makes the customer's preorder disappear from history.
     let preorders = [];
     let sessionOrders = [];
+
+    if (safeResId) {
+      const [preorderRows] = await pool.query(
+        `SELECT pi.preorder_item_id AS order_item_id, pi.reservation_id, pi.quantity,
+                pi.unit_price, pi.notes, N'Preordered' AS item_status,
+                d.dish_name, CONCAT('/api/dishes/', d.dish_id, '/image') AS image_url,
+                N'Preorder' AS order_type
+         FROM dbo.PreorderItems pi
+         JOIN dbo.Dishes d ON d.dish_id = pi.dish_id
+         WHERE pi.reservation_id = ?`,
+        [safeResId]
+      );
+      preorders = preorderRows;
+    }
 
     // To prevent duplicate items if orders overlap unexpectedly
     const seenOrderIds = new Set();
@@ -691,9 +774,7 @@ export async function getQrSessionHistory(req, res) {
       `, [order.order_id]);
 
 
-      if (order.order_type === 'Preorder') {
-        preorders = preorders.concat(items);
-      } else {
+      if (order.order_type !== 'Preorder') {
         sessionOrders = sessionOrders.concat(items);
       }
     }
@@ -1008,4 +1089,3 @@ export async function applyPromoCodeToQrSession(req, res) {
     conn.release();
   }
 }
-

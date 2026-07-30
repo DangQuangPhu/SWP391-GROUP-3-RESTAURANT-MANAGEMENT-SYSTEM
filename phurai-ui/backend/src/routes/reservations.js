@@ -198,6 +198,10 @@ const ACTIVE_RESERVATION_STATUS_SQL = `
   N'Overdue'
 `;
 
+const MULTI_TABLE_PURPOSES = new Set([
+  "birthday", "business meeting", "family gathering", "special occasion", "private party",
+]);
+
 /* ------------------------------------------------------------------ */
 /* Suggestion logic                                                    */
 /* ------------------------------------------------------------------ */
@@ -690,11 +694,12 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
   const tableIds = Array.isArray(table_ids)
     ? [...new Set(table_ids.map(Number).filter((n) => Number.isFinite(n) && n > 0))]
     : [];
+  const allowsMultipleTables = MULTI_TABLE_PURPOSES.has(String(dining_purpose || "").trim().toLowerCase());
 
-  if (tableIds.length > 1) {
+  if (tableIds.length > 1 && !allowsMultipleTables) {
     return res.status(400).json({
       success: false,
-      message: "Please select exactly one table for this reservation.",
+      message: "Multiple tables are available only for event and party reservations.",
     });
   }
 
@@ -1257,7 +1262,7 @@ router.post("/", resolveUserId, validateReservationCreate, async (req, res) => {
       const preorderItemsTotal = totalAmount || 0;
 
       // 2. Define the Base Table Deposit
-      const BASE_TABLE_DEPOSIT = 20000;
+      const BASE_TABLE_DEPOSIT = 20000 * Math.max(1, effectiveTableIds.length);
 
       // 3. Define the exact money the customer MUST pay upfront via QR right now
       // 30% deposit of food + table, remaining 70% paid at checkout.
@@ -1449,6 +1454,7 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
     const ids = rows.map((r) => r.reservation_id);
     let tablesByReservation = {};
     let preorderByReservation = {};
+    let orderHistoryByReservation = {};
 
     if (ids.length > 0) {
       const placeholders = ids.map(() => "?").join(", ");
@@ -1505,6 +1511,55 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
 
         return acc;
       }, {});
+
+      const [orderHistoryRows] = await pool.query(
+        `SELECT o.reservation_id,
+                o.order_id,
+                o.order_type,
+                o.order_status,
+                o.created_at,
+                o.total_amount,
+                oi.order_item_id,
+                oi.quantity,
+                oi.unit_price,
+                oi.item_status,
+                d.dish_name
+         FROM dbo.Orders o
+         LEFT JOIN dbo.OrderItems oi ON oi.order_id = o.order_id
+         LEFT JOIN dbo.Dishes d ON d.dish_id = oi.dish_id
+         WHERE o.reservation_id IN (${placeholders})
+           AND o.order_type <> N'Preorder'
+         ORDER BY o.created_at ASC, o.order_id ASC, oi.order_item_id ASC;`,
+        ids
+      );
+
+      orderHistoryByReservation = orderHistoryRows.reduce((acc, row) => {
+        const reservationOrders = acc[row.reservation_id] || [];
+        let order = reservationOrders.find((item) => item.order_id === row.order_id);
+        if (!order) {
+          order = {
+            order_id: row.order_id,
+            order_type: row.order_type,
+            order_status: row.order_status,
+            created_at: row.created_at,
+            total_amount: Number(row.total_amount || 0),
+            items: [],
+          };
+          reservationOrders.push(order);
+          acc[row.reservation_id] = reservationOrders;
+        }
+
+        if (row.order_item_id) {
+          order.items.push({
+            order_item_id: row.order_item_id,
+            dish_name: row.dish_name,
+            quantity: Number(row.quantity || 0),
+            unit_price: Number(row.unit_price || 0),
+            item_status: row.item_status,
+          });
+        }
+        return acc;
+      }, {});
     }
 
     const reservations = rows.map((r) => {
@@ -1549,6 +1604,7 @@ router.get("/my", resolveUserId, requireUserId, async (req, res) => {
           : null,
         preorders: preorderByReservation[r.reservation_id] || [],
         preorder_items: preorderByReservation[r.reservation_id] || [],
+        order_history: orderHistoryByReservation[r.reservation_id] || [],
       };
     });
 

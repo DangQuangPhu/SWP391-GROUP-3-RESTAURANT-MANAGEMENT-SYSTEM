@@ -10,6 +10,10 @@ import {
 } from "../utils/tableAssignmentPolicy.js";
 import { getAreaSurcharge } from "../utils/areaDepositConfig.js";
 
+const MULTI_TABLE_PURPOSES = new Set([
+  "birthday", "business meeting", "family gathering", "special occasion", "private party",
+]);
+
 export const createPreSaveReservation = async (req, res) => {
   try {
     const {
@@ -39,17 +43,19 @@ export const createPreSaveReservation = async (req, res) => {
         .filter((id) => Number.isFinite(id) && id > 0)
     )];
 
-    if (normalizedTableIds.length !== 1) {
+    const allowsMultipleTables = MULTI_TABLE_PURPOSES.has(String(dining_purpose || "").trim().toLowerCase());
+    if (!normalizedTableIds.length || (!allowsMultipleTables && normalizedTableIds.length !== 1)) {
       return res.status(400).json({
         success: false,
-        message: "Please select exactly one table for this reservation.",
+        message: allowsMultipleTables
+          ? "Please select at least one table for this event reservation."
+          : "Please select exactly one table for this reservation.",
       });
     }
 
     const tableResult = await pool.request()
-      .input('tableId', sql.Int, normalizedTableIds[0])
       .query(`
-        SELECT TOP 1
+        SELECT
           t.table_id,
           t.table_number,
           t.capacity,
@@ -58,21 +64,27 @@ export const createPreSaveReservation = async (req, res) => {
           a.area_name
         FROM dbo.RestaurantTables t
         INNER JOIN dbo.RestaurantAreas a ON a.area_id = t.area_id
-        WHERE t.table_id = @tableId
+        WHERE t.table_id IN (${normalizedTableIds.join(",")})
           AND a.is_active = 1
       `);
 
-    const selectedTable = tableResult.recordset[0];
-    if (!selectedTable) {
+    const selectedTables = tableResult.recordset;
+    const selectedTable = selectedTables[0];
+    if (selectedTables.length !== normalizedTableIds.length) {
       return res.status(400).json({
-        success: false,
-        message: "Selected table was not found.",
+        success: false, message: "One or more selected tables were not found.",
       });
+    }
+    if (new Set(selectedTables.map((table) => table.area_id)).size > 1) {
+      return res.status(400).json({ success: false, message: "Event tables must be in the same dining area." });
     }
 
     const tableAssignmentStatus = getAssignmentMode(reservation_start_at);
     const isConfirmedAssignment = tableAssignmentStatus === TABLE_ASSIGNMENT_STATUS.CONFIRMED;
-    const areaSurchargeInfo = getAreaSurcharge(selectedTable.area_name, selectedTable.capacity);
+    const areaSurchargeInfo = selectedTables.reduce((total, table) => {
+      const surcharge = getAreaSurcharge(table.area_name, table.capacity);
+      return { surcharge: total.surcharge + surcharge.surcharge, isLuxury: total.isLuxury || surcharge.isLuxury, description: surcharge.description || total.description };
+    }, { surcharge: 0, isLuxury: false, description: "" });
 
     let baseSpecialRequest = special_request || "";
     if (areaSurchargeInfo.isLuxury) {
@@ -137,7 +149,7 @@ export const createPreSaveReservation = async (req, res) => {
     }
 
     // 2. Validate Promo Code via voucher service (Discount applies ONLY to preorder food items subtotal)
-    const BASE_TABLE_DEPOSIT = 20000;
+    const BASE_TABLE_DEPOSIT = 20000 * normalizedTableIds.length;
 
     if (promo_code) {
        const { checkPromoCodeValidity } = await import("./promoCodesController.js");

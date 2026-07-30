@@ -156,6 +156,21 @@ export function TableSessionProvider({
     };
   }, [socket, session?.table_id]);
 
+  useEffect(() => {
+    if (!socket || !session?.session_id) return;
+
+    const handleSessionCleared = (data = {}) => {
+      const clearedSessionId = Number(data.session_id ?? data.qr_session_id);
+      if (clearedSessionId === Number(session.session_id)) {
+        // Clear the table-order session only. Keep the user's login session.
+        clearSession();
+      }
+    };
+
+    socket.on("TABLE_SESSION_CLEARED", handleSessionCleared);
+    return () => socket.off("TABLE_SESSION_CLEARED", handleSessionCleared);
+  }, [socket, session?.session_id, clearSession]);
+
   const value = useMemo(
     () => ({
       session,

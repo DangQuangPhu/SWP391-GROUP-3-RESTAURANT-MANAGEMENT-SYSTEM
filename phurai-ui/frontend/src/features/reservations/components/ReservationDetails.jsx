@@ -629,6 +629,8 @@ export default function ReservationDetails({
   initialForm,
   tables,
   selectedTableId,
+  selectedTableIds = [],
+  allowMultipleTables = false,
   onSelectTable,
   tablesLoading,
   isAuthenticated,
@@ -700,6 +702,7 @@ export default function ReservationDetails({
   const [showTableBoard, setShowTableBoard] = useState(false);
   const [errors, setErrors] = useState({});
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const selectionGuestLimit = allowMultipleTables ? 50 : 10;
 
   useEffect(() => {
     if (showTableBoard) {
@@ -1127,25 +1130,25 @@ export default function ReservationDetails({
         </div>
       </div>
 
-      {form.guests !== '' && form.guests > 10 ? (
+      {form.guests !== '' && form.guests > selectionGuestLimit ? (
         <div style={{ padding: "1rem", background: "#fff3cd", color: "#856404", border: "1px solid #ffeeba", borderRadius: "8px", marginBottom: "1.5rem" }}>
           <strong>Note: </strong>For groups of more than 10 people, please contact our Hotline or switch to the Private Events page so we can prepare the best space for you.
         </div>
       ) : (
         <>
           <div style={{ marginTop: "1rem", marginBottom: "1rem" }} ref={registerRef('selectedTable')}>
-            {!selectedTableId ? (
+            {!selectedTableIds.length ? (
               <>
                 <button
                   type="button"
-                  className={`rd-btn-outline ${(!form.guests || form.guests < 1 || form.guests > 10) ? 'opacity-50 cursor-not-allowed' : ''} ${errors.selectedTable ? 'rd-btn-outline--error' : ''}`}
-                  onClick={() => form.guests && form.guests >= 1 && form.guests <= 10 && setShowTableBoard(true)}
-                  disabled={!form.guests || form.guests < 1 || form.guests > 10}
+                  className={`rd-btn-outline ${(!form.guests || form.guests < 1 || form.guests > selectionGuestLimit) ? 'opacity-50 cursor-not-allowed' : ''} ${errors.selectedTable ? 'rd-btn-outline--error' : ''}`}
+                  onClick={() => form.guests && form.guests >= 1 && form.guests <= selectionGuestLimit && setShowTableBoard(true)}
+                  disabled={!form.guests || form.guests < 1 || form.guests > selectionGuestLimit}
                 >
                   CHOOSE AND VIEW TABLE
                 </button>
                 {errors.selectedTable && <p className="rd-error-message">{errors.selectedTable}</p>}
-                {(!form.guests || form.guests < 1 || form.guests > 10) && (
+                {(!form.guests || form.guests < 1 || form.guests > selectionGuestLimit) && (
                   <p className="text-amber-600 text-sm mt-1">
                     Please select the number of guests before choosing a table.
                   </p>
@@ -1166,9 +1169,11 @@ export default function ReservationDetails({
                       <TableBoard
                         tables={tables || []}
                         selectedTableId={selectedTableId}
+                        selectedTableIds={selectedTableIds}
+                        allowMultiple={allowMultipleTables}
                         onSelectTable={(tableId) => {
                           onSelectTable(tableId);
-                          setShowTableBoard(false);
+                          if (!allowMultipleTables) setShowTableBoard(false);
                         }}
                         loading={tablesLoading}
                         guestCount={form.guests}
@@ -1184,7 +1189,7 @@ export default function ReservationDetails({
             ) : (
               <div style={{ padding: "1rem", border: "1px solid #ddd", borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <p className="rd-selected-table" style={{ margin: 0, fontWeight: 500, fontSize: "0.9rem" }}>
-                  Selected table: {tables?.find((t) => t.table_id === selectedTableId)?.display_label || selectedTableId}
+                  Selected table{selectedTableIds.length > 1 ? "s" : ""}: {selectedTableIds.map((id) => tables?.find((t) => Number(t.table_id) === Number(id))?.display_label || id).join(", ")}
                 </p>
                 <button
                   type="button"
@@ -1192,12 +1197,12 @@ export default function ReservationDetails({
                     background: 'transparent',
                     border: 'none',
                     textDecoration: 'underline',
-                    cursor: (form.guests && form.guests >= 1 && form.guests <= 10) ? 'pointer' : 'not-allowed',
+                    cursor: (form.guests && form.guests >= 1 && form.guests <= selectionGuestLimit) ? 'pointer' : 'not-allowed',
                     fontSize: '0.85rem',
-                    opacity: (form.guests && form.guests >= 1 && form.guests <= 10) ? 1 : 0.5
+                    opacity: (form.guests && form.guests >= 1 && form.guests <= selectionGuestLimit) ? 1 : 0.5
                   }}
-                  onClick={() => form.guests && form.guests >= 1 && form.guests <= 10 && setShowTableBoard(true)}
-                  disabled={!form.guests || form.guests < 1 || form.guests > 10}
+                  onClick={() => form.guests && form.guests >= 1 && form.guests <= selectionGuestLimit && setShowTableBoard(true)}
+                  disabled={!form.guests || form.guests < 1 || form.guests > selectionGuestLimit}
                 >
                   Edit Table
                 </button>
@@ -1217,9 +1222,11 @@ export default function ReservationDetails({
                       <TableBoard
                         tables={tables || []}
                         selectedTableId={selectedTableId}
+                        selectedTableIds={selectedTableIds}
+                        allowMultiple={allowMultipleTables}
                         onSelectTable={(tableId) => {
                           onSelectTable(tableId);
-                          setShowTableBoard(false);
+                          if (!allowMultipleTables) setShowTableBoard(false);
                         }}
                         loading={tablesLoading}
                         guestCount={form.guests}
@@ -1227,6 +1234,11 @@ export default function ReservationDetails({
                         onNavigateLogin={() => navigate('/login')}
                         onNavigateRegister={() => navigate('/register')}
                       />
+                      {allowMultipleTables && (
+                        <button type="button" className="rzv-btn rzv-btn--solid" style={{ marginTop: "1rem" }} onClick={() => setShowTableBoard(false)}>
+                          Done selecting tables ({selectedTableIds.length})
+                        </button>
+                      )}
                     </div>
                   </div>,
                   document.body

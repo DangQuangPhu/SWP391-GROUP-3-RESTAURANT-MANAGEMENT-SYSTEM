@@ -128,7 +128,7 @@ FROM @Menu m JOIN dbo.MenuCategories c ON c.category_name=m.category_name;
    development demo hash; it is intentionally not printed by this script. */
 DECLARE @CustomerSeed TABLE (n INT PRIMARY KEY, full_name NVARCHAR(120), email NVARCHAR(180), phone VARCHAR(25));
 INSERT @CustomerSeed VALUES
- (1,N'Nguyen Minh Anh',N'customer01@seed.local','0901000001'),(2,N'Tran Gia Han',N'customer02@seed.local','0901000002'),(3,N'Le Quoc Bao',N'customer03@seed.local','0901000003'),(4,N'Pham Thanh Mai',N'customer04@seed.local','0901000004'),(5,N'Hoang Duc Long',N'customer05@seed.local','0901000005'),
+ (1,N'Dang Quang Phu',N'customer01@seed.local','0901000001'),(2,N'Tran Gia Han',N'customer02@seed.local','0901000002'),(3,N'Le Quoc Bao',N'customer03@seed.local','0901000003'),(4,N'Pham Thanh Mai',N'customer04@seed.local','0901000004'),(5,N'Hoang Duc Long',N'customer05@seed.local','0901000005'),
  (6,N'Vu Thao Linh',N'customer06@seed.local','0901000006'),(7,N'Dang Huu Phuc',N'customer07@seed.local','0901000007'),(8,N'Bui Ngoc Chau',N'customer08@seed.local','0901000008'),(9,N'Phan Tuan Kiet',N'customer09@seed.local','0901000009'),(10,N'Vo Khanh Vy',N'customer10@seed.local','0901000010'),
  (11,N'Nguyen Hai Nam',N'customer11@seed.local','0901000011'),(12,N'Tran My Duyen',N'customer12@seed.local','0901000012'),(13,N'Le Gia Huy',N'customer13@seed.local','0901000013'),(14,N'Pham Nhu Quynh',N'customer14@seed.local','0901000014'),(15,N'Hoang Bao Tran',N'customer15@seed.local','0901000015'),
  (16,N'Vu Minh Khoa',N'customer16@seed.local','0901000016'),(17,N'Dang Thu Ha',N'customer17@seed.local','0901000017'),(18,N'Bui Tien Dat',N'customer18@seed.local','0901000018'),(19,N'Phan Yen Nhi',N'customer19@seed.local','0901000019'),(20,N'Vo Quang Huy',N'customer20@seed.local','0901000020');
@@ -136,6 +136,7 @@ INSERT dbo.UserAccounts (role_id,full_name,email,phone,password_hash,is_active,e
 SELECT @CustomerRoleId,full_name,email,phone,N'$2b$10$RIY70dyCRrUSfUJsJGPyluad9hMxx1eYG5vckpjMPxOS/oJvumTz6',1,1,DATEADD(day,-(n*13),@SeedEndDate),@SeedEndDate FROM @CustomerSeed;
 INSERT dbo.CustomerProfiles (user_id,username,loyalty_points,country,[language],created_at,updated_at)
 SELECT ua.user_id,N'seed_customer_'+CONVERT(NVARCHAR(10),s.n),0,N'Vietnam',N'English',ua.created_at,@SeedEndDate FROM @CustomerSeed s JOIN dbo.UserAccounts ua ON ua.email=s.email;
+IF NOT EXISTS (SELECT 1 FROM dbo.CustomerProfiles WHERE user_id = 1) INSERT dbo.CustomerProfiles (user_id,username,loyalty_points,country,[language],created_at,updated_at) VALUES (1,N'dangquangphu',0,N'Vietnam',N'English',DATEADD(month,-6,@SeedEndDate),@SeedEndDate);
 
 IF NOT EXISTS (SELECT 1 FROM dbo.PaymentMethods WHERE method_name=N'Cash') INSERT dbo.PaymentMethods(method_name,is_active) VALUES(N'Cash',1);
 IF NOT EXISTS (SELECT 1 FROM dbo.PaymentMethods WHERE method_name=N'Bank Transfer') INSERT dbo.PaymentMethods(method_name,is_active) VALUES(N'Bank Transfer',1);
@@ -175,7 +176,7 @@ SELECT b.seed_key,b.start_at,DATEADD(minute,90+(b.n%3)*30,b.start_at),CONVERT(TI
  CASE WHEN b.seed_key%10<4 THEN N'Walk-in' WHEN b.seed_key%10<6 THEN N'Phone' ELSE N'Online' END,
  CASE WHEN b.seed_key%10<4 THEN NULL ELSE c.user_id END,CASE WHEN b.seed_key%10<4 THEN CONCAT(N'Walk-in Guest ',b.seed_key) ELSE c.full_name END,CASE WHEN b.seed_key%10<4 THEN CONCAT(N'0908',RIGHT(CONCAT(N'000000',b.seed_key),6)) ELSE c.phone END,CASE WHEN b.seed_key%10<4 THEN NULL ELSE c.email END,
  t.table_id,t.area_id,s.user_id,DATEADD(hour,-(12+(b.n%36)),b.start_at)
-FROM Base b JOIN @Tables t ON t.rn=1+(ABS(CHECKSUM(b.seed_key))%(SELECT COUNT(*) FROM @Tables)) LEFT JOIN @Customers c ON c.rn=1+(ABS(CHECKSUM(b.seed_key*17))%20) JOIN @Staff s ON s.rn=1+(ABS(CHECKSUM(b.seed_key*31))%(SELECT COUNT(*) FROM @Staff));
+FROM Base b JOIN @Tables t ON t.rn=1+(ABS(CHECKSUM(b.seed_key))%(SELECT COUNT(*) FROM @Tables)) LEFT JOIN @Customers c ON c.rn=1+((b.d*3+b.n)%20) JOIN @Staff s ON s.rn=1+(ABS(CHECKSUM(b.seed_key*31))%(SELECT COUNT(*) FROM @Staff));
 
 INSERT dbo.Reservations(customer_id,contact_name,contact_phone,contact_email,created_by_staff_id,preferred_area_id,reservation_start_at,reservation_end_at,guest_count,special_request,dining_purpose,deposit_amount,deposit_required,order_code,reservation_status,reservation_source,confirmed_by_staff_id,confirmed_at,checked_in_at,seated_at,cancelled_at,checked_out_at,completed_at,cancel_reason,created_at,updated_at)
 SELECT customer_id,contact_name,contact_phone,contact_email,actor_id,area_id,start_at,end_at,guest_count,CASE WHEN seed_key%13=0 THEN N'Window seat if available' ELSE NULL END,N'Dining',0,0,CONCAT('SEED-2Y-',seed_key),reservation_status,reservation_source,actor_id,DATEADD(hour,1,created_at),CASE WHEN reservation_status=N'Completed' THEN DATEADD(minute,5,start_at) END,CASE WHEN reservation_status=N'Completed' THEN DATEADD(minute,8,start_at) END,CASE WHEN reservation_status=N'Cancelled' THEN DATEADD(hour,-2,start_at) END,CASE WHEN reservation_status=N'Completed' THEN end_at END,CASE WHEN reservation_status=N'Completed' THEN end_at END,CASE WHEN reservation_status=N'Cancelled' THEN N'Guest cancelled before arrival' END,created_at,CASE WHEN reservation_status=N'Completed' THEN end_at ELSE created_at END FROM @SeedReservations;
@@ -194,7 +195,7 @@ INSERT dbo.ReservationTables(reservation_id,table_id,assigned_by_staff_id,assign
 INSERT dbo.QROrderSessions(table_id,scanned_table_id,reservation_id,customer_id,token,session_status,generated_by_staff_id,generated_at,expires_at,closed_at)
 SELECT s.table_id,s.table_id,r.reservation_id,s.customer_id,CONCAT(N'seed-qr-',s.seed_key),N'Closed',s.actor_id,DATEADD(minute,5,s.start_at),DATEADD(hour,4,s.start_at),s.end_at FROM @SeedReservations s JOIN dbo.Reservations r ON r.order_code=CONCAT('SEED-2Y-',s.seed_key) WHERE s.reservation_status=N'Completed' AND s.seed_key%5=0;
 INSERT dbo.Orders(reservation_id,table_id,customer_id,created_by_staff_id,qr_session_id,order_type,order_status,order_note,subtotal,discount_amount,service_charge,total_amount,amount_paid,created_at,updated_at)
-SELECT r.reservation_id,s.table_id,s.customer_id,s.actor_id,q.qr_session_id,CASE WHEN q.qr_session_id IS NULL THEN N'Dine In' ELSE N'QR Self' END,N'Paid',CONCAT(N'Two-year seed:',s.seed_key),0,0,0,0,0,DATEADD(minute,12,s.start_at),s.end_at FROM @SeedReservations s JOIN dbo.Reservations r ON r.order_code=CONCAT('SEED-2Y-',s.seed_key) LEFT JOIN dbo.QROrderSessions q ON q.reservation_id=r.reservation_id WHERE s.reservation_status=N'Completed';
+SELECT r.reservation_id,s.table_id,COALESCE(s.customer_id, c.user_id),s.actor_id,q.qr_session_id,CASE WHEN q.qr_session_id IS NULL THEN N'Dine In' ELSE N'QR Self' END,N'Paid',CONCAT(N'Two-year seed:',s.seed_key),0,0,0,0,0,DATEADD(minute,12,s.start_at),s.end_at FROM @SeedReservations s JOIN dbo.Reservations r ON r.order_code=CONCAT('SEED-2Y-',s.seed_key) LEFT JOIN dbo.QROrderSessions q ON q.reservation_id=r.reservation_id CROSS APPLY(SELECT TOP(1)* FROM @Customers WHERE rn=1+(s.seed_key%20))c WHERE s.reservation_status=N'Completed';
 ;WITH SeedOrders AS (SELECT o.order_id,TRY_CONVERT(INT,REPLACE(o.order_note,N'Two-year seed:',N'')) seed_key FROM dbo.Orders o WHERE o.order_note LIKE N'Two-year seed:%'), Lines AS (SELECT so.order_id,so.seed_key,v.n FROM SeedOrders so CROSS APPLY (VALUES(1),(2),(3),(4)) v(n) WHERE v.n<=2+(so.seed_key%3))
 INSERT dbo.OrderItems(order_id,dish_id,quantity,unit_price,notes,item_status,created_at,updated_at)
 SELECT l.order_id,d.dish_id,1+(l.seed_key+l.n)%2,d.price,NULL,N'Served',o.created_at,DATEADD(minute,35,o.created_at) FROM Lines l JOIN dbo.Orders o ON o.order_id=l.order_id JOIN @Dishes d ON d.rn=CASE WHEN (l.seed_key+l.n)%10<5 THEN 1+(l.seed_key+l.n)%6 ELSE 1+(ABS(CHECKSUM(l.seed_key*l.n))%(SELECT COUNT(*) FROM @Dishes)) END;
@@ -221,6 +222,59 @@ INSERT dbo.AuditLogs(user_id,action_name,target_table,target_id,new_value_json,i
 SELECT s.actor_id,N'NO_SHOW',N'Reservations',r.reservation_id,N'{"status":"No Show"}','127.0.0.1',DATEADD(minute,20,s.start_at) FROM @SeedReservations s JOIN dbo.Reservations r ON r.order_code=CONCAT('SEED-2Y-',s.seed_key) WHERE s.reservation_status=N'No Show';
 INSERT dbo.AuditLogs(user_id,action_name,target_table,target_id,new_value_json,ip_address,created_at)
 SELECT @ActorStaffId,N'RESERVATION_CHANGE_REQUESTED',N'Reservations',reservation_id,N'{"request_type":"Cancel","status":"Pending"}','127.0.0.1',created_at FROM dbo.ReservationChangeRequests;
+
+-- Seed CustomerReviews across 2-year range
+INSERT dbo.CustomerReviews (customer_id, order_id, food_rating, service_rating, ambiance_rating, comment, is_visible, created_at)
+SELECT 
+  o.customer_id,
+  o.order_id,
+  3 + (o.order_id % 3),
+  3 + ((o.order_id + 1) % 3),
+  4 + (o.order_id % 2),
+  CASE WHEN o.order_id % 3 = 0 THEN N'Great dining experience! Delicious food and friendly staff.'
+       WHEN o.order_id % 3 = 1 THEN N'Pho Braised Beef and Australian Ribeye were exquisite.'
+       ELSE NULL END,
+  1,
+  o.created_at
+FROM dbo.Orders o
+WHERE o.customer_id IS NOT NULL AND o.order_id % 5 = 0;
+
+-- Seed LoyaltyTransactions from paid orders (1 point per 10,000 VND)
+INSERT dbo.LoyaltyTransactions (customer_id, points, transaction_type, reference_type, reference_id, description, created_at)
+SELECT 
+  o.customer_id,
+  CAST(ROUND(o.amount_paid / 10000.0, 0) AS INT),
+  N'Earn',
+  N'Order',
+  o.order_id,
+  CONCAT(N'Points earned for paid Order #', o.order_id),
+  o.created_at
+FROM dbo.Orders o
+WHERE o.customer_id IS NOT NULL AND o.amount_paid > 0;
+
+-- Update CustomerProfiles total loyalty points
+UPDATE cp
+SET loyalty_points = ISNULL(lt.total_pts, 0)
+FROM dbo.CustomerProfiles cp
+CROSS APPLY (
+  SELECT SUM(points) AS total_pts
+  FROM dbo.LoyaltyTransactions
+  WHERE customer_id = cp.user_id AND transaction_type = N'Earn'
+) lt;
+
+-- Seed CustomerPromotions
+INSERT dbo.CustomerPromotions (customer_id, promotion_id, points_spent, promo_code, status, redeemed_at, expires_at)
+SELECT 
+  ua.user_id,
+  p.promotion_id,
+  0,
+  CONCAT(N'SEED-PROMO-', ua.user_id, N'-', p.promotion_id),
+  N'active',
+  ua.created_at,
+  DATEADD(day, 180, @SeedEndDate)
+FROM dbo.UserAccounts ua
+CROSS JOIN (SELECT TOP 2 promotion_id FROM dbo.Promotions) p
+WHERE ua.role_id = @CustomerRoleId OR ua.user_id = 1;
 
 /* Fail the transaction if a key invariant is not true. */
 IF (SELECT COUNT(*) FROM dbo.UserAccounts WHERE role_id=@CustomerRoleId) <> 20 THROW 51010, 'Expected exactly 20 seeded customer accounts.', 1;

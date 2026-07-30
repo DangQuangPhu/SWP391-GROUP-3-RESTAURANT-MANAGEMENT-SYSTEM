@@ -6,6 +6,7 @@ import { RESERVATION_STATUS } from '../constants/reservationStatus.js';
 import { handlePostCheckoutSuccess } from '../services/checkoutHelper.js';
 import { notifyStaffNewCustomerAction, notifyCustomerStaffAction } from '../services/notificationService.js';
 import { closeOccupancySession } from '../services/tableReleaseService.js';
+import { closeQrSessionsForCheckout } from '../services/qrSessionCleanupService.js';
 
 
 /**
@@ -401,17 +402,13 @@ export const handleSepayWebhook = async (req, res) => {
           }
         }
 
-        // 2. Update QR Session to Closed (Session Leak Fix)
-        if (order.qr_session_id) {
-          await transaction.request()
-            .input('sessionId', sql.Int, order.qr_session_id)
-            .query(`
-              UPDATE dbo.QROrderSessions
-              SET session_status = N'Closed',
-                  closed_at = SYSDATETIME()
-              WHERE qr_session_id = @sessionId
-            `);
-        }
+        // 2. Clear every active table-ordering session for this completed bill.
+        // A reservation may have more than one QR scan/browser session.
+        const closedQrSessionIds = await closeQrSessionsForCheckout({
+          transaction,
+          tableId: order.table_id,
+          reservationId: order.reservation_id,
+        });
 
         // 3. & 4. Update Reservation to Completed & Insert Timeline
         if (order.reservation_id) {
@@ -502,6 +499,13 @@ export const handleSepayWebhook = async (req, res) => {
             io.to(`session_${order.qr_session_id}`).emit('PAYMENT_STATUS_CHANGED', payload);
             io.to(`session_${order.qr_session_id}`).emit('QR_SESSION_PAYMENT_COMPLETED', payload);
             io.to(`session_${order.qr_session_id}`).emit('table:status_changed', { tableId: order.table_id, status: 'Cleaning', table_status: 'Cleaning' });
+          }
+          for (const sessionId of closedQrSessionIds) {
+            io.to(`session_${sessionId}`).emit('TABLE_SESSION_CLEARED', {
+              session_id: sessionId,
+              table_id: order.table_id,
+              reason: 'payment_completed',
+            });
           }
         }
       }
@@ -595,7 +599,7 @@ export const requestCashOnDelivery = async (req, res) => {
  */
 export const confirmCashPaymentStaff = async (req, res) => {
   try {
-    const { orderId, tableId } = req.body;
+    const { orderId } = req.body;
     
     if (!orderId) {
       return res.status(400).json({ success: false, message: 'Order ID is required' });
@@ -608,7 +612,7 @@ export const confirmCashPaymentStaff = async (req, res) => {
     try {
       const orderRes = await transaction.request()
         .input('orderId', sql.Int, orderId)
-        .query('SELECT total_amount, reservation_id FROM dbo.Orders WHERE order_id = @orderId');
+        .query('SELECT total_amount, reservation_id, table_id, qr_session_id FROM dbo.Orders WHERE order_id = @orderId');
 
       if (orderRes.recordset.length === 0) {
         await transaction.rollback();
@@ -643,9 +647,10 @@ export const confirmCashPaymentStaff = async (req, res) => {
           WHERE order_id = @orderId
         `);
 
-      if (tableId) {
+      const effectiveTableId = Number(order.table_id);
+      if (effectiveTableId) {
         await transaction.request()
-          .input('tableId', sql.Int, tableId)
+          .input('tableId', sql.Int, effectiveTableId)
           .query(`
             UPDATE dbo.RestaurantTables
             SET table_status = 'Cleaning'
@@ -656,7 +661,7 @@ export const confirmCashPaymentStaff = async (req, res) => {
         try {
           await closeOccupancySession({
             transaction,
-            tableId,
+            tableId: effectiveTableId,
             releaseTrigger: 'StaffCashConfirm',
             releasedByStaffId: req.user?.user_id || req.user?.id || null,
           });
@@ -664,6 +669,14 @@ export const confirmCashPaymentStaff = async (req, res) => {
           console.warn('[confirmCashPaymentStaff] closeOccupancySession failed (non-fatal):', sessionErr.message);
         }
       }
+
+      const closedQrSessionIds = effectiveTableId
+        ? await closeQrSessionsForCheckout({
+          transaction,
+          tableId: effectiveTableId,
+          reservationId: order.reservation_id,
+        })
+        : [];
 
       if (order.reservation_id) {
         await transaction.request()
@@ -690,7 +703,7 @@ export const confirmCashPaymentStaff = async (req, res) => {
           staffName,
           amountPaid: order.total_amount,
           method: 'Cash on Delivery',
-          tableId,
+          tableId: effectiveTableId,
           releaseTrigger: 'StaffCashConfirm',
           actor: `Staff - ${staffName} (ID: ${staffUserId})`
         }))
@@ -709,9 +722,13 @@ export const confirmCashPaymentStaff = async (req, res) => {
       const io = getIO();
       if (io) {
         io.emit('payment:confirmed', { orderId });
-        io.to("room:staff").to("room:manager").emit("table:status_changed", { tableId, status: 'Cleaning', table_status: 'Cleaning' });
-        if (order.qr_session_id) {
-          io.to(`session_${order.qr_session_id}`).emit("table:status_changed", { tableId, status: 'Cleaning', table_status: 'Cleaning' });
+        io.to("room:staff").to("room:manager").emit("table:status_changed", { tableId: effectiveTableId, status: 'Cleaning', table_status: 'Cleaning' });
+        for (const sessionId of closedQrSessionIds) {
+          io.to(`session_${sessionId}`).emit("TABLE_SESSION_CLEARED", {
+            session_id: sessionId,
+            table_id: effectiveTableId,
+            reason: 'payment_completed',
+          });
         }
         if (order.reservation_id) {
           io.to('room:staff').to('room:manager').emit('reservation:status_changed', {

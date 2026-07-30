@@ -1343,6 +1343,30 @@ function MyReservationsPage({
                 </div>
               )}
 
+              {/* QR orders are linked to this reservation on the server, so a
+                  reused physical table cannot leak another guest's history. */}
+              {viewDetailsTarget.order_history?.length > 0 && (
+                <div className="apple-stagger-item" style={{ marginBottom: "24px", fontSize: "0.95rem", animationDelay: "0.31s" }}>
+                  <strong style={{ color: "var(--rzv-muted)", display: "block", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "8px" }}>Order History</strong>
+                  <div style={{ border: "1px solid var(--rzv-line)", borderRadius: "14px", overflow: "hidden" }}>
+                    {viewDetailsTarget.order_history.map((order, index) => (
+                      <div key={order.order_id} style={{ padding: "14px 18px", background: index % 2 === 0 ? "rgba(248, 245, 239, 0.6)" : "#fff", borderTop: index ? "1px solid var(--rzv-line)" : "none" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: order.items?.length ? "8px" : 0 }}>
+                          <span style={{ fontWeight: 700 }}>Order #{String(order.order_id).padStart(6, "0")}</span>
+                          <span style={{ color: "var(--rzv-gold)", fontWeight: 700 }}>{Number(order.total_amount || 0).toLocaleString("vi-VN")} VND</span>
+                        </div>
+                        {order.items?.map((item) => (
+                          <div key={item.order_item_id} style={{ display: "flex", justifyContent: "space-between", color: "var(--rzv-muted)", fontSize: "0.88rem", paddingTop: "3px" }}>
+                            <span>{item.dish_name} ×{item.quantity}</span>
+                            <span>{item.item_status}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Special Notes */}
               {(() => {
                 const purpose = viewDetailsTarget.occasion;

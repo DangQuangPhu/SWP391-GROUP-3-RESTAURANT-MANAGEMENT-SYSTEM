@@ -1,6 +1,7 @@
 import { getRawPool } from '../db.js';
 import sql from 'mssql';
 import { getIO } from '../socket.js';
+import { closeQrSessionsForCheckout } from '../services/qrSessionCleanupService.js';
 
 function resolveCartDishId(item = {}) {
     const direct = Number(item.dish_id ?? item.menu_item_id ?? item.db_id);
@@ -868,12 +869,12 @@ export const processCashPayment = async (req, res) => {
                 .query(`UPDATE dbo.RestaurantTables SET table_status = N'Cleaning', updated_at = SYSDATETIME() WHERE table_id = @tableId`);
         }
 
-        // 5. Close QR session if exists
-        if (order.qr_session_id) {
-            await transaction.request()
-                .input('sessionId', sql.Int, order.qr_session_id)
-                .query(`UPDATE dbo.QROrderSessions SET session_status = N'Closed', closed_at = SYSDATETIME() WHERE qr_session_id = @sessionId`);
-        }
+        // 5. Close every active QR session belonging to this table/reservation.
+        const closedQrSessionIds = await closeQrSessionsForCheckout({
+            transaction,
+            tableId: order.table_id,
+            reservationId: order.reservation_id,
+        });
 
         // 6. Complete reservation if linked
         if (order.reservation_id) {
@@ -909,6 +910,13 @@ export const processCashPayment = async (req, res) => {
             io.emit('PAYMENT_STATUS_CHANGED', payload);
             io.to('room:staff').to('room:manager').emit('table:status_changed', { tableId: order.table_id, status: 'Cleaning' });
             io.to('room:kitchen').emit('kds:clear_order', { orderId: parsedOrderId });
+            for (const sessionId of closedQrSessionIds) {
+                io.to(`session_${sessionId}`).emit('TABLE_SESSION_CLEARED', {
+                    session_id: sessionId,
+                    table_id: order.table_id,
+                    reason: 'payment_completed',
+                });
+            }
         }
 
         return res.json({

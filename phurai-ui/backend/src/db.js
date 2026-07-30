@@ -242,21 +242,21 @@ function getPool() {
         USING (SELECT N'phuadmin@phurai.vn' AS email) AS src ON target.email = src.email
         WHEN MATCHED THEN UPDATE SET
           role_id=4, full_name=N'Dang Quang Phu', is_active=1, email_verified=1,
-          password_hash=N'scrypt$4f2ab2ac57cea58a40e76477d53f3e61$d38e5d2db24cd605a3d29eaf79e1b0429e7c7f5fce28c47faf59126fdd15029828447e1b56d0886c74f888ff7ac6693d7b33e0371ac39c9ff0b55385a0ca547e',
+          password_hash=N'scrypt$3fc41cd9111a05256c622615de15c504$8478e9821bc1955d78e788229acce921aa4e9b7be840afe40b8551b486c10f6d565a17afffe7d8aee279a2782dda8b4fddbf3bd99bba6f46b9df11c0d73f0af6',
           updated_at=SYSDATETIME()
         WHEN NOT MATCHED THEN INSERT (role_id, full_name, email, phone, password_hash, is_active, email_verified)
           VALUES (4, N'Dang Quang Phu', N'phuadmin@phurai.vn', '0901000001',
-            N'scrypt$4f2ab2ac57cea58a40e76477d53f3e61$d38e5d2db24cd605a3d29eaf79e1b0429e7c7f5fce28c47faf59126fdd15029828447e1b56d0886c74f888ff7ac6693d7b33e0371ac39c9ff0b55385a0ca547e', 1, 1);
+            N'scrypt$3fc41cd9111a05256c622615de15c504$8478e9821bc1955d78e788229acce921aa4e9b7be840afe40b8551b486c10f6d565a17afffe7d8aee279a2782dda8b4fddbf3bd99bba6f46b9df11c0d73f0af6', 1, 1);
 
         MERGE dbo.UserAccounts AS target
         USING (SELECT N'phumanager@phurai.vn' AS email) AS src ON target.email = src.email
         WHEN MATCHED THEN UPDATE SET
           role_id=3, full_name=N'Dang Quang Phu', is_active=1, email_verified=1,
-          password_hash=N'scrypt$8b83430313edc67abc8eadeefc31e841$ce82bbdd63b2f38cc66e8cb939a52599c91f53a8396a40ec2ee1d3d28dd106eedb890ddbe0a4b462080f268b0f848fc5d3f1974aa3930dab29612cb25cb887f0',
+          password_hash=N'scrypt$3fc41cd9111a05256c622615de15c504$8478e9821bc1955d78e788229acce921aa4e9b7be840afe40b8551b486c10f6d565a17afffe7d8aee279a2782dda8b4fddbf3bd99bba6f46b9df11c0d73f0af6',
           updated_at=SYSDATETIME()
         WHEN NOT MATCHED THEN INSERT (role_id, full_name, email, phone, password_hash, is_active, email_verified)
           VALUES (3, N'Dang Quang Phu', N'phumanager@phurai.vn', '0901000002',
-            N'scrypt$8b83430313edc67abc8eadeefc31e841$ce82bbdd63b2f38cc66e8cb939a52599c91f53a8396a40ec2ee1d3d28dd106eedb890ddbe0a4b462080f268b0f848fc5d3f1974aa3930dab29612cb25cb887f0', 1, 1);
+            N'scrypt$3fc41cd9111a05256c622615de15c504$8478e9821bc1955d78e788229acce921aa4e9b7be840afe40b8551b486c10f6d565a17afffe7d8aee279a2782dda8b4fddbf3bd99bba6f46b9df11c0d73f0af6', 1, 1);
       `).then(() => console.log("[DB] Admin accounts synchronized."))
         .catch((err) => console.error("[DB] Admin upsert error:", err.message));
 

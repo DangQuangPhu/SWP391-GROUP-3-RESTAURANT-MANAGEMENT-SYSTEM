@@ -61,6 +61,7 @@ const ZoneViewButton = ({ x, y, label, img, onViewZone }) => {
 export default function FloorPlanSVG({
   tables = [],
   selectedTableId,
+  selectedTableIds = [],
   currentTableId,
   guestCount,
   onTableClick,
@@ -314,7 +315,7 @@ export default function FloorPlanSVG({
             const apiTable = apiTableMap.get(tableConfig.id);
             let status = normalizeStatus(apiTable, guestCount);
 
-            const isSelected = apiTable && String(selectedTableId) === String(apiTable.table_id);
+            const isSelected = apiTable && (selectedTableIds.map(String).includes(String(apiTable.table_id)) || String(selectedTableId) === String(apiTable.table_id));
             const isCurrent = apiTable && String(currentTableId) === String(apiTable.table_id);
 
             let visualStatus = status;

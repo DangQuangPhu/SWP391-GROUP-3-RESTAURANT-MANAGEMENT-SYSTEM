@@ -6,7 +6,6 @@ import {
   AREA_PREFERENCES,
   BOOKING_AREAS,
   DINING_PURPOSES,
-  HOLD_DURATION_OPTIONS,
   EVENT_AREA_HINTS,
   KITCHEN_VIEW_AREA_NAME,
   KITCHEN_VIEW_COUNTER_CAPACITY,
@@ -260,29 +259,10 @@ function ReservationFormPanel({
           )}
         </div>
         <div className="rzv-field">
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <div style={{ flex: 1 }}>
-              <label className="rzv-field__label" htmlFor="rzv-duration">
-                Duration (Grace Period)
-              </label>
-              <select
-                id="rzv-duration"
-                className="rzv-select"
-                value={form.holdDurationMinutes}
-                onChange={(e) => setField("holdDurationMinutes", Number(e.target.value))}
-              >
-                {HOLD_DURATION_OPTIONS.map((d) => (
-                  <option key={d.value} value={d.value}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div style={{ flex: 1 }}>
-              <label className="rzv-field__label" htmlFor="rzv-endtime">
-                End time
-              </label>
-              <select
+          <label className="rzv-field__label" htmlFor="rzv-endtime">
+            End time
+          </label>
+          <select
                 id="rzv-endtime"
                 className="rzv-select"
                 value={form.endTime}
@@ -308,10 +288,8 @@ function ReservationFormPanel({
                   return null;
                 })}
               </select>
-            </div>
-          </div>
           <p className="rzv-card__hint" style={{ marginTop: "0.5rem", fontSize: "0.85rem", opacity: 0.8 }}>
-            How long we hold the table if you are late, and when you plan to leave.
+            When you plan to leave.
           </p>
         </div>
       </div>

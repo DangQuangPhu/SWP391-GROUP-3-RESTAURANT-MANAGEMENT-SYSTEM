@@ -6,6 +6,8 @@ import TablePreviewModal from './TablePreviewModal';
 export default function TableBoard({
   tables = [],
   selectedTableId,
+  selectedTableIds = [],
+  allowMultiple = false,
   currentTableId,
   onSelectTable,
   guestCount
@@ -62,13 +64,14 @@ export default function TableBoard({
     () => tables.find((t) => String(t.table_id) === String(selectedTableId)),
     [tables, selectedTableId]
   );
+  const activeSelectedIds = selectedTableIds.length ? selectedTableIds : (selectedTableId ? [selectedTableId] : []);
 
   return (
     <div className="table-board-container">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 relative" ref={dropdownRef}>
         <div className="tb-board__header m-0 p-0 border-0 bg-transparent">
           <p className="tb-board__hint">
-            Select an available table. Occupied or invalid capacity tables are disabled.
+            {allowMultiple ? "Select all available tables for your event; tap again to remove a table." : "Select an available table. Occupied or invalid capacity tables are disabled."}
           </p>
         </div>
 
@@ -173,6 +176,7 @@ export default function TableBoard({
       <FloorPlanSVG
         tables={tables}
         selectedTableId={selectedTableId}
+        selectedTableIds={activeSelectedIds}
         currentTableId={currentTableId}
         guestCount={guestCount}
         onTableClick={handleTableClick}

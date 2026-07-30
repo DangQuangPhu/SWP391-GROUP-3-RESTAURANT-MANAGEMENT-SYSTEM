@@ -47,6 +47,10 @@ const STEPS = [
   { id: "success", label: "Confirmed" },
 ];
 
+const MULTI_TABLE_PURPOSES = new Set([
+  "birthday", "business meeting", "family gathering", "special occasion", "private party",
+]);
+
 
 function ReservationPage({
   isAuthenticated = false,
@@ -115,11 +119,12 @@ function ReservationPage({
     
     const handleTableStatusChanged = (data) => {
       if (!data) return;
-      const { table_id, table_status } = data;
-      const nextStatus = table_status || data.status;
+      const tableId = data.table_id ?? data.tableId;
+      const nextStatus = data.table_status || data.status || data.new_status;
+      if (!tableId || !nextStatus) return;
 
       setTables(prevTables => prevTables.map(t => 
-        String(t.table_id) === String(table_id)
+        String(t.table_id) === String(tableId)
           ? { ...t, current_status: nextStatus || t.current_status, table_status: nextStatus || t.table_status }
           : t
       ));
@@ -142,6 +147,15 @@ function ReservationPage({
   }, [socket]);
   const [selectedTableId, setSelectedTableId] = useState(() => {
     return localStorage.getItem("phurai_reservation_table") || null;
+  });
+  const [selectedTableIds, setSelectedTableIds] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("phurai_reservation_tables") || "[]");
+      return Array.isArray(saved) ? saved.map(Number).filter(Number.isFinite) : [];
+    } catch {
+      const legacy = Number(localStorage.getItem("phurai_reservation_table"));
+      return Number.isFinite(legacy) && legacy > 0 ? [legacy] : [];
+    }
   });
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -214,6 +228,10 @@ function ReservationPage({
       localStorage.removeItem("phurai_reservation_table");
     }
   }, [selectedTableId]);
+
+  useEffect(() => {
+    localStorage.setItem("phurai_reservation_tables", JSON.stringify(selectedTableIds));
+  }, [selectedTableIds]);
 
   useEffect(() => {
     localStorage.setItem("phurai_reservation_preorder_items", JSON.stringify(preorderItems));
@@ -324,9 +342,20 @@ function ReservationPage({
   // Stable callbacks for ReservationDetails — must be useCallback to prevent
   // re-render loops caused by the useEffect inside ReservationDetails that
   // depends on onSelectTable as a dependency.
+  const allowsMultipleTables = MULTI_TABLE_PURPOSES.has(String(form.diningPurpose || "").toLowerCase());
+
   const handleSelectTable = useCallback((tableId) => {
-    setSelectedTableId(tableId);
-  }, []);
+    const normalizedId = Number(tableId);
+    if (!Number.isFinite(normalizedId) || normalizedId <= 0) return;
+    setSelectedTableIds((previous) => {
+      const exists = previous.includes(normalizedId);
+      const next = allowsMultipleTables
+        ? (exists ? previous.filter((id) => id !== normalizedId) : [...previous, normalizedId])
+        : [normalizedId];
+      setSelectedTableId(next[0] || null);
+      return next;
+    });
+  }, [allowsMultipleTables]);
 
   const handleUpdateForm = useCallback((name, value) => {
     setError("");
@@ -335,7 +364,12 @@ function ReservationPage({
     else if (name === 'endTime') setField('endTime', value);
     else if (name === 'guests') setField('guestCount', value);
     else if (name === 'duration') setField('holdDurationMinutes', parseInt(value) || 30);
-    else if (name === 'diningPurpose') setField('diningPurpose', value);
+    else if (name === 'diningPurpose') {
+      setField('diningPurpose', value);
+      if (!MULTI_TABLE_PURPOSES.has(String(value || "").toLowerCase())) {
+        setSelectedTableIds((previous) => previous.slice(0, 1));
+      }
+    }
   }, [setField]);
 
   /* Load settings once. */
@@ -443,10 +477,13 @@ function ReservationPage({
             message: res?.assignmentMessage || "",
             confirmedWindowHours: res?.confirmedAssignmentWindowHours || 3,
           });
-          setSelectedTableId((prev) => {
-            if (!prev) return null;
-            const t = nextTables.find((x) => String(x.table_id) === String(prev));
-            return (t && t.is_bookable && !t.is_too_small) ? prev : null;
+          setSelectedTableIds((previous) => {
+            const next = previous.filter((id) => {
+              const table = nextTables.find((x) => String(x.table_id) === String(id));
+              return table && table.is_bookable;
+            });
+            setSelectedTableId(next[0] || null);
+            return next;
           });
         })
         .catch((err) => {
@@ -464,10 +501,8 @@ function ReservationPage({
   }, [form.date, form.time, form.endTime, form.holdDurationMinutes, form.guestCount, form.diningPurpose, availabilityRefreshKey]);
 
   const selectedTables = useMemo(() => {
-    if (!selectedTableId) return [];
-    const selected = tables.find((t) => String(t.table_id) === String(selectedTableId));
-    return selected ? [selected] : [];
-  }, [tables, selectedTableId]);
+    return tables.filter((t) => selectedTableIds.includes(Number(t.table_id)));
+  }, [tables, selectedTableIds]);
 
   const isKitchenView = useMemo(() => {
     if (!selectedTables.length) return false;
@@ -479,10 +514,10 @@ function ReservationPage({
   const activeCustomerId = currentUser?.userId ?? currentUser?.user_id ?? currentUser?.id ?? null;
 
   const canSubmit = useMemo(() => {
-    if (!form.date || !form.time || !form.guestCount || !form.fullName || !form.email || !form.phone || !selectedTableId) return false;
+    if (!form.date || !form.time || !form.guestCount || !form.fullName || !form.email || !form.phone || !selectedTableIds.length) return false;
     if (totalCapacity < form.guestCount) return false;
     return true;
-  }, [form, selectedTableId, totalCapacity]);
+  }, [form, selectedTableIds, totalCapacity]);
 
   const handleEditDetails = useCallback(() => {
     setShowSummaryBg(false);
@@ -508,7 +543,7 @@ function ReservationPage({
         reservation_end_at: form.endTime ? `${form.date}T${form.endTime}:00` : undefined,
         special_request: combinedNotes || null,
         dining_purpose: form.diningPurpose,
-        table_ids: [Number(selectedTableId)].filter((id) => Number.isFinite(id) && id > 0),
+        table_ids: selectedTableIds,
         contact_name: form.fullName,
         contact_phone: form.phone,
         contact_email: form.email,
@@ -638,6 +673,7 @@ function ReservationPage({
                     startTime: form.time,
                     diningArea: form.selectedArea || 'Standard dining (choose a table)',
                     selectedTable: selectedTableId,
+                    selectedTableIds,
                     guests: form.guestCount,
                     duration: form.holdDurationMinutes || 30,
                     endTime: form.endTime,
@@ -650,6 +686,8 @@ function ReservationPage({
                   tableHoldMin={Number(settings?.table_hold_min) || 15}
                   tables={tables}
                   selectedTableId={selectedTableId}
+                  selectedTableIds={selectedTableIds}
+                  allowMultipleTables={allowsMultipleTables}
                   onSelectTable={handleSelectTable}
                   tablesLoading={loadingAvailability}
                   isAuthenticated={isAuthenticated}

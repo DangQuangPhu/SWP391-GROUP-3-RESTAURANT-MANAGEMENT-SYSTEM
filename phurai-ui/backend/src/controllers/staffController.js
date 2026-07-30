@@ -935,12 +935,19 @@ export async function resetTable(req, res) {
       );
     }
 
+    const [activeQrSessions] = await connection.query(
+      `SELECT qr_session_id
+       FROM dbo.QROrderSessions
+       WHERE table_id = ? AND session_status IN (N'Active', N'Pending');`,
+      [tableId]
+    );
+
     await connection.query(
       `UPDATE dbo.QROrderSessions
        SET session_status = N'Closed',
            closed_at = SYSDATETIME()
        WHERE table_id = ?
-         AND session_status = N'Active';`,
+         AND session_status IN (N'Active', N'Pending');`,
       [tableId]
     );
 
@@ -977,6 +984,17 @@ export async function resetTable(req, res) {
     }
 
     await connection.commit();
+
+    const io = getIO();
+    if (io) {
+      for (const qrSession of activeQrSessions) {
+        io.to(`session_${qrSession.qr_session_id}`).emit("TABLE_SESSION_CLEARED", {
+          session_id: qrSession.qr_session_id,
+          table_id: tableId,
+          reason: "table_reset",
+        });
+      }
+    }
 
     return jsonOk(res, {
       table_id: tableId,
@@ -2654,12 +2672,20 @@ export async function checkoutTablePayment(req, res) {
       );
     }
 
+    const [activeQrSessions] = await connection.query(
+      `SELECT qr_session_id
+       FROM dbo.QROrderSessions
+       WHERE table_id = ?
+         AND session_status IN (N'Active', N'Pending');`,
+      [tableId]
+    );
+
     await connection.query(
       `UPDATE dbo.QROrderSessions
        SET session_status = N'Closed',
            closed_at = SYSDATETIME()
        WHERE table_id = ?
-         AND session_status = N'Active';`,
+         AND session_status IN (N'Active', N'Pending');`,
       [tableId]
     );
 
@@ -2819,6 +2845,13 @@ export async function checkoutTablePayment(req, res) {
         for (const resId of completedResIds) {
           io.to('room:staff').emit('reservation:checkout_ready', { reservation_id: resId });
           io.to('room:manager').emit('reservation:status_changed', { reservation_id: resId, new_status: RESERVATION_STATUS.COMPLETED });
+        }
+        for (const qrSession of activeQrSessions) {
+          io.to(`session_${qrSession.qr_session_id}`).emit("TABLE_SESSION_CLEARED", {
+            session_id: qrSession.qr_session_id,
+            table_id: tableId,
+            reason: "payment_completed",
+          });
         }
       }
     } catch (emitError) {

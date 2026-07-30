@@ -46,9 +46,7 @@ export async function query(sqlText, params = {}) {
         throw new Error(`Parameter "${key}" is not a finite number: ${val}`);
       }
       if (Number.isInteger(val)) {
-        if (val >= -32768 && val <= 32767)       req.input(key, sql.SmallInt, val);
-        else if (val >= 0 && val <= 255)          req.input(key, sql.TinyInt,  val);
-        else                                       req.input(key, sql.Int,      val);
+        req.input(key, sql.Int, val);
       } else {
         req.input(key, sql.Decimal(12, 2), val);
       }
